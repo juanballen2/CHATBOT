@@ -12,17 +12,17 @@ const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 
 // ============================================================
-// 🔑 SEGURIDAD Y CONFIGURACIÓN (Variables de Entorno)
+// 🔑 CONFIGURACIÓN Y SEGURIDAD (LLAVE INTEGRADA)
 // ============================================================
-// ¡NUNCA dejes llaves reales aquí! Usa el panel de Render -> Environment
-const API_KEY = process.env.GEMINI_KEY; 
+app.set('trust proxy', 1); // Necesario para que el login funcione en Render
+
+const API_KEY = "AIzaSyACJytpDnPzl9y5FeoQ5sx8m-iyhPXINto"; 
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = process.env.SESSION_SECRET || "secreto-ultra-seguro-icc";
+const SESSION_SECRET = process.env.SESSION_SECRET || "icc-ultra-secret-2025";
 const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || "ICC_2025";
 
-// Aumentamos límites para recibir CSVs pesados sin que se cuelgue
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -31,14 +31,14 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: { 
-        secure: process.env.NODE_ENV === 'production', // Solo HTTPS en producción
-        httpOnly: true, // Protege contra ataques XSS (nadie ve la cookie desde consola)
-        maxAge: 3600000 * 8 // 8 horas de sesión
+        secure: true, // Render usa HTTPS
+        sameSite: 'lax',
+        maxAge: 3600000 * 8 // 8 horas
     }
 }));
 
 // ============================================================
-// 📂 GESTIÓN DE BASE DE DATOS LOCAL
+// 📂 GESTIÓN DE DATOS
 // ============================================================
 const DATA_DIR = path.resolve(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -61,100 +61,54 @@ const readData = (file, fallback) => {
 };
 
 const writeData = (file, data) => {
-    try { 
-        fs.writeFileSync(file, JSON.stringify(data, null, 2)); 
-        return true;
-    } catch (err) { return false; }
+    try { fs.writeFileSync(file, JSON.stringify(data, null, 2)); return true; } 
+    catch (err) { return false; }
 };
 
 const normalizarParaBusqueda = (t) => t ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[-.\s]/g, "").trim() : "";
 
 // ============================================================
-// 🔊 INTEGRACIÓN WHATSAPP (LA BOCA)
+// 🤖 LÓGICA DE LORENA (RAG)
 // ============================================================
 async function enviarWhatsApp(phoneId, to, text) {
-    if (!META_ACCESS_TOKEN) return console.log("⚠️ Error: META_ACCESS_TOKEN no configurado.");
-    
+    if (!META_ACCESS_TOKEN) return;
     try {
         await axios.post(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: to,
-            type: "text",
-            text: { body: text }
-        }, {
-            headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}` }
-        });
-        console.log(`✅ WhatsApp enviado a: ${to}`);
-    } catch (e) {
-        console.error("❌ Error enviando WhatsApp:", e.response ? e.response.data : e.message);
-    }
+            messaging_product: "whatsapp", to, type: "text", text: { body: text }
+        }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}` } });
+    } catch (e) { console.error("Error WhatsApp:", e.message); }
 }
 
-// ============================================================
-// 🤖 CEREBRO DE LORENA (RAG + LEAD CAPTURE)
-// ============================================================
 async function procesarConLorena(message, sessionId = 'tester') {
     const config = readData(FILES.config, {});
-    let allHistory = readData(FILES.history, {});
-
-    const consultaLimpia = normalizarParaBusqueda(message);
-    const palabras = message.toLowerCase().split(/\s+/).filter(p => p.length > 2);
+    const queryNorm = normalizarParaBusqueda(message);
     
-    // Búsqueda en catálogo (CSV cargado)
-    const coincidencias = globalKnowledge.map(item => {
-        const texto = normalizarParaBusqueda(item.searchable);
-        let score = texto.includes(consultaLimpia) ? 100 : 0;
-        palabras.forEach(p => { if (texto.includes(p)) score += 15; });
-        return { ...item, score };
-    }).filter(i => i.score > 0).sort((a, b) => b.score - a.score).slice(0, 7);
+    // Búsqueda simple por relevancia
+    const coincidencias = globalKnowledge.map(item => ({
+        ...item, score: normalizarParaBusqueda(item.searchable).includes(queryNorm) ? 100 : 0
+    })).filter(i => i.score > 0).slice(0, 5);
 
-    // Ajuste de tono formal "Usted" (según perfil de usuario)
-    const promptLorena = `
-    ${config.prompt || "Eres Lorena, asesora de Importadora Casa Colombia (ICC). Siempre habla con respeto 'usteando' al cliente."}
-    REGLAS: ${config.tech_rules || "Dar información técnica precisa."}
-    
-    CONOCIMIENTO ACTUAL (STOCK):
-    ${coincidencias.length > 0 ? coincidencias.map(c => `- ${c.originalRow}`).join('\n') : "No tenemos información exacta en este momento."}
+    const prompt = `
+    ${config.prompt || "Eres Lorena de ICC, asesora técnica de repuestos."}
+    REGLAS: ${config.tech_rules || "Hablar siempre de Usted."}
+    STOCK ENCONTRADO: ${JSON.stringify(coincidencias)}
+    MENSAJE CLIENTE: ${message}`;
 
-    INSTRUCCIÓN DE LEADS: Si el cliente pide algo que no está o quieres cerrar la venta, solicita: Nombre, Ciudad y Celular. 
-    Si te dan datos, genera al final: [DATA] {"es_lead":true, "nombre":"...", "telefono":"...", "ciudad":"..."} [DATA]
-
-    MENSAJE DEL CLIENTE: "${message}"`;
-
-    // Llamada a Gemini
     return new Promise((resolve) => {
-        const payload = JSON.stringify({ contents: [{ parts: [{ text: promptLorena }] }] });
+        const payload = JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] });
         const options = {
             hostname: 'generativelanguage.googleapis.com',
             path: `/v1/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            method: 'POST', headers: { 'Content-Type': 'application/json' }
         };
-
-        const reqGoogle = https.request(options, (resGoogle) => {
+        const reqGoogle = https.request(options, (resG) => {
             let body = '';
-            resGoogle.on('data', d => body += d);
-            resGoogle.on('end', () => {
+            resG.on('data', d => body += d);
+            resG.on('end', () => {
                 try {
-                    const json = JSON.parse(body);
-                    const raw = json.candidates[0].content.parts[0].text;
-                    const finalReply = raw.split('[DATA]')[0].trim();
-                    const dataPart = raw.split('[DATA]')[1];
-
-                    // Guardar Lead
-                    if (dataPart) {
-                        try {
-                            const lead = JSON.parse(dataPart.replace(/```json|```/g, "").trim());
-                            if (lead.es_lead) {
-                                const leads = readData(FILES.leads, []);
-                                leads.push({ ...lead, fecha: new Date().toLocaleString('es-CO') });
-                                writeData(FILES.leads, leads);
-                            }
-                        } catch (e) {}
-                    }
-                    resolve(finalReply);
-                } catch (e) { resolve("Lo siento, estoy verificando el sistema. ¿Me repite su duda?"); }
+                    const reply = JSON.parse(body).candidates[0].content.parts[0].text;
+                    resolve(reply.split('[DATA]')[0].trim());
+                } catch (e) { resolve("Estoy validando la disponibilidad en bodega..."); }
             });
         });
         reqGoogle.write(payload); reqGoogle.end();
@@ -162,107 +116,84 @@ async function procesarConLorena(message, sessionId = 'tester') {
 }
 
 // ============================================================
-// 🛡️ RUTAS Y SEGURIDAD
+// 🔓 RUTAS PÚBLICAS
 // ============================================================
-
-// Webhook GET (Meta Verification)
-app.get('/webhook', (req, res) => {
-    if (req.query['hub.verify_token'] === META_VERIFY_TOKEN) {
-        return res.send(req.query['hub.challenge']);
-    }
-    res.sendStatus(403);
-});
-
-// Webhook POST (WhatsApp + Tester)
-app.post('/webhook', async (req, res) => {
-    const body = req.body;
-    
-    // Caso 1: Mensaje desde el Dashboard (Tester)
-    if (body.message) {
-        const r = await procesarConLorena(body.message);
-        return res.json({ reply: r });
-    }
-
-    // Caso 2: Mensaje real de WhatsApp
-    if (body.object === 'whatsapp_business_account') {
-        try {
-            const entry = body.entry[0].changes[0].value;
-            if (entry.messages && entry.messages[0]) {
-                const msg = entry.messages[0];
-                const phoneId = entry.metadata.phone_number_id;
-                const reply = await procesarConLorena(msg.text.body, msg.from);
-                await enviarWhatsApp(phoneId, msg.from, reply);
-            }
-        } catch (e) {}
-        return res.sendStatus(200);
-    }
-    res.sendStatus(404);
-});
-
-// LOGIN Y ACCESO
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
+
 app.post('/auth', (req, res) => {
     const { user, pass } = req.body;
     if (user === ADMIN_USER && pass === ADMIN_PASS) {
         req.session.isLogged = true;
         return res.json({ success: true });
     }
-    res.status(401).json({ error: "Credenciales inválidas" });
+    res.status(401).json({ error: "No autorizado" });
 });
 
-// Middleware de protección: Bloquea el acceso a /data y archivos JSON
-const proteger = (req, res, next) => {
-    if (req.path.includes('.json') || req.path.startsWith('/data')) {
-        return res.status(403).send("Acceso Denegado");
+app.get('/webhook', (req, res) => {
+    if (req.query['hub.verify_token'] === META_VERIFY_TOKEN) return res.send(req.query['hub.challenge']);
+    res.sendStatus(403);
+});
+
+app.post('/webhook', async (req, res) => {
+    const body = req.body;
+    if (body.message) return res.json({ reply: await procesarConLorena(body.message) });
+    if (body.object === 'whatsapp_business_account') {
+        const entry = body.entry[0].changes[0].value;
+        if (entry.messages) {
+            const reply = await procesarConLorena(entry.messages[0].text.body, entry.messages[0].from);
+            await enviarWhatsApp(entry.metadata.phone_number_id, entry.messages[0].from, reply);
+        }
     }
+    res.sendStatus(200);
+});
+
+// ============================================================
+// 🛡️ RUTAS PROTEGIDAS (DASHBOARD)
+// ============================================================
+const proteger = (req, res, next) => {
     if (req.session.isLogged) return next();
-    if (['/login', '/auth', '/webhook'].includes(req.path)) return next();
     res.redirect('/login');
 };
 
-app.use(proteger);
-app.use(express.static(__dirname));
-
-// ============================================================
-// 📊 API ADMINISTRATIVA (CSV / DATA)
-// ============================================================
-
-app.post('/api/knowledge/csv', upload.single('file'), (req, res) => {
-    try {
-        if (!req.file) return res.status(400).send("No hay archivo");
-        
-        const content = req.file.buffer.toString('utf-8');
-        const delimiter = content.includes(';') ? ';' : ',';
-        const records = parse(content, { columns: true, skip_empty_lines: true, delimiter });
-        
-        const total = records.map(r => ({
-            searchable: Object.values(r).join(" "),
-            originalRow: Object.entries(r).map(([k,v]) => `${k}: ${v}`).join(" | ")
-        }));
-
-        globalKnowledge = total;
-        writeData(FILES.knowledge, total);
-        
-        // Enviamos respuesta rápida para que el cliente no se quede cargando
-        res.json({ success: true, total: total.length });
-    } catch (err) {
-        console.error("Error CSV:", err);
-        res.status(500).send("Error procesando CSV");
-    }
-});
-
-app.get('/api/data/:type', (req, res) => {
-    const type = req.params.type;
-    if (FILES[type]) return res.json(readData(FILES[type], []));
-    res.sendStatus(404);
-});
-
-// ELIMINAR LEADS (Botón de limpieza)
-app.post('/api/data/clear-leads', (req, res) => {
-    writeData(FILES.leads, []);
+// Endpoints de API protegidos
+app.post('/api/save-personality', proteger, (req, res) => {
+    const config = readData(FILES.config, {});
+    config.prompt = req.body.prompt;
+    writeData(FILES.config, config);
     res.json({ success: true });
 });
 
+app.post('/save-context', proteger, (req, res) => {
+    const config = readData(FILES.config, {});
+    config.tech_rules = req.body.context;
+    writeData(FILES.config, config);
+    res.json({ success: true });
+});
+
+app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
+    try {
+        const content = req.file.buffer.toString('utf-8');
+        const records = parse(content, { columns: true, skip_empty_lines: true });
+        globalKnowledge = records.map(r => ({
+            searchable: Object.values(r).join(" "),
+            originalRow: Object.entries(r).map(([k,v]) => `${k}:${v}`).join("|")
+        }));
+        writeData(FILES.knowledge, globalKnowledge);
+        res.json({ success: true, total: globalKnowledge.length });
+    } catch (e) { res.status(500).send(); }
+});
+
+app.get('/api/data/:type', proteger, (req, res) => {
+    res.json(readData(FILES[req.params.type], []));
+});
+
+// Servir el Dashboard
+app.get('/', proteger, (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.use(express.static(__dirname));
+
+// ============================================================
+// 🚀 INICIO
+// ============================================================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     globalKnowledge = readData(FILES.knowledge, []);
