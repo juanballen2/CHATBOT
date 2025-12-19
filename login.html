@@ -3,32 +3,206 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | ICC Admin</title>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <title>Acceso Seguro | ICC Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { font-family: 'Montserrat', sans-serif; background: #1a1a1a; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; color: white; }
-        .login-card { background: #2c3e50; padding: 40px; border-radius: 12px; box-shadow: 0 15px 35px rgba(0,0,0,0.5); width: 100%; max-width: 400px; text-align: center; border-top: 5px solid #c0392b; }
-        h2 { color: #fff; margin-bottom: 25px; font-weight: 700; }
-        input { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 6px; border: 1px solid #3d3d3d; background: #1a1a1a; color: white; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; border: none; border-radius: 6px; background: #E9511D; color: white; font-weight: bold; cursor: pointer; transition: 0.3s; font-size: 16px; }
-        button:hover { background: #c0392b; transform: translateY(-2px); }
-        .error { color: #ff4444; font-size: 13px; margin-top: 15px; display: none; background: rgba(255,0,0,0.1); padding: 10px; border-radius: 4px; }
+        :root {
+            --icc-red: #c0392b; 
+            --icc-blue: #2c3e50;
+            --naranja: #E9511D;
+            --dark: #121212;
+        }
+
+        body { 
+            font-family: 'Montserrat', sans-serif; 
+            background: var(--dark); 
+            background-image: radial-gradient(circle at 20% 30%, rgba(192, 57, 43, 0.15) 0%, transparent 40%),
+                              radial-gradient(circle at 80% 70%, rgba(44, 62, 80, 0.2) 0%, transparent 40%);
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0; 
+            color: white; 
+            overflow: hidden;
+        }
+
+        .login-card { 
+            background: rgba(44, 62, 80, 0.8); 
+            backdrop-filter: blur(10px);
+            padding: 40px; 
+            border-radius: 16px; 
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6); 
+            width: 100%; 
+            max-width: 380px; 
+            text-align: center; 
+            border: 1px solid rgba(255,255,255,0.1);
+            position: relative;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .logo-container {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            display: inline-block;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .logo-container img { 
+            max-width: 180px; 
+            height: auto; 
+            display: block;
+        }
+
+        h2 { 
+            font-size: 18px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 30px; 
+            color: #fff;
+            font-weight: 700; 
+        }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .input-group i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #95a5a6;
+            font-size: 14px;
+        }
+
+        input { 
+            width: 100%; 
+            padding: 14px 14px 14px 45px; 
+            border-radius: 8px; 
+            border: 2px solid transparent; 
+            background: rgba(0,0,0,0.3); 
+            color: white; 
+            box-sizing: border-box; 
+            font-family: inherit;
+            transition: 0.3s;
+            font-size: 14px;
+        }
+
+        input:focus { 
+            outline: none; 
+            border-color: var(--naranja);
+            background: rgba(0,0,0,0.5);
+            box-shadow: 0 0 10px rgba(233, 81, 29, 0.2);
+        }
+
+        button { 
+            width: 100%; 
+            padding: 14px; 
+            border: none; 
+            border-radius: 8px; 
+            background: linear-gradient(135deg, var(--naranja) 0%, var(--icc-red) 100%); 
+            color: white; 
+            font-weight: 700; 
+            cursor: pointer; 
+            transition: 0.3s; 
+            font-size: 15px; 
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 10px;
+        }
+
+        button:hover { 
+            transform: translateY(-3px); 
+            box-shadow: 0 10px 20px rgba(192, 57, 43, 0.4);
+            filter: brightness(1.1);
+        }
+
+        button:active { transform: translateY(-1px); }
+
+        .error { 
+            color: #ff4444; 
+            font-size: 13px; 
+            margin-top: 20px; 
+            display: none; 
+            background: rgba(255,0,0,0.15); 
+            padding: 12px; 
+            border-radius: 8px; 
+            border-left: 4px solid #ff4444;
+            animation: shake 0.4s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .footer-text {
+            margin-top: 30px;
+            font-size: 11px;
+            color: #95a5a6;
+        }
     </style>
 </head>
 <body>
+
     <div class="login-card">
-        <h2>Panel ICC Admin</h2>
-        <input type="text" id="user" placeholder="Usuario">
-        <input type="password" id="pass" placeholder="Contraseña">
-        <button onclick="login()">Ingresar al Dashboard</button>
-        <div id="errorMessage" class="error">Credenciales incorrectas. Reintenta.</div>
+        <div class="logo-container">
+            <img src="images/ICC.png" alt="ICC Colombia" onerror="this.src='https://via.placeholder.com/180x60?text=ICC+COLOMBIA'">
+        </div>
+        
+        <h2>Gestión Administrativa</h2>
+        
+        <div class="input-group">
+            <i class="fas fa-user"></i>
+            <input type="text" id="user" placeholder="Usuario de acceso" autocomplete="off">
+        </div>
+
+        <div class="input-group">
+            <i class="fas fa-lock"></i>
+            <input type="password" id="pass" placeholder="Contraseña" onkeypress="handleEnter(event)">
+        </div>
+
+        <button onclick="login()" id="loginBtn">Entrar al Sistema</button>
+        
+        <div id="errorMessage" class="error">
+            <i class="fas fa-exclamation-circle"></i> Acceso denegado. Verifique sus datos.
+        </div>
+
+        <p class="footer-text">Motor ICC 2.7 &copy; 2025 | Seguridad Encriptada</p>
     </div>
 
     <script>
+        // Función para permitir el ingreso con la tecla Enter
+        function handleEnter(event) {
+            if (event.key === 'Enter') {
+                login();
+            }
+        }
+
         async function login() {
             const user = document.getElementById('user').value;
             const pass = document.getElementById('pass').value;
             const errorDiv = document.getElementById('errorMessage');
+            const btn = document.getElementById('loginBtn');
+
+            if(!user || !pass) return;
+
+            // Feedback visual de carga
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Validando...';
+            btn.style.opacity = '0.7';
+            btn.disabled = true;
+            errorDiv.style.display = 'none';
 
             try {
                 const res = await fetch('/auth', {
@@ -38,12 +212,17 @@
                 });
 
                 if (res.ok) {
-                    window.location.href = '/'; // Redirige al index.html (Dashboard)
+                    window.location.href = '/'; 
                 } else {
                     errorDiv.style.display = 'block';
+                    btn.innerHTML = 'Entrar al Sistema';
+                    btn.style.opacity = '1';
+                    btn.disabled = false;
                 }
             } catch (err) {
-                alert("Error de conexión con el servidor");
+                alert("Sin conexión con el servidor de ICC");
+                btn.innerHTML = 'Entrar al Sistema';
+                btn.disabled = false;
             }
         }
     </script>
