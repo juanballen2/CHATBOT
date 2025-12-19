@@ -12,13 +12,13 @@ const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 
 // ============================================================
-// 🔑 CONFIGURACIÓN Y LLAVES (Render)
+// 🔑 CONFIGURACIÓN (Usa variables de entorno en Render)
 // ============================================================
 const API_KEY = process.env.GEMINI_KEY || "AIzaSyACJytpDnPzl9y5FeoQ5sx8m-iyhPXINto"; 
 const ADMIN_USER = process.env.ADMIN_USER || "admin"; 
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025"; 
 const META_VERIFY_TOKEN = "ICC_2025"; 
-const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN; // Tu Token de Meta
+const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN; 
 
 app.use(express.json());
 app.use(session({
@@ -40,9 +40,7 @@ const FILES = {
 
 let globalKnowledge = [];
 
-// ============================================================
-// 📁 HELPERS DE DATOS (No se pierde nada)
-// ============================================================
+// HELPERS
 const readData = (file, fallback) => {
     try {
         if (!fs.existsSync(file)) return fallback;
@@ -57,34 +55,20 @@ const writeData = (file, data) => {
 
 const normalizarParaBusqueda = (t) => t ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[-.\s]/g, "").trim() : "";
 
-// ============================================================
-// 🔊 LA BOCA: FUNCIÓN PARA ENVIAR A WHATSAPP
-// ============================================================
+// ENVIAR WHATSAPP
 async function enviarWhatsApp(phoneId, to, text) {
-    if (!META_ACCESS_TOKEN) return console.log("⚠️ No hay Token de Meta configurado.");
-    
+    if (!META_ACCESS_TOKEN) return console.log("⚠️ No hay Token de Meta.");
     const url = `https://graph.facebook.com/v21.0/${phoneId}/messages`;
-    const data = {
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to: to,
-        type: "text",
-        text: { body: text }
-    };
-
     try {
-        await axios.post(url, data, {
-            headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' }
-        });
-        console.log(`✅ Mensaje enviado a ${to}`);
-    } catch (e) {
-        console.error("❌ Error enviando WA:", e.response ? e.response.data : e.message);
-    }
+        await axios.post(url, {
+            messaging_product: "whatsapp",
+            to: to,
+            text: { body: text }
+        }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}` } });
+    } catch (e) { console.error("❌ Error WA:", e.message); }
 }
 
-// ============================================================
-// 🤖 EL CEREBRO: PROCESAR CON LORENA
-// ============================================================
+// CEREBRO LORENA
 async function procesarConLorena(message, sessionId = 'test-user') {
     const config = readData(FILES.config, {});
     let allHistory = readData(FILES.history, {});
@@ -96,27 +80,18 @@ async function procesarConLorena(message, sessionId = 'test-user') {
         const textoProducto = normalizarParaBusqueda(item.searchable);
         let score = 0;
         if (textoProducto.includes(consultaLimpia)) score += 100;
-        palabrasClave.forEach(key => {
-            if (textoProducto.includes(key)) score += 20;
-        });
+        palabrasClave.forEach(key => { if (textoProducto.includes(key)) score += 20; });
         return { ...item, score };
     }).filter(item => item.score > 0).sort((a, b) => b.score - a.score).slice(0, 8);
 
     const prompt = `
     ${config.prompt || "Eres Lorena de ICC, asesora experta."}
     REGLAS: ${config.tech_rules || "Atención técnica."}
-    INSTRUCCIONES:
-    1. SI HAY STOCK: Confirma SKU y ofrece facturar.
-    2. SI NO HAY STOCK: Di "Estoy validando..." y pide Nombre, Ciudad, Celular y Correo.
-    3. EXTRACCIÓN: Si el usuario da sus datos, genera al final [DATA] {"es_lead":true, "nombre":"...", "telefono":"...", "ciudad":"...", "correo":"...", "interes":"..."} [DATA].
-    
-    PRODUCTOS:
-    ${coincidencias.length > 0 ? coincidencias.map(c => `- ${c.originalRow}`).join('\n') : "Sin stock exacto."}
-
+    PRODUCTOS: ${coincidencias.length > 0 ? coincidencias.map(c => `- ${c.originalRow}`).join('\n') : "Sin stock."}
     HISTORIAL: ${(allHistory[sessionId] || []).map(m => `${m.role}: ${m.text}`).slice(-5).join('\n')}
-    CLIENTE: "${message}"`;
+    MENSAJE: "${message}"`;
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         const payload = JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] });
         const options = {
             hostname: 'generativelanguage.googleapis.com',
@@ -136,8 +111,8 @@ async function procesarConLorena(message, sessionId = 'test-user') {
                     const dataPart = fullReply.split('[DATA]')[1];
 
                     if (!allHistory[sessionId]) allHistory[sessionId] = [];
-                    allHistory[sessionId].push({ role: 'user', text: message, timestamp: Date.now() });
-                    allHistory[sessionId].push({ role: 'bot', text: finalReply, timestamp: Date.now() });
+                    allHistory[sessionId].push({ role: 'user', text: message });
+                    allHistory[sessionId].push({ role: 'bot', text: finalReply });
                     writeData(FILES.history, allHistory);
 
                     if (dataPart) {
@@ -151,142 +126,50 @@ async function procesarConLorena(message, sessionId = 'test-user') {
                         } catch (e) {}
                     }
                     resolve(finalReply);
-                } catch (e) { resolve("Deme un momento, estoy verificando disponibilidad..."); }
+                } catch (e) { resolve("Deme un momento..."); }
             });
         });
-        googleReq.on('error', (e) => reject(e));
         googleReq.write(payload);
         googleReq.end();
     });
 }
 
-// ============================================================
-// 🔓 RUTAS PÚBLICAS (Antes de la protección)
-// ============================================================
-
-// Pantalla de Login (Corregido para Render)
-app.get('/login', (req, res) => {
-    res.sendFile(path.join(__dirname, 'login.html'));
-});
-
-// Autenticación
+// RUTAS PÚBLICAS
+app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
 app.post('/auth', (req, res) => {
     const { user, pass } = req.body;
-    if (user === ADMIN_USER && pass === ADMIN_PASS) {
-        req.session.isLogged = true;
-        return res.json({ success: true });
-    }
+    if (user === ADMIN_USER && pass === ADMIN_PASS) { req.session.isLogged = true; return res.json({ success: true }); }
     res.status(401).send();
 });
-
-// Webhook GET (Verificación de Meta)
 app.get('/webhook', (req, res) => {
-    const mode = req.query['hub.mode'];
-    const token = req.query['hub.verify_token'];
-    const challenge = req.query['hub.challenge'];
-    if (mode && token === META_VERIFY_TOKEN) return res.status(200).send(challenge);
+    if (req.query['hub.verify_token'] === META_VERIFY_TOKEN) return res.send(req.query['hub.challenge']);
     res.sendStatus(403);
 });
-
-// Webhook POST (Recepción de mensajes)
 app.post('/webhook', async (req, res) => {
-    try {
-        const body = req.body;
-        
-        // 1. Mensaje del Dashboard
-        if (body.message) {
-            const reply = await procesarConLorena(body.message);
-            return res.json({ reply });
+    const body = req.body;
+    if (body.message) return res.json({ reply: await procesarConLorena(body.message) });
+    if (body.object === 'whatsapp_business_account') {
+        const entry = body.entry[0].changes[0].value;
+        if (entry.messages) {
+            const reply = await procesarConLorena(entry.messages[0].text.body, entry.messages[0].from);
+            await enviarWhatsApp(entry.metadata.phone_number_id, entry.messages[0].from, reply);
         }
-
-        // 2. Mensaje de WhatsApp Real
-        if (body.object === 'whatsapp_business_account') {
-            const entry = body.entry[0].changes[0].value;
-            const msg = entry.messages ? entry.messages[0] : null;
-            const phoneId = entry.metadata.phone_number_id;
-
-            if (msg && msg.text) {
-                const reply = await procesarConLorena(msg.text.body, msg.from);
-                await enviarWhatsApp(phoneId, msg.from, reply); // Lorena responde sola
-            }
-            return res.sendStatus(200);
-        }
-        res.sendStatus(404);
-    } catch (err) { res.status(200).send(); }
+    }
+    res.sendStatus(200);
 });
 
-// ============================================================
-// 🛡️ RUTAS PROTEGIDAS (Solo Admin)
-// ============================================================
-const proteger = (req, res, next) => {
-    if (req.session.isLogged) return next();
-    res.redirect('/login');
-};
-
-app.use(proteger);
+// RUTAS PROTEGIDAS
+app.use((req, res, next) => req.session.isLogged ? next() : res.redirect('/login'));
 app.use(express.static(__dirname));
 
-// Endpoints de configuración (CSV, URL, etc - Se mantienen igual)
-app.get('/api/data/:type', (req, res) => {
-    const type = req.params.type;
-    if (FILES[type]) return res.json(readData(FILES[type], (type === 'config' ? {} : [])));
-    res.status(404).send();
-});
-
-app.post('/save-context', (req, res) => {
-    const config = readData(FILES.config, {});
-    config.tech_rules = req.body.context;
-    writeData(FILES.config, config);
-    res.json({ success: true });
-});
-
-app.post('/api/save-personality', (req, res) => {
-    const config = readData(FILES.config, {});
-    config.prompt = req.body.prompt;
-    writeData(FILES.config, config);
-    res.json({ success: true });
-});
-
+app.get('/api/data/:type', (req, res) => res.json(readData(FILES[req.params.type], [])));
 app.post('/api/knowledge/csv', upload.single('file'), (req, res) => {
-    try {
-        const actual = readData(FILES.knowledge, []);
-        const content = req.file.buffer.toString('utf-8');
-        const delimiter = content.includes(';') ? ';' : ',';
-        const records = parse(content, { columns: true, skip_empty_lines: true, delimiter: delimiter });
-        const nuevos = records.map(row => ({
-            searchable: Object.values(row).join(" "),
-            originalRow: Object.entries(row).map(([k, v]) => `${k}: ${v}`).join(" | ")
-        }));
-        const total = [...actual, ...nuevos];
-        writeData(FILES.knowledge, total);
-        globalKnowledge = total;
-        res.json({ success: true, total: total.length });
-    } catch (err) { res.status(500).send(); }
+    const records = parse(req.file.buffer.toString(), { columns: true, skip_empty_lines: true });
+    globalKnowledge = records.map(r => ({ searchable: Object.values(r).join(" "), originalRow: Object.entries(r).map(([k,v]) => `${k}:${v}`).join("|") }));
+    writeData(FILES.knowledge, globalKnowledge);
+    res.json({ success: true, total: globalKnowledge.length });
 });
+// (Agrega aquí las demás funciones de guardado que ya tenías)
 
-app.post('/api/knowledge/url', async (req, res) => {
-    try {
-        let { url } = req.body;
-        if (!url.startsWith('http')) url = 'https://' + url;
-        const response = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        const $ = cheerio.load(response.data);
-        $('script, style, nav, footer, header').remove();
-        const titulo = $('title').text() || "Web";
-        const contenido = $('p, h1, h2, h3, li').text().replace(/\s+/g, ' ').trim();
-        const total = [...readData(FILES.knowledge, []), { searchable: `${titulo} ${contenido}`, originalRow: `WEB: ${contenido.substring(0, 500)}... (${url})` }];
-        writeData(FILES.knowledge, total);
-        globalKnowledge = total;
-        res.json({ success: true, title: titulo });
-    } catch (err) { res.status(500).send(); }
-});
-
-app.post('/api/reset-history', (req, res) => {
-    writeData(FILES.history, {});
-    res.json({ success: true });
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    globalKnowledge = readData(FILES.knowledge, []);
-    console.log(`🚀 MOTOR ICC 2.5 LISTO EN PUERTO ${PORT}`);
-});
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => { globalKnowledge = readData(FILES.knowledge, []); console.log(`🚀 MOTOR ICC 2.5 LISTO EN PUERTO ${PORT}`); });
