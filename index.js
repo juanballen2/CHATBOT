@@ -14,6 +14,7 @@ const app = express();
 // ============================================================
 // 🔑 CONFIGURACIÓN Y CONSTANTES
 // ============================================================
+// Confiar en el Proxy de Railway/Render (CRÍTICO PARA QUE FUNCIONE EL LOGIN)
 app.set('trust proxy', 1);
 
 const API_KEY = "AIzaSyACJytpDnPzl9y5FeoQ5sx8m-iyhPXINto"; 
@@ -49,15 +50,17 @@ const writeData = (file, data) => {
 };
 
 // ============================================================
-// 💾 SESIÓN SIMPLIFICADA (SIN INSTALACIONES EXTRA)
+// 💾 SESIÓN BLINDADA PARA NUBE (HTTPS/RAILWAY)
 // ============================================================
 app.use(session({
     secret: SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
+    resave: true,            // Fuerza a guardar la sesión siempre
+    saveUninitialized: true, // Crea sesión desde el primer momento
+    proxy: true,             // Necesario para Railway/Render
     cookie: { 
-        secure: false, // Importante para que no lo saque
-        httpOnly: true,
+        secure: true,        // ¡OJO! True porque usa HTTPS (Candadito)
+        httpOnly: true,      // Evita robo de cookies por scripts
+        sameSite: 'none',    // Permite flujo correcto en navegadores modernos
         maxAge: 1000 * 60 * 60 * 24 // 24 Horas
     }
 }));
@@ -181,7 +184,11 @@ app.post('/auth', (req, res) => {
     const { user, pass } = req.body;
     if (user === ADMIN_USER && pass === ADMIN_PASS) {
         req.session.isLogged = true;
-        res.json({ success: true });
+        // Importante: Guardar explícitamente antes de responder
+        req.session.save(err => {
+            if(err) return res.status(500).json({error: "Error guardando sesión"});
+            res.json({ success: true });
+        });
     } else {
         res.status(401).json({ error: "Credenciales inválidas" });
     }
