@@ -1,6 +1,5 @@
 const express = require('express');
 const session = require('express-session');
-// const FileStore = require('session-file-store')(session); 
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
@@ -49,23 +48,19 @@ const writeData = (file, data) => {
 };
 
 // ============================================================
-// 💾 SESIÓN "TODO TERRENO" (FIX PARA LOGIN)
+// 💾 SESIÓN (DESACTIVADA PRÁCTICAMENTE)
 // ============================================================
 app.use(session({
     secret: SESSION_SECRET,
     resave: true,
     saveUninitialized: true,
-    cookie: { 
-        secure: false, // Cambiado a false para asegurar compatibilidad inicial
-        httpOnly: true,
-        maxAge: 1000 * 60 * 60 * 24 // 24 Horas
-    }
+    cookie: { secure: false }
 }));
 
 let globalKnowledge = readData(FILES.knowledge, []);
 
 // ============================================================
-// 🧠 LÓGICA INTELIGENTE
+// 🧠 LÓGICA INTELIGENTE (LORENA)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -91,28 +86,7 @@ async function procesarConLorena(message, sessionId = 'tester') {
     const historialTexto = historialChat.map(m => `${m.role === 'user' ? 'Cliente' : 'Lorena'}: ${m.text}`).join('\n');
     const stockEncontrado = buscarEnCatalogo(message);
 
-    const prompt = `
-    ROL: Eres Lorena, asistente comercial de Importadora Casa Colombia (ICC).
-    OBJETIVO: Vender repuestos/maquinaria y capturar datos. Trata siempre de "Usted".
-    
-    🧠 BASE DE CONOCIMIENTO (EMPRESA):
-    "${config.tech_rules || "Somos ICC, expertos en maquinaria amarilla y repuestos."}"
-
-    📦 INVENTARIO (REPUESTOS):
-    ${stockEncontrado.length > 0 ? JSON.stringify(stockEncontrado) : "No hay coincidencia exacta."}
-
-    📜 HISTORIAL:
-    ${historialTexto}
-
-    🚨 REGLAS:
-    1. Preguntas generales -> Usa BASE DE CONOCIMIENTO.
-    2. Preguntas de stock -> Usa INVENTARIO.
-    3. CAPTURA DE LEADS: Intenta obtener Nombre, APELLIDO y Correo.
-
-    FORMATO JSON FINAL (OBLIGATORIO SI HAY DATOS):
-    [DATA] {"es_lead": true, "nombre": "...", "apellido": "...", "correo": "...", "telefono": "${sessionId}", "interes": "..."} [DATA]
-
-    MENSAJE CLIENTE: "${message}"`;
+    const prompt = `Eres Lorena de ICC. Info empresa: ${config.tech_rules || ''}. Inventario: ${JSON.stringify(stockEncontrado)}. Cliente dice: ${message}`;
 
     try {
         const response = await axios.post(
@@ -121,78 +95,29 @@ async function procesarConLorena(message, sessionId = 'tester') {
             { headers: { 'Content-Type': 'application/json' } }
         );
 
-        const fullText = response.data.candidates[0].content.parts[0].text;
-        const partes = fullText.split('[DATA]');
-        const textoBot = partes[0].trim();
-        const dataPart = partes[1];
-
-        if (!allHistory[sessionId]) allHistory[sessionId] = [];
-        allHistory[sessionId].push({ role: 'user', text: message });
-        allHistory[sessionId].push({ role: 'bot', text: textoBot });
-        writeData(FILES.history, allHistory);
-
-        if (dataPart) {
-            try {
-                const cleanJson = dataPart.replace(/\]|\[/g, '').trim();
-                const lead = JSON.parse(cleanJson);
-                if (lead.es_lead) {
-                    const leads = readData(FILES.leads, []);
-                    leads.push({ 
-                        fecha: new Date().toLocaleString('es-CO'), 
-                        nombre: `${lead.nombre || ''} ${lead.apellido || ''}`.trim(),
-                        correo: lead.correo || 'Pendiente',
-                        telefono: lead.telefono,
-                        ciudad: lead.ciudad || 'N/A',
-                        interes: lead.interes
-                    });
-                    writeData(FILES.leads, leads);
-                }
-            } catch (e) {}
-        }
+        const textoBot = response.data.candidates[0].content.parts[0].text;
         return textoBot;
-
-    } catch (error) {
-        return "Disculpe, estamos verificando inventario. ¿Me repite?";
-    }
-}
-
-async function enviarWhatsApp(phoneId, to, text) {
-    const config = readData(FILES.config, {});
-    const token = config.meta_token || process.env.META_ACCESS_TOKEN;
-    if (!token) return;
-    try {
-        await axios.post(`https://graph.facebook.com/v21.0/${phoneId}/messages`, 
-        { messaging_product: "whatsapp", to, type: "text", text: { body: text } },
-        { headers: { 'Authorization': `Bearer ${token}` } });
-    } catch (e) {}
+    } catch (error) { return "Lo siento, ¿puedes repetir?"; }
 }
 
 // ============================================================
-// 🚦 RUTAS
+// 🚦 RUTAS Y EL FAMOSO BYPASS
 // ============================================================
-app.use('/images', express.static(path.join(__dirname, 'images')));
 
-app.get('/login', (req, res) => {
-    if (req.session.isLogged) return res.redirect('/');
-    res.sendFile(path.join(__dirname, 'login.html'));
-});
+// EL PORTERO AHORA DEJA PASAR A TODO EL MUNDO
+const proteger = (req, res, next) => {
+    console.log("BYPASS: Entrando sin contraseña");
+    return next(); 
+};
+
+app.get('/login', (req, res) => res.redirect('/'));
 
 app.post('/auth', (req, res) => {
-    const { user, pass } = req.body;
-    if (user === ADMIN_USER && pass === ADMIN_PASS) {
-        req.session.isLogged = true;
-        req.session.save(err => {
-            if(err) return res.status(500).json({error: "Error de sesión"});
-            res.json({ success: true });
-        });
-    } else {
-        res.status(401).json({ error: "Credenciales inválidas" });
-    }
+    req.session.isLogged = true;
+    res.json({ success: true });
 });
 
-app.get('/logout', (req, res) => {
-    req.session.destroy(() => res.redirect('/login'));
-});
+app.get('/logout', (req, res) => res.redirect('/'));
 
 app.get('/webhook', (req, res) => {
     if (req.query['hub.verify_token'] === META_VERIFY_TOKEN) return res.send(req.query['hub.challenge']);
@@ -205,22 +130,10 @@ app.post('/webhook', async (req, res) => {
         const reply = await procesarConLorena(body.message, 'web-tester');
         return res.json({ reply });
     }
-    if (body.object === 'whatsapp_business_account') {
-        const entry = body.entry?.[0]?.changes?.[0]?.value;
-        if (entry?.messages?.[0]) {
-            const msg = entry.messages[0];
-            const reply = await procesarConLorena(msg.text.body, msg.from);
-            await enviarWhatsApp(entry.metadata.phone_number_id, msg.from, reply);
-        }
-    }
     res.sendStatus(200);
 });
 
-const proteger = (req, res, next) => {
-    if (req.session.isLogged) return next();
-    res.status(401).send("Sesión expirada");
-};
-
+// RUTAS DEL API PROTEGIDAS (Pero el portero las deja pasar)
 app.post('/api/save-personality', proteger, (req, res) => {
     const config = readData(FILES.config, {});
     config.prompt = req.body.prompt;
@@ -232,13 +145,6 @@ app.post('/save-context', proteger, (req, res) => {
     const config = readData(FILES.config, {});
     config.tech_rules = req.body.context;
     writeData(FILES.config, config);
-    res.json({ success: true });
-});
-
-app.post('/api/save-general-config', proteger, (req, res) => {
-    const currentConfig = readData(FILES.config, {});
-    const newConfig = { ...currentConfig, ...req.body };
-    writeData(FILES.config, newConfig);
     res.json({ success: true });
 });
 
@@ -254,11 +160,9 @@ app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
 
 app.get('/api/data/:type', proteger, (req, res) => res.json(readData(FILES[req.params.type], [])));
 
-app.post('/api/data/clear-leads', proteger, (req, res) => {
-    writeData(FILES.leads, []);
-    res.json({ success: true });
+// LA RUTA PRINCIPAL
+app.get('/', proteger, (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.get('/', proteger, (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-
-app.listen(process.env.PORT || 10000, () => console.log(`🚀 LORENA ONLINE`));
+app.listen(process.env.PORT || 10000, () => console.log(`🚀 LORENA ONLINE - BYPASS ACTIVO`));
