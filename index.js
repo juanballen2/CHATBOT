@@ -22,7 +22,6 @@ const SESSION_SECRET = process.env.SESSION_SECRET || "icc-ultra-secret-2025";
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// SERVIR ARCHIVOS ESTÁTICOS (ESTO ARREGLA EL FRONT)
 app.use(express.static(__dirname)); 
 app.use('/images', express.static(path.join(__dirname, 'images')));
 
@@ -50,14 +49,14 @@ const writeData = (file, data) => {
 };
 
 // ============================================================
-// 💾 SESIÓN RE-ESTABLECIDA (YA DEBE FUNCIONAR)
+// 💾 SESIÓN
 // ============================================================
 app.use(session({
     secret: SESSION_SECRET,
     resave: true,
     saveUninitialized: true,
     cookie: { 
-        secure: false, // Cambiado para evitar el bloqueo en Railway/Render inicial
+        secure: false, 
         maxAge: 1000 * 60 * 60 * 24 
     }
 }));
@@ -92,7 +91,36 @@ app.get('/logout', (req, res) => {
 });
 
 // ============================================================
-// 🧠 LÓGICA DE INTELIGENCIA Y API
+// 🤖 WEBHOOK: CONEXIÓN CON META (LA PIEZA QUE FALTA)
+// ============================================================
+
+// 1. ESTO ES LO QUE VALIDA TU URL EN META (EL BOTÓN AZUL)
+app.get('/webhook', (req, res) => {
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    // El token debe ser ICC_2025 como lo pusiste en Meta
+    if (mode === 'subscribe' && token === 'ICC_2025') {
+        console.log('✅ Webhook verificado correctamente');
+        return res.status(200).send(challenge);
+    } else {
+        return res.sendStatus(403);
+    }
+});
+
+// 2. ESTO RECIBE LOS MENSAJES DE WHATSAPP
+app.post('/webhook', async (req, res) => {
+    const body = req.body;
+    // Respuesta rápida para que Meta no de error
+    res.status(200).send('EVENT_RECEIVED');
+
+    // Aquí iría tu lógica de procesarConLorena cuando lleguen datos reales
+    console.log('Mensaje recibido de Meta');
+});
+
+// ============================================================
+// 🧠 API Y DASHBOARD
 // ============================================================
 
 app.get('/api/data/:type', proteger, (req, res) => res.json(readData(FILES[req.params.type], [])));
@@ -111,15 +139,9 @@ app.post('/save-context', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-// WEBHOOK TESTER
-app.post('/webhook', async (req, res) => {
-    // Lógica simplificada para el test del Dashboard
-    res.json({ reply: "Lorena está lista. Configura Meta para WhatsApp." });
-});
-
-// RUTA PRINCIPAL (DASHBOARD)
 app.get('/', proteger, (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.listen(process.env.PORT || 10000, () => console.log(`🚀 ICC SISTEMA ONLINE`));
+
