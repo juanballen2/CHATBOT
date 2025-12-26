@@ -1,18 +1,18 @@
 const express = require('express');
 const session = require('express-session');
+const FileStore = require('session-file-store')(session); // <--- NUEVO: Para que no lo saque
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const multer = require('multer');
 const { parse } = require('csv-parse/sync');
 const axios = require('axios');
-const cheerio = require('cheerio');
 
 const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 
 // ============================================================
-// 🔑 CONFIGURACIÓN Y SEGURIDAD (Render & Meta)
+// 🔑 CONFIGURACIÓN Y SEGURIDAD
 // ============================================================
 app.set('trust proxy', 1); 
 
@@ -20,29 +20,33 @@ const API_KEY = "AIzaSyACJytpDnPzl9y5FeoQ5sx8m-iyhPXINto";
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = process.env.SESSION_SECRET || "icc-ultra-secret-2025";
-const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN; // Usa el System User Token (Permanente)
+const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN; 
 const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || "ICC_2025";
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Directorio para sesiones y datos
+const DATA_DIR = path.resolve(__dirname, 'data');
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+// CONFIGURACIÓN DE SESIÓN ROBUSTA
 app.use(session({
+    store: new FileStore({ path: path.join(DATA_DIR, 'sessions'), ttl: 86400 }), // Guarda sesión en archivo
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: { 
-        secure: true, 
-        sameSite: 'lax',
-        maxAge: 3600000 * 8 
+        secure: process.env.NODE_ENV === 'production', // False en local, True en prod si hay HTTPS
+        httpOnly: true,
+        sameSite: 'lax', // Importante para que no bloquee la cookie
+        maxAge: 1000 * 60 * 60 * 24 // 24 Horas
     }
 }));
 
 // ============================================================
-// 📂 GESTIÓN DE DATOS (Persistencia Local)
+// 📂 GESTIÓN DE DATOS (JSON)
 // ============================================================
-const DATA_DIR = path.resolve(__dirname, 'data');
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-
 const FILES = {
     knowledge: path.join(DATA_DIR, 'knowledge.json'),
     config: path.join(DATA_DIR, 'config.json'),
@@ -65,106 +69,140 @@ const writeData = (file, data) => {
     catch (err) { return false; }
 };
 
-const normalizarParaBusqueda = (t) => t ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[-.\s]/g, "").trim() : "";
+// ============================================================
+// 🤖 LÓGICA INTELLIGENTE (Búsqueda Borrosa)
+// ============================================================
+const normalizar = (t) => t ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
 
-// ============================================================
-// 🤖 LÓGICA DE LORENA (RAG + MEMORIA + LEADS)
-// ============================================================
-async function enviarWhatsApp(phoneId, to, text) {
-    if (!META_ACCESS_TOKEN) return console.log("⚠️ Sin Token de Meta.");
-    try {
-        await axios.post(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
-            messaging_product: "whatsapp", to, type: "text", text: { body: text }
-        }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}` } });
-    } catch (e) { console.error("❌ Error WhatsApp:", e.message); }
+// Función para encontrar repuestos aunque escriban mal
+function buscarEnCatalogo(query) {
+    if (!query) return [];
+    const qNorm = normalizar(query).split(" "); // Separar palabras clave
+    
+    return globalKnowledge.map(item => {
+        const itemNorm = normalizar(item.searchable);
+        let coincidencias = 0;
+        // Cuenta cuántas palabras de la búsqueda aparecen en el producto
+        qNorm.forEach(word => {
+            if (itemNorm.includes(word)) coincidencias++;
+        });
+        return { ...item, score: coincidencias };
+    })
+    .filter(i => i.score > 0) // Solo los que tengan al menos una coincidencia
+    .sort((a, b) => b.score - a.score) // Los más relevantes primero
+    .slice(0, 5); // Top 5
 }
 
+// ============================================================
+// 🧠 CEREBRO GEMINI (Conexión Estable)
+// ============================================================
 async function procesarConLorena(message, sessionId = 'tester') {
     const config = readData(FILES.config, {});
     let allHistory = readData(FILES.history, {});
-    const queryNorm = normalizarParaBusqueda(message);
     
-    // 1. MEMORIA: Recuperar últimos 6 mensajes
-    const historialLimpio = (allHistory[sessionId] || [])
-        .map(m => `${m.role === 'user' ? 'Cliente' : 'Lorena'}: ${m.text}`)
-        .slice(-6).join('\n');
+    // Recuperar historial
+    const historialChat = (allHistory[sessionId] || []).slice(-6);
+    const historialTexto = historialChat.map(m => `${m.role === 'user' ? 'Cliente' : 'Lorena'}: ${m.text}`).join('\n');
 
-    // 2. CONOCIMIENTO: Búsqueda en catálogo
-    const coincidencias = globalKnowledge.map(item => ({
-        ...item, score: normalizarParaBusqueda(item.searchable).includes(queryNorm) ? 100 : 0
-    })).filter(i => i.score > 0).slice(0, 5);
+    // Buscar en stock
+    const stockEncontrado = buscarEnCatalogo(message);
 
     const prompt = `
-    ${config.prompt || "Eres Lorena de ICC, asesora experta en maquinaria y repuestos."}
-    REGLAS: ${config.tech_rules || "Hablar siempre de Usted. No repetir saludos."}
+    ROL: ${config.prompt || "Eres Lorena, asistente comercial de Importadora Casa Colombia (ICC)."}
+    TONO: Profesional, corporativo ("Usted"), amable y directo.
+    CONTEXTO TÉCNICO: ${config.tech_rules || "Prioriza venta de repuestos Hitachi y Shacman."}
     
-    HISTORIAL DE CONVERSACIÓN:
-    ${historialLimpio}
+    INFORMACIÓN DE BODEGA (STOCK ENCONTRADO):
+    ${stockEncontrado.length > 0 ? JSON.stringify(stockEncontrado) : "No encontré coincidencias exactas en el catálogo, pide más detalles."}
 
-    STOCK DISPONIBLE:
-    ${JSON.stringify(coincidencias)}
+    HISTORIAL RECIENTE:
+    ${historialTexto}
 
-    INSTRUCCIÓN DE LEADS: Si detectas Nombre, Ciudad o Interés, genera: 
+    INSTRUCCIONES DATA:
+    Si el cliente da datos de contacto o muestra interés claro de compra, responde AL FINAL del mensaje con este formato JSON exacto:
     [DATA] {"es_lead": true, "nombre": "...", "telefono": "${sessionId}", "ciudad": "...", "interes": "..."} [DATA]
 
-    MENSAJE ACTUAL DEL CLIENTE: "${message}"`;
+    MENSAJE DEL CLIENTE: "${message}"
+    Respuesta de Lorena:`;
 
-    return new Promise((resolve) => {
-        const payload = JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] });
-        const options = {
-            hostname: 'generativelanguage.googleapis.com',
-            path: `/v1/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            method: 'POST', headers: { 'Content-Type': 'application/json' }
-        };
-        const reqGoogle = https.request(options, (resG) => {
-            let body = '';
-            resG.on('data', d => body += d);
-            resG.on('end', () => {
-                try {
-                    const fullReply = JSON.parse(body).candidates[0].content.parts[0].text;
-                    const partes = fullReply.split('[DATA]');
-                    const textoBot = partes[0].trim();
-                    const dataPart = partes[1];
+    try {
+        const response = await axios.post(
+            `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+            { contents: [{ parts: [{ text: prompt }] }] },
+            { headers: { 'Content-Type': 'application/json' } }
+        );
 
-                    // Actualizar Historial
-                    if (!allHistory[sessionId]) allHistory[sessionId] = [];
-                    allHistory[sessionId].push({ role: 'user', text: message });
-                    allHistory[sessionId].push({ role: 'bot', text: textoBot });
-                    writeData(FILES.history, allHistory);
+        const fullText = response.data.candidates[0].content.parts[0].text;
+        const [textoBot, dataPart] = fullText.split('[DATA]');
 
-                    // Procesar Lead
-                    if (dataPart) {
-                        try {
-                            const lead = JSON.parse(dataPart.replace(/```json|```/g, "").trim());
-                            if (lead.es_lead) {
-                                const leads = readData(FILES.leads, []);
-                                leads.push({ fecha: new Date().toLocaleString('es-CO'), ...lead });
-                                writeData(FILES.leads, leads);
-                            }
-                        } catch (e) {}
-                    }
-                    resolve(textoBot);
-                } catch (e) { resolve("Deme un momento, estoy verificando en bodega..."); }
-            });
-        });
-        reqGoogle.write(payload); reqGoogle.end();
-    });
+        // Guardar Historial
+        if (!allHistory[sessionId]) allHistory[sessionId] = [];
+        allHistory[sessionId].push({ role: 'user', text: message });
+        allHistory[sessionId].push({ role: 'bot', text: textoBot.trim() });
+        writeData(FILES.history, allHistory);
+
+        // Procesar Lead
+        if (dataPart) {
+            try {
+                const cleanJson = dataPart.replace(/\]|\[/g, '').trim(); // Limpieza extra
+                const lead = JSON.parse(cleanJson);
+                if (lead.es_lead) {
+                    const leads = readData(FILES.leads, []);
+                    leads.push({ fecha: new Date().toLocaleString('es-CO'), ...lead });
+                    writeData(FILES.leads, leads);
+                }
+            } catch (e) { console.error("Error parseando Lead:", e); }
+        }
+
+        return textoBot.trim();
+
+    } catch (error) {
+        console.error("Error Gemini:", error.response ? error.response.data : error.message);
+        return "Disculpe, tengo una intermitencia en el sistema de inventario. ¿Podría repetirme la pregunta?";
+    }
+}
+
+async function enviarWhatsApp(phoneId, to, text) {
+    if (!META_ACCESS_TOKEN) return;
+    try {
+        await axios.post(`https://graph.facebook.com/v21.0/${phoneId}/messages`, 
+        { messaging_product: "whatsapp", to, type: "text", text: { body: text } },
+        { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}` } });
+    } catch (e) { console.error("Error WhatsApp Out:", e.message); }
 }
 
 // ============================================================
-// 🔓 RUTAS PÚBLICAS
+// 🚦 RUTAS (Ordenadas Correctamente)
 // ============================================================
-app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
+
+// 1. Archivos estáticos específicos (CSS, JS, IMGs)
+app.use('/images', express.static(path.join(__dirname, 'images')));
+
+// 2. Rutas Públicas
+app.get('/login', (req, res) => {
+    if (req.session.isLogged) return res.redirect('/');
+    res.sendFile(path.join(__dirname, 'login.html'));
+});
 
 app.post('/auth', (req, res) => {
     const { user, pass } = req.body;
     if (user === ADMIN_USER && pass === ADMIN_PASS) {
         req.session.isLogged = true;
-        return res.json({ success: true });
+        // Guardar explícitamente la sesión antes de responder
+        req.session.save(err => {
+            if(err) return res.status(500).json({error: "Error guardando sesión"});
+            res.json({ success: true });
+        });
+    } else {
+        res.status(401).json({ error: "Credenciales inválidas" });
     }
-    res.status(401).json({ error: "Fallo de ingreso" });
 });
 
+app.get('/logout', (req, res) => {
+    req.session.destroy(() => res.redirect('/login'));
+});
+
+// Webhook Meta
 app.get('/webhook', (req, res) => {
     if (req.query['hub.verify_token'] === META_VERIFY_TOKEN) return res.send(req.query['hub.challenge']);
     res.sendStatus(403);
@@ -172,10 +210,15 @@ app.get('/webhook', (req, res) => {
 
 app.post('/webhook', async (req, res) => {
     const body = req.body;
-    if (body.message) return res.json({ reply: await procesarConLorena(body.message) });
+    // Chat Tester (Web)
+    if (body.message && !body.entry) {
+        const reply = await procesarConLorena(body.message, 'web-tester');
+        return res.json({ reply });
+    }
+    // WhatsApp Real
     if (body.object === 'whatsapp_business_account') {
-        const entry = body.entry[0].changes[0].value;
-        if (entry.messages && entry.messages[0]) {
+        const entry = body.entry?.[0]?.changes?.[0]?.value;
+        if (entry?.messages?.[0]) {
             const msg = entry.messages[0];
             const reply = await procesarConLorena(msg.text.body, msg.from);
             await enviarWhatsApp(entry.metadata.phone_number_id, msg.from, reply);
@@ -184,14 +227,13 @@ app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
 });
 
-// ============================================================
-// 🛡️ RUTAS PROTEGIDAS (DASHBOARD)
-// ============================================================
+// 3. Middleware de Protección (Todo lo de abajo requiere Login)
 const proteger = (req, res, next) => {
     if (req.session.isLogged) return next();
-    res.redirect('/login');
+    res.status(401).send("No autorizado. Recargue la página.");
 };
 
+// 4. API del Dashboard
 app.post('/api/save-personality', proteger, (req, res) => {
     const config = readData(FILES.config, {});
     config.prompt = req.body.prompt;
@@ -207,20 +249,22 @@ app.post('/save-context', proteger, (req, res) => {
 });
 
 app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
+    if(!req.file) return res.status(400).json({error: "No archivo"});
     try {
         const content = req.file.buffer.toString('utf-8');
         const records = parse(content, { columns: true, skip_empty_lines: true });
         globalKnowledge = records.map(r => ({
             searchable: Object.values(r).join(" "),
-            originalRow: Object.entries(r).map(([k,v]) => `${k}:${v}`).join("|")
+            data: r
         }));
         writeData(FILES.knowledge, globalKnowledge);
         res.json({ success: true, total: globalKnowledge.length });
-    } catch (e) { res.status(500).send(); }
-} );
+    } catch (e) { res.status(500).json({ error: "Error procesando CSV" }); }
+});
 
 app.get('/api/data/:type', proteger, (req, res) => {
-    res.json(readData(FILES[req.params.type], []));
+    const data = readData(FILES[req.params.type], []);
+    res.json(data);
 });
 
 app.post('/api/data/clear-leads', proteger, (req, res) => {
@@ -228,14 +272,15 @@ app.post('/api/data/clear-leads', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-app.get('/', proteger, (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-app.use(express.static(__dirname));
+// 5. Servir el Dashboard (Solo si está logueado)
+app.get('/', (req, res) => {
+    if (!req.session.isLogged) return res.redirect('/login');
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
-// ============================================================
-// 🚀 INICIO
-// ============================================================
+// 6. Arrancar Servidor
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     globalKnowledge = readData(FILES.knowledge, []);
-    console.log(`🚀 MOTOR ICC 3.0 LISTO - PUERTO ${PORT}`);
+    console.log(`🚀 LORENA IA 3.0 ONLINE - PUERTO ${PORT}`);
 });
