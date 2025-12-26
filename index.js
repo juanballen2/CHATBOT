@@ -10,19 +10,21 @@ const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 
 // ============================================================
-// 🔑 CONFIGURACIÓN INTEGRAL
+// 🔑 CONFIGURACIÓN
 // ============================================================
 app.set('trust proxy', 1);
 
 const API_KEY = "AIzaSyACJytpDnPzl9y5FeoQ5sx8m-iyhPXINto"; 
+// EL TOKEN QUE ME PASASTE:
+const META_TOKEN = "EAAL9wuZCZBtTwBQRQZAogjWdS9glvP9gUZC1MMLT90VPNEcvTH1TsZCu9O4PevZAQCv9MvUXZBty7ZCtAY4xZAnULWzG2EPhGJhCluENc22GDnvzc3oyUAZBdBW7TYabxgCAdTBXT3ku13a7L2ZBZCvNZC9EJfjZBvibbzZCj9uEX8G7coIMJdgUN6wEtvE0B4qZCSNPYtIgGAfZCQkw6ZCmcBvck9B5ggmWPwRUZBnNEmM0D54gZC2AmZC1UBlxM63bn6hG34gTEH0FPANwAwJ0VSGMuQUNptZAFeIgZDZD";
+const PHONE_NUMBER_ID = "913148698549581"; // Tu ID de teléfono de Meta
+
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = process.env.SESSION_SECRET || "icc-ultra-secret-2025";
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-// Servir archivos para que el diseño no se rompa
 app.use(express.static(__dirname)); 
 app.use('/images', express.static(path.join(__dirname, 'images')));
 
@@ -49,7 +51,6 @@ const writeData = (file, data) => {
     catch (err) { return false; }
 };
 
-// Sesión segura pero flexible para Railway
 app.use(session({
     secret: SESSION_SECRET,
     resave: true,
@@ -57,21 +58,38 @@ app.use(session({
     cookie: { secure: false, maxAge: 1000 * 60 * 60 * 24 }
 }));
 
-// Cargar inventario en memoria
 let globalKnowledge = readData(FILES.knowledge, []);
 
 // ============================================================
-// 🧠 LÓGICA DE BÚSQUEDA Y LORENA (CSV + IA)
+// 📩 FUNCIÓN PARA ENVIAR WHATSAPP
+// ============================================================
+async function enviarWhatsApp(destinatario, texto) {
+    try {
+        await axios.post(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`, {
+            messaging_product: "whatsapp",
+            to: destinatario,
+            type: "text",
+            text: { body: texto }
+        }, {
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` }
+        });
+        console.log(`✅ Mensaje enviado a ${destinatario}`);
+    } catch (error) {
+        console.error("❌ Error al enviar WhatsApp:", error.response ? error.response.data : error.message);
+    }
+}
+
+// ============================================================
+// 🧠 LÓGICA DE BÚSQUEDA E IA (LORENA)
 // ============================================================
 function buscarEnCatalogo(query) {
-    if (!query || globalKnowledge.length === 0) return [];
+    if (!query) return [];
     const normalizar = (t) => t ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
     const qNorm = normalizar(query).split(" "); 
-    
     return globalKnowledge.map(item => {
-        const itemText = normalizar(item.searchable || "");
+        const itemNorm = normalizar(item.searchable);
         let score = 0;
-        qNorm.forEach(word => { if (itemText.includes(word)) score++; });
+        qNorm.forEach(word => { if (itemNorm.includes(word)) score++; });
         return { ...item, score };
     }).filter(i => i.score > 0).sort((a, b) => b.score - a.score).slice(0, 5);
 }
@@ -80,106 +98,48 @@ async function procesarConLorena(message, sessionId = 'tester') {
     const config = readData(FILES.config, {});
     let allHistory = readData(FILES.history, {});
     const historialChat = (allHistory[sessionId] || []).slice(-6);
-    
-    // Buscar en el inventario cargado por CSV
-    const stockEncontrado = buscarEnCatalogo(message);
+    const stock = buscarEnCatalogo(message);
 
-    const prompt = `Eres Lorena, asistente comercial de ICC. 
-    REGLAS: ${config.tech_rules || 'Vende repuestos.'}
-    INVENTARIO: ${JSON.stringify(stockEncontrado)}
-    HISTORIAL: ${JSON.stringify(historialChat)}
-    CLIENTE: "${message}"
-    Responde amable. Si captas datos (Nombre, Correo), inclúyelos así al final: [DATA] {"es_lead":true, "nombre":"...", "correo":"..."} [DATA]`;
+    const prompt = `Eres Lorena de ICC (Importadora Casa Colombia). ROL: Experta comercial amable.
+    REGLAS: ${config.tech_rules || 'Vende repuestos de maquinaria amarilla'}. 
+    INVENTARIO ACTUAL: ${JSON.stringify(stock)}. 
+    HISTORIAL: ${JSON.stringify(historialChat)}. 
+    MENSAJE DEL CLIENTE: "${message}".
+    TAREA: Responde de forma servicial. Usa el inventario si es relevante. 
+    Si el cliente parece interesado, intenta obtener su nombre y correo.
+    FORMATO DE SALIDA: Solo texto. Si captas datos, añade al final: [DATA] {"es_lead":true, "nombre":"...", "correo":"..."} [DATA]`;
 
     try {
         const res = await axios.post(`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
             { contents: [{ parts: [{ text: prompt }] }] });
 
         const fullText = res.data.candidates[0].content.parts[0].text;
-        
-        // Separar texto de datos de Leads
-        let textoBot = fullText;
-        if (fullText.includes('[DATA]')) {
-            const partes = fullText.split('[DATA]');
-            textoBot = partes[0].trim();
-            try {
-                const leadData = JSON.parse(partes[1].trim());
-                if (leadData.es_lead) {
-                    const leads = readData(FILES.leads, []);
-                    leads.push({ ...leadData, fecha: new Date().toLocaleString(), telefono: sessionId });
-                    writeData(FILES.leads, leads);
-                }
-            } catch (e) { console.log("Error Lead JSON"); }
-        }
+        const partes = fullText.split('[DATA]');
+        const textoBot = partes[0].trim();
+        const dataPart = partes[1];
 
-        // Guardar Historial
         if (!allHistory[sessionId]) allHistory[sessionId] = [];
         allHistory[sessionId].push({ role: 'user', text: message }, { role: 'bot', text: textoBot });
         writeData(FILES.history, allHistory);
 
+        if (dataPart) {
+            try {
+                const leadData = JSON.parse(dataPart.trim());
+                const leads = readData(FILES.leads, []);
+                leads.push({ ...leadData, fecha: new Date().toLocaleString(), telefono: sessionId });
+                writeData(FILES.leads, leads);
+            } catch (e) { console.log("Error al procesar JSON de Lead"); }
+        }
         return textoBot;
-    } catch (err) { return "Lo siento, ¿podría repetirme su duda?"; }
+    } catch (err) { 
+        console.error("Error Gemini:", err.message);
+        return "Lo siento, estamos verificando el sistema de inventario. ¿Me podrías repetir tu consulta?"; 
+    }
 }
 
 // ============================================================
-// 🚦 WEBHOOK: META Y PRUEBAS
+// 🚦 RUTAS Y WEBHOOK
 // ============================================================
-
-// VALIDACIÓN GET (PARA EL BOTÓN AZUL DE META)
-app.get('/webhook', (req, res) => {
-    const token = 'ICC_2025';
-    if (req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token'] === token) {
-        return res.status(200).send(req.query['hub.challenge']);
-    }
-    res.sendStatus(403);
-});
-
-// RECEPCIÓN POST (MENSAJES REALES Y TESTER)
-app.post('/webhook', async (req, res) => {
-    const body = req.body;
-    
-    // Caso 1: Prueba desde el Dashboard (Tester)
-    if (body.message && !body.entry) {
-        const reply = await procesarConLorena(body.message, 'web-tester');
-        return res.json({ reply });
-    }
-    
-    // Caso 2: Mensaje real de WhatsApp (Meta)
-    if (body.object === 'whatsapp_business_account') {
-        res.sendStatus(200);
-        const entry = body.entry?.[0]?.changes?.[0]?.value;
-        if (entry?.messages?.[0]) {
-            const msg = entry.messages[0];
-            await procesarConLorena(msg.text.body, msg.from);
-        }
-    } else {
-        res.sendStatus(200);
-    }
-});
-
-// ============================================================
-// ⚙️ APIS DEL DASHBOARD (CSV, LOGIN, CONFIG)
-// ============================================================
-
-// CARGAR CSV (RESTAURADO AL 100%)
-app.post('/api/knowledge/csv', upload.single('file'), (req, res) => {
-    try {
-        if (!req.file) return res.status(400).send("No hay archivo");
-        const content = req.file.buffer.toString('utf-8');
-        const records = parse(content, { columns: true, skip_empty_lines: true });
-        
-        globalKnowledge = records.map(r => ({
-            searchable: Object.values(r).join(" "),
-            data: r
-        }));
-        
-        writeData(FILES.knowledge, globalKnowledge);
-        res.json({ success: true, count: globalKnowledge.length });
-    } catch (e) {
-        res.status(500).send("Error procesando CSV");
-    }
-});
-
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
 
 app.post('/auth', (req, res) => {
@@ -190,11 +150,46 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-const proteger = (req, res, next) => {
-    if (req.session.isLogged) return next();
-    res.redirect('/login');
-};
+const proteger = (req, res, next) => req.session.isLogged ? next() : res.redirect('/login');
 
+// VERIFICACIÓN DE WEBHOOK (GET)
+app.get('/webhook', (req, res) => {
+    const token = 'ICC_2025';
+    if (req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token'] === token) {
+        return res.status(200).send(req.query['hub.challenge']);
+    }
+    res.sendStatus(403);
+});
+
+// RECEPCIÓN DE MENSAJES (POST)
+app.post('/webhook', async (req, res) => {
+    const body = req.body;
+
+    // 1. Mensaje desde el Tester del Dashboard
+    if (body.message && !body.entry) {
+        const reply = await procesarConLorena(body.message, 'web-tester');
+        return res.json({ reply });
+    }
+
+    // 2. Mensaje real desde WhatsApp Meta
+    if (body.object === 'whatsapp_business_account') {
+        const entry = body.entry?.[0]?.changes?.[0]?.value;
+        if (entry && entry.messages && entry.messages[0]) {
+            const msg = entry.messages[0];
+            const from = msg.from; // Número del cliente
+            const text = msg.text ? msg.text.body : null;
+
+            if (text) {
+                const respuestaLorena = await procesarConLorena(text, from);
+                await enviarWhatsApp(from, respuestaLorena);
+            }
+        }
+        return res.sendStatus(200);
+    }
+    res.sendStatus(200);
+});
+
+// APIs DASHBOARD
 app.get('/api/data/:type', proteger, (req, res) => res.json(readData(FILES[req.params.type], [])));
 
 app.post('/save-context', proteger, (req, res) => {
@@ -204,10 +199,15 @@ app.post('/save-context', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-app.get('/', proteger, (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-
-app.get('/logout', (req, res) => {
-    req.session.destroy(() => res.redirect('/login'));
+app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
+    const content = req.file.buffer.toString('utf-8');
+    const records = parse(content, { columns: true, skip_empty_lines: true });
+    globalKnowledge = records.map(r => ({ searchable: Object.values(r).join(" "), data: r }));
+    writeData(FILES.knowledge, globalKnowledge);
+    res.json({ success: true });
 });
 
-app.listen(process.env.PORT || 10000, () => console.log(`🚀 ICC LORENA ONLINE`));
+app.get('/', proteger, (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
+
+app.listen(process.env.PORT || 10000, () => console.log(`🚀 LORENA IA ONLINE Y CONECTADA`));
