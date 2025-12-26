@@ -17,7 +17,6 @@
         body { 
             font-family: 'Montserrat', sans-serif; 
             background: #121212;
-            /* Fondo de maquinaria pesada para dar contexto de marca */
             background-image: linear-gradient(var(--dark-overlay), var(--dark-overlay)), 
                               url('https://images.unsplash.com/photo-1578319439584-104c94d37305?q=80&w=2070&auto=format&fit=crop');
             background-size: cover;
@@ -138,8 +137,6 @@
             filter: brightness(1.15);
         }
 
-        button:active { transform: translateY(-1px); }
-
         .error { 
             color: #ff4d4d; 
             font-size: 13px; 
@@ -221,14 +218,19 @@
                 });
 
                 if (res.ok) {
-                    window.location.href = '/'; 
+                    btn.innerHTML = '<i class="fas fa-check"></i> Acceso Concedido';
+                    // Pequeña espera de 600ms para asegurar que la cookie de sesión se guarde
+                    setTimeout(() => {
+                        window.location.replace('/');
+                    }, 600);
                 } else {
                     errorDiv.style.display = 'block';
                     btn.innerHTML = 'Ingresar al Dashboard';
                     btn.disabled = false;
                 }
             } catch (err) {
-                alert("Error de red: No se pudo contactar al servidor ICC");
+                console.error(err);
+                alert("Error de red: No se pudo conectar con el servidor.");
                 btn.innerHTML = 'Ingresar al Dashboard';
                 btn.disabled = false;
             }
