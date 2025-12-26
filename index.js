@@ -1,6 +1,6 @@
 const express = require('express');
 const session = require('express-session');
-const FileStore = require('session-file-store')(session); // <--- NUEVO: Para que no lo saque
+const FileStore = require('session-file-store')(session); // Mantiene la sesión viva
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
@@ -12,41 +12,25 @@ const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 
 // ============================================================
-// 🔑 CONFIGURACIÓN Y SEGURIDAD
+// 🔑 CONFIGURACIÓN Y CONSTANTES
 // ============================================================
-app.set('trust proxy', 1); 
+app.set('trust proxy', 1);
 
+// Estas variables ahora pueden leerse del archivo config.json si se actualizan desde el panel
 const API_KEY = "AIzaSyACJytpDnPzl9y5FeoQ5sx8m-iyhPXINto"; 
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = process.env.SESSION_SECRET || "icc-ultra-secret-2025";
-const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN; 
 const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || "ICC_2025";
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Directorio para sesiones y datos
+// Directorio para datos
 const DATA_DIR = path.resolve(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-// CONFIGURACIÓN DE SESIÓN ROBUSTA
-app.use(session({
-    store: new FileStore({ path: path.join(DATA_DIR, 'sessions'), ttl: 86400 }), // Guarda sesión en archivo
-    secret: SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: { 
-        secure: process.env.NODE_ENV === 'production', // False en local, True en prod si hay HTTPS
-        httpOnly: true,
-        sameSite: 'lax', // Importante para que no bloquee la cookie
-        maxAge: 1000 * 60 * 60 * 24 // 24 Horas
-    }
-}));
-
-// ============================================================
-// 📂 GESTIÓN DE DATOS (JSON)
-// ============================================================
+// Archivos JSON
 const FILES = {
     knowledge: path.join(DATA_DIR, 'knowledge.json'),
     config: path.join(DATA_DIR, 'config.json'),
@@ -54,8 +38,11 @@ const FILES = {
     history: path.join(DATA_DIR, 'history.json')
 };
 
-let globalKnowledge = [];
+// ============================================================
+// 💾 GESTIÓN DE DATOS Y SESIONES
+// ============================================================
 
+// Lectura segura de datos
 const readData = (file, fallback) => {
     try {
         if (!fs.existsSync(file)) return fallback;
@@ -69,58 +56,83 @@ const writeData = (file, data) => {
     catch (err) { return false; }
 };
 
-// ============================================================
-// 🤖 LÓGICA INTELLIGENTE (Búsqueda Borrosa)
-// ============================================================
-const normalizar = (t) => t ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
+// Configuración de Sesión "Blindada"
+app.use(session({
+    store: new FileStore({ path: path.join(DATA_DIR, 'sessions'), ttl: 86400 }), // Guarda en archivo
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { 
+        secure: false, // Importante: false evita problemas con proxys en Render
+        httpOnly: true,
+        maxAge: 1000 * 60 * 60 * 24 // 24 Horas
+    }
+}));
 
-// Función para encontrar repuestos aunque escriban mal
+let globalKnowledge = readData(FILES.knowledge, []);
+
+// ============================================================
+// 🧠 LÓGICA INTELIGENTE (Búsqueda + Gemini)
+// ============================================================
+
+// 1. Buscador "Borroso" (Entiende errores ortográficos)
 function buscarEnCatalogo(query) {
     if (!query) return [];
-    const qNorm = normalizar(query).split(" "); // Separar palabras clave
+    const normalizar = (t) => t ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
+    const qNorm = normalizar(query).split(" "); 
     
     return globalKnowledge.map(item => {
         const itemNorm = normalizar(item.searchable);
         let coincidencias = 0;
-        // Cuenta cuántas palabras de la búsqueda aparecen en el producto
-        qNorm.forEach(word => {
-            if (itemNorm.includes(word)) coincidencias++;
-        });
+        qNorm.forEach(word => { if (itemNorm.includes(word)) coincidencias++; });
         return { ...item, score: coincidencias };
     })
-    .filter(i => i.score > 0) // Solo los que tengan al menos una coincidencia
-    .sort((a, b) => b.score - a.score) // Los más relevantes primero
-    .slice(0, 5); // Top 5
+    .filter(i => i.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5); // Top 5 coincidencias
 }
 
-// ============================================================
-// 🧠 CEREBRO GEMINI (Conexión Estable)
-// ============================================================
+// 2. Cerebro Principal
 async function procesarConLorena(message, sessionId = 'tester') {
     const config = readData(FILES.config, {});
     let allHistory = readData(FILES.history, {});
     
-    // Recuperar historial
+    // Recuperar últimos 6 mensajes para contexto
     const historialChat = (allHistory[sessionId] || []).slice(-6);
     const historialTexto = historialChat.map(m => `${m.role === 'user' ? 'Cliente' : 'Lorena'}: ${m.text}`).join('\n');
 
     // Buscar en stock
     const stockEncontrado = buscarEnCatalogo(message);
 
+    // PROMPT MAESTRO ACTUALIZADO (Pide Apellido y Correo)
     const prompt = `
-    ROL: ${config.prompt || "Eres Lorena, asistente comercial de Importadora Casa Colombia (ICC)."}
-    TONO: Profesional, corporativo ("Usted"), amable y directo.
-    CONTEXTO TÉCNICO: ${config.tech_rules || "Prioriza venta de repuestos Hitachi y Shacman."}
+    ROL: Eres Lorena, la asistente comercial experta de Importadora Casa Colombia (ICC).
+    TU OBJETIVO: Asesorar, dar información de la empresa y VENDER repuestos/maquinaria.
     
-    INFORMACIÓN DE BODEGA (STOCK ENCONTRADO):
-    ${stockEncontrado.length > 0 ? JSON.stringify(stockEncontrado) : "No encontré coincidencias exactas en el catálogo, pide más detalles."}
+    🧠 BASE DE CONOCIMIENTO (INFORMACIÓN DE LA EMPRESA):
+    Usa esto para responder preguntas generales (quiénes somos, horarios, servicios):
+    "${config.tech_rules || "Somos ICC, líderes en maquinaria amarilla y repuestos en Colombia. Atendemos de 8am a 5pm."}"
 
-    HISTORIAL RECIENTE:
+    📦 INVENTARIO (SOLO SI PREGUNTAN POR REPUESTOS):
+    ${stockEncontrado.length > 0 ? JSON.stringify(stockEncontrado) : "No hay coincidencia exacta en este momento."}
+
+    📜 HISTORIAL:
     ${historialTexto}
 
-    INSTRUCCIONES DATA:
-    Si el cliente da datos de contacto o muestra interés claro de compra, responde AL FINAL del mensaje con este formato JSON exacto:
-    [DATA] {"es_lead": true, "nombre": "...", "telefono": "${sessionId}", "ciudad": "...", "interes": "..."} [DATA]
+    🚨 REGLAS DE ORO:
+    1. Si preguntan cosas generales, usa la BASE DE CONOCIMIENTO.
+    2. Si preguntan por repuestos, usa el INVENTARIO.
+    3. Trata siempre de "Usted".
+
+    🕵️‍♂️ CAZADOR DE LEADS (IMPORTANTE):
+    Tu meta oculta es completar la ficha del cliente. Intenta obtener sutilmente:
+    - Nombre y APELLIDO.
+    - Correo Electrónico.
+    - Interés (Qué máquina o repuesto busca).
+    
+    FORMATO JSON DE SALIDA:
+    Si el cliente da datos o muestra interés de compra, agrega AL FINAL de tu respuesta este bloque (llena con null lo que no tengas):
+    [DATA] {"es_lead": true, "nombre": "...", "apellido": "...", "correo": "...", "telefono": "${sessionId}", "interes": "..."} [DATA]
 
     MENSAJE DEL CLIENTE: "${message}"
     Respuesta de Lorena:`;
@@ -133,52 +145,70 @@ async function procesarConLorena(message, sessionId = 'tester') {
         );
 
         const fullText = response.data.candidates[0].content.parts[0].text;
-        const [textoBot, dataPart] = fullText.split('[DATA]');
+        const partes = fullText.split('[DATA]');
+        const textoBot = partes[0].trim();
+        const dataPart = partes[1];
 
         // Guardar Historial
         if (!allHistory[sessionId]) allHistory[sessionId] = [];
         allHistory[sessionId].push({ role: 'user', text: message });
-        allHistory[sessionId].push({ role: 'bot', text: textoBot.trim() });
+        allHistory[sessionId].push({ role: 'bot', text: textoBot });
         writeData(FILES.history, allHistory);
 
         // Procesar Lead
         if (dataPart) {
             try {
-                const cleanJson = dataPart.replace(/\]|\[/g, '').trim(); // Limpieza extra
+                const cleanJson = dataPart.replace(/\]|\[/g, '').trim();
                 const lead = JSON.parse(cleanJson);
                 if (lead.es_lead) {
                     const leads = readData(FILES.leads, []);
-                    leads.push({ fecha: new Date().toLocaleString('es-CO'), ...lead });
+                    // Combinar nombre y apellido para visualización
+                    const nombreCompleto = `${lead.nombre || ''} ${lead.apellido || ''}`.trim();
+                    
+                    leads.push({ 
+                        fecha: new Date().toLocaleString('es-CO'), 
+                        nombre: nombreCompleto || 'Desconocido',
+                        correo: lead.correo || 'Pendiente',
+                        telefono: lead.telefono,
+                        ciudad: lead.ciudad || 'N/A',
+                        interes: lead.interes
+                    });
                     writeData(FILES.leads, leads);
                 }
             } catch (e) { console.error("Error parseando Lead:", e); }
         }
 
-        return textoBot.trim();
+        return textoBot;
 
     } catch (error) {
-        console.error("Error Gemini:", error.response ? error.response.data : error.message);
-        return "Disculpe, tengo una intermitencia en el sistema de inventario. ¿Podría repetirme la pregunta?";
+        console.error("Error Gemini:", error.message);
+        return "Disculpe, estamos actualizando el inventario. ¿Me repite la pregunta?";
     }
 }
 
+// 3. Envío a WhatsApp (Con soporte para Token desde Config)
 async function enviarWhatsApp(phoneId, to, text) {
-    if (!META_ACCESS_TOKEN) return;
+    const config = readData(FILES.config, {});
+    // Usa el token del env O el guardado en el panel
+    const token = config.meta_token || process.env.META_ACCESS_TOKEN;
+    
+    if (!token) return console.log("⚠️ Falta Token Meta");
+
     try {
         await axios.post(`https://graph.facebook.com/v21.0/${phoneId}/messages`, 
         { messaging_product: "whatsapp", to, type: "text", text: { body: text } },
-        { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}` } });
-    } catch (e) { console.error("Error WhatsApp Out:", e.message); }
+        { headers: { 'Authorization': `Bearer ${token}` } });
+    } catch (e) { console.error("Error WhatsApp Out:", e.response ? e.response.data : e.message); }
 }
 
 // ============================================================
-// 🚦 RUTAS (Ordenadas Correctamente)
+// 🚦 RUTAS DEL SERVIDOR
 // ============================================================
 
-// 1. Archivos estáticos específicos (CSS, JS, IMGs)
+// Estáticos
 app.use('/images', express.static(path.join(__dirname, 'images')));
 
-// 2. Rutas Públicas
+// 1. Autenticación
 app.get('/login', (req, res) => {
     if (req.session.isLogged) return res.redirect('/');
     res.sendFile(path.join(__dirname, 'login.html'));
@@ -188,11 +218,7 @@ app.post('/auth', (req, res) => {
     const { user, pass } = req.body;
     if (user === ADMIN_USER && pass === ADMIN_PASS) {
         req.session.isLogged = true;
-        // Guardar explícitamente la sesión antes de responder
-        req.session.save(err => {
-            if(err) return res.status(500).json({error: "Error guardando sesión"});
-            res.json({ success: true });
-        });
+        req.session.save(() => res.json({ success: true })); // Guarda sesión forzosamente
     } else {
         res.status(401).json({ error: "Credenciales inválidas" });
     }
@@ -202,7 +228,7 @@ app.get('/logout', (req, res) => {
     req.session.destroy(() => res.redirect('/login'));
 });
 
-// Webhook Meta
+// 2. Webhooks (Públicos)
 app.get('/webhook', (req, res) => {
     if (req.query['hub.verify_token'] === META_VERIFY_TOKEN) return res.send(req.query['hub.challenge']);
     res.sendStatus(403);
@@ -210,11 +236,13 @@ app.get('/webhook', (req, res) => {
 
 app.post('/webhook', async (req, res) => {
     const body = req.body;
-    // Chat Tester (Web)
+    
+    // Tester Web
     if (body.message && !body.entry) {
         const reply = await procesarConLorena(body.message, 'web-tester');
         return res.json({ reply });
     }
+    
     // WhatsApp Real
     if (body.object === 'whatsapp_business_account') {
         const entry = body.entry?.[0]?.changes?.[0]?.value;
@@ -230,7 +258,7 @@ app.post('/webhook', async (req, res) => {
 // 3. Middleware de Protección (Todo lo de abajo requiere Login)
 const proteger = (req, res, next) => {
     if (req.session.isLogged) return next();
-    res.status(401).send("No autorizado. Recargue la página.");
+    res.status(401).send("Sesión expirada");
 };
 
 // 4. API del Dashboard
@@ -248,8 +276,16 @@ app.post('/save-context', proteger, (req, res) => {
     res.json({ success: true });
 });
 
+// NUEVA RUTA: Guardar Integraciones y Config General
+app.post('/api/save-general-config', proteger, (req, res) => {
+    const currentConfig = readData(FILES.config, {});
+    const newConfig = { ...currentConfig, ...req.body };
+    writeData(FILES.config, newConfig);
+    res.json({ success: true });
+});
+
 app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
-    if(!req.file) return res.status(400).json({error: "No archivo"});
+    if(!req.file) return res.status(400).json({error: "Falta archivo"});
     try {
         const content = req.file.buffer.toString('utf-8');
         const records = parse(content, { columns: true, skip_empty_lines: true });
@@ -259,7 +295,7 @@ app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
         }));
         writeData(FILES.knowledge, globalKnowledge);
         res.json({ success: true, total: globalKnowledge.length });
-    } catch (e) { res.status(500).json({ error: "Error procesando CSV" }); }
+    } catch (e) { res.status(500).json({ error: "Error en CSV" }); }
 });
 
 app.get('/api/data/:type', proteger, (req, res) => {
@@ -272,15 +308,11 @@ app.post('/api/data/clear-leads', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-// 5. Servir el Dashboard (Solo si está logueado)
-app.get('/', (req, res) => {
-    if (!req.session.isLogged) return res.redirect('/login');
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
+// 5. Servir Frontend Protegido
+app.get('/', proteger, (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
-// 6. Arrancar Servidor
+// 6. Arranque
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-    globalKnowledge = readData(FILES.knowledge, []);
-    console.log(`🚀 LORENA IA 3.0 ONLINE - PUERTO ${PORT}`);
+    console.log(`🚀 LORENA IA 3.0 LISTA EN PUERTO ${PORT}`);
 });
