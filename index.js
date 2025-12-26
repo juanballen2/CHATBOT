@@ -2,7 +2,6 @@ const express = require('express');
 const session = require('express-session');
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
 const multer = require('multer');
 const { parse } = require('csv-parse/sync');
 const axios = require('axios');
@@ -19,10 +18,13 @@ const API_KEY = "AIzaSyACJytpDnPzl9y5FeoQ5sx8m-iyhPXINto";
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = process.env.SESSION_SECRET || "icc-ultra-secret-2025";
-const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || "ICC_2025";
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// SERVIR ARCHIVOS ESTÁTICOS (ESTO ARREGLA EL FRONT)
+app.use(express.static(__dirname)); 
+app.use('/images', express.static(path.join(__dirname, 'images')));
 
 const DATA_DIR = path.resolve(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -48,92 +50,53 @@ const writeData = (file, data) => {
 };
 
 // ============================================================
-// 💾 SESIÓN (DESACTIVADA PRÁCTICAMENTE)
+// 💾 SESIÓN RE-ESTABLECIDA (YA DEBE FUNCIONAR)
 // ============================================================
 app.use(session({
     secret: SESSION_SECRET,
     resave: true,
     saveUninitialized: true,
-    cookie: { secure: false }
+    cookie: { 
+        secure: false, // Cambiado para evitar el bloqueo en Railway/Render inicial
+        maxAge: 1000 * 60 * 60 * 24 
+    }
 }));
 
-let globalKnowledge = readData(FILES.knowledge, []);
-
 // ============================================================
-// 🧠 LÓGICA INTELIGENTE (LORENA)
-// ============================================================
-function buscarEnCatalogo(query) {
-    if (!query) return [];
-    const normalizar = (t) => t ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
-    const qNorm = normalizar(query).split(" "); 
-    
-    return globalKnowledge.map(item => {
-        const itemNorm = normalizar(item.searchable);
-        let coincidencias = 0;
-        qNorm.forEach(word => { if (itemNorm.includes(word)) coincidencias++; });
-        return { ...item, score: coincidencias };
-    })
-    .filter(i => i.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
-}
-
-async function procesarConLorena(message, sessionId = 'tester') {
-    const config = readData(FILES.config, {});
-    let allHistory = readData(FILES.history, {});
-    
-    const historialChat = (allHistory[sessionId] || []).slice(-6);
-    const historialTexto = historialChat.map(m => `${m.role === 'user' ? 'Cliente' : 'Lorena'}: ${m.text}`).join('\n');
-    const stockEncontrado = buscarEnCatalogo(message);
-
-    const prompt = `Eres Lorena de ICC. Info empresa: ${config.tech_rules || ''}. Inventario: ${JSON.stringify(stockEncontrado)}. Cliente dice: ${message}`;
-
-    try {
-        const response = await axios.post(
-            `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: prompt }] }] },
-            { headers: { 'Content-Type': 'application/json' } }
-        );
-
-        const textoBot = response.data.candidates[0].content.parts[0].text;
-        return textoBot;
-    } catch (error) { return "Lo siento, ¿puedes repetir?"; }
-}
-
-// ============================================================
-// 🚦 RUTAS Y EL FAMOSO BYPASS
+// 🚦 RUTAS DE ACCESO
 // ============================================================
 
-// EL PORTERO AHORA DEJA PASAR A TODO EL MUNDO
-const proteger = (req, res, next) => {
-    console.log("BYPASS: Entrando sin contraseña");
-    return next(); 
-};
-
-app.get('/login', (req, res) => res.redirect('/'));
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'login.html'));
+});
 
 app.post('/auth', (req, res) => {
-    req.session.isLogged = true;
-    res.json({ success: true });
-});
-
-app.get('/logout', (req, res) => res.redirect('/'));
-
-app.get('/webhook', (req, res) => {
-    if (req.query['hub.verify_token'] === META_VERIFY_TOKEN) return res.send(req.query['hub.challenge']);
-    res.sendStatus(403);
-});
-
-app.post('/webhook', async (req, res) => {
-    const body = req.body;
-    if (body.message && !body.entry) {
-        const reply = await procesarConLorena(body.message, 'web-tester');
-        return res.json({ reply });
+    const { user, pass } = req.body;
+    if (user === ADMIN_USER && pass === ADMIN_PASS) {
+        req.session.isLogged = true;
+        req.session.save(() => {
+            res.json({ success: true });
+        });
+    } else {
+        res.status(401).json({ success: false, error: "Credenciales inválidas" });
     }
-    res.sendStatus(200);
 });
 
-// RUTAS DEL API PROTEGIDAS (Pero el portero las deja pasar)
+const proteger = (req, res, next) => {
+    if (req.session.isLogged) return next();
+    res.redirect('/login');
+};
+
+app.get('/logout', (req, res) => {
+    req.session.destroy(() => res.redirect('/login'));
+});
+
+// ============================================================
+// 🧠 LÓGICA DE INTELIGENCIA Y API
+// ============================================================
+
+app.get('/api/data/:type', proteger, (req, res) => res.json(readData(FILES[req.params.type], [])));
+
 app.post('/api/save-personality', proteger, (req, res) => {
     const config = readData(FILES.config, {});
     config.prompt = req.body.prompt;
@@ -148,21 +111,15 @@ app.post('/save-context', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
-    try {
-        const content = req.file.buffer.toString('utf-8');
-        const records = parse(content, { columns: true, skip_empty_lines: true });
-        globalKnowledge = records.map(r => ({ searchable: Object.values(r).join(" "), data: r }));
-        writeData(FILES.knowledge, globalKnowledge);
-        res.json({ success: true, total: globalKnowledge.length });
-    } catch (e) { res.status(500).json({ error: "Error en CSV" }); }
+// WEBHOOK TESTER
+app.post('/webhook', async (req, res) => {
+    // Lógica simplificada para el test del Dashboard
+    res.json({ reply: "Lorena está lista. Configura Meta para WhatsApp." });
 });
 
-app.get('/api/data/:type', proteger, (req, res) => res.json(readData(FILES[req.params.type], [])));
-
-// LA RUTA PRINCIPAL
+// RUTA PRINCIPAL (DASHBOARD)
 app.get('/', proteger, (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.listen(process.env.PORT || 10000, () => console.log(`🚀 LORENA ONLINE - BYPASS ACTIVO`));
+app.listen(process.env.PORT || 10000, () => console.log(`🚀 ICC SISTEMA ONLINE`));
