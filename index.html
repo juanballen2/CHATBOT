@@ -31,7 +31,10 @@
             <i class="fas fa-users"></i> Base de Leads
         </div>
 
-        <div class="nav-label">Inteligencia Artificial</div>
+        <div class="nav-label">Configuración</div>
+        <div class="nav-item" onclick="navTo('integraciones', this)">
+            <i class="fas fa-plug"></i> Integraciones
+        </div>
         <div class="nav-item" onclick="navTo('cerebro', this)">
             <i class="fas fa-brain"></i> Entrenamiento
         </div>
@@ -120,6 +123,55 @@
             </div>
         </div>
 
+        <div id="integraciones" class="view">
+            <h2><i class="fas fa-network-wired"></i> Conexiones del Sistema</h2>
+            
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:25px;">
+                
+                <div class="card" style="border-top-color: var(--whatsapp);">
+                    <h3><i class="fab fa-whatsapp"></i> Meta (WhatsApp Cloud API)</h3>
+                    <p style="font-size:12px; color:#666; margin-bottom:15px;">
+                        Configure aquí el token permanente para que Lorena escuche y responda 24/7.
+                    </p>
+                    
+                    <label style="font-size:12px; font-weight:bold;">Phone Number ID</label>
+                    <input type="text" id="meta-phone" placeholder="Ej: 367283..." style="margin-bottom:15px;">
+                    
+                    <label style="font-size:12px; font-weight:bold;">Token de Acceso (Permanente)</label>
+                    <input type="password" id="meta-token" placeholder="EAAG..." style="margin-bottom:15px;">
+                    
+                    <button class="btn" style="width:100%; background:var(--whatsapp);" onclick="guardarIntegracion('meta')">
+                        <i class="fas fa-sync"></i> Actualizar Meta
+                    </button>
+                </div>
+
+                <div class="card" style="border-top-color: #9b59b6;">
+                    <h3><i class="fab fa-wordpress"></i> Tienda Virtual (StoreICC)</h3>
+                    <p style="font-size:12px; color:#666; margin-bottom:15px;">
+                        Conecte con storeicc.com para verificar precios en tiempo real.
+                    </p>
+                    
+                    <label style="font-size:12px; font-weight:bold;">URL de la Tienda</label>
+                    <input type="text" value="https://storeicc.com" disabled style="background:#eee; margin-bottom:15px;">
+                    
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                        <div>
+                            <label style="font-size:12px; font-weight:bold;">Consumer Key</label>
+                            <input type="password" id="woo-key" placeholder="ck_...">
+                        </div>
+                        <div>
+                            <label style="font-size:12px; font-weight:bold;">Consumer Secret</label>
+                            <input type="password" id="woo-secret" placeholder="cs_...">
+                        </div>
+                    </div>
+                    
+                    <button class="btn" style="width:100%; margin-top:15px; background: #9b59b6;" onclick="guardarIntegracion('woo')">
+                        <i class="fas fa-link"></i> Vincular Tienda
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div id="cerebro" class="view">
             <h2><i class="fas fa-brain"></i> Configuración de Lorena IA</h2>
             
@@ -135,8 +187,9 @@
                     </div>
 
                     <div class="card">
-                        <h3><i class="fas fa-book"></i> Reglas de Negocio</h3>
-                        <textarea id="context-area" rows="6" placeholder="Ej: Horario de atención 8am a 5pm. Envíos gratis en Bogotá..."></textarea>
+                        <h3><i class="fas fa-book"></i> Reglas de Negocio / Contexto</h3>
+                        <p style="font-size:12px; margin-bottom:10px; color:#666;">Pega aquí la información de la empresa (Quiénes somos, servicios, etc).</p>
+                        <textarea id="context-area" rows="6" placeholder="Ej: Importadora Casa Colombia es líder en repuestos..."></textarea>
                         <button class="btn" style="margin-top:15px; width:100%; background:var(--dark-bg);" onclick="guardarContexto()">
                             <i class="fas fa-save"></i> Guardar Reglas
                         </button>
@@ -200,8 +253,12 @@
                 document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
                 element.classList.add('active');
             } else {
-                // Si se llama desde botón interno, buscar el menú correspondiente
-                // (Lógica simplificada para este caso)
+                // Manejo manual si se llama desde botón interno
+                if(viewId === 'cerebro') {
+                    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                    // Busca el 5to hijo aprox, pero simplificado:
+                    // En producción se busca por ID o atributo, por ahora funciona visualmente
+                }
             }
 
             // Cargar datos según la vista
@@ -209,6 +266,7 @@
             if(viewId === 'whatsapp') loadWhatsApp();
             if(viewId === 'leads') loadLeads();
             if(viewId === 'cerebro') loadConfig();
+            if(viewId === 'integraciones') loadIntegrations();
         }
 
         function showToast(msg, type='success') {
@@ -279,7 +337,6 @@
             }
         }
 
-        // ¡AQUÍ ESTÁ LA FUNCIÓN QUE FALTABA! 
         function verChat(phone) {
             const box = document.getElementById('active-chat-box');
             const msgs = chatHistoryCache[phone] || [];
@@ -289,7 +346,6 @@
                         </div>`;
 
             msgs.forEach(m => {
-                // Usamos las clases de SU CSS: bot-row y user-row
                 const typeClass = m.role === 'bot' ? 'bot-row' : 'user-row';
                 html += `<div class="bubble ${typeClass}">${m.text}</div>`;
             });
@@ -328,12 +384,39 @@
         }
 
         // ========================
-        // 5. CONFIGURACIÓN
+        // 5. CONFIGURACIÓN E INTEGRACIONES
         // ========================
         async function loadConfig() {
             const config = await fetch('/api/data/config').then(r => r.json());
-            document.getElementById('prompt-area').value = config.prompt || '';
-            document.getElementById('context-area').value = config.tech_rules || '';
+            if(document.getElementById('prompt-area')) document.getElementById('prompt-area').value = config.prompt || '';
+            if(document.getElementById('context-area')) document.getElementById('context-area').value = config.tech_rules || '';
+        }
+
+        async function loadIntegrations() {
+            try {
+                const config = await fetch('/api/data/config').then(r => r.json());
+                if(config.meta_phone) document.getElementById('meta-phone').value = config.meta_phone;
+                if(config.meta_token) document.getElementById('meta-token').value = config.meta_token;
+                if(config.woo_key) document.getElementById('woo-key').value = config.woo_key;
+                if(config.woo_secret) document.getElementById('woo-secret').value = config.woo_secret;
+            } catch(e) {}
+        }
+
+        async function guardarIntegracion(type) {
+            const payload = {};
+            if (type === 'meta') {
+                payload.meta_phone = document.getElementById('meta-phone').value;
+                payload.meta_token = document.getElementById('meta-token').value;
+            } else {
+                payload.woo_key = document.getElementById('woo-key').value;
+                payload.woo_secret = document.getElementById('woo-secret').value;
+            }
+            
+            await fetch('/api/save-general-config', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            showToast("Integración Guardada Correctamente");
         }
 
         async function guardarPersonalidad() {
@@ -359,20 +442,16 @@
         async function subirCSV() {
             const file = document.getElementById('csv-upload').files[0];
             if(!file) return alert("Selecciona un archivo primero");
-
-            const fd = new FormData();
-            fd.append('file', file);
-            
+            const fd = new FormData(); fd.append('file', file);
             showToast("Procesando archivo...", "info");
             logTerm("Iniciando carga de inventario...");
-
             try {
                 const res = await fetch('/api/knowledge/csv', { method:'POST', body: fd });
                 const d = await res.json();
                 if(d.success) {
                     showToast(`¡Listo! ${d.total} productos aprendidos`);
                     logTerm(`Carga completada: ${d.total} registros indexados.`);
-                    document.getElementById('kpi-stock').innerText = d.total; // Actualizar KPI en vivo
+                    document.getElementById('kpi-stock').innerText = d.total;
                 }
             } catch(e) {
                 alert("Error al subir");
@@ -397,8 +476,7 @@
             // Call Bot
             try {
                 const res = await fetch('/webhook', {
-                    method:'POST',
-                    headers: {'Content-Type':'application/json'},
+                    method:'POST', headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({ message: txt })
                 });
                 const d = await res.json();
@@ -411,9 +489,7 @@
         }
 
         // INIT
-        window.onload = () => {
-            loadStats();
-        };
+        window.onload = () => { loadStats(); };
     </script>
 </body>
 </html>
