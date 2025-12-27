@@ -121,8 +121,8 @@ async function procesarConLorena(message, sessionId) {
     5. IMPORTANTE: Si detectas su nombre o correo, añade al final: [DATA] {"es_lead":true, "nombre":"...", "correo":"..."} [DATA]`;
 
     try {
-        // ✨ CAMBIO AQUÍ: Usamos v1 y gemini-1.5-flash para evitar el error de cuota agotada
-        const res = await axios.post(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
+        // ✨ AJUSTE FINAL: v1beta + gemini-1.5-flash
+        const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
             { contents: [{ parts: [{ text: prompt }] }] });
 
         let fullText = res.data.candidates[0].content.parts[0].text;
