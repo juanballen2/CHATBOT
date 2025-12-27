@@ -121,12 +121,9 @@ async function procesarConLorena(message, sessionId) {
     5. IMPORTANTE: Si detectas su nombre o correo, añade al final: [DATA] {"es_lead":true, "nombre":"...", "correo":"..."} [DATA]`;
 
     try {
-        // ✨ LA URL DEFINITIVA: Usando gemini-1.5-flash-latest que es la más compatible
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${API_KEY}`;
-        
-        const res = await axios.post(url, {
-            contents: [{ parts: [{ text: prompt }] }]
-        });
+        // ✨ URL CORREGIDA: Usando gemini-1.5-flash-latest con v1beta
+        const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${API_KEY}`,
+            { contents: [{ parts: [{ text: prompt }] }] });
 
         let fullText = res.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText;
@@ -145,6 +142,7 @@ async function procesarConLorena(message, sessionId) {
         allHistory[sessionId].push({ role: 'bot', text: respuestaLimpia, time: new Date().toISOString() });
         writeData(FILES.history, allHistory);
 
+        // ✅ RECUPERADO: Procesamiento de Leads
         if (dataPart) {
             try {
                 const leadData = JSON.parse(dataPart.trim());
@@ -153,12 +151,12 @@ async function procesarConLorena(message, sessionId) {
                     leads.push({ ...leadData, fecha: new Date().toLocaleString(), telefono: sessionId });
                     writeData(FILES.leads, leads);
                 }
-            } catch (e) { console.log("Error procesando Lead"); }
+            } catch (e) { console.log("Error Lead JSON"); }
         }
         return respuestaLimpia;
     } catch (err) { 
-        console.error("❌ Error CRITICO Gemini:", err.response?.data || err.message);
-        return "Hola, te habla Lorena de ICC. Tuvimos una pequeña interrupción técnica, ¿me podrías repetir lo último?"; 
+        console.error("Error Gemini:", err.response?.data || err.message);
+        return "Hola, te habla Lorena de ICC. Tuvimos una pequeña interrupción, ¿me podrías repetir lo último?"; 
     }
 }
 
@@ -202,6 +200,7 @@ app.post('/auth', (req, res) => {
     res.status(401).json({ success: false });
 });
 
+// ✅ RECUPERADO: Guardar Contexto
 app.post('/save-context', proteger, (req, res) => {
     const config = readData(FILES.config, {});
     config.tech_rules = req.body.context;
@@ -233,6 +232,7 @@ app.post('/api/chat/toggle-bot', proteger, (req, res) => {
 
 app.get('/api/data/:type', proteger, (req, res) => res.json(readData(FILES[req.params.type], [])));
 
+// ✅ RECUPERADO: Carga de CSV
 app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: "No se envió archivo" });
