@@ -11,6 +11,7 @@ const app = express();
 
 app.set('trust proxy', 1);
 
+// CONFIGURACIÓN DE VARIABLES
 const API_KEY = process.env.GEMINI_API_KEY; 
 const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
@@ -22,7 +23,6 @@ const SESSION_SECRET = "icc-ultra-secret-2025";
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(__dirname)); 
-app.use('/images', express.static(path.join(__dirname, 'images')));
 
 const DATA_DIR = path.resolve(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -56,17 +56,18 @@ app.use(session({
 let globalKnowledge = readData(FILES.knowledge, []);
 
 // ============================================================
-// 📩 ENVÍO DE WHATSAPP
+// 📩 MOTOR DE ENVÍO (TEXTO / IMAGEN / DOC)
 // ============================================================
-async function enviarWhatsApp(destinatario, texto) {
+async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     try {
-        await axios.post(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`, {
-            messaging_product: "whatsapp",
-            to: destinatario,
-            type: "text",
-            text: { body: texto }
-        }, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
-        console.log(`✅ Mensaje enviado a ${destinatario}`);
+        let payload = { messaging_product: "whatsapp", to: destinatario, type: tipo };
+        if (tipo === "text") payload.text = { body: contenido };
+        else if (tipo === "image") payload.image = { link: contenido };
+        else if (tipo === "document") payload.document = { link: contenido, filename: "Archivo_ICC.pdf" };
+
+        await axios.post(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`, payload, { 
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
+        });
         return true;
     } catch (e) { 
         console.error("Error envío WhatsApp:", e.response?.data || e.message);
@@ -75,7 +76,7 @@ async function enviarWhatsApp(destinatario, texto) {
 }
 
 // ============================================================
-// 🧠 PROCESAMIENTO CON IA LORENA (PUNTOS 3, 4 Y 5)
+// 🧠 CEREBRO LORENA (GEMINI 2.0 + LEADS + TAGS)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -89,78 +90,65 @@ function buscarEnCatalogo(query) {
     }).filter(i => i.score > 0).sort((a,b) => b.score - a.score).slice(0, 5);
 }
 
-async function procesarConLorena(message, sessionId) {
+async function procesarConLorena(message, sessionId, mediaDesc = "") {
     const botStatus = readData(FILES.bot_status, {});
+    let allHistory = readData(FILES.history, {});
+    
+    // Si el bot está apagado para este chat, solo guardamos lo que llega
     if (botStatus[sessionId] === false) {
-        let allHistory = readData(FILES.history, {});
         if (!allHistory[sessionId]) allHistory[sessionId] = [];
-        allHistory[sessionId].push({ role: 'user', text: message, time: new Date().toISOString() });
+        allHistory[sessionId].push({ role: 'user', text: mediaDesc || message, time: new Date().toISOString() });
         writeData(FILES.history, allHistory);
         return null; 
     }
 
     const config = readData(FILES.config, {});
-    let allHistory = readData(FILES.history, {});
-    const chatPrevio = (allHistory[sessionId] || []).slice(-8);
+    const chatPrevio = (allHistory[sessionId] || []).slice(-10);
     const stock = buscarEnCatalogo(message);
 
-    const prompt = `Eres Lorena de ICC (Importadora Casa Colombia). 
-    OBJETIVO: Vender repuestos y captar datos.
-
-    REGLAS Y PERSONALIDAD: ${config.tech_rules || 'Profesional.'}
-    WEBSITE/INFO EXTRA (PUNTO 3): ${config.website_data || 'No hay info extra.'}
-    INVENTARIO ACTUAL: ${JSON.stringify(stock)}
+    const prompt = `Eres Lorena de ICC. Vende repuestos Caterpillar/Komatsu.
+    PERSONALIDAD: ${config.tech_rules || 'Profesional'}
+    INFO WEB: ${config.website_data || ''}
+    STOCK DISPONIBLE: ${JSON.stringify(stock)}
     HISTORIAL: ${JSON.stringify(chatPrevio)}
-
-    DIRECTRICES:
-    1. Responde de forma natural.
-    2. SIEMPRE añade al final: [DATA] {"es_lead":Boolean, "nombre":"...", "interes":"...", "etiqueta":"lead_caliente"|"duda_tecnica"|"curioso"} [DATA]`;
+    
+    INSTRUCCIÓN: Responde amable y cierra con pregunta. 
+    AL FINAL añade: [DATA] {"es_lead":Boolean, "nombre":"...", "interes":"...", "etiqueta":"lead_caliente"|"duda_tecnica"|"curioso"} [DATA]`;
 
     try {
         const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
             { contents: [{ parts: [{ text: prompt }] }] });
 
         let fullText = res.data.candidates[0].content.parts[0].text;
-        let textoVisible = fullText;
-        let dataPart = null;
-
+        let textoVisible = fullText.split('[DATA]')[0].trim();
+        
+        // Procesar metadatos de la IA
         if (fullText.includes('[DATA]')) {
-            const partes = fullText.split('[DATA]');
-            textoVisible = partes[0].trim();
-            dataPart = partes[1];
-        }
-
-        const respuestaLimpia = textoVisible.trim();
-
-        if (!allHistory[sessionId]) allHistory[sessionId] = [];
-        allHistory[sessionId].push({ role: 'user', text: message, time: new Date().toISOString() });
-        allHistory[sessionId].push({ role: 'bot', text: respuestaLimpia, time: new Date().toISOString() });
-        writeData(FILES.history, allHistory);
-
-        if (dataPart) {
             try {
-                const info = JSON.parse(dataPart.trim());
-                if(info.es_lead || info.nombre) {
+                const info = JSON.parse(fullText.split('[DATA]')[1].trim());
+                if(info.es_lead) {
                     const leads = readData(FILES.leads, []);
                     leads.push({ ...info, fecha: new Date().toLocaleString(), telefono: sessionId });
                     writeData(FILES.leads, leads);
                 }
-                if(info.etiqueta) {
-                    const tags = readData(FILES.tags, {});
-                    tags[sessionId] = info.etiqueta;
-                    writeData(FILES.tags, tags);
-                }
-            } catch (e) { console.log("Error parseando DATA"); }
+                const tags = readData(FILES.tags, {});
+                tags[sessionId] = info.etiqueta || "lead";
+                writeData(FILES.tags, tags);
+            } catch(e) {}
         }
-        return respuestaLimpia;
-    } catch (err) { 
-        console.error("❌ Error Gemini:", err.response?.data || err.message);
-        return "Lorena ICC aquí. ¿Me repites lo que necesitas?"; 
-    }
+
+        // Guardar historial
+        if (!allHistory[sessionId]) allHistory[sessionId] = [];
+        allHistory[sessionId].push({ role: 'user', text: mediaDesc || message, time: new Date().toISOString() });
+        allHistory[sessionId].push({ role: 'bot', text: textoVisible, time: new Date().toISOString() });
+        writeData(FILES.history, allHistory);
+
+        return textoVisible;
+    } catch (err) { return "Lorena ICC: Tuvimos un pequeño error, ¿me repites?"; }
 }
 
 // ============================================================
-// 🚦 RUTAS WEBHOOK
+// 🚦 WEBHOOK (DETECCIÓN MULTIMEDIA)
 // ============================================================
 app.get('/webhook', (req, res) => {
     if (req.query['hub.verify_token'] === 'ICC_2025') return res.send(req.query['hub.challenge']);
@@ -173,26 +161,43 @@ app.post('/webhook', async (req, res) => {
         res.sendStatus(200);
         const entry = body.entry?.[0]?.changes?.[0]?.value;
         const msg = entry?.messages?.[0];
-        if (msg?.text?.body) {
-            const r = await procesarConLorena(msg.text.body, msg.from);
+        if (msg) {
+            let texto = msg.text ? msg.text.body : "";
+            let desc = msg.image ? "📷 [Imagen recibida]" : msg.document ? "📄 [Documento recibido]" : "";
+            const r = await procesarConLorena(texto || desc, msg.from, desc);
             if (r) await enviarWhatsApp(msg.from, r);
         }
     } else { res.sendStatus(200); }
 });
 
 // ============================================================
-// ⚙️ APIS DASHBOARD (PERSISTENCIA Y GESTIÓN)
+// ⚙️ APIS PANEL (CRUD Y GESTIÓN)
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
-// Punto 1: Gestión de productos
-app.post('/api/knowledge/delete', proteger, (req, res) => {
-    globalKnowledge.splice(req.body.index, 1);
-    writeData(FILES.knowledge, globalKnowledge);
+// 🆕 Borrar Chat (WhatsApp Style)
+app.post('/api/chat/delete', proteger, (req, res) => {
+    const { phone } = req.body;
+    let h = readData(FILES.history, {});
+    let t = readData(FILES.tags, {});
+    delete h[phone]; delete t[phone];
+    writeData(FILES.history, h); writeData(FILES.tags, t);
     res.json({ success: true });
 });
 
-// Punto 3: Info Web
+// 🆕 Enviar Multimedia Manual
+app.post('/api/chat/send-media', proteger, async (req, res) => {
+    const { phone, url, type } = req.body;
+    if (await enviarWhatsApp(phone, url, type)) {
+        let h = readData(FILES.history, {});
+        if (!h[phone]) h[phone] = [];
+        h[phone].push({ role: 'manual', text: `📎 [Enviado ${type}]: ${url}`, time: new Date().toISOString() });
+        writeData(FILES.history, h);
+        res.json({ success: true });
+    } else { res.status(500).send("Error"); }
+});
+
+// 🆕 Sincronizar Info Web
 app.post('/save-website', proteger, (req, res) => {
     const config = readData(FILES.config, {});
     config.website_data = req.body.urlData;
@@ -200,15 +205,13 @@ app.post('/save-website', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-// Punto 5: Etiquetas Manuales
-app.post('/api/chat/tag', proteger, (req, res) => {
-    const tags = readData(FILES.tags, {});
-    tags[req.body.phone] = req.body.tag;
-    writeData(FILES.tags, tags);
+// 🆕 Borrar Producto Individual
+app.post('/api/knowledge/delete', proteger, (req, res) => {
+    globalKnowledge.splice(req.body.index, 1);
+    writeData(FILES.knowledge, globalKnowledge);
     res.json({ success: true });
 });
 
-// Rutas de administración
 app.post('/auth', (req, res) => {
     if (req.body.user === ADMIN_USER && req.body.pass === ADMIN_PASS) {
         req.session.isLogged = true;
@@ -232,7 +235,7 @@ app.post('/api/chat/send', proteger, async (req, res) => {
         h[phone].push({ role: 'manual', text: message, time: new Date().toISOString() });
         writeData(FILES.history, h);
         res.json({ success: true });
-    } else { res.status(500).json({ error: "No se pudo enviar" }); }
+    } else { res.status(500).json({ error: "No enviado" }); }
 });
 
 app.post('/api/chat/toggle-bot', proteger, (req, res) => {
@@ -248,13 +251,18 @@ app.get('/api/data/:type', proteger, (req, res) => {
     res.json(readData(FILES[type], fallback));
 });
 
+// 🔄 Acumulación de CSV
 app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
     try {
-        const records = parse(req.file.buffer.toString('utf-8'), { columns: true, skip_empty_lines: true });
-        globalKnowledge = records.map(r => ({ searchable: Object.values(r).join(" "), data: r }));
+        const newRecords = parse(req.file.buffer.toString('utf-8'), { columns: true, skip_empty_lines: true });
+        const formattedNew = newRecords.map(r => ({ searchable: Object.values(r).join(" "), data: r }));
+        const currentData = readData(FILES.knowledge, []);
+        const combined = [...currentData, ...formattedNew];
+        // Quitar duplicados
+        globalKnowledge = Array.from(new Set(combined.map(a => a.searchable))).map(s => combined.find(a => a.searchable === s));
         writeData(FILES.knowledge, globalKnowledge);
         res.json({ success: true, count: globalKnowledge.length });
-    } catch (e) { res.status(500).json({ error: "CSV Error" }); }
+    } catch (e) { res.status(500).send("CSV Error"); }
 });
 
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
