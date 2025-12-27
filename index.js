@@ -14,15 +14,13 @@ const app = express();
 // ============================================================
 app.set('trust proxy', 1);
 
-// ⚠️ AQUÍ ESTÁ EL CAMBIO IMPORTANTE:
-// Ya no pegamos las claves aquí. Le decimos al código que las busque en Railway.
 const API_KEY = process.env.GEMINI_API_KEY; 
 const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = process.env.SESSION_SECRET || "icc-ultra-secret-2025";
+const SESSION_SECRET = "icc-ultra-secret-2025";
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -37,7 +35,7 @@ const FILES = {
     config: path.join(DATA_DIR, 'config.json'),
     leads: path.join(DATA_DIR, 'leads.json'),
     history: path.join(DATA_DIR, 'history.json'),
-    bot_status: path.join(DATA_DIR, 'bot_status.json') // Archivo para saber si la IA está activa o pausada
+    bot_status: path.join(DATA_DIR, 'bot_status.json')
 };
 
 const readData = (file, fallback) => {
@@ -94,15 +92,13 @@ function buscarEnCatalogo(query) {
 }
 
 async function procesarConLorena(message, sessionId) {
-    // 1. Verificamos si la IA está pausada para este cliente (Modo Manual)
     const botStatus = readData(FILES.bot_status, {});
     if (botStatus[sessionId] === false) {
-        // Guardamos el mensaje del usuario aunque la IA no responda
         let allHistory = readData(FILES.history, {});
         if (!allHistory[sessionId]) allHistory[sessionId] = [];
         allHistory[sessionId].push({ role: 'user', text: message, time: new Date().toISOString() });
         writeData(FILES.history, allHistory);
-        return null; // Retornamos null para que NO se envíe nada automático
+        return null; 
     }
 
     const config = readData(FILES.config, {});
@@ -125,12 +121,11 @@ async function procesarConLorena(message, sessionId) {
     5. IMPORTANTE: Si detectas su nombre o correo, añade al final: [DATA] {"es_lead":true, "nombre":"...", "correo":"..."} [DATA]`;
 
     try {
-        // Usamos gemini-1.5-flash que es más estable y la API_KEY viene de Railway
-        const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
+        // ✨ CORRECCIÓN AQUÍ: URL específica para Gemini 2.0 Flash
+        const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
             { contents: [{ parts: [{ text: prompt }] }] });
 
         let fullText = res.data.candidates[0].content.parts[0].text;
-        
         let textoVisible = fullText;
         let dataPart = null;
 
@@ -155,7 +150,7 @@ async function procesarConLorena(message, sessionId) {
                     leads.push({ ...leadData, fecha: new Date().toLocaleString(), telefono: sessionId });
                     writeData(FILES.leads, leads);
                 }
-            } catch (e) { console.log("Error procesando JSON Lead"); }
+            } catch (e) { console.log("Error procesando Lead"); }
         }
         return respuestaLimpia;
     } catch (err) { 
@@ -174,14 +169,10 @@ app.get('/webhook', (req, res) => {
 
 app.post('/webhook', async (req, res) => {
     const body = req.body;
-    
-    // Soporte para Tester del Dashboard
     if (body.message && !body.entry) {
         const r = await procesarConLorena(body.message, 'tester-web');
         return res.json({ reply: r || "(Bot en pausa manual)" });
     }
-    
-    // Soporte para WhatsApp Real
     if (body.object === 'whatsapp_business_account') {
         res.sendStatus(200);
         try {
@@ -189,17 +180,10 @@ app.post('/webhook', async (req, res) => {
             const msg = entry?.messages?.[0];
             if (msg?.text?.body) {
                 const respuesta = await procesarConLorena(msg.text.body, msg.from);
-                // Solo respondemos si la IA generó algo (si es null, estamos en manual)
-                if (respuesta) {
-                    await enviarWhatsApp(msg.from, respuesta);
-                }
+                if (respuesta) await enviarWhatsApp(msg.from, respuesta);
             }
-        } catch (e) {
-            console.error("Error en Webhook:", e);
-        }
-    } else {
-        res.sendStatus(200);
-    }
+        } catch (e) { console.error("Error en Webhook:", e); }
+    } else { res.sendStatus(200); }
 });
 
 // ============================================================
@@ -222,33 +206,25 @@ app.post('/save-context', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-// Endpoint para enviar mensaje MANUAL (La asesora escribe)
 app.post('/api/chat/send', proteger, async (req, res) => {
     const { phone, message } = req.body;
     if (!phone || !message) return res.status(400).json({ error: "Faltan datos" });
-
     const enviado = await enviarWhatsApp(phone, message);
-
     if (enviado) {
         let allHistory = readData(FILES.history, {});
         if (!allHistory[phone]) allHistory[phone] = [];
         allHistory[phone].push({ role: 'manual', text: message, time: new Date().toISOString() });
         writeData(FILES.history, allHistory);
         res.json({ success: true });
-    } else {
-        res.status(500).json({ error: "No se pudo enviar" });
-    }
+    } else { res.status(500).json({ error: "No se pudo enviar" }); }
 });
 
-// Endpoint para ACTIVAR/DESACTIVAR el bot (El switch)
 app.post('/api/chat/toggle-bot', proteger, (req, res) => {
     const { phone, active } = req.body;
     if (!phone) return res.status(400).json({ error: "Falta teléfono" });
-
     let botStatus = readData(FILES.bot_status, {});
     botStatus[phone] = active; 
     writeData(FILES.bot_status, botStatus);
-
     res.json({ success: true, status: active });
 });
 
@@ -261,9 +237,7 @@ app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
         globalKnowledge = records.map(r => ({ searchable: Object.values(r).join(" "), data: r }));
         writeData(FILES.knowledge, globalKnowledge);
         res.json({ success: true, count: globalKnowledge.length });
-    } catch (e) {
-        res.status(500).json({ error: "Error procesando CSV" });
-    }
+    } catch (e) { res.status(500).json({ error: "Error procesando CSV" }); }
 });
 
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
