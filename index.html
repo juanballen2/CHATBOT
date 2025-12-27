@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICC | Panel de Control</title>
+    <title>ICC | Panel de Control Pro</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -23,6 +23,7 @@
 
         body { margin: 0; font-family: 'Montserrat', sans-serif; background: var(--light-bg); display: flex; height: 100vh; color: var(--text-main); }
 
+        /* SIDEBAR */
         .sidebar { width: 260px; background: var(--dark-bg); color: white; display: flex; flex-direction: column; z-index: 100; }
         .logo-box { padding: 30px 20px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
         .nav-label { font-size: 10px; text-transform: uppercase; color: rgba(255,255,255,0.4); padding: 25px 25px 10px; letter-spacing: 1.5px; font-weight: 700; }
@@ -30,22 +31,25 @@
         .nav-item:hover, .nav-item.active { background: rgba(255,255,255,0.05); color: var(--naranja); box-shadow: inset 4px 0 0 var(--naranja); }
         .nav-item i { width: 20px; text-align: center; }
 
+        /* MAIN CONTENT */
         .main-content { flex: 1; padding: 40px; overflow-y: auto; }
         .view { display: none; }
         .view.active { display: block; animation: fadeIn 0.4s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
+        /* CARDS */
         .card { background: white; border-radius: 12px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); margin-bottom: 25px; }
         .card h3 { margin: 0 0 20px; font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
 
+        /* CHAT CENTER */
         .chat-container { display: grid; grid-template-columns: 320px 1fr; height: 75vh; background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
         .chat-list { border-right: 1px solid #eee; display: flex; flex-direction: column; background: #fff; }
         .search-area { padding: 20px; border-bottom: 1px solid #eee; }
-        .search-area input { width: 100%; padding: 10px 15px; border-radius: 8px; border: 1px solid #ddd; outline: none; }
+        .search-area input { width: 100%; padding: 10px 15px; border-radius: 8px; border: 1px solid #ddd; outline: none; box-sizing: border-box; }
         
         .chat-user { padding: 18px 20px; border-bottom: 1px solid #f8f8f8; cursor: pointer; transition: 0.2s; }
         .chat-user.active { background: var(--naranja-light); border-right: 4px solid var(--naranja); }
-        .tag-badge { font-size: 9px; padding: 3px 8px; border-radius: 4px; font-weight: 700; text-transform: uppercase; }
+        .tag-badge { font-size: 9px; padding: 3px 8px; border-radius: 4px; font-weight: 700; text-transform: uppercase; margin-top: 5px; display: inline-block; }
 
         .chat-window { display: flex; flex-direction: column; background: #f0f2f5; }
         .chat-header { padding: 15px 25px; background: #fff; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
@@ -59,6 +63,7 @@
         .chat-input-area { padding: 20px; background: #fff; border-top: 1px solid #eee; display: flex; gap: 15px; }
         .chat-input-area input { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #ddd; }
 
+        /* TABLES */
         table { width: 100%; border-collapse: collapse; }
         th { text-align: left; padding: 15px; background: #fbfbfb; font-size: 12px; color: var(--text-muted); border-bottom: 1px solid #eee; }
         td { padding: 15px; border-bottom: 1px solid #eee; font-size: 13px; }
@@ -108,13 +113,13 @@
             <div class="chat-container">
                 <div class="chat-list">
                     <div class="search-area">
-                        <input type="text" id="search-chat" placeholder="Filtrar por número..." oninput="renderChatList()">
+                        <input type="text" id="search-chat" placeholder="Buscar número..." oninput="renderChatList()">
                     </div>
                     <div id="chat-list-items" style="flex:1; overflow-y:auto;"></div>
                 </div>
                 <div class="chat-window">
                     <div class="chat-header">
-                        <div id="chat-target-info"><strong>Seleccione un chat</strong></div>
+                        <div id="chat-target-info"><strong>Seleccione un cliente</strong></div>
                         <div id="chat-actions" style="display:none; gap:10px;">
                             <select id="tag-selector" onchange="updateTag()" style="padding:8px; border-radius:6px; border:1px solid #ddd;">
                                 <option value="curioso">Curioso</option>
@@ -126,7 +131,7 @@
                     </div>
                     <div class="chat-messages" id="chat-messages-box"></div>
                     <div class="chat-input-area" id="chat-input-box" style="display:none;">
-                        <input type="text" id="manual-msg-input" placeholder="Escribe un mensaje manual..." onkeypress="if(event.key==='Enter') sendManual()">
+                        <input type="text" id="manual-msg-input" placeholder="Mensaje manual..." onkeypress="if(event.key==='Enter') sendManual()">
                         <button class="btn btn-naranja" onclick="sendManual()"><i class="fas fa-paper-plane"></i></button>
                     </div>
                 </div>
@@ -134,7 +139,7 @@
         </div>
 
         <div id="leads" class="view">
-            <h2>Clientes Capturados</h2>
+            <h2>Base de Clientes</h2>
             <div class="card" style="padding:0; overflow:hidden;">
                 <table>
                     <thead><tr><th>Fecha</th><th>Nombre</th><th>Teléfono</th><th>Interés</th><th>Etiqueta</th></tr></thead>
@@ -148,43 +153,30 @@
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:30px;">
                 <div>
                     <div class="card">
-                        <h3>Personalidad (Cómo debe hablar)</h3>
-                        <textarea id="prompt-area" rows="12" placeholder="Escribe aquí el tono, saludos y reglas..."></textarea>
-                        <button class="btn btn-naranja" style="width:100%" onclick="savePrompt()">GUARDAR CAMBIOS</button>
+                        <h3>Personalidad (Prompt)</h3>
+                        <textarea id="prompt-area" rows="10"></textarea>
+                        <button class="btn btn-naranja" style="width:100%" onclick="savePrompt()">GUARDAR PERSONALIDAD</button>
                     </div>
                     <div class="card">
                         <h3>Info Web Adicional</h3>
-                        <textarea id="web-data-area" rows="8" placeholder="Información copiada de la web..."></textarea>
-                        <button class="btn btn-naranja" style="width:100%" onclick="saveWebData()">SINCRONIZAR</button>
+                        <textarea id="web-data-area" rows="8"></textarea>
+                        <button class="btn btn-naranja" style="width:100%" onclick="saveWebData()">GUARDAR WEB</button>
                     </div>
                 </div>
                 <div>
                     <div class="card">
-                        <h3>Subir Inventario</h3>
+                        <h3>Cargar CSV</h3>
                         <input type="file" id="csv-file" accept=".csv" style="margin-bottom:15px;">
-                        <button class="btn btn-naranja" style="width:100%" onclick="uploadCSV()">PROCESAR CSV</button>
+                        <button class="btn btn-naranja" style="width:100%" onclick="uploadCSV()">PROCESAR</button>
                     </div>
                     <div class="card">
-                        <h3>Productos en Base de Datos</h3>
+                        <h3>Inventario</h3>
                         <div style="max-height: 400px; overflow-y:auto;">
                             <table>
-                                <thead><tr><th>Producto</th><th>Acciones</th></tr></thead>
+                                <thead><tr><th>Producto</th><th>Acción</th></tr></thead>
                                 <tbody id="inventory-body"></tbody>
                             </table>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="tester" class="view">
-            <h2>Laboratorio</h2>
-            <div class="chat-container" style="grid-template-columns: 1fr;">
-                <div class="chat-window">
-                    <div class="chat-messages" id="test-box"></div>
-                    <div class="chat-input-area">
-                        <input type="text" id="test-input" placeholder="Mensaje de prueba..." onkeypress="if(event.key==='Enter') runTest()">
-                        <button class="btn btn-naranja" onclick="runTest()">PROBAR</button>
                     </div>
                 </div>
             </div>
@@ -211,27 +203,33 @@
             }
             if(view === 'dashboard') loadStats();
             if(view === 'leads') loadLeads();
-            if(view === 'cerebro') { loadInventory(); loadConfig(); } // <-- AQUÍ CARGA LOS TEXTOS
+            if(view === 'cerebro') { loadInventory(); loadConfig(); }
         }
 
         async function syncChat() {
             try {
-                const hRes = await fetch('/api/data/history');
-                globalHistory = await hRes.json();
-                const tRes = await fetch('/api/data/tags');
-                globalTags = await tRes.json();
+                const [hRes, tRes] = await Promise.all([
+                    fetch('/api/data/history').then(r => r.json()),
+                    fetch('/api/data/tags').then(r => r.json())
+                ]);
+                globalHistory = hRes;
+                globalTags = tRes;
                 renderChatList();
-            } catch(e) {}
+            } catch(e) { console.error("Sync error:", e); }
         }
 
         function renderChatList() {
             const list = document.getElementById('chat-list-items');
-            const query = document.getElementById('search-chat').value;
+            const query = document.getElementById('search-chat').value.toLowerCase();
             const nums = Object.keys(globalHistory).filter(n => n.includes(query)).reverse();
+            
             list.innerHTML = nums.map(n => {
                 const tag = globalTags[n] || 'lead';
                 const tagStyles = tag === 'lead_caliente' ? 'background:#ffebee;color:#c62828' : 'background:#e3f2fd;color:#1565c0';
-                return `<div class="chat-user ${selectedPhone === n ? 'active' : ''}" onclick="selectChat('${n}')"><span class="num">${n}</span><span class="tag-badge" style="${tagStyles}">${tag.replace('_', ' ')}</span></div>`;
+                return `<div class="chat-user ${selectedPhone === n ? 'active' : ''}" onclick="selectChat('${n}')">
+                    <strong>${n}</strong><br>
+                    <span class="tag-badge" style="${tagStyles}">${tag.replace('_', ' ')}</span>
+                </div>`;
             }).join('');
             if(selectedPhone) renderMessages();
         }
@@ -242,33 +240,42 @@
             document.getElementById('chat-actions').style.display = 'flex';
             document.getElementById('chat-input-box').style.display = 'flex';
             document.getElementById('tag-selector').value = globalTags[phone] || 'curioso';
-            const res = await fetch('/api/data/bot_status');
-            const status = await res.json();
+            
+            const status = await fetch('/api/data/bot_status').then(r => r.json());
             botIsActive = status[phone] !== false;
             updateBotBtn();
+            renderMessages();
         }
 
         function renderMessages() {
             const box = document.getElementById('chat-messages-box');
             const msgs = globalHistory[selectedPhone] || [];
-            box.innerHTML = msgs.map(m => `<div class="bubble ${m.role === 'bot' ? 'bot-row' : m.role === 'manual' ? 'manual-row' : 'user-row'}">${m.text}</div>`).join('');
-            box.scrollTop = box.scrollHeight;
+            const html = msgs.map(m => `<div class="bubble ${m.role === 'bot' ? 'bot-row' : m.role === 'manual' ? 'manual-row' : 'user-row'}">${m.text}</div>`).join('');
+            if(box.innerHTML !== html) {
+                box.innerHTML = html;
+                box.scrollTop = box.scrollHeight;
+            }
         }
 
         async function sendManual() {
             const inp = document.getElementById('manual-msg-input');
             const txt = inp.value;
-            if(!txt) return;
-            await fetch('/api/chat/send', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedPhone, message:txt})});
-            inp.value = '';
-            syncChat();
+            if(!txt || !selectedPhone) return;
+            const res = await fetch('/api/chat/send', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({phone:selectedPhone, message:txt})
+            });
+            if(res.ok) { inp.value = ''; syncChat(); }
         }
 
         async function toggleBot() {
             botIsActive = !botIsActive;
-            await fetch('/api/chat/toggle-bot', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedPhone, active:botIsActive})});
+            await fetch('/api/chat/toggle-bot', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({phone:selectedPhone, active:botIsActive})
+            });
             updateBotBtn();
-            toast(botIsActive ? "IA Activa" : "IA Pausada");
+            toast(botIsActive ? "IA Activada" : "IA Pausada");
         }
 
         function updateBotBtn() {
@@ -277,44 +284,74 @@
             btn.style.background = botIsActive ? "var(--naranja)" : "var(--danger)";
         }
 
+        async function updateTag() {
+            const val = document.getElementById('tag-selector').value;
+            await fetch('/api/chat/tag', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({phone:selectedPhone, tag:val})
+            });
+            toast("Etiqueta actualizada");
+            syncChat();
+        }
+
         async function loadConfig() {
-            try {
-                const res = await fetch('/api/data/config');
-                const data = await res.json();
-                if(data.tech_rules) document.getElementById('prompt-area').value = data.tech_rules;
-                if(data.website_data) document.getElementById('web-data-area').value = data.website_data;
-            } catch(e) {}
+            const data = await fetch('/api/data/config').then(r => r.json());
+            document.getElementById('prompt-area').value = data.tech_rules || '';
+            document.getElementById('web-data-area').value = data.website_data || '';
         }
 
         async function savePrompt() {
-            const txt = document.getElementById('prompt-area').value;
-            await fetch('/save-context', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({context:txt})});
-            toast("Guardado");
+            await fetch('/save-context', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({context: document.getElementById('prompt-area').value})
+            });
+            toast("Personalidad guardada");
         }
 
         async function saveWebData() {
-            const txt = document.getElementById('web-data-area').value;
-            await fetch('/save-website', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({urlData:txt})});
-            toast("Sincronizado");
+            await fetch('/save-website', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({urlData: document.getElementById('web-data-area').value})
+            });
+            toast("Info web guardada");
         }
 
         async function loadInventory() {
-            const res = await fetch('/api/data/knowledge');
-            const data = await res.json();
-            document.getElementById('inventory-body').innerHTML = data.map((it, idx) => `<tr><td>${it.searchable.substring(0,40)}...</td><td><button class="btn btn-danger" style="padding:5px;" onclick="deleteItem(${idx})">Eliminar</button></td></tr>`).join('');
+            const data = await fetch('/api/data/knowledge').then(r => r.json());
+            document.getElementById('inventory-body').innerHTML = data.map((it, idx) => `<tr>
+                <td>${it.searchable.substring(0,35)}...</td>
+                <td><button class="btn btn-danger" style="padding:5px;" onclick="deleteItem(${idx})">Borrar</button></td>
+            </tr>`).join('');
             document.getElementById('kpi-stock').innerText = data.length;
         }
 
         async function deleteItem(idx) {
-            await fetch('/api/knowledge/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:idx})});
+            if(!confirm("¿Borrar producto?")) return;
+            await fetch('/api/knowledge/delete', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({index: idx})
+            });
             loadInventory();
         }
 
         async function loadLeads() {
-            const res = await fetch('/api/data/leads');
-            const data = await res.json();
-            document.getElementById('leads-table-body').innerHTML = data.map(l => `<tr><td>${l.fecha}</td><td>${l.nombre||'---'}</td><td>${l.telefono}</td><td>${l.interes}</td><td>${globalTags[l.telefono] || 'lead'}</td></tr>`).join('');
-            document.getElementById('kpi-leads').innerText = data.length;
+            const [leads, tags] = await Promise.all([
+                fetch('/api/data/leads').then(r => r.json()),
+                fetch('/api/data/tags').then(r => r.json())
+            ]);
+            document.getElementById('leads-table-body').innerHTML = leads.map(l => `<tr>
+                <td>${l.fecha}</td><td>${l.nombre||'---'}</td><td>${l.telefono}</td><td>${l.interes}</td><td>${tags[l.telefono] || 'lead'}</td>
+            </tr>`).join('');
+            document.getElementById('kpi-leads').innerText = leads.length;
+        }
+
+        async function uploadCSV() {
+            const file = document.getElementById('csv-file').files[0];
+            if(!file) return;
+            const fd = new FormData(); fd.append('file', file);
+            await fetch('/api/knowledge/csv', { method:'POST', body: fd });
+            toast("Inventario cargado");
+            loadInventory();
         }
 
         function toast(m) {
@@ -325,10 +362,12 @@
         }
 
         async function loadStats() {
-            loadLeads();
-            const res = await fetch('/api/data/knowledge');
-            const data = await res.json();
-            document.getElementById('kpi-stock').innerText = data.length;
+            const [leads, inv] = await Promise.all([
+                fetch('/api/data/leads').then(r => r.json()),
+                fetch('/api/data/knowledge').then(r => r.json())
+            ]);
+            document.getElementById('kpi-leads').innerText = leads.length;
+            document.getElementById('kpi-stock').innerText = inv.length;
         }
 
         window.onload = loadStats;
