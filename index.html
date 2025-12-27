@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICC | Lorena IA - Panel de Control</title>
+    <title>ICC | Panel de Control</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -11,147 +11,180 @@
     <style>
         :root {
             --naranja: #FF8C00;
-            --dark-bg: #2c3e50;
-            --light-bg: #ecf0f1;
+            --naranja-light: #fff3e6;
+            --dark-bg: #1a2a3a;
+            --light-bg: #f4f7f6;
             --whatsapp: #25D366;
             --success: #27ae60;
             --danger: #e74c3c;
-            --caliente: #ffdada;
-            --tecnico: #d9f0ff;
+            --text-main: #333;
+            --text-muted: #777;
         }
-        body { margin: 0; font-family: 'Montserrat', sans-serif; background: var(--light-bg); display: flex; height: 100vh; overflow: hidden; }
-        
-        /* SIDEBAR */
-        .sidebar { width: 250px; background: white; display: flex; flex-direction: column; border-right: 1px solid #ddd; z-index: 10; }
-        .logo-box { padding: 20px; text-align: center; border-bottom: 1px solid #eee; }
-        .nav-label { font-size: 11px; text-transform: uppercase; color: #999; padding: 20px 20px 10px; letter-spacing: 1px; }
-        .nav-item { padding: 12px 20px; cursor: pointer; color: #555; transition: 0.3s; display: flex; align-items: center; gap: 10px; font-size: 14px; text-decoration: none; }
-        .nav-item:hover, .nav-item.active { background: #f8f9fa; color: var(--naranja); border-right: 4px solid var(--naranja); }
 
-        /* MAIN */
-        .main-content { flex: 1; padding: 30px; overflow-y: auto; }
+        body { margin: 0; font-family: 'Montserrat', sans-serif; background: var(--light-bg); display: flex; height: 100vh; color: var(--text-main); }
+
+        .sidebar { width: 260px; background: var(--dark-bg); color: white; display: flex; flex-direction: column; z-index: 100; }
+        .logo-box { padding: 30px 20px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .nav-label { font-size: 10px; text-transform: uppercase; color: rgba(255,255,255,0.4); padding: 25px 25px 10px; letter-spacing: 1.5px; font-weight: 700; }
+        .nav-item { padding: 14px 25px; cursor: pointer; color: rgba(255,255,255,0.7); display: flex; align-items: center; gap: 12px; font-size: 14px; transition: all 0.3s; text-decoration: none; }
+        .nav-item:hover, .nav-item.active { background: rgba(255,255,255,0.05); color: var(--naranja); box-shadow: inset 4px 0 0 var(--naranja); }
+        .nav-item i { width: 20px; text-align: center; }
+
+        .main-content { flex: 1; padding: 40px; overflow-y: auto; }
         .view { display: none; }
-        .view.active { display: block; animation: fadeIn 0.3s; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .view.active { display: block; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        .card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; border-top: 4px solid #ddd; }
-        
-        /* CHAT CENTER PRO */
-        .chat-container { display: grid; grid-template-columns: 320px 1fr; height: calc(100vh - 180px); background: white; border-radius: 10px; overflow: hidden; }
-        .chat-list { border-right: 1px solid #eee; display: flex; flex-direction: column; }
-        .search-box { padding: 15px; border-bottom: 1px solid #eee; }
-        .chat-user { padding: 15px; border-bottom: 1px solid #f9f9f9; cursor: pointer; display: flex; align-items: center; gap: 12px; }
-        .chat-user.active { background: #f0f2f5; }
-        .tag-badge { font-size: 10px; padding: 2px 6px; border-radius: 10px; text-transform: uppercase; font-weight: bold; }
-        
-        .chat-main { display: flex; flex-direction: column; background: #e5ddd5; }
-        .chat-header { padding: 10px 20px; background: #f0f0f0; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
-        
-        /* BUBBLES */
-        .bubble { max-width: 75%; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 5px; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
-        .user-row { align-self: flex-start; background: white; }
-        .bot-row { align-self: flex-end; background: #dcf8c6; }
-        .manual-row { align-self: flex-end; background: #cfe9ff; }
+        .card { background: white; border-radius: 12px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); margin-bottom: 25px; }
+        .card h3 { margin: 0 0 20px; font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
 
-        /* TABLES */
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th { text-align: left; padding: 12px; background: #f8f9fa; font-size: 12px; color: #777; }
-        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 13px; }
+        .chat-container { display: grid; grid-template-columns: 320px 1fr; height: 75vh; background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .chat-list { border-right: 1px solid #eee; display: flex; flex-direction: column; background: #fff; }
+        .search-area { padding: 20px; border-bottom: 1px solid #eee; }
+        .search-area input { width: 100%; padding: 10px 15px; border-radius: 8px; border: 1px solid #ddd; outline: none; }
+        
+        .chat-user { padding: 18px 20px; border-bottom: 1px solid #f8f8f8; cursor: pointer; transition: 0.2s; }
+        .chat-user.active { background: var(--naranja-light); border-right: 4px solid var(--naranja); }
+        .tag-badge { font-size: 9px; padding: 3px 8px; border-radius: 4px; font-weight: 700; text-transform: uppercase; }
 
-        .btn { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-family: inherit; }
-        .btn-sm { padding: 4px 8px; font-size: 11px; }
+        .chat-window { display: flex; flex-direction: column; background: #f0f2f5; }
+        .chat-header { padding: 15px 25px; background: #fff; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .chat-messages { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        
+        .bubble { max-width: 70%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .user-row { align-self: flex-start; background: #fff; border-bottom-left-radius: 2px; }
+        .bot-row { align-self: flex-end; background: #dcf8c6; border-bottom-right-radius: 2px; }
+        .manual-row { align-self: flex-end; background: #e3f2fd; border: 1px solid #bbdefb; border-bottom-right-radius: 2px; }
+
+        .chat-input-area { padding: 20px; background: #fff; border-top: 1px solid #eee; display: flex; gap: 15px; }
+        .chat-input-area input { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #ddd; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 15px; background: #fbfbfb; font-size: 12px; color: var(--text-muted); border-bottom: 1px solid #eee; }
+        td { padding: 15px; border-bottom: 1px solid #eee; font-size: 13px; }
+        
+        textarea { width: 100%; padding: 15px; border-radius: 8px; border: 1px solid #ddd; font-family: inherit; font-size: 14px; line-height: 1.6; margin-bottom: 15px; box-sizing: border-box; }
+        .btn { padding: 12px 24px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-family: inherit; transition: 0.3s; }
+        .btn-naranja { background: var(--naranja); color: white; }
+        .btn-danger { background: #fee; color: var(--danger); }
+
+        #toast { position: fixed; bottom: 30px; right: 30px; background: var(--dark-bg); color: white; padding: 15px 30px; border-radius: 10px; transform: translateY(200%); transition: 0.4s; z-index: 9999; }
     </style>
 </head>
 <body>
 
-    <div id="toast" style="position: fixed; top: 20px; right: 20px; background: var(--dark-bg); color: white; padding: 15px 25px; border-radius: 8px; border-left: 5px solid var(--naranja); transform: translateX(200%); transition: 0.5s; z-index: 1000;">
-        <span id="toast-msg"></span>
-    </div>
+    <div id="toast">Acción realizada</div>
 
     <div class="sidebar">
-        <div class="logo-box"><h2 style="color:var(--naranja);">ICC ADMIN</h2></div>
-        <div class="nav-label">Ventas</div>
-        <div class="nav-item active" onclick="navTo('dashboard', this)"><i class="fas fa-th"></i> Resumen</div>
+        <div class="logo-box">
+            <h2 style="margin:0; font-size: 22px; color: var(--naranja);">ICC <span style="color:white; font-weight:400;">IA</span></h2>
+        </div>
+        
+        <div class="nav-label">Operaciones</div>
+        <div class="nav-item active" onclick="navTo('dashboard', this)"><i class="fas fa-chart-line"></i> Dashboard</div>
         <div class="nav-item" onclick="navTo('whatsapp', this)"><i class="fab fa-whatsapp"></i> Chat Center</div>
-        <div class="nav-item" onclick="navTo('leads', this)"><i class="fas fa-user-tie"></i> Leads</div>
-        <div class="nav-label">IA</div>
+        <div class="nav-item" onclick="navTo('leads', this)"><i class="fas fa-user-friends"></i> Leads</div>
+
+        <div class="nav-label">Configuración IA</div>
         <div class="nav-item" onclick="navTo('cerebro', this)"><i class="fas fa-brain"></i> Entrenamiento</div>
         <div class="nav-item" onclick="navTo('tester', this)"><i class="fas fa-vial"></i> Laboratorio</div>
+        
+        <div style="margin-top: auto; padding: 20px;">
+            <a href="/logout" class="nav-item" style="color:#ff4d4d; font-weight:600;"><i class="fas fa-power-off"></i> CERRAR SESIÓN</a>
+        </div>
     </div>
 
     <div class="main-content">
         <div id="dashboard" class="view active">
-            <h2>Panel de Control</h2>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
-                <div class="card" style="border-top-color: var(--success);"><h3>Leads</h3><h1 id="kpi-leads">0</h1></div>
-                <div class="card" style="border-top-color: var(--naranja);"><h3>Productos</h3><h1 id="kpi-stock">0</h1></div>
-                <div class="card" style="border-top-color: #3498db;"><h3>Estado</h3><h1 style="color:var(--success)">ONLINE</h1></div>
+            <h2>Resumen General</h2>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px;">
+                <div class="card"><h3>Total Leads</h3><h1 id="kpi-leads" style="color:var(--naranja)">0</h1></div>
+                <div class="card"><h3>Productos</h3><h1 id="kpi-stock" style="color:var(--success)">0</h1></div>
+                <div class="card"><h3>Estado</h3><h1 style="color:var(--whatsapp)">🟢 ONLINE</h1></div>
             </div>
         </div>
 
         <div id="whatsapp" class="view">
-            <h2>Chat Center</h2>
             <div class="chat-container">
                 <div class="chat-list">
-                    <div class="search-box">
-                        <input type="text" id="search-chat" placeholder="Buscar por número..." oninput="filterChats()">
+                    <div class="search-area">
+                        <input type="text" id="search-chat" placeholder="Filtrar por número..." oninput="renderChatList()">
                     </div>
-                    <div id="chat-list-sidebar" style="overflow-y:auto; flex:1;"></div>
+                    <div id="chat-list-items" style="flex:1; overflow-y:auto;"></div>
                 </div>
-                <div class="chat-main">
+                <div class="chat-window">
                     <div class="chat-header">
-                        <div id="chat-info"><b>Seleccione un cliente</b></div>
-                        <div id="chat-controls" style="display:none; gap:10px; display:flex;">
-                            <select id="manual-tag" onchange="changeTag()" style="padding:5px; border-radius:5px;">
+                        <div id="chat-target-info"><strong>Seleccione un chat</strong></div>
+                        <div id="chat-actions" style="display:none; gap:10px;">
+                            <select id="tag-selector" onchange="updateTag()" style="padding:8px; border-radius:6px; border:1px solid #ddd;">
                                 <option value="curioso">Curioso</option>
                                 <option value="lead_caliente">Lead Caliente</option>
                                 <option value="duda_tecnica">Duda Técnica</option>
                             </select>
-                            <button id="btn-toggle-bot" class="btn btn-sm" onclick="toggleBot()">Pausar IA</button>
+                            <button id="btn-toggle-ia" class="btn btn-naranja" style="padding:8px 15px; font-size:12px;" onclick="toggleBot()">PAUSAR IA</button>
                         </div>
                     </div>
-                    <div id="active-chat-box" style="flex:1; padding:20px; overflow-y:auto; display:flex; flex-direction:column;"></div>
-                    <div id="footer-chat" style="padding:15px; background:white; display:none; gap:10px;">
-                        <input type="text" id="input-manual" placeholder="Respuesta manual..." onkeypress="if(event.key==='Enter') enviarManual()">
-                        <button class="btn" style="background:var(--whatsapp); color:white" onclick="enviarManual()">Enviar</button>
+                    <div class="chat-messages" id="chat-messages-box"></div>
+                    <div class="chat-input-area" id="chat-input-box" style="display:none;">
+                        <input type="text" id="manual-msg-input" placeholder="Escribe un mensaje manual..." onkeypress="if(event.key==='Enter') sendManual()">
+                        <button class="btn btn-naranja" onclick="sendManual()"><i class="fas fa-paper-plane"></i></button>
                     </div>
                 </div>
             </div>
         </div>
 
         <div id="leads" class="view">
-            <h2>Base de Leads</h2>
-            <div class="card" style="padding:0;">
+            <h2>Clientes Capturados</h2>
+            <div class="card" style="padding:0; overflow:hidden;">
                 <table>
                     <thead><tr><th>Fecha</th><th>Nombre</th><th>Teléfono</th><th>Interés</th><th>Etiqueta</th></tr></thead>
-                    <tbody id="leads-body"></tbody>
+                    <tbody id="leads-table-body"></tbody>
                 </table>
             </div>
         </div>
 
         <div id="cerebro" class="view">
-            <h2>Entrenamiento de Lorena</h2>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
-                <div class="card">
-                    <h3>Personalidad (Prompt)</h3>
-                    <textarea id="context-area" rows="6" placeholder="Reglas de comportamiento..."></textarea>
-                    <button class="btn" style="width:100%; background:var(--dark-bg); color:white" onclick="guardarContexto()">Guardar Personalidad</button>
-                    
-                    <h3 style="margin-top:20px;">Información Web (Punto 3)</h3>
-                    <textarea id="website-area" rows="6" placeholder="Pega aquí info de la web..."></textarea>
-                    <button class="btn" style="width:100%; background:var(--naranja); color:white" onclick="guardarWeb()">Guardar Info Web</button>
+            <h2>Entrenamiento</h2>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:30px;">
+                <div>
+                    <div class="card">
+                        <h3>Personalidad (Cómo debe hablar)</h3>
+                        <textarea id="prompt-area" rows="12" placeholder="Escribe aquí el tono, saludos y reglas..."></textarea>
+                        <button class="btn btn-naranja" style="width:100%" onclick="savePrompt()">GUARDAR CAMBIOS</button>
+                    </div>
+                    <div class="card">
+                        <h3>Info Web Adicional</h3>
+                        <textarea id="web-data-area" rows="8" placeholder="Información copiada de la web..."></textarea>
+                        <button class="btn btn-naranja" style="width:100%" onclick="saveWebData()">SINCRONIZAR</button>
+                    </div>
                 </div>
-                <div class="card">
-                    <h3>Inventario CSV</h3>
-                    <input type="file" id="csv-upload" accept=".csv">
-                    <button class="btn" style="width:100%; margin-top:5px;" onclick="subirCSV()">Subir CSV</button>
-                    
-                    <h3 style="margin-top:20px;">Gestión de Productos (Punto 1)</h3>
-                    <div style="max-height: 300px; overflow-y: auto; border: 1px solid #eee;">
-                        <table style="font-size:11px;">
-                            <thead><tr><th>Producto</th><th>Acciones</th></tr></thead>
-                            <tbody id="products-table-body"></tbody>
-                        </table>
+                <div>
+                    <div class="card">
+                        <h3>Subir Inventario</h3>
+                        <input type="file" id="csv-file" accept=".csv" style="margin-bottom:15px;">
+                        <button class="btn btn-naranja" style="width:100%" onclick="uploadCSV()">PROCESAR CSV</button>
+                    </div>
+                    <div class="card">
+                        <h3>Productos en Base de Datos</h3>
+                        <div style="max-height: 400px; overflow-y:auto;">
+                            <table>
+                                <thead><tr><th>Producto</th><th>Acciones</th></tr></thead>
+                                <tbody id="inventory-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tester" class="view">
+            <h2>Laboratorio</h2>
+            <div class="chat-container" style="grid-template-columns: 1fr;">
+                <div class="chat-window">
+                    <div class="chat-messages" id="test-box"></div>
+                    <div class="chat-input-area">
+                        <input type="text" id="test-input" placeholder="Mensaje de prueba..." onkeypress="if(event.key==='Enter') runTest()">
+                        <button class="btn btn-naranja" onclick="runTest()">PROBAR</button>
                     </div>
                 </div>
             </div>
@@ -159,183 +192,143 @@
     </div>
 
     <script>
-        let activeChatPhone = null;
-        let refreshInterval = null;
-        let currentHistory = {};
-        let currentTags = {};
+        let selectedPhone = null;
+        let botIsActive = true;
+        let globalHistory = {};
+        let globalTags = {};
+        let liveTimer = null;
 
-        function navTo(viewId, element) {
+        function navTo(view, el) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.getElementById(viewId).classList.add('active');
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            if(element) element.classList.add('active');
-            if(refreshInterval) clearInterval(refreshInterval);
-
-            if(viewId === 'dashboard') loadStats();
-            if(viewId === 'leads') loadLeads();
-            if(viewId === 'cerebro') { loadConfig(); loadInventory(); }
-            if(viewId === 'whatsapp') {
-                loadWhatsApp();
-                refreshInterval = setInterval(loadWhatsApp, 4000);
+            document.getElementById(view).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            if(el) el.classList.add('active');
+            
+            if(liveTimer) clearInterval(liveTimer);
+            if(view === 'whatsapp') {
+                syncChat();
+                liveTimer = setInterval(syncChat, 3000);
             }
+            if(view === 'dashboard') loadStats();
+            if(view === 'leads') loadLeads();
+            if(view === 'cerebro') { loadInventory(); loadConfig(); } // <-- AQUÍ CARGA LOS TEXTOS
         }
 
-        // --- CHAT CENTER ---
-        async function loadWhatsApp() {
+        async function syncChat() {
             try {
-                const histRes = await fetch('/api/data/history');
-                currentHistory = await histRes.json();
-                const tagsRes = await fetch('/api/data/tags');
-                currentTags = await tagsRes.json();
+                const hRes = await fetch('/api/data/history');
+                globalHistory = await hRes.json();
+                const tRes = await fetch('/api/data/tags');
+                globalTags = await tRes.json();
                 renderChatList();
             } catch(e) {}
         }
 
         function renderChatList() {
-            const list = document.getElementById('chat-list-sidebar');
-            const search = document.getElementById('search-chat').value.toLowerCase();
-            const numbers = Object.keys(currentHistory).filter(n => n.includes(search)).reverse();
-
-            list.innerHTML = numbers.map(num => {
-                const tag = currentTags[num] || 'nuevo';
-                const tagColor = tag === 'lead_caliente' ? 'var(--danger)' : tag === 'duda_tecnica' ? '#3498db' : '#999';
-                return `
-                <div class="chat-user ${activeChatPhone === num ? 'active' : ''}" onclick="selectChat('${num}')">
-                    <div style="flex:1">
-                        <div style="font-weight:700">${num}</div>
-                        <span class="tag-badge" style="background:${tagColor}; color:white">${tag}</span>
-                    </div>
-                    <i class="fas fa-chevron-right" style="color:#ccc"></i>
-                </div>`;
+            const list = document.getElementById('chat-list-items');
+            const query = document.getElementById('search-chat').value;
+            const nums = Object.keys(globalHistory).filter(n => n.includes(query)).reverse();
+            list.innerHTML = nums.map(n => {
+                const tag = globalTags[n] || 'lead';
+                const tagStyles = tag === 'lead_caliente' ? 'background:#ffebee;color:#c62828' : 'background:#e3f2fd;color:#1565c0';
+                return `<div class="chat-user ${selectedPhone === n ? 'active' : ''}" onclick="selectChat('${n}')"><span class="num">${n}</span><span class="tag-badge" style="${tagStyles}">${tag.replace('_', ' ')}</span></div>`;
             }).join('');
-
-            if(activeChatPhone) renderMessages(currentHistory[activeChatPhone]);
+            if(selectedPhone) renderMessages();
         }
 
         async function selectChat(phone) {
-            activeChatPhone = phone;
-            document.getElementById('chat-info').innerHTML = `<b>${phone}</b>`;
-            document.getElementById('chat-controls').style.display = 'flex';
-            document.getElementById('footer-chat').style.display = 'flex';
-            document.getElementById('manual-tag').value = currentTags[phone] || 'curioso';
-            loadWhatsApp();
+            selectedPhone = phone;
+            document.getElementById('chat-target-info').innerHTML = `<strong>${phone}</strong>`;
+            document.getElementById('chat-actions').style.display = 'flex';
+            document.getElementById('chat-input-box').style.display = 'flex';
+            document.getElementById('tag-selector').value = globalTags[phone] || 'curioso';
+            const res = await fetch('/api/data/bot_status');
+            const status = await res.json();
+            botIsActive = status[phone] !== false;
+            updateBotBtn();
         }
 
-        async function changeTag() {
-            const tag = document.getElementById('manual-tag').value;
-            await fetch('/api/chat/tag', {
-                method: 'POST',
-                headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ phone: activeChatPhone, tag })
-            });
-            showToast("Etiqueta actualizada");
-            loadWhatsApp();
-        }
-
-        // --- INVENTARIO (PUNTO 1) ---
-        async function loadInventory() {
-            const data = await fetch('/api/data/knowledge').then(r => r.json());
-            const tbody = document.getElementById('products-table-body');
-            tbody.innerHTML = data.map((item, index) => `
-                <tr>
-                    <td>${item.searchable.substring(0, 30)}...</td>
-                    <td>
-                        <button class="btn btn-sm btn-danger" onclick="deleteProduct(${index})"><i class="fas fa-trash"></i></button>
-                    </td>
-                </tr>
-            `).join('');
-            document.getElementById('kpi-stock').innerText = data.length;
-        }
-
-        async function deleteProduct(index) {
-            if(!confirm("¿Borrar este producto?")) return;
-            await fetch('/api/knowledge/delete', {
-                method: 'POST',
-                headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ index })
-            });
-            loadInventory();
-        }
-
-        // --- CONFIG (PUNTO 3) ---
-        async function loadConfig() {
-            const config = await fetch('/api/data/config').then(r => r.json());
-            document.getElementById('context-area').value = config.tech_rules || '';
-            document.getElementById('website-area').value = config.website_data || '';
-        }
-
-        async function guardarWeb() {
-            const val = document.getElementById('website-area').value;
-            await fetch('/save-website', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({urlData: val})
-            });
-            showToast("Información web guardada");
-        }
-
-        // --- COMUNES ---
-        function renderMessages(msgs) {
-            const box = document.getElementById('active-chat-box');
-            box.innerHTML = msgs.map(m => {
-                let cls = m.role === 'bot' ? 'bot-row' : m.role === 'manual' ? 'manual-row' : 'user-row';
-                return `<div class="bubble ${cls}">${m.text}</div>`;
-            }).join('');
+        function renderMessages() {
+            const box = document.getElementById('chat-messages-box');
+            const msgs = globalHistory[selectedPhone] || [];
+            box.innerHTML = msgs.map(m => `<div class="bubble ${m.role === 'bot' ? 'bot-row' : m.role === 'manual' ? 'manual-row' : 'user-row'}">${m.text}</div>`).join('');
             box.scrollTop = box.scrollHeight;
         }
 
-        async function enviarManual() {
-            const inp = document.getElementById('input-manual');
-            const msg = inp.value;
-            if(!msg || !activeChatPhone) return;
-            await fetch('/api/chat/send', {
-                method: 'POST',
-                headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ phone: activeChatPhone, message: msg })
-            });
+        async function sendManual() {
+            const inp = document.getElementById('manual-msg-input');
+            const txt = inp.value;
+            if(!txt) return;
+            await fetch('/api/chat/send', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedPhone, message:txt})});
             inp.value = '';
-            loadWhatsApp();
+            syncChat();
         }
 
-        async function guardarContexto() {
-            await fetch('/save-context', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({context: document.getElementById('context-area').value})
-            });
-            showToast("Personalidad guardada");
+        async function toggleBot() {
+            botIsActive = !botIsActive;
+            await fetch('/api/chat/toggle-bot', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedPhone, active:botIsActive})});
+            updateBotBtn();
+            toast(botIsActive ? "IA Activa" : "IA Pausada");
         }
 
-        async function subirCSV() {
-            const fd = new FormData(); fd.append('file', document.getElementById('csv-upload').files[0]);
-            await fetch('/api/knowledge/csv', { method:'POST', body: fd });
-            showToast("CSV Procesado");
+        function updateBotBtn() {
+            const btn = document.getElementById('btn-toggle-ia');
+            btn.innerHTML = botIsActive ? "PAUSAR IA" : "RETOMAR IA";
+            btn.style.background = botIsActive ? "var(--naranja)" : "var(--danger)";
+        }
+
+        async function loadConfig() {
+            try {
+                const res = await fetch('/api/data/config');
+                const data = await res.json();
+                if(data.tech_rules) document.getElementById('prompt-area').value = data.tech_rules;
+                if(data.website_data) document.getElementById('web-data-area').value = data.website_data;
+            } catch(e) {}
+        }
+
+        async function savePrompt() {
+            const txt = document.getElementById('prompt-area').value;
+            await fetch('/save-context', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({context:txt})});
+            toast("Guardado");
+        }
+
+        async function saveWebData() {
+            const txt = document.getElementById('web-data-area').value;
+            await fetch('/save-website', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({urlData:txt})});
+            toast("Sincronizado");
+        }
+
+        async function loadInventory() {
+            const res = await fetch('/api/data/knowledge');
+            const data = await res.json();
+            document.getElementById('inventory-body').innerHTML = data.map((it, idx) => `<tr><td>${it.searchable.substring(0,40)}...</td><td><button class="btn btn-danger" style="padding:5px;" onclick="deleteItem(${idx})">Eliminar</button></td></tr>`).join('');
+            document.getElementById('kpi-stock').innerText = data.length;
+        }
+
+        async function deleteItem(idx) {
+            await fetch('/api/knowledge/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:idx})});
             loadInventory();
         }
 
         async function loadLeads() {
-            const data = await fetch('/api/data/leads').then(r => r.json());
-            const tags = await fetch('/api/data/tags').then(r => r.json());
-            document.getElementById('leads-body').innerHTML = data.map(l => `
-                <tr>
-                    <td>${l.fecha}</td>
-                    <td>${l.nombre||'N/A'}</td>
-                    <td>${l.telefono}</td>
-                    <td>${l.interes}</td>
-                    <td><span class="tag-badge" style="background:#eee; color:#333">${tags[l.telefono] || 'lead'}</span></td>
-                </tr>
-            `).join('');
+            const res = await fetch('/api/data/leads');
+            const data = await res.json();
+            document.getElementById('leads-table-body').innerHTML = data.map(l => `<tr><td>${l.fecha}</td><td>${l.nombre||'---'}</td><td>${l.telefono}</td><td>${l.interes}</td><td>${globalTags[l.telefono] || 'lead'}</td></tr>`).join('');
             document.getElementById('kpi-leads').innerText = data.length;
         }
 
-        function showToast(m) {
-            document.getElementById('toast-msg').innerText = m;
+        function toast(m) {
             const t = document.getElementById('toast');
-            t.style.transform = "translateX(0)";
-            setTimeout(() => t.style.transform = "translateX(200%)", 3000);
+            t.innerText = m;
+            t.style.transform = "translateY(0)";
+            setTimeout(() => t.style.transform = "translateY(200%)", 3000);
         }
 
-        function loadStats() {
+        async function loadStats() {
             loadLeads();
-            fetch('/api/data/knowledge').then(r=>r.json()).then(d=>document.getElementById('kpi-stock').innerText = d.length);
+            const res = await fetch('/api/data/knowledge');
+            const data = await res.json();
+            document.getElementById('kpi-stock').innerText = data.length;
         }
 
         window.onload = loadStats;
