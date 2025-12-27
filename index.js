@@ -121,8 +121,8 @@ async function procesarConLorena(message, sessionId) {
     5. IMPORTANTE: Si detectas su nombre o correo, añade al final: [DATA] {"es_lead":true, "nombre":"...", "correo":"..."} [DATA]`;
 
     try {
-        // ✨ URL CORREGIDA: Usando gemini-1.5-flash-latest con v1beta
-        const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${API_KEY}`,
+        // ✨ LA URL QUE NUNCA FALLA (v1 / gemini-1.5-flash)
+        const res = await axios.post(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
             { contents: [{ parts: [{ text: prompt }] }] });
 
         let fullText = res.data.candidates[0].content.parts[0].text;
@@ -142,7 +142,6 @@ async function procesarConLorena(message, sessionId) {
         allHistory[sessionId].push({ role: 'bot', text: respuestaLimpia, time: new Date().toISOString() });
         writeData(FILES.history, allHistory);
 
-        // ✅ RECUPERADO: Procesamiento de Leads
         if (dataPart) {
             try {
                 const leadData = JSON.parse(dataPart.trim());
@@ -151,11 +150,11 @@ async function procesarConLorena(message, sessionId) {
                     leads.push({ ...leadData, fecha: new Date().toLocaleString(), telefono: sessionId });
                     writeData(FILES.leads, leads);
                 }
-            } catch (e) { console.log("Error Lead JSON"); }
+            } catch (e) { console.log("Error Lead"); }
         }
         return respuestaLimpia;
     } catch (err) { 
-        console.error("Error Gemini:", err.response?.data || err.message);
+        console.error("❌ Error en Gemini:", err.response?.data || err.message);
         return "Hola, te habla Lorena de ICC. Tuvimos una pequeña interrupción, ¿me podrías repetir lo último?"; 
     }
 }
@@ -200,7 +199,6 @@ app.post('/auth', (req, res) => {
     res.status(401).json({ success: false });
 });
 
-// ✅ RECUPERADO: Guardar Contexto
 app.post('/save-context', proteger, (req, res) => {
     const config = readData(FILES.config, {});
     config.tech_rules = req.body.context;
@@ -210,7 +208,6 @@ app.post('/save-context', proteger, (req, res) => {
 
 app.post('/api/chat/send', proteger, async (req, res) => {
     const { phone, message } = req.body;
-    if (!phone || !message) return res.status(400).json({ error: "Faltan datos" });
     const enviado = await enviarWhatsApp(phone, message);
     if (enviado) {
         let allHistory = readData(FILES.history, {});
@@ -223,7 +220,6 @@ app.post('/api/chat/send', proteger, async (req, res) => {
 
 app.post('/api/chat/toggle-bot', proteger, (req, res) => {
     const { phone, active } = req.body;
-    if (!phone) return res.status(400).json({ error: "Falta teléfono" });
     let botStatus = readData(FILES.bot_status, {});
     botStatus[phone] = active; 
     writeData(FILES.bot_status, botStatus);
@@ -232,7 +228,6 @@ app.post('/api/chat/toggle-bot', proteger, (req, res) => {
 
 app.get('/api/data/:type', proteger, (req, res) => res.json(readData(FILES[req.params.type], [])));
 
-// ✅ RECUPERADO: Carga de CSV
 app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: "No se envió archivo" });
@@ -240,7 +235,7 @@ app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
         globalKnowledge = records.map(r => ({ searchable: Object.values(r).join(" "), data: r }));
         writeData(FILES.knowledge, globalKnowledge);
         res.json({ success: true, count: globalKnowledge.length });
-    } catch (e) { res.status(500).json({ error: "Error procesando CSV" }); }
+    } catch (e) { res.status(500).json({ error: "Error CSV" }); }
 });
 
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
