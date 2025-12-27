@@ -15,7 +15,7 @@ const app = express();
 app.set('trust proxy', 1);
 
 const API_KEY = "AIzaSyACJytpDnPzl9y5FeoQ5sx8m-iyhPXINto"; 
-const META_TOKEN = "EAAL9wuZCZBtTwBQRQZAogjWdS9glvP9gUZC1MMLT90VPNEcvTH1TsZCu9O4PevZAQCv9MvUXZBty7ZCtAY4xZAnULWzG2EPhGJhCluENc22GDnvzc3oyUAZBdBW7TYabxgCAdTBXT3ku13a7L2ZBZCvNZC9EJfjZBvibbzZCj9uEX8G7coIMJdgUN6wEtvE0B4qZCSNPYtIgGAfZCQkw6ZCmcBvck9B5ggmWPwRUZBnNEmM0D54gZC2AmZC1UBlxM63bn6hG34gTEH0FPANwAwJ0VSGMuQUNptZAFeIgZDZD";
+const META_TOKEN = "EAAL9wuZCZBtTwBQSJFtJAGqFQYpUHIPvXasybuUNQPEYdhIwiIL2MNfS6g80opN9YGPeQHCEBGMkKPibOpZAHF9rtqMr0hYG0ZAv1x3BgjgrDFiCrA9UY8CcuuQBtIi8HZBvgbFAbnF2tqXYHcQA9j2C3uRXpuZAwvsXcpfA3ZAdb4aZCrOdrJZCp93EZB149DFwZDZD";
 const PHONE_NUMBER_ID = "913148698549581";
 
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
@@ -181,3 +181,4 @@ app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirna
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
 
 app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA ICC ACTIVADA"));
+
