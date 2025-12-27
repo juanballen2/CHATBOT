@@ -77,7 +77,7 @@ async function enviarWhatsApp(destinatario, texto) {
 }
 
 // ============================================================
-// 🧠 PROCESAMIENTO CON IA LORENA
+// 🧠 PROCESAMIENTO CON IA LORENA (GEMINI 2.0 FLASH)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -121,8 +121,8 @@ async function procesarConLorena(message, sessionId) {
     5. IMPORTANTE: Si detectas su nombre o correo, añade al final: [DATA] {"es_lead":true, "nombre":"...", "correo":"..."} [DATA]`;
 
     try {
-        // ✨ LA URL QUE NUNCA FALLA (v1 / gemini-1.5-flash)
-        const res = await axios.post(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
+        // ✨ CONFIGURACIÓN PARA GEMINI 2.0 FLASH
+        const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
             { contents: [{ parts: [{ text: prompt }] }] });
 
         let fullText = res.data.candidates[0].content.parts[0].text;
@@ -154,7 +154,7 @@ async function procesarConLorena(message, sessionId) {
         }
         return respuestaLimpia;
     } catch (err) { 
-        console.error("❌ Error en Gemini:", err.response?.data || err.message);
+        console.error("❌ Error en Gemini 2.0:", err.response?.data || err.message);
         return "Hola, te habla Lorena de ICC. Tuvimos una pequeña interrupción, ¿me podrías repetir lo último?"; 
     }
 }
