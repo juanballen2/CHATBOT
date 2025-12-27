@@ -7,7 +7,63 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="style.css">
+    
+    <style>
+        :root {
+            --naranja: #FF8C00;
+            --dark-bg: #2c3e50;
+            --light-bg: #ecf0f1;
+            --whatsapp: #25D366;
+            --success: #27ae60;
+        }
+        body { margin: 0; font-family: 'Montserrat', sans-serif; background: var(--light-bg); display: flex; height: 100vh; overflow: hidden; }
+        
+        /* SIDEBAR */
+        .sidebar { width: 250px; background: white; display: flex; flex-direction: column; border-right: 1px solid #ddd; z-index: 10; }
+        .logo-box { padding: 20px; text-align: center; border-bottom: 1px solid #eee; }
+        .logo-box img { max-width: 80%; }
+        .nav-label { font-size: 11px; text-transform: uppercase; color: #999; padding: 20px 20px 10px; letter-spacing: 1px; }
+        .nav-item { padding: 12px 20px; cursor: pointer; color: #555; transition: 0.3s; display: flex; align-items: center; gap: 10px; font-size: 14px; text-decoration: none; }
+        .nav-item:hover, .nav-item.active { background: #f8f9fa; color: var(--naranja); border-right: 4px solid var(--naranja); }
+        .nav-item i { width: 20px; text-align: center; }
+
+        /* MAIN CONTENT */
+        .main-content { flex: 1; padding: 30px; overflow-y: auto; position: relative; }
+        .view { display: none; animation: fadeIn 0.3s; }
+        .view.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* CARDS & GRID */
+        .card { background: white; border-radius: 10px; padding: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; border-top: 4px solid #ddd; }
+        h2 { margin-top: 0; color: var(--dark-bg); font-weight: 700; margin-bottom: 25px; }
+        h3 { margin: 0 0 15px 0; font-size: 16px; color: #7f8c8d; text-transform: uppercase; }
+
+        /* BUTTONS & INPUTS */
+        .btn { background: var(--naranja); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 500; transition: 0.2s; font-family: inherit; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        input, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-family: inherit; margin-bottom: 10px; }
+        input:focus, textarea:focus { border-color: var(--naranja); outline: none; }
+
+        /* CHAT CENTER */
+        .chat-container { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 100px); background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        .chat-list { border-right: 1px solid #eee; overflow-y: auto; background: #fff; }
+        .chat-user { padding: 15px; border-bottom: 1px solid #f9f9f9; cursor: pointer; display: flex; gap: 15px; align-items: center; transition: 0.2s; }
+        .chat-user:hover, .chat-user.active { background: #f0f2f5; }
+        .chat-main { display: flex; flex-direction: column; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-color: #e5ddd5; }
+        
+        .bubble { max-width: 70%; padding: 10px 15px; border-radius: 10px; font-size: 14px; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-bottom: 8px; line-height: 1.4; }
+        .user-row { align-self: flex-start; background: white; border-top-left-radius: 0; color: #333; }
+        .bot-row { align-self: flex-end; background: #dcf8c6; border-top-right-radius: 0; color: #333; }
+        
+        /* TABLES */
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th { text-align: left; padding: 15px; background: #f8f9fa; color: #7f8c8d; font-weight: 600; border-bottom: 2px solid #eee; }
+        td { padding: 15px; border-bottom: 1px solid #eee; color: #555; }
+        .badge-active { background: #e8f8f5; color: #27ae60; padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; }
+
+        /* TERMINAL */
+        .terminal { background: #1e1e1e; color: #0f0; padding: 15px; border-radius: 6px; font-family: monospace; height: 150px; overflow-y: auto; font-size: 12px; }
+    </style>
 </head>
 <body>
 
@@ -17,7 +73,7 @@
 
     <div class="sidebar">
         <div class="logo-box">
-            <img src="images/ICC.png" alt="ICC Logo" onerror="this.src='https://placehold.co/200x80?text=ICC+ADMIN'">
+            <h2 style="margin:0; color:var(--naranja);">ICC <span style="color:#333;">ADMIN</span></h2>
         </div>
 
         <div class="nav-label">Gestión Comercial</div>
@@ -58,7 +114,7 @@
                 <div class="card" style="border-top-color: var(--success);">
                     <h3><i class="fas fa-user-check"></i> Leads Capturados</h3>
                     <h1 id="kpi-leads" style="font-size: 40px; margin: 10px 0;">0</h1>
-                    <small>Clientes potenciales este mes</small>
+                    <small>Clientes potenciales totales</small>
                 </div>
                 <div class="card" style="border-top-color: var(--naranja);">
                     <h3><i class="fas fa-boxes"></i> Stock Sincronizado</h3>
@@ -67,16 +123,8 @@
                 </div>
                 <div class="card" style="border-top-color: #3498db;">
                     <h3><i class="fas fa-server"></i> Estado del Sistema</h3>
-                    <h1 style="font-size: 20px; margin: 20px 0; color: #27ae60;">🟢 OPERATIVO</h1>
+                    <h1 style="font-size: 20px; margin: 20px 0; color: #27ae60;">🟢 ONLINE</h1>
                     <small>Motor Gemini 2.0: Activo</small>
-                </div>
-            </div>
-
-            <div class="card">
-                <h3><i class="fas fa-info-circle"></i> Acciones Rápidas</h3>
-                <div style="display: flex; gap: 15px; margin-top: 15px;">
-                    <button class="btn" onclick="navTo('cerebro')"><i class="fas fa-upload"></i> Subir Nuevo Stock</button>
-                    <button class="btn" onclick="navTo('whatsapp')"><i class="fas fa-comments"></i> Ver Conversaciones</button>
                 </div>
             </div>
         </div>
@@ -88,10 +136,10 @@
                     <div style="padding:20px; text-align:center; color:#999;">Cargando chats...</div>
                 </div>
                 <div class="chat-main">
-                    <div id="active-chat-box" style="flex:1; padding:25px; overflow-y:auto; display:flex; flex-direction:column; gap:10px;">
-                        <div style="text-align:center; margin-top:50px; color:#aaa;">
+                    <div id="active-chat-box" style="flex:1; padding:25px; overflow-y:auto; display:flex; flex-direction:column;">
+                        <div style="text-align:center; margin-top:50px; color:#666;">
                             <i class="fas fa-comments fa-3x"></i><br><br>
-                            Seleccione un chat de la izquierda
+                            Seleccione un chat para ver la conversación en tiempo real.
                         </div>
                     </div>
                 </div>
@@ -113,62 +161,11 @@
                             <th>Fecha</th>
                             <th>Nombre</th>
                             <th>Teléfono</th>
-                            <th>Ciudad</th>
                             <th>Interés</th>
                         </tr>
                     </thead>
-                    <tbody id="leads-body">
-                        </tbody>
+                    <tbody id="leads-body"></tbody>
                 </table>
-            </div>
-        </div>
-
-        <div id="integraciones" class="view">
-            <h2><i class="fas fa-network-wired"></i> Conexiones del Sistema</h2>
-            
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:25px;">
-                
-                <div class="card" style="border-top-color: var(--whatsapp);">
-                    <h3><i class="fab fa-whatsapp"></i> Meta (WhatsApp Cloud API)</h3>
-                    <p style="font-size:12px; color:#666; margin-bottom:15px;">
-                        Configure aquí el token permanente para que Lorena escuche y responda 24/7.
-                    </p>
-                    
-                    <label style="font-size:12px; font-weight:bold;">Phone Number ID</label>
-                    <input type="text" id="meta-phone" placeholder="Ej: 367283..." style="margin-bottom:15px;">
-                    
-                    <label style="font-size:12px; font-weight:bold;">Token de Acceso (Permanente)</label>
-                    <input type="password" id="meta-token" placeholder="EAAG..." style="margin-bottom:15px;">
-                    
-                    <button class="btn" style="width:100%; background:var(--whatsapp);" onclick="guardarIntegracion('meta')">
-                        <i class="fas fa-sync"></i> Actualizar Meta
-                    </button>
-                </div>
-
-                <div class="card" style="border-top-color: #9b59b6;">
-                    <h3><i class="fab fa-wordpress"></i> Tienda Virtual (StoreICC)</h3>
-                    <p style="font-size:12px; color:#666; margin-bottom:15px;">
-                        Conecte con storeicc.com para verificar precios en tiempo real.
-                    </p>
-                    
-                    <label style="font-size:12px; font-weight:bold;">URL de la Tienda</label>
-                    <input type="text" value="https://storeicc.com" disabled style="background:#eee; margin-bottom:15px;">
-                    
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                        <div>
-                            <label style="font-size:12px; font-weight:bold;">Consumer Key</label>
-                            <input type="password" id="woo-key" placeholder="ck_...">
-                        </div>
-                        <div>
-                            <label style="font-size:12px; font-weight:bold;">Consumer Secret</label>
-                            <input type="password" id="woo-secret" placeholder="cs_...">
-                        </div>
-                    </div>
-                    
-                    <button class="btn" style="width:100%; margin-top:15px; background: #9b59b6;" onclick="guardarIntegracion('woo')">
-                        <i class="fas fa-link"></i> Vincular Tienda
-                    </button>
-                </div>
             </div>
         </div>
 
@@ -178,18 +175,9 @@
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:30px;">
                 <div>
                     <div class="card">
-                        <h3><i class="fas fa-robot"></i> Personalidad y Rol</h3>
-                        <p style="font-size:12px; margin-bottom:10px; color:#666;">Define cómo se comporta Lorena ante el cliente.</p>
-                        <textarea id="prompt-area" rows="6" placeholder="Ej: Eres un experto en maquinaria pesada..."></textarea>
-                        <button class="btn" style="margin-top:15px; width:100%;" onclick="guardarPersonalidad()">
-                            <i class="fas fa-save"></i> Actualizar Personalidad
-                        </button>
-                    </div>
-
-                    <div class="card">
-                        <h3><i class="fas fa-book"></i> Reglas de Negocio / Contexto</h3>
-                        <p style="font-size:12px; margin-bottom:10px; color:#666;">Pega aquí la información de la empresa (Quiénes somos, servicios, etc).</p>
-                        <textarea id="context-area" rows="6" placeholder="Ej: Importadora Casa Colombia es líder en repuestos..."></textarea>
+                        <h3><i class="fas fa-book"></i> Reglas de Negocio / Prompt</h3>
+                        <p style="font-size:12px; margin-bottom:10px; color:#666;">Define cómo se comporta Lorena y la información de la empresa.</p>
+                        <textarea id="context-area" rows="10" placeholder="Escribe aquí las reglas, quiénes somos, horarios..."></textarea>
                         <button class="btn" style="margin-top:15px; width:100%; background:var(--dark-bg);" onclick="guardarContexto()">
                             <i class="fas fa-save"></i> Guardar Reglas
                         </button>
@@ -201,7 +189,7 @@
                         <h3><i class="fas fa-upload"></i> Importar Inventario (CSV)</h3>
                         <div style="padding:30px; border: 2px dashed #ccc; border-radius:10px; text-align:center; margin:20px 0;">
                             <i class="fas fa-file-csv fa-3x" style="color:#ccc;"></i>
-                            <p style="margin-top:10px; font-size:13px;">Arrastre su CSV aquí o seleccione</p>
+                            <p style="margin-top:10px; font-size:13px;">Sube tu archivo .csv aquí</p>
                             <input type="file" id="csv-upload" accept=".csv" style="margin-top:10px;">
                         </div>
                         <button class="btn" style="width:100%;" onclick="subirCSV()">
@@ -210,14 +198,20 @@
                     </div>
 
                     <div class="card">
-                        <h3><i class="fas fa-code"></i> Logs del Servidor</h3>
+                        <h3><i class="fas fa-code"></i> Logs del Sistema</h3>
                         <div class="terminal" id="sys-logs">
                             > Sistema iniciado...<br>
-                            > Esperando comandos...
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
+        
+        <div id="integraciones" class="view">
+             <h2><i class="fas fa-plug"></i> Integraciones</h2>
+             <div class="card">
+                 <p>Las credenciales de Meta se configuran actualmente desde el servidor (Variables de entorno).</p>
+             </div>
         </div>
 
         <div id="tester" class="view">
@@ -240,36 +234,40 @@
     </div>
 
     <script>
+        // VARIABLES GLOBALES
+        let activeChatPhone = null;
+        let refreshInterval = null;
+
         // ========================
         // 1. NAVEGACIÓN
         // ========================
         function navTo(viewId, element) {
-            // Cambiar vista activa
+            // Cambiar vista
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById(viewId).classList.add('active');
             
-            // Cambiar menú activo (si se hizo clic en menú)
+            // Cambiar menú activo
             if(element) {
                 document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
                 element.classList.add('active');
-            } else {
-                // Manejo manual si se llama desde botón interno
-                if(viewId === 'cerebro') {
-                    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-                    // Busca el 5to hijo aprox, pero simplificado:
-                    // En producción se busca por ID o atributo, por ahora funciona visualmente
-                }
             }
 
-            // Cargar datos según la vista
+            // DETENER INTERVALOS ANTERIORES
+            if(refreshInterval) clearInterval(refreshInterval);
+
+            // LOGICA SEGÚN VISTA
             if(viewId === 'dashboard') loadStats();
-            if(viewId === 'whatsapp') loadWhatsApp();
             if(viewId === 'leads') loadLeads();
             if(viewId === 'cerebro') loadConfig();
-            if(viewId === 'integraciones') loadIntegrations();
+            
+            // MODO TIEMPO REAL PARA WHATSAPP
+            if(viewId === 'whatsapp') {
+                loadWhatsApp(); // Carga inmediata
+                refreshInterval = setInterval(loadWhatsApp, 3000); // Recarga cada 3 seg
+            }
         }
 
-        function showToast(msg, type='success') {
+        function showToast(msg) {
             const t = document.getElementById('toast');
             document.getElementById('toast-msg').innerText = msg;
             t.style.transform = "translateX(0)";
@@ -289,88 +287,89 @@
         async function loadStats() {
             try {
                 const leads = await fetch('/api/data/leads').then(r => r.json());
-                const items = await fetch('/api/data/knowledge').then(r => r.json());
-                
-                document.getElementById('kpi-leads').innerText = leads.length;
-                document.getElementById('kpi-stock').innerText = items.length;
-            } catch(e) { console.error("Error stats", e); }
+                const knowledge = await fetch('/api/data/knowledge').then(r => r.json());
+                document.getElementById('kpi-leads').innerText = leads.length || 0;
+                document.getElementById('kpi-stock').innerText = knowledge.length || 0;
+            } catch(e) { console.error("Error cargando stats", e); }
         }
 
         // ========================
-        // 3. WHATSAPP LOGIC
+        // 3. WHATSAPP LOGIC (AUTO-REFRESCO)
         // ========================
-        let chatHistoryCache = {};
-
         async function loadWhatsApp() {
-            const list = document.getElementById('chat-list-sidebar');
-            list.innerHTML = '<div style="padding:20px; text-align:center;"><i class="fas fa-sync fa-spin"></i> Cargando...</div>';
-            
             try {
                 const res = await fetch('/api/data/history');
-                chatHistoryCache = await res.json();
-                
-                const numbers = Object.keys(chatHistoryCache);
+                const history = await res.json();
+                const list = document.getElementById('chat-list-sidebar');
+                const numbers = Object.keys(history);
+
+                // Si no hay chats
                 if(numbers.length === 0) {
-                    list.innerHTML = '<div style="padding:20px; text-align:center;">No hay conversaciones aún.</div>';
+                    list.innerHTML = '<div style="padding:20px; text-align:center;">No hay chats</div>';
                     return;
                 }
 
+                // Renderizar lista de contactos
                 let html = '';
                 numbers.forEach(num => {
-                    const lastMsg = chatHistoryCache[num][chatHistoryCache[num].length - 1];
-                    const txt = lastMsg ? lastMsg.text.substring(0, 30) + '...' : 'Nueva conversación';
+                    const lastMsg = history[num][history[num].length - 1];
+                    const txt = lastMsg ? lastMsg.text.substring(0, 25) + '...' : 'Nuevo chat';
+                    const activeClass = (activeChatPhone === num) ? 'background:#f0f2f5;' : '';
                     
                     html += `
-                    <div class="chat-user" onclick="verChat('${num}')">
-                        <div style="width:40px; height:40px; background:#ddd; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-weight:bold;">
+                    <div class="chat-user" style="${activeClass}" onclick="setActiveChat('${num}')">
+                        <div style="width:40px; height:40px; background:#ddd; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white;">
                             <i class="fas fa-user"></i>
                         </div>
                         <div>
-                            <div style="font-weight:600; font-size:14px;">+${num}</div>
+                            <div style="font-weight:600;">${num}</div>
                             <div style="font-size:12px; color:#888;">${txt}</div>
                         </div>
                     </div>`;
                 });
                 list.innerHTML = html;
-            } catch(e) {
-                list.innerHTML = '<div style="color:red; padding:20px;">Error de conexión</div>';
-            }
+
+                // Si hay un chat abierto, refrescar sus mensajes
+                if(activeChatPhone && history[activeChatPhone]) {
+                    renderChatMessages(history[activeChatPhone]);
+                }
+
+            } catch(e) { console.error("Error sync WhatsApp", e); }
         }
 
-        function verChat(phone) {
-            const box = document.getElementById('active-chat-box');
-            const msgs = chatHistoryCache[phone] || [];
-            
-            let html = `<div style="text-align:center; padding:10px; font-size:12px; color:#888; margin-bottom:20px;">
-                            Chat con +${phone}
-                        </div>`;
+        function setActiveChat(phone) {
+            activeChatPhone = phone;
+            loadWhatsApp(); // Forzar recarga inmediata para ver cambios
+        }
 
+        function renderChatMessages(msgs) {
+            const box = document.getElementById('active-chat-box');
+            // Solo reconstruir si hay cambios para no perder scroll (lógica simple)
+            let html = '';
             msgs.forEach(m => {
                 const typeClass = m.role === 'bot' ? 'bot-row' : 'user-row';
                 html += `<div class="bubble ${typeClass}">${m.text}</div>`;
             });
-
-            box.innerHTML = html;
-            box.scrollTop = box.scrollHeight;
+            
+            // Simple check para evitar parpadeo si no hay mensajes nuevos
+            if(box.innerHTML !== html) {
+                box.innerHTML = html;
+                box.scrollTop = box.scrollHeight;
+            }
         }
 
         // ========================
-        // 4. LEADS
+        // 4. LEADS & EXCEL
         // ========================
         async function loadLeads() {
             const tbody = document.getElementById('leads-body');
             try {
                 const data = await fetch('/api/data/leads').then(r => r.json());
-                if(data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center">Sin leads todavía</td></tr>';
-                    return;
-                }
-                tbody.innerHTML = data.reverse().map(l => `
+                tbody.innerHTML = data.map(l => `
                     <tr>
                         <td>${l.fecha}</td>
-                        <td style="font-weight:600;">${l.nombre || 'Desconocido'}</td>
+                        <td style="font-weight:600;">${l.nombre || 'N/A'}</td>
                         <td>${l.telefono}</td>
-                        <td>${l.ciudad || '-'}</td>
                         <td><span class="badge-active">${l.interes || 'General'}</span></td>
                     </tr>
                 `).join('');
@@ -378,55 +377,21 @@
         }
 
         function exportarExcel() {
-            const wb = XLSX.utils.table_to_book(document.getElementById("knowledge-table"), {sheet:"Leads ICC"});
+            const wb = XLSX.utils.table_to_book(document.getElementById("knowledge-table"), {sheet:"Leads"});
             XLSX.writeFile(wb, "Leads_ICC.xlsx");
-            showToast("Excel descargado correctamente");
+            showToast("Descargando Excel...");
         }
 
         // ========================
-        // 5. CONFIGURACIÓN E INTEGRACIONES
+        // 5. CONFIGURACIÓN (Contexto)
         // ========================
         async function loadConfig() {
-            const config = await fetch('/api/data/config').then(r => r.json());
-            if(document.getElementById('prompt-area')) document.getElementById('prompt-area').value = config.prompt || '';
-            if(document.getElementById('context-area')) document.getElementById('context-area').value = config.tech_rules || '';
-        }
-
-        async function loadIntegrations() {
             try {
                 const config = await fetch('/api/data/config').then(r => r.json());
-                if(config.meta_phone) document.getElementById('meta-phone').value = config.meta_phone;
-                if(config.meta_token) document.getElementById('meta-token').value = config.meta_token;
-                if(config.woo_key) document.getElementById('woo-key').value = config.woo_key;
-                if(config.woo_secret) document.getElementById('woo-secret').value = config.woo_secret;
+                if(document.getElementById('context-area')) {
+                    document.getElementById('context-area').value = config.tech_rules || '';
+                }
             } catch(e) {}
-        }
-
-        async function guardarIntegracion(type) {
-            const payload = {};
-            if (type === 'meta') {
-                payload.meta_phone = document.getElementById('meta-phone').value;
-                payload.meta_token = document.getElementById('meta-token').value;
-            } else {
-                payload.woo_key = document.getElementById('woo-key').value;
-                payload.woo_secret = document.getElementById('woo-secret').value;
-            }
-            
-            await fetch('/api/save-general-config', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            });
-            showToast("Integración Guardada Correctamente");
-        }
-
-        async function guardarPersonalidad() {
-            const val = document.getElementById('prompt-area').value;
-            await fetch('/api/save-personality', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({prompt: val})
-            });
-            showToast("Personalidad actualizada");
-            logTerm("Personalidad IA modificada por usuario");
         }
 
         async function guardarContexto() {
@@ -436,27 +401,23 @@
                 body: JSON.stringify({context: val})
             });
             showToast("Reglas guardadas");
-            logTerm("Reglas de negocio actualizadas");
+            logTerm("Reglas actualizadas en el servidor");
         }
 
         async function subirCSV() {
             const file = document.getElementById('csv-upload').files[0];
-            if(!file) return alert("Selecciona un archivo primero");
+            if(!file) return alert("Selecciona archivo");
             const fd = new FormData(); fd.append('file', file);
-            showToast("Procesando archivo...", "info");
-            logTerm("Iniciando carga de inventario...");
+            
+            showToast("Subiendo inventario...");
             try {
                 const res = await fetch('/api/knowledge/csv', { method:'POST', body: fd });
                 const d = await res.json();
                 if(d.success) {
-                    showToast(`¡Listo! ${d.total} productos aprendidos`);
-                    logTerm(`Carga completada: ${d.total} registros indexados.`);
-                    document.getElementById('kpi-stock').innerText = d.total;
+                    showToast("Inventario actualizado");
+                    logTerm(`Cargados ${d.count} productos`);
                 }
-            } catch(e) {
-                alert("Error al subir");
-                logTerm("Error crítico en carga CSV");
-            }
+            } catch(e) { alert("Error al subir"); }
         }
 
         // ========================
@@ -468,27 +429,24 @@
             const txt = inp.value.trim();
             if(!txt) return;
 
-            // User Bubble
             box.innerHTML += `<div class="bubble user-row">${txt}</div>`;
             inp.value = '';
             box.scrollTop = box.scrollHeight;
 
-            // Call Bot
             try {
                 const res = await fetch('/webhook', {
                     method:'POST', headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({ message: txt })
                 });
                 const d = await res.json();
-                // Bot Bubble
                 box.innerHTML += `<div class="bubble bot-row">${d.reply}</div>`;
                 box.scrollTop = box.scrollHeight;
             } catch(e) {
-                box.innerHTML += `<div style="color:red; font-size:12px;">Error conectando con Lorena</div>`;
+                box.innerHTML += `<div style="color:red; font-size:12px;">Error conexión</div>`;
             }
         }
 
-        // INIT
+        // INICIALIZACIÓN
         window.onload = () => { loadStats(); };
     </script>
 </body>
