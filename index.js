@@ -121,10 +121,12 @@ async function procesarConLorena(message, sessionId) {
     5. IMPORTANTE: Si detectas su nombre o correo, añade al final: [DATA] {"es_lead":true, "nombre":"...", "correo":"..."} [DATA]`;
 
     try {
-        // ✨ CONFIGURACIÓN DEFINITIVA PARA 1.5 FLASH:
-        // Usamos la versión 'v1' y el nombre de modelo corto 'gemini-1.5-flash'
-        const res = await axios.post(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: prompt }] }] });
+        // ✨ LA URL DEFINITIVA: Usando gemini-1.5-flash-latest que es la más compatible
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${API_KEY}`;
+        
+        const res = await axios.post(url, {
+            contents: [{ parts: [{ text: prompt }] }]
+        });
 
         let fullText = res.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText;
@@ -155,22 +157,8 @@ async function procesarConLorena(message, sessionId) {
         }
         return respuestaLimpia;
     } catch (err) { 
-        // Si el v1 falla, intentamos con v1beta automáticamente como plan B
-        console.error("Error Gemini v1, intentando v1beta...");
-        try {
-            const resBeta = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
-                { contents: [{ parts: [{ text: prompt }] }] });
-            
-            let fullText = resBeta.data.candidates[0].content.parts[0].text;
-            let textoVisible = fullText;
-            if (fullText.includes('[DATA]')) {
-                textoVisible = fullText.split('[DATA]')[0].trim();
-            }
-            return textoVisible.trim();
-        } catch (errBeta) {
-            console.error("Error definitivo en Gemini:", errBeta.response?.data || errBeta.message);
-            return "Hola, te habla Lorena de ICC. Tuvimos una pequeña interrupción técnica, ¿me podrías repetir lo último?"; 
-        }
+        console.error("❌ Error CRITICO Gemini:", err.response?.data || err.message);
+        return "Hola, te habla Lorena de ICC. Tuvimos una pequeña interrupción técnica, ¿me podrías repetir lo último?"; 
     }
 }
 
