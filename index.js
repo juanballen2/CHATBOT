@@ -38,7 +38,7 @@ app.use((req, res, next) => {
 });
 
 // ============================================================
-// 2. MOTOR SQLITE (REEMPLAZA readData / writeData)
+// 2. MOTOR SQLITE
 // ============================================================
 let db;
 (async () => {
@@ -50,7 +50,6 @@ let db;
         driver: sqlite3.Database
     });
 
-    // Creamos las tablas para alojar cada uno de tus antiguos archivos JSON
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
         CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT);
@@ -72,7 +71,6 @@ async function refreshKnowledge() {
     } catch(e) { globalKnowledge = []; }
 }
 
-// Auxiliares para Config (Fieles a tu lógica de config.json)
 async function getCfg(key, fallback) {
     const res = await db.get("SELECT value FROM config WHERE key = ?", [key]);
     return res ? JSON.parse(res.value) : fallback;
@@ -87,7 +85,7 @@ app.use(session({
 }));
 
 // ============================================================
-// 3. WHATSAPP ENGINE (IDÉNTICO v6.6)
+// 3. WHATSAPP ENGINE
 // ============================================================
 async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     try {
@@ -122,7 +120,7 @@ async function uploadToMeta(buffer, mimeType, filename) {
 }
 
 // ============================================================
-// 4. IA LORENA (SQL EDITION - MISMAS FUNCIONES)
+// 4. IA LORENA
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -137,20 +135,15 @@ function buscarEnCatalogo(query) {
 }
 
 async function procesarConLorena(message, sessionId, mediaDesc = "") {
-    // Guardar Mensaje Usuario en SQL
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
-
-    // Verificar Bot Status
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    // Obtener Config y Reglas
     const promptBase = await getCfg('prompt', "Eres amable y profesional.");
     const websiteData = await getCfg('website_data', "No hay información web extra.");
     const techRules = await getCfg('tech_rules', []);
     const reglasTexto = Array.isArray(techRules) ? techRules.map(r => `- ${r}`).join("\n") : "Sin reglas definidas.";
 
-    // Historial SQL (Últimos 15 como v6.6)
     const historyRows = await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId]);
     const chatPrevio = historyRows.reverse();
     const stock = buscarEnCatalogo(message);
@@ -184,7 +177,6 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
                 const info = JSON.parse(match[1]);
                 if(info.es_lead) {
                     let nombreFinal = info.nombre;
-                    // Lógica Metadata (Fiel v6.6)
                     const meta = await db.get("SELECT addedManual, contactName FROM metadata WHERE phone = ?", [sessionId]);
                     if (nombreFinal && !nombreFinal.toLowerCase().includes("desconocido") && !nombreFinal.toLowerCase().includes("nombre")) {
                         if (!meta || meta.addedManual === 0) {
@@ -194,11 +186,9 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
                         nombreFinal = meta.contactName;
                     }
 
-                    // Guardar Lead SQL
                     await db.run("INSERT INTO leads (phone, nombre, interes, etiqueta, fecha) VALUES (?, ?, ?, ?, ?)", 
                         [sessionId, nombreFinal, info.interes, info.etiqueta, new Date().toLocaleString()]);
                     
-                    // Guardar Etiqueta en Metadata
                     if(info.etiqueta) {
                         const row = await db.get("SELECT labels FROM metadata WHERE phone = ?", [sessionId]);
                         let labs = JSON.parse(row?.labels || "[]");
@@ -210,14 +200,13 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
                 }
             } catch(e) { console.error("Error JSON Bot:", e); }
         }
-
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', textoVisible, new Date().toISOString()]);
         return textoVisible;
     } catch (err) { return "Dame un momento, estoy verificando..."; }
 }
 
 // ============================================================
-// 5. API ENDPOINTS (TRANSPOSICIÓN 1:1)
+// 5. API ENDPOINTS
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
@@ -228,13 +217,27 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-// Endpoint data inteligente (Fiel a v6.6)
+// CORRECCIÓN: Endpoint de datos para que el Front no se rompa
 app.get('/api/data/:type', proteger, async (req, res) => {
     const t = req.params.type;
     try {
-        if (t === 'leads') res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
-        if (t === 'config') res.json({ prompt: await getCfg('prompt', ""), website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []) });
-        if (t === 'knowledge') res.json(await db.all("SELECT * FROM inventory"));
+        if (t === 'leads') {
+            const rows = await db.all("SELECT * FROM leads ORDER BY id DESC");
+            // Mapeamos para que el front reciba 'telefono' y 'fecha' como antes
+            return res.json(rows.map(r => ({ ...r, telefono: r.phone, fecha: r.fecha })));
+        }
+        if (t === 'config') return res.json({ prompt: await getCfg('prompt', ""), website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []) });
+        if (t === 'knowledge') return res.json(await db.all("SELECT * FROM inventory"));
+        if (t === 'history') {
+            const rows = await db.all("SELECT * FROM history ORDER BY id ASC");
+            const grouped = rows.reduce((acc, curr) => {
+                if(!acc[curr.phone]) acc[curr.phone] = [];
+                acc[curr.phone].push({ role: curr.role, text: curr.text, time: curr.time });
+                return acc;
+            }, {});
+            return res.json(grouped);
+        }
+        res.status(404).json([]);
     } catch (e) { res.status(500).json([]); }
 });
 
@@ -300,9 +303,7 @@ app.get('/api/chats-full', proteger, async (req, res) => {
     const historyPhones = await db.all("SELECT DISTINCT phone FROM history");
     const metadataList = await db.all("SELECT * FROM metadata");
     const statusList = await db.all("SELECT * FROM bot_status");
-    
     const phones = Array.from(new Set([...historyPhones.map(h=>h.phone), ...metadataList.map(m=>m.phone)]));
-    
     const list = await Promise.all(phones.map(async id => {
         const lastMsg = await db.get("SELECT text, time FROM history WHERE phone = ? ORDER BY id DESC LIMIT 1", [id]);
         const meta = metadataList.find(m => m.phone === id) || {};
@@ -317,7 +318,6 @@ app.get('/api/chats-full', proteger, async (req, res) => {
             timestamp: lastMsg ? lastMsg.time : new Date().toISOString()
         };
     }));
-    
     list.sort((a,b) => (a.pinned === b.pinned) ? new Date(b.timestamp) - new Date(a.timestamp) : (a.pinned ? -1 : 1));
     res.json(list);
 });
