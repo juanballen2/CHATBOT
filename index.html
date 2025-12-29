@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICC | Manager v7.0</title>
+    <title>ICC | Manager v7.2 SQL</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -26,7 +26,7 @@
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .page-content { padding: 30px; overflow-y: auto; flex: 1; }
 
-        /* CHAT */
+        /* CHAT SIDEBAR */
         .chat-layout { display: flex; height: 100%; }
         .chat-sidebar { width: 320px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
         .chat-header { height: 60px; background: #f0f2f5; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; border-bottom: 1px solid #ddd; }
@@ -64,8 +64,6 @@
         /* REGLAS */
         .rule-list { list-style: none; padding: 0; margin-top: 15px; max-height: 350px; overflow-y: auto; border: 1px solid #eee; border-radius: 5px; }
         .rule-item { padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fafafa; font-size: 13px; }
-        .rule-item:last-child { border-bottom: none; }
-        .rule-item:hover { background: #fff; }
 
         /* TABLAS */
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -175,20 +173,16 @@
         <div id="view-config" class="view page-content">
             <h2>Configuración IA</h2>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:25px;">
-                
                 <div class="card">
                     <h3 style="color:var(--naranja); margin-top:0;">🤖 Personalidad & Web</h3>
                     <label style="font-size:12px; font-weight:bold;">Prompt (Personalidad)</label>
                     <textarea id="cfg-prompt" style="width:100%; height:120px; padding:10px; border:1px solid #ddd; border-radius:5px; margin-bottom:15px;"></textarea>
-                    
                     <label style="font-size:12px; font-weight:bold;">Información Web (URLs, Nosotros...)</label>
                     <textarea id="cfg-web" style="width:100%; height:120px; padding:10px; border:1px solid #ddd; border-radius:5px;" placeholder="Pega aquí la info de tu página web..."></textarea>
-                    
                     <div style="margin-top:15px;">
                         <button class="btn btn-orange" onclick="savePromptWeb()">Guardar Datos Base</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <h3 style="color:#202c33; margin-top:0;">📜 Reglas de Negocio</h3>
                     <div style="display:flex; gap:10px; margin-bottom:10px;">
@@ -197,7 +191,6 @@
                     </div>
                     <ul id="rule-list-box" class="rule-list"></ul>
                 </div>
-
             </div>
         </div>
 
@@ -231,7 +224,6 @@
         function nav(v) {
             document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
             document.getElementById('view-'+v).classList.add('active');
-            
             const btns = document.querySelectorAll('.nav-btn');
             btns.forEach(b => b.classList.remove('active'));
             const map = { chat:0, dashboard:1, leads:2, inventory:3, config:4, sandbox:5 };
@@ -290,11 +282,13 @@
         }
 
         async function renderMsgs(id) {
-            const h = await fetch('/api/data/history').then(r=>r.json());
-            const msgs = h[id] || [];
-            const box = document.getElementById('msgs-box');
-            box.innerHTML = msgs.map(m => `<div class="bubble ${m.role==='bot'?'bubble-out':(m.role==='manual'?'bubble-manual':'bubble-in')}">${m.text}</div>`).join('');
-            box.scrollTop = box.scrollHeight;
+            try {
+                const h = await fetch('/api/data/history').then(r=>r.json());
+                const msgs = h[id] || [];
+                const box = document.getElementById('msgs-box');
+                box.innerHTML = msgs.map(m => `<div class="bubble ${m.role==='bot'?'bubble-out':(m.role==='manual'?'bubble-manual':'bubble-in')}">${m.text}</div>`).join('');
+                box.scrollTop = box.scrollHeight;
+            } catch(e) {}
         }
 
         async function sendMsg() {
@@ -342,11 +336,7 @@
 
         function renderRules(rules) {
             const list = document.getElementById('rule-list-box');
-            if(Array.isArray(rules)) {
-                list.innerHTML = rules.map((r, i) => `<li class="rule-item"><span>${r}</span><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="deleteRule(${i})"></i></li>`).join('');
-            } else {
-                list.innerHTML = `<li class="rule-item">${rules} (Formato antiguo) <i class="fas fa-trash" onclick="deleteRule(0)"></i></li>`;
-            }
+            list.innerHTML = (Array.isArray(rules) ? rules : []).map((r, i) => `<li class="rule-item"><span>${r}</span><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="deleteRule(${i})"></i></li>`).join('');
         }
 
         async function addRule() {
@@ -371,8 +361,16 @@
         }
 
         async function loadDash() {
-            const [l,c,s] = await Promise.all([fetch('/api/data/leads').then(r=>r.json()), fetch('/api/chats-full').then(r=>r.json()), fetch('/api/data/knowledge').then(r=>r.json())]);
-            document.getElementById('kpi-leads').innerText=l.length; document.getElementById('kpi-chats').innerText=c.length; document.getElementById('kpi-stock').innerText=s.length;
+            try {
+                const [l,c,s] = await Promise.all([
+                    fetch('/api/data/leads').then(r=>r.json()), 
+                    fetch('/api/chats-full').then(r=>r.json()), 
+                    fetch('/api/data/knowledge').then(r=>r.json())
+                ]);
+                document.getElementById('kpi-leads').innerText = l.length;
+                document.getElementById('kpi-chats').innerText = c.length;
+                document.getElementById('kpi-stock').innerText = s.length;
+            } catch(e) {}
         }
 
         async function loadInventory() {
@@ -389,20 +387,16 @@
 
         function renderLeadsTable(data) {
             const body = document.getElementById('leads-body');
-            body.innerHTML = data.slice().reverse().map(x => `
+            body.innerHTML = (data || []).slice().reverse().map(x => `
                 <tr>
-                    <td>${x.fecha}</td>
-                    <td><b>${x.nombre}</b></td>
-                    <td>${x.telefono}</td>
+                    <td>${x.fecha || '-'}</td>
+                    <td><b>${x.nombre || '-'}</b></td>
+                    <td>${x.telefono || '-'}</td>
                     <td>${x.ciudad || '-'}</td>
                     <td>${x.correo || '-'}</td>
-                    <td>${x.interes}</td>
+                    <td>${x.interes || '-'}</td>
                     <td>${x.etiqueta||'-'}</td>
-                    <td>
-                        <button class="btn btn-red" onclick="deleteLead(${x.id})" style="padding:4px 8px;">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
+                    <td><button class="btn btn-red" onclick="deleteLead(${x.id})" style="padding:4px 8px;"><i class="fas fa-trash"></i></button></td>
                 </tr>
             `).join('');
         }
@@ -413,18 +407,14 @@
                 (l.nombre||'').toLowerCase().includes(q) || 
                 (l.interes||'').toLowerCase().includes(q) || 
                 (l.ciudad||'').toLowerCase().includes(q) || 
-                l.telefono.includes(q)
+                (l.telefono||'').includes(q)
             );
             renderLeadsTable(filtered);
         }
 
         async function deleteLead(id) {
             if(!confirm("¿Borrar este lead?")) return;
-            await fetch('/api/leads/delete', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ id })
-            });
+            await fetch('/api/leads/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id })});
             loadLeads();
         }
 
@@ -438,12 +428,22 @@
             }
         }
         
-        async function toggleBot() { const c=chats.find(x=>x.id===selectedId); await fetch('/api/chat/toggle-bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedId,active:!c.botActive})}); sync(); }
-        function updateBotBtn(a) { document.getElementById('btn-bot').innerText = a ? "IA: ON" : "IA: OFF"; document.getElementById('btn-bot').style.background = a?"#202c33":"#ef5350"; }
+        async function toggleBot() { 
+            const c=chats.find(x=>x.id===selectedId); 
+            await fetch('/api/chat/toggle-bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedId,active:!c.botActive})}); 
+            sync(); 
+        }
+
+        function updateBotBtn(a) { 
+            const btn = document.getElementById('btn-bot');
+            btn.innerText = a ? "IA: ON" : "IA: OFF"; 
+            btn.style.background = a ? "#202c33" : "#ef5350"; 
+        }
         
         async function runTest() {
             const r = await fetch('/api/test-ai', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:document.getElementById('sand-in').value})}).then(x=>x.json());
-            document.getElementById('sand-res').innerText = r.response; document.getElementById('sand-log').innerText = r.logic_log;
+            document.getElementById('sand-res').innerText = r.response; 
+            document.getElementById('sand-log').innerText = r.logic_log;
         }
 
         function openCtx(e,id) { e.preventDefault(); ctxId=id; const m=document.getElementById('ctx-menu'); m.style.display='block'; m.style.left=e.pageX+'px'; m.style.top=e.pageY+'px'; }
@@ -463,11 +463,7 @@
                 if(!val) return;
             }
             if(action === 'pin') val = !c.pinned;
-            await fetch('/api/chat/action', {
-                method:'POST',
-                headers:{'Content-Type':'application/json'}, 
-                body:JSON.stringify({phone:ctxId, action:action, value:val})
-            });
+            await fetch('/api/chat/action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:ctxId, action:action, value:val})});
             sync();
         }
 
