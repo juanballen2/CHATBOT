@@ -141,7 +141,7 @@
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <h2>Base de Leads</h2>
                 <div style="display:flex; gap:10px;">
-                    <input type="text" id="filter-leads" placeholder="Filtrar por nombre, producto o ciudad..." oninput="filterLeadsTable()" style="padding:8px; border-radius:5px; border:1px solid #ddd; width:280px;">
+                    <input type="text" id="filter-leads" placeholder="Filtrar por nombre, ciudad, producto..." oninput="filterLeadsTable()" style="padding:8px; border-radius:5px; border:1px solid #ddd; width:280px;">
                     <button class="btn btn-orange" onclick="exportExcel()"><i class="fas fa-file-excel"></i> Exportar Excel</button>
                 </div>
             </div>
@@ -159,7 +159,6 @@
                 <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center;">
                     <input type="file" id="csv-file">
                     <button class="btn btn-orange" onclick="uploadCSV()">Cargar CSV</button>
-                    <small style="color:#666;">Col: ID, Nombre, Precio, Descripcion</small>
                 </div>
                 <div style="max-height:400px; overflow-y:auto;">
                     <table id="inv-table">
@@ -186,7 +185,7 @@
                 <div class="card">
                     <h3 style="color:#202c33; margin-top:0;">📜 Reglas de Negocio</h3>
                     <div style="display:flex; gap:10px; margin-bottom:10px;">
-                        <input type="text" id="rule-input" placeholder="Nueva regla (Ej: Horario 8-5pm)" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:5px;">
+                        <input type="text" id="rule-input" placeholder="Horario, formas de pago..." style="flex:1; padding:10px; border:1px solid #ddd; border-radius:5px;">
                         <button class="btn btn-orange" onclick="addRule()">Agregar</button>
                     </div>
                     <ul id="rule-list-box" class="rule-list"></ul>
@@ -357,7 +356,7 @@
                 prompt: document.getElementById('cfg-prompt').value,
                 website_data: document.getElementById('cfg-web').value
             })});
-            alert("✅ Datos Base Guardados");
+            alert("✅ Configuración Guardada");
         }
 
         async function loadDash() {
@@ -367,30 +366,32 @@
                     fetch('/api/chats-full').then(r=>r.json()), 
                     fetch('/api/data/knowledge').then(r=>r.json())
                 ]);
-                document.getElementById('kpi-leads').innerText = l.length;
-                document.getElementById('kpi-chats').innerText = c.length;
-                document.getElementById('kpi-stock').innerText = s.length;
-            } catch(e) {}
+                document.getElementById('kpi-leads').innerText = l.length || 0;
+                document.getElementById('kpi-chats').innerText = c.length || 0;
+                document.getElementById('kpi-stock').innerText = (Array.isArray(s) ? s.length : 0);
+            } catch(e) { console.error("Dash Error", e); }
         }
 
         async function loadInventory() {
             const inv = await fetch('/api/data/knowledge').then(r=>r.json());
-            document.getElementById('inv-body').innerHTML = inv.map((item, i) => `<tr><td>${item.searchable}</td><td><button class="btn btn-red" onclick="delInv(${i})">X</button></td></tr>`).join('');
+            document.getElementById('inv-body').innerHTML = (Array.isArray(inv) ? inv : []).map((item, i) => `<tr><td>${item.searchable}</td><td><button class="btn btn-red" onclick="delInv(${i})">X</button></td></tr>`).join('');
         }
         async function delInv(i) { await fetch('/api/knowledge/delete', {method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); }
-        async function uploadCSV() { const f = document.getElementById('csv-file').files[0]; const fd = new FormData(); fd.append('file', f); await fetch('/api/knowledge/csv', {method:'POST', body:fd}); loadInventory(); }
+        async function uploadCSV() { const f = document.getElementById('csv-file').files[0]; if(!f) return; const fd = new FormData(); fd.append('file', f); await fetch('/api/knowledge/csv', {method:'POST', body:fd}); loadInventory(); }
 
         async function loadLeads() {
-            allLeads = await fetch('/api/data/leads').then(r=>r.json());
-            renderLeadsTable(allLeads);
+            try {
+                allLeads = await fetch('/api/data/leads').then(r=>r.json());
+                renderLeadsTable(allLeads);
+            } catch(e) { console.error("Leads error", e); }
         }
 
         function renderLeadsTable(data) {
             const body = document.getElementById('leads-body');
-            body.innerHTML = (data || []).slice().reverse().map(x => `
+            body.innerHTML = (data || []).map(x => `
                 <tr>
                     <td>${x.fecha || '-'}</td>
-                    <td><b>${x.nombre || '-'}</b></td>
+                    <td><b>${x.nombre || 'Desconocido'}</b></td>
                     <td>${x.telefono || '-'}</td>
                     <td>${x.ciudad || '-'}</td>
                     <td>${x.correo || '-'}</td>
