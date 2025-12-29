@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICC | Manager v7.5 SQL Full</title>
+    <title>ICC | Manager v7.2 SQL</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -12,20 +12,21 @@
         :root { --naranja: #FF8C00; --dark: #202c33; --bg: #f0f2f5; --white: #fff; --danger: #ef5350; }
         body { margin: 0; font-family: 'Montserrat', sans-serif; background: var(--bg); display: flex; height: 100vh; overflow: hidden; }
         
-        /* NAV BAR COMPLETA */
+        /* NAV */
         .nav-bar { width: 60px; background: var(--dark); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 200; }
         .nav-btn { color: #aebac1; font-size: 20px; margin-bottom: 25px; cursor: pointer; width: 100%; text-align: center; padding: 10px 0; transition: 0.2s; position: relative; }
         .nav-btn:hover, .nav-btn.active { color: var(--naranja); background: rgba(255,255,255,0.05); border-left: 3px solid var(--naranja); }
         .tooltip { position: absolute; left: 60px; background: #000; color: #fff; padding: 5px; border-radius: 4px; font-size: 10px; display: none; white-space: nowrap; z-index: 300; }
         .nav-btn:hover .tooltip { display: block; }
 
+        /* LAYOUT */
         .app-container { flex: 1; display: flex; }
         .view { display: none; width: 100%; height: 100%; flex-direction: column; animation: fadeIn 0.3s; }
         .view.active { display: flex; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .page-content { padding: 30px; overflow-y: auto; flex: 1; }
 
-        /* SIDEBAR PRO */
+        /* CHAT SIDEBAR */
         .chat-layout { display: flex; height: 100%; }
         .chat-sidebar { width: 320px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
         .chat-header { height: 60px; background: #f0f2f5; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; border-bottom: 1px solid #ddd; }
@@ -37,15 +38,10 @@
         .chat-item:hover { background: #f5f5f5; }
         .chat-item.active { background: #e9edef; }
         
-        .avatar { width: 45px; height: 45px; border-radius: 50%; background: #dfe5e7; display: flex; align-items: center; justify-content: center; margin-right: 10px; color: #fff; font-size: 18px; position: relative; }
-        .status-dot { position: absolute; bottom: 2px; right: 2px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #fff; }
-        .dot-active { background: #4caf50; }
-        .dot-inactive { background: #ccc; }
-
+        .avatar { width: 45px; height: 45px; border-radius: 50%; background: #dfe5e7; display: flex; align-items: center; justify-content: center; margin-right: 10px; color: #fff; font-size: 18px; }
         .labels-row { display: flex; gap: 3px; margin-top: 3px; flex-wrap: wrap; }
         .label-tag { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: #ffe0b2; color: #e65100; border: 1px solid #ffcc80; }
 
-        /* CHAT WINDOW */
         .chat-main { flex: 1; display: flex; flex-direction: column; background: #efe7dd; position: relative; }
         .chat-bg { position: absolute; inset: 0; opacity: 0.4; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); pointer-events: none; }
         
@@ -58,15 +54,21 @@
         .input-bar { min-height: 60px; background: #f0f2f5; padding: 10px; display: flex; gap: 10px; z-index: 10; align-items: center; }
         .input-msg { flex: 1; padding: 12px; border-radius: 8px; border: none; outline: none; background: #fff; }
 
-        /* CARDS & TABLES */
+        /* CARDS */
         .card { background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid #eee; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th { text-align: left; padding: 12px; border-bottom: 2px solid #ddd; background: #f9f9f9; color: #555; }
-        td { padding: 12px; border-bottom: 1px solid #eee; }
-
-        .btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; color: white; background: var(--dark); display: inline-flex; align-items: center; gap: 5px; font-size: 13px; }
+        .btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; color: white; background: var(--dark); display: inline-flex; align-items: center; gap: 5px; font-size: 13px; transition: 0.2s; }
+        .btn:hover { opacity: 0.9; }
         .btn-orange { background: var(--naranja); }
         .btn-red { background: var(--danger); }
+        
+        /* REGLAS */
+        .rule-list { list-style: none; padding: 0; margin-top: 15px; max-height: 350px; overflow-y: auto; border: 1px solid #eee; border-radius: 5px; }
+        .rule-item { padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fafafa; font-size: 13px; }
+
+        /* TABLAS */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; padding: 10px; border-bottom: 2px solid #ddd; background: #f9f9f9; color: #555; }
+        td { padding: 10px; border-bottom: 1px solid #eee; }
         
         /* MENU CONTEXTUAL */
         #ctx-menu { display: none; position: absolute; background: #fff; width: 180px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 1000; border-radius: 5px; overflow: hidden; }
@@ -94,9 +96,9 @@
         <div id="view-chat" class="view active">
             <div class="chat-layout">
                 <div class="chat-sidebar">
-                    <div class="chat-header"><b>ICC Chat SQL</b> <span id="sync-status" style="font-size:8px; color:green;">● LIVE</span></div>
+                    <div class="chat-header"><b>ICC Chat SQL</b> <span style="font-size:10px; color:green;">● Online</span></div>
                     <div class="search-row">
-                        <input id="search" class="search-input" placeholder="Buscar..." oninput="renderChats()">
+                        <input id="search" class="search-input" placeholder="Buscar chat..." oninput="renderChats()">
                         <button class="btn btn-orange" onclick="addContactPrompt()">+</button>
                     </div>
                     <div class="chat-list" id="chat-list-box"></div>
@@ -106,17 +108,18 @@
                     <div id="chat-top" style="height:60px; background:#f0f2f5; padding:0 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; visibility:hidden; border-bottom:1px solid #ddd;">
                         <div style="display:flex; align-items:center; gap:10px;">
                             <div class="avatar" style="background:var(--naranja);"><i class="fas fa-user"></i></div>
-                            <div>
-                                <div id="active-name" style="font-weight:bold;">Usuario</div>
-                                <div id="active-phone" style="font-size:11px; color:#666;">...</div>
-                            </div>
+                            <div><div id="active-name" style="font-weight:bold;">Usuario</div><div id="active-phone" style="font-size:11px; color:#666;">...</div></div>
                         </div>
-                        <button id="btn-bot" class="btn" onclick="toggleBot()">IA</button>
+                        <button id="btn-bot" class="btn" onclick="toggleBot()" style="font-size:11px;">IA</button>
                     </div>
-                    <div class="msgs-box" id="msgs-box"></div>
+                    
+                    <div class="msgs-box" id="msgs-box">
+                        <div style="text-align:center; margin-top:100px; color:#aaa;">Selecciona un chat</div>
+                    </div>
+                    
                     <div class="input-bar" id="input-bar" style="display:none;">
                         <input type="file" id="file-input" hidden onchange="handleFileUpload(this)">
-                        <button class="btn" style="background:transparent; color:#555;" onclick="document.getElementById('file-input').click()"><i class="fas fa-paperclip"></i></button>
+                        <button class="btn" style="background:transparent; color:#555;" onclick="document.getElementById('file-input').click()"><i class="fas fa-paperclip" style="font-size:20px;"></i></button>
                         <input type="text" id="msg-input" class="input-msg" placeholder="Escribe..." onkeypress="if(event.key==='Enter') sendMsg()">
                         <button class="btn btn-orange" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button>
                         <button id="btn-mic" class="btn" style="border-radius:50%; width:40px; height:40px;" onclick="toggleRecord()"><i class="fas fa-microphone"></i></button>
@@ -127,7 +130,7 @@
 
         <div id="view-dashboard" class="view page-content">
             <h2>Dashboard General</h2>
-            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:20px;">
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
                 <div class="card"><h3>Leads</h3><h1 id="kpi-leads" style="color:var(--naranja)">0</h1></div>
                 <div class="card"><h3>Chats Activos</h3><h1 id="kpi-chats">0</h1></div>
                 <div class="card"><h3>Productos</h3><h1 id="kpi-stock" style="color:#2980b9">0</h1></div>
@@ -135,11 +138,11 @@
         </div>
 
         <div id="view-leads" class="view page-content">
-            <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <h2>Base de Leads</h2>
                 <div style="display:flex; gap:10px;">
-                    <input type="text" id="filter-leads" placeholder="Filtrar..." oninput="filterLeadsTable()" style="padding:8px; border-radius:5px; border:1px solid #ddd;">
-                    <button class="btn btn-orange" onclick="exportExcel()">Exportar Excel</button>
+                    <input type="text" id="filter-leads" placeholder="Filtrar por nombre, ciudad, producto..." oninput="filterLeadsTable()" style="padding:8px; border-radius:5px; border:1px solid #ddd; width:280px;">
+                    <button class="btn btn-orange" onclick="exportExcel()"><i class="fas fa-file-excel"></i> Exportar Excel</button>
                 </div>
             </div>
             <div class="card">
@@ -151,16 +154,18 @@
         </div>
 
         <div id="view-inventory" class="view page-content">
-            <h2>Gestión de Inventario</h2>
+            <h2>Inventario de Productos</h2>
             <div class="card">
-                <div style="margin-bottom:15px;">
+                <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center;">
                     <input type="file" id="csv-file">
                     <button class="btn btn-orange" onclick="uploadCSV()">Cargar CSV</button>
                 </div>
-                <table id="inv-table">
-                    <thead><tr><th>Producto (Searchable IA)</th><th style="width:50px;">Acción</th></tr></thead>
-                    <tbody id="inv-body"></tbody>
-                </table>
+                <div style="max-height:400px; overflow-y:auto;">
+                    <table id="inv-table">
+                        <thead><tr><th>Producto (Búsqueda IA)</th><th>Acción</th></tr></thead>
+                        <tbody id="inv-body"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -168,29 +173,36 @@
             <h2>Configuración IA</h2>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:25px;">
                 <div class="card">
-                    <h3>Personalidad & Web</h3>
-                    <textarea id="cfg-prompt" style="width:100%; height:100px; margin-bottom:10px;"></textarea>
-                    <textarea id="cfg-web" style="width:100%; height:100px;"></textarea>
-                    <button class="btn btn-orange" style="margin-top:10px;" onclick="savePromptWeb()">Guardar Base</button>
+                    <h3 style="color:var(--naranja); margin-top:0;">🤖 Personalidad & Web</h3>
+                    <label style="font-size:12px; font-weight:bold;">Prompt (Personalidad)</label>
+                    <textarea id="cfg-prompt" style="width:100%; height:120px; padding:10px; border:1px solid #ddd; border-radius:5px; margin-bottom:15px;"></textarea>
+                    <label style="font-size:12px; font-weight:bold;">Información Web (URLs, Nosotros...)</label>
+                    <textarea id="cfg-web" style="width:100%; height:120px; padding:10px; border:1px solid #ddd; border-radius:5px;" placeholder="Pega aquí la info de tu página web..."></textarea>
+                    <div style="margin-top:15px;">
+                        <button class="btn btn-orange" onclick="savePromptWeb()">Guardar Datos Base</button>
+                    </div>
                 </div>
                 <div class="card">
-                    <h3>Reglas de Negocio</h3>
+                    <h3 style="color:#202c33; margin-top:0;">📜 Reglas de Negocio</h3>
                     <div style="display:flex; gap:10px; margin-bottom:10px;">
-                        <input type="text" id="rule-input" style="flex:1;">
-                        <button class="btn btn-orange" onclick="addRule()">Añadir</button>
+                        <input type="text" id="rule-input" placeholder="Horario, formas de pago..." style="flex:1; padding:10px; border:1px solid #ddd; border-radius:5px;">
+                        <button class="btn btn-orange" onclick="addRule()">Agregar</button>
                     </div>
-                    <ul id="rule-list-box" style="list-style:none; padding:0;"></ul>
+                    <ul id="rule-list-box" class="rule-list"></ul>
                 </div>
             </div>
         </div>
 
         <div id="view-sandbox" class="view page-content">
-            <h2>Pruebas de IA</h2>
+            <h2>Laboratorio de Pruebas</h2>
             <div class="card">
-                <input id="sand-in" style="width:100%; padding:10px; margin-bottom:10px;" placeholder="Mensaje...">
-                <button class="btn btn-orange" onclick="runTest()">Enviar</button>
-                <div style="margin-top:20px; background:#f9f9f9; padding:15px; border-radius:5px;">
-                    <b>Respuesta:</b> <p id="sand-res">...</p>
+                <div style="display:flex; gap:10px;">
+                    <input id="sand-in" style="flex:1; padding:10px; border:1px solid #ddd;" placeholder="Prueba un mensaje...">
+                    <button class="btn btn-orange" onclick="runTest()">Enviar</button>
+                </div>
+                <div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                    <div style="background:#f9f9f9; padding:15px; border-radius:5px;"><b>Respuesta:</b><p id="sand-res">...</p></div>
+                    <div style="background:#222; color:#0f0; padding:15px; border-radius:5px; font-family:monospace; font-size:11px; height:150px; overflow:auto;" id="sand-log">LOG</div>
                 </div>
             </div>
         </div>
@@ -198,10 +210,10 @@
     </div>
 
     <div id="ctx-menu">
-        <div class="ctx-item" onclick="ctxAction('rename')"><i class="fas fa-pen"></i> Renombrar</div>
-        <div class="ctx-item" onclick="ctxAction('pin')"><i class="fas fa-thumbtack"></i> Fijar Chat</div>
+        <div class="ctx-item" onclick="ctxAction('rename')"><i class="fas fa-pen"></i> Cambiar Nombre</div>
         <div class="ctx-item" onclick="ctxAction('label')"><i class="fas fa-tag"></i> Etiquetar</div>
-        <div class="ctx-item" onclick="ctxAction('delete')" style="color:red;"><i class="fas fa-trash"></i> Eliminar Chat</div>
+        <div class="ctx-item" onclick="ctxAction('pin')"><i class="fas fa-thumbtack"></i> Fijar/Desfijar</div>
+        <div class="ctx-item" onclick="ctxAction('delete')" style="color:red;"><i class="fas fa-trash"></i> Eliminar</div>
     </div>
 
     <script>
@@ -211,6 +223,11 @@
         function nav(v) {
             document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
             document.getElementById('view-'+v).classList.add('active');
+            const btns = document.querySelectorAll('.nav-btn');
+            btns.forEach(b => b.classList.remove('active'));
+            const map = { chat:0, dashboard:1, leads:2, inventory:3, config:4, sandbox:5 };
+            if(btns[map[v]]) btns[map[v]].classList.add('active');
+
             if(timer) clearInterval(timer);
             if(v==='chat') { sync(); timer = setInterval(sync, 3000); }
             if(v==='dashboard') loadDash();
@@ -222,29 +239,33 @@
         async function sync() {
             try {
                 const res = await fetch('/api/chats-full');
-                chats = await res.json();
-                renderChats();
-                if(selectedId) renderMsgs(selectedId);
+                const data = await res.json();
+                if(JSON.stringify(data) !== JSON.stringify(chats)) {
+                    chats = data;
+                    renderChats();
+                    if(selectedId) renderMsgs(selectedId);
+                }
             } catch(e) {}
         }
 
         function renderChats() {
             const q = document.getElementById('search').value.toLowerCase();
-            document.getElementById('chat-list-box').innerHTML = chats.filter(c => (c.name||c.id).toLowerCase().includes(q)).map(c => `
+            document.getElementById('chat-list-box').innerHTML = chats.filter(c => (c.name||c.id).toLowerCase().includes(q)).map(c => {
+                let labelsHtml = (c.labels||[]).map(l => `<span class="label-tag">${l}</span>`).join('');
+                return `
                 <div class="chat-item ${c.id===selectedId?'active':''}" onclick="selChat('${c.id}')" oncontextmenu="openCtx(event, '${c.id}')">
-                    <div class="avatar" style="background:${c.botActive?'var(--naranja)':'#ccc'}">
-                        <i class="fas fa-user"></i>
-                        <div class="status-dot ${c.botActive?'dot-active':'dot-inactive'}"></div>
-                    </div>
+                    <div class="avatar" style="background:${c.botActive?'var(--naranja)':'#ccc'}"><i class="fas fa-user"></i></div>
                     <div style="flex:1; overflow:hidden;">
-                        <div style="font-weight:bold; display:flex; justify-content:space-between;">
-                            ${c.name} <span>${c.pinned?'📌':''}</span>
+                        <div style="font-weight:600; display:flex; justify-content:space-between;">
+                            ${c.name} <small>${c.pinned?'📌':''}</small>
                         </div>
-                        <div class="labels-row">${(c.labels||[]).map(l=>`<span class="label-tag">${l}</span>`).join('')}</div>
-                        <div style="font-size:11px; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.lastMessage.text}</div>
+                        <div class="labels-row">${labelsHtml}</div>
+                        <div style="font-size:12px; color:#666; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            ${(c.lastMessage.text||'').substring(0,30)}
+                        </div>
                     </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
         }
 
         function selChat(id) {
@@ -252,91 +273,21 @@
             const c = chats.find(x=>x.id===id);
             document.getElementById('chat-top').style.visibility='visible';
             document.getElementById('input-bar').style.display='flex';
-            document.getElementById('active-name').innerText = c.name;
-            document.getElementById('active-phone').innerText = id;
+            document.getElementById('active-name').innerText=c.name;
+            document.getElementById('active-phone').innerText=id;
             updateBotBtn(c.botActive);
             renderMsgs(id);
+            renderChats();
         }
 
         async function renderMsgs(id) {
-            const h = await fetch('/api/data/history').then(r=>r.json());
-            const msgs = h[id] || [];
-            const box = document.getElementById('msgs-box');
-            box.innerHTML = msgs.map(m => `
-                <div class="bubble ${m.role==='bot'?'bubble-out':(m.role==='manual'?'bubble-manual':'bubble-in')}">${m.text}</div>
-            `).join('');
-            box.scrollTop = box.scrollHeight;
-        }
-
-        // --- CONEXIONES SQL CORREGIDAS ---
-
-        async function loadDash() {
-            const [l,c,s] = await Promise.all([
-                fetch('/api/data/leads').then(r=>r.json()),
-                fetch('/api/chats-full').then(r=>r.json()),
-                fetch('/api/data/knowledge').then(r=>r.json())
-            ]);
-            document.getElementById('kpi-leads').innerText = l.length;
-            document.getElementById('kpi-chats').innerText = c.length;
-            document.getElementById('kpi-stock').innerText = s.length;
-        }
-
-        async function loadLeads() {
-            allLeads = await fetch('/api/data/leads').then(r=>r.json());
-            renderLeadsTable(allLeads);
-        }
-
-        function renderLeadsTable(data) {
-            const body = document.getElementById('leads-body');
-            body.innerHTML = data.map(x => `
-                <tr>
-                    <td>${x.fecha || '-'}</td>
-                    <td><b>${x.nombre || '-'}</b></td>
-                    <td>${x.telefono || '-'}</td>
-                    <td>${x.ciudad || '-'}</td>
-                    <td>${x.correo || '-'}</td>
-                    <td>${x.interes || '-'}</td>
-                    <td><span class="label-tag">${x.etiqueta || 'Lead'}</span></td>
-                    <td><button class="btn btn-red" onclick="deleteLead(${x.id})"><i class="fas fa-trash"></i></button></td>
-                </tr>
-            `).join('');
-        }
-
-        async function loadInventory() {
-            const inv = await fetch('/api/data/knowledge').then(r=>r.json());
-            document.getElementById('inv-body').innerHTML = inv.map((item, i) => `
-                <tr>
-                    <td>${item.searchable}</td>
-                    <td><button class="btn btn-red" onclick="delInv(${i})"><i class="fas fa-times"></i></button></td>
-                </tr>
-            `).join('');
-        }
-
-        async function delInv(i) {
-            if(!confirm("¿Borrar?")) return;
-            await fetch('/api/knowledge/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})});
-            loadInventory();
-        }
-
-        async function uploadCSV() {
-            const file = document.getElementById('csv-file').files[0];
-            const fd = new FormData(); fd.append('file', file);
-            await fetch('/api/knowledge/csv', {method:'POST', body:fd});
-            loadInventory();
-        }
-
-        // --- FUNCIONES DE CHAT PRO ---
-
-        function openCtx(e,id) { e.preventDefault(); ctxId=id; const m=document.getElementById('ctx-menu'); m.style.display='block'; m.style.left=e.pageX+'px'; m.style.top=e.pageY+'px'; }
-        document.onclick = () => document.getElementById('ctx-menu').style.display='none';
-
-        async function ctxAction(action) {
-            let val = null;
-            if(action==='rename') val = prompt("Nombre:");
-            if(action==='label') val = prompt("Etiqueta:");
-            if(action==='pin') { const c=chats.find(x=>x.id===ctxId); val = !c.pinned; }
-            await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:ctxId, action, value:val})});
-            sync();
+            try {
+                const h = await fetch('/api/data/history').then(r=>r.json());
+                const msgs = h[id] || [];
+                const box = document.getElementById('msgs-box');
+                box.innerHTML = msgs.map(m => `<div class="bubble ${m.role==='bot'?'bubble-out':(m.role==='manual'?'bubble-manual':'bubble-in')}">${m.text}</div>`).join('');
+                box.scrollTop = box.scrollHeight;
+            } catch(e) {}
         }
 
         async function sendMsg() {
@@ -348,61 +299,175 @@
         }
 
         async function handleFileUpload(input) {
-            const fd = new FormData(); fd.append('file', input.files[0]); fd.append('phone', selectedId); fd.append('type', 'document');
-            await fetch('/api/chat/upload-send', {method:'POST', body:fd});
-            sync();
+            if (input.files.length === 0 || !selectedId) return;
+            const fd = new FormData();
+            fd.append('file', input.files[0]);
+            fd.append('phone', selectedId);
+            fd.append('type', input.files[0].type.includes('image') ? 'image' : 'document');
+            await fetch('/api/chat/upload-send', { method: 'POST', body: fd });
+            input.value = ''; sync();
         }
 
         async function toggleRecord() {
-            if(!isRecording) {
-                const stream = await navigator.mediaDevices.getUserMedia({audio:true});
-                mediaRecorder = new MediaRecorder(stream); audioChunks=[];
+            if (!isRecording) {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
                 mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
                 mediaRecorder.onstop = async () => {
-                    const blob = new Blob(audioChunks, {type:'audio/ogg'});
+                    const blob = new Blob(audioChunks, { type: 'audio/ogg; codecs=opus' });
                     const fd = new FormData(); fd.append('file', blob, 'audio.ogg'); fd.append('phone', selectedId); fd.append('type', 'audio');
-                    await fetch('/api/chat/upload-send', {method:'POST', body:fd});
-                    sync();
+                    await fetch('/api/chat/upload-send', { method: 'POST', body: fd });
+                    document.getElementById('btn-mic').classList.remove('recording'); sync();
                 };
-                mediaRecorder.start(); isRecording=true; document.getElementById('btn-mic').classList.add('recording');
-            } else { mediaRecorder.stop(); isRecording=false; document.getElementById('btn-mic').classList.remove('recording'); }
+                mediaRecorder.start(); isRecording = true; document.getElementById('btn-mic').classList.add('recording');
+            } else {
+                mediaRecorder.stop(); isRecording = false;
+            }
         }
 
-        function updateBotBtn(a) { const b=document.getElementById('btn-bot'); b.innerText=a?'IA: ON':'IA: OFF'; b.style.background=a?'#202c33':'#ef5350'; }
-
-        // --- CONFIG & TEST ---
         async function loadCfg() {
             const d = await fetch('/api/data/config').then(r=>r.json());
-            document.getElementById('cfg-prompt').value = d.prompt;
-            document.getElementById('cfg-web').value = d.website_data;
-            renderRules(d.tech_rules);
+            document.getElementById('cfg-prompt').value = d.prompt || '';
+            document.getElementById('cfg-web').value = d.website_data || ''; 
+            renderRules(d.tech_rules || []);
         }
 
         function renderRules(rules) {
-            document.getElementById('rule-list-box').innerHTML = (rules||[]).map((r,i)=>`<li style="padding:5px; border-bottom:1px solid #eee;">${r} <i class="fas fa-trash" style="color:red; cursor:pointer; float:right;" onclick="deleteRule(${i})"></i></li>`).join('');
+            const list = document.getElementById('rule-list-box');
+            list.innerHTML = (Array.isArray(rules) ? rules : []).map((r, i) => `<li class="rule-item"><span>${r}</span><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="deleteRule(${i})"></i></li>`).join('');
         }
 
         async function addRule() {
             const r = document.getElementById('rule-input').value;
-            const res = await fetch('/api/config/rules/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({rule:r})}).then(x=>x.json());
+            if(!r) return;
+            const res = await fetch('/api/config/rules/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({rule:r})}).then(r=>r.json());
             renderRules(res.rules);
             document.getElementById('rule-input').value = '';
         }
 
-        async function deleteRule(i) {
-            const res = await fetch('/api/config/rules/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}).then(x=>x.json());
+        async function deleteRule(idx) {
+            const res = await fetch('/api/config/rules/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:idx})}).then(r=>r.json());
             renderRules(res.rules);
         }
 
-        async function runTest() {
-            const txt = document.getElementById('sand-in').value;
-            const r = await fetch('/api/test-ai', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:txt})}).then(x=>x.json());
-            document.getElementById('sand-res').innerText = r.response;
+        async function savePromptWeb() {
+            await fetch('/api/save-prompt-web', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+                prompt: document.getElementById('cfg-prompt').value,
+                website_data: document.getElementById('cfg-web').value
+            })});
+            alert("✅ Configuración Guardada");
         }
 
-        async function savePromptWeb() {
-            await fetch('/api/save-prompt-web', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt: document.getElementById('cfg-prompt').value, website_data: document.getElementById('cfg-web').value})});
-            alert("Guardado");
+        async function loadDash() {
+            try {
+                const [l,c,s] = await Promise.all([
+                    fetch('/api/data/leads').then(r=>r.json()), 
+                    fetch('/api/chats-full').then(r=>r.json()), 
+                    fetch('/api/data/knowledge').then(r=>r.json())
+                ]);
+                document.getElementById('kpi-leads').innerText = l.length || 0;
+                document.getElementById('kpi-chats').innerText = c.length || 0;
+                document.getElementById('kpi-stock').innerText = (Array.isArray(s) ? s.length : 0);
+            } catch(e) { console.error("Dash Error", e); }
+        }
+
+        async function loadInventory() {
+            const inv = await fetch('/api/data/knowledge').then(r=>r.json());
+            // En SQL el inv viene como array de objetos
+            document.getElementById('inv-body').innerHTML = (Array.isArray(inv) ? inv : []).map((item, i) => `<tr><td>${item.searchable}</td><td><button class="btn btn-red" onclick="delInv(${i})">X</button></td></tr>`).join('');
+        }
+        async function delInv(i) { await fetch('/api/knowledge/delete', {method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); }
+        async function uploadCSV() { const f = document.getElementById('csv-file').files[0]; if(!f) return; const fd = new FormData(); fd.append('file', f); await fetch('/api/knowledge/csv', {method:'POST', body:fd}); loadInventory(); }
+
+        async function loadLeads() {
+            try {
+                allLeads = await fetch('/api/data/leads').then(r=>r.json());
+                renderLeadsTable(allLeads);
+            } catch(e) { console.error("Leads error", e); }
+        }
+
+        function renderLeadsTable(data) {
+            const body = document.getElementById('leads-body');
+            // Mapeamos para que soporte los nombres del Backend SQL
+            body.innerHTML = (data || []).map(x => `
+                <tr>
+                    <td>${x.fecha || x.time || '-'}</td>
+                    <td><b>${x.nombre || x.name || 'Desconocido'}</b></td>
+                    <td>${x.telefono || x.phone || '-'}</td>
+                    <td>${x.ciudad || x.city || '-'}</td>
+                    <td>${x.correo || x.email || '-'}</td>
+                    <td>${x.interes || x.interest || '-'}</td>
+                    <td><span class="label-tag">${x.etiqueta || x.label || 'Lead'}</span></td>
+                    <td><button class="btn btn-red" onclick="deleteLead(${x.id})" style="padding:4px 8px;"><i class="fas fa-trash"></i></button></td>
+                </tr>
+            `).join('');
+        }
+
+        function filterLeadsTable() {
+            const q = document.getElementById('filter-leads').value.toLowerCase();
+            const filtered = allLeads.filter(l => 
+                (l.nombre||l.name||'').toLowerCase().includes(q) || 
+                (l.interes||l.interest||'').toLowerCase().includes(q) || 
+                (l.ciudad||l.city||'').toLowerCase().includes(q) || 
+                (l.telefono||l.phone||'').includes(q)
+            );
+            renderLeadsTable(filtered);
+        }
+
+        async function deleteLead(id) {
+            if(!confirm("¿Borrar este lead?")) return;
+            await fetch('/api/leads/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id })});
+            loadLeads();
+        }
+
+        function exportExcel() { XLSX.writeFile(XLSX.utils.table_to_book(document.getElementById('leads-table')), "Leads_ICC.xlsx"); }
+
+        function addContactPrompt() { 
+            const p=prompt("Teléfono (con país):"); 
+            if(p) {
+                const n=prompt("Nombre:");
+                fetch('/api/contacts/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:p,name:n})}).then(sync);
+            }
+        }
+        
+        async function toggleBot() { 
+            const c=chats.find(x=>x.id===selectedId); 
+            await fetch('/api/chat/toggle-bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedId,active:!c.botActive})}); 
+            sync(); 
+        }
+
+        function updateBotBtn(a) { 
+            const btn = document.getElementById('btn-bot');
+            btn.innerText = a ? "IA: ON" : "IA: OFF"; 
+            btn.style.background = a ? "#202c33" : "#ef5350"; 
+        }
+        
+        async function runTest() {
+            const r = await fetch('/api/test-ai', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:document.getElementById('sand-in').value})}).then(x=>x.json());
+            document.getElementById('sand-res').innerText = r.response; 
+            document.getElementById('sand-log').innerText = r.logic_log;
+        }
+
+        function openCtx(e,id) { e.preventDefault(); ctxId=id; const m=document.getElementById('ctx-menu'); m.style.display='block'; m.style.left=e.pageX+'px'; m.style.top=e.pageY+'px'; }
+        document.onclick = (e) => { if(!e.target.closest('#ctx-menu')) document.getElementById('ctx-menu').style.display='none'; }
+        
+        async function ctxAction(action) {
+            const c = chats.find(x=>x.id===ctxId);
+            let val = null;
+            if(action === 'rename') {
+                val = prompt("Nuevo nombre:", c.name || c.id);
+                if(!val) return;
+                await fetch('/api/contacts/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:ctxId, name:val})});
+                sync(); return;
+            }
+            if(action === 'label') {
+                val = prompt("Etiqueta:");
+                if(!val) return;
+            }
+            if(action === 'pin') val = !c.pinned;
+            await fetch('/api/chat/action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:ctxId, action:action, value:val})});
+            sync();
         }
 
         window.onload = () => nav('dashboard');
