@@ -30,7 +30,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
 
 // ============================================================
-// 2. MOTOR DE BASE DE DATOS (SQLITE) - REEMPLAZA FILES Y readData
+// 2. MOTOR DE BASE DE DATOS (SQLITE)
 // ============================================================
 let db;
 (async () => {
@@ -42,7 +42,6 @@ let db;
         driver: sqlite3.Database
     });
 
-    // Creamos las tablas respetando tu estructura original de leads y metadatos
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
         CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, name TEXT, email TEXT, city TEXT, interest TEXT, label TEXT, time TEXT, original_timestamp TEXT);
@@ -52,7 +51,7 @@ let db;
     `);
     
     await refreshKnowledge();
-    console.log("🚀 LORENA 7.0 SQL - MOTOR INICIADO CON ÉXITO");
+    console.log("🚀 LORENA 7.1 SQL - MOTOR INICIADO CON ÉXITO");
 })();
 
 let globalKnowledge = [];
@@ -63,7 +62,6 @@ async function refreshKnowledge() {
     } catch(e) { globalKnowledge = []; }
 }
 
-// Auxiliares para Config (Reemplazan readData/writeData para config.json)
 async function getCfg(key, fallback) {
     const res = await db.get("SELECT value FROM config WHERE key = ?", [key]);
     return res ? JSON.parse(res.value) : fallback;
@@ -78,19 +76,17 @@ app.use(session({
 }));
 
 // ============================================================
-// 3. WHATSAPP ENGINE (IDÉNTICO A v6.6)
+// 3. WHATSAPP ENGINE
 // ============================================================
 async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     try {
         let payload = { messaging_product: "whatsapp", to: destinatario, type: tipo };
         if (tipo === "text") { payload.text = { body: contenido }; } 
         else if (contenido.id) { 
-            if(tipo === 'image') payload.image = { id: contenido.id };
-            if(tipo === 'document') payload.document = { id: contenido.id, filename: "Archivo_ICC.pdf" };
-            if(tipo === 'audio') payload.audio = { id: contenido.id };
+            payload[tipo] = { id: contenido.id };
+            if (tipo === 'document') payload.document.filename = "Archivo_ICC.pdf";
         } else {
-            if(tipo === 'image') payload.image = { link: contenido };
-            if(tipo === 'document') payload.document = { link: contenido };
+            payload[tipo] = { link: contenido };
         }
         await axios.post(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`, payload, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
@@ -113,7 +109,7 @@ async function uploadToMeta(buffer, mimeType, filename) {
 }
 
 // ============================================================
-// 4. IA LORENA (SQL EDITION - DEDUPLICACIÓN INTELIGENTE)
+// 4. IA LORENA (CORREGIDA PARA CAPTURA DE DATOS)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -128,10 +124,8 @@ function buscarEnCatalogo(query) {
 }
 
 async function procesarConLorena(message, sessionId, mediaDesc = "") {
-    // 1. Guardar mensaje usuario
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
 
-    // 2. Control del Bot (Reemplaza bot_status.json)
     const meta = await db.get("SELECT botActive, contactName, addedManual FROM metadata WHERE phone = ?", [sessionId]);
     if (meta && meta.botActive === 0) return null;
 
@@ -145,8 +139,8 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
     let reglasTexto = Array.isArray(techRules) ? techRules.map(r => `- ${r}`).join("\n") : techRules;
 
     const prompt = `ERES LORENA DE ICC. Personalidad: ${configPrompt}. Web: ${websiteData}. Inventario: ${JSON.stringify(stock)}. Reglas: ${reglasTexto}.
-    MISION: Extraer NOMBRE, CORREO, CIUDAD e INTERÉS.
-    [RESPUESTA JSON]: [DATA] {"es_lead": true, "nombre": "...", "correo": "...", "ciudad": "...", "interes": "...", "etiqueta": "Lead Caliente"} [DATA]`;
+    MISION: Identificar NOMBRE, CORREO, CIUDAD e INTERÉS.
+    [RESPUESTA JSON OBLIGATORIA]: [DATA] {"es_lead": true, "nombre": "...", "correo": "...", "ciudad": "...", "interes": "...", "etiqueta": "Lead Caliente"} [DATA]`;
 
     try {
         const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
@@ -154,32 +148,41 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
 
         let fullText = res.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText;
+        
+        // Regex mejorado para capturar el JSON incluso con saltos de línea
         const match = fullText.match(/\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/);
 
         if (match) {
             textoVisible = fullText.replace(/\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/, "").trim();
-            const info = JSON.parse(match[1]);
+            try {
+                const info = JSON.parse(match[1]);
 
-            if(info.es_lead) {
-                // --- DEDUPLICACIÓN (Punto corregido) ---
-                const seisHorasAtras = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
-                const yaExiste = await db.get("SELECT id FROM leads WHERE phone = ? AND interest = ? AND time > ?", [sessionId, info.interes, seisHorasAtras]);
+                if(info.es_lead) {
+                    const seisHorasAtras = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+                    const yaExiste = await db.get("SELECT id FROM leads WHERE phone = ? AND interest = ? AND time > ?", [sessionId, info.interes, seisHorasAtras]);
 
-                if (!yaExiste) {
-                    let nombreFinal = info.nombre;
-                    // Jerarquía de Nombres (Punto corregido)
-                    if (nombreFinal && !nombreFinal.toLowerCase().includes("desconocido")) {
-                        if (!meta || meta.addedManual === 0) {
-                            await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName", [sessionId, nombreFinal]);
+                    if (!yaExiste) {
+                        let nombreFinal = info.nombre;
+                        
+                        // Si detecta nombre y no es manual, actualiza metadata
+                        if (nombreFinal && !nombreFinal.toLowerCase().includes("desconocido")) {
+                            if (!meta || meta.addedManual === 0) {
+                                await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName", [sessionId, nombreFinal]);
+                            }
                         }
-                    }
-                    const updatedMeta = await db.get("SELECT contactName FROM metadata WHERE phone = ?", [sessionId]);
-                    nombreFinal = updatedMeta?.contactName || sessionId;
+                        
+                        const updatedMeta = await db.get("SELECT contactName FROM metadata WHERE phone = ?", [sessionId]);
+                        nombreFinal = updatedMeta?.contactName || sessionId;
 
-                    await db.run("INSERT INTO leads (phone, name, email, city, interest, label, time, original_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
-                        [sessionId, nombreFinal, info.correo||"", info.city||"", info.interes, info.etiqueta, new Date().toLocaleString(), Date.now()]);
+                        // CORRECCIÓN DE CAMPOS: Mapeo exacto del JSON de la IA a las columnas de la DB
+                        await db.run(
+                            "INSERT INTO leads (phone, name, email, city, interest, label, time, original_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
+                            [sessionId, nombreFinal, info.correo || "", info.ciudad || "", info.interes || "", info.etiqueta || "Lead", new Date().toLocaleString(), Date.now().toString()]
+                        );
+                        console.log("✅ Lead Capturado con éxito:", nombreFinal);
+                    }
                 }
-            }
+            } catch (jsonErr) { console.error("Error parseando JSON de IA:", jsonErr); }
         }
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', textoVisible, new Date().toISOString()]);
         return textoVisible;
@@ -187,7 +190,7 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
 }
 
 // ============================================================
-// 5. API ENDPOINTS (TRANSPOSICIÓN 1:1 DE v6.6)
+// 5. API ENDPOINTS (TRANSPOSICIÓN TOTAL)
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
@@ -198,7 +201,6 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-// Chats Full (Con Reagrupación SQL)
 app.get('/api/chats-full', proteger, async (req, res) => {
     const rows = await db.all(`
         SELECT m.*, 
@@ -213,7 +215,6 @@ app.get('/api/chats-full', proteger, async (req, res) => {
     })));
 });
 
-// Endpoint History (Transformado a estructura JSON original para el front)
 app.get('/api/data/history', proteger, async (req, res) => {
     const rows = await db.all("SELECT * FROM history ORDER BY id ASC");
     const grouped = rows.reduce((acc, curr) => {
@@ -226,7 +227,16 @@ app.get('/api/data/history', proteger, async (req, res) => {
 
 app.get('/api/data/leads', proteger, async (req, res) => {
     const rows = await db.all("SELECT * FROM leads ORDER BY id DESC");
-    res.json(rows.map(r => ({ ...r, fecha: r.time, nombre: r.name, telefono: r.phone, interes: r.interest, ciudad: r.city, correo: r.email })));
+    // Mapeo para que el Front reciba los nombres de campo que espera
+    res.json(rows.map(r => ({ 
+        ...r, 
+        fecha: r.time, 
+        nombre: r.name, 
+        telefono: r.phone, 
+        interes: r.interest, 
+        ciudad: r.city, 
+        correo: r.email 
+    })));
 });
 
 app.post('/api/leads/delete', proteger, async (req, res) => {
@@ -271,7 +281,7 @@ app.post('/api/chat/action', proteger, async (req, res) => {
         const row = await db.get("SELECT labels FROM metadata WHERE phone = ?", [phone]);
         let labels = JSON.parse(row?.labels || "[]");
         if(!labels.includes(value)) labels.push(value);
-        await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [phone, JSON.stringify(labels)]);
+        await db.run("UPDATE metadata SET labels = ? WHERE phone = ?", [JSON.stringify(labels), phone]);
     }
     res.json({ success: true });
 });
@@ -303,7 +313,6 @@ app.post('/api/chat/toggle-bot', proteger, async (req, res) => {
 app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res) => {
     try {
         const n = parse(req.file.buffer.toString('utf-8'), { columns: true });
-        // Lógica de Merge Incremental original
         for(const r of n) {
             const searchable = Object.values(r).join(" ");
             await db.run("INSERT OR IGNORE INTO inventory (searchable, raw_data) VALUES (?, ?)", [searchable, JSON.stringify(r)]);
@@ -313,12 +322,30 @@ app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res)
     } catch(e) { res.status(500).json({ error: "CSV Error" }); }
 });
 
-app.get('/api/data/config', proteger, async (req, res) => {
-    res.json({ 
-        prompt: await getCfg('prompt', ""), 
-        website_data: await getCfg('website_data', ""), 
-        tech_rules: await getCfg('tech_rules', []) 
-    });
+app.post('/api/knowledge/delete', proteger, async (req, res) => {
+    // En SQL es mejor borrar por el contenido searchable único
+    const rows = await db.all("SELECT searchable FROM inventory");
+    if(rows[req.body.index]) {
+        await db.run("DELETE FROM inventory WHERE searchable = ?", [rows[req.body.index].searchable]);
+        await refreshKnowledge();
+        res.json({ success: true });
+    } else res.status(404).json({ error: "No encontrado" });
+});
+
+app.get('/api/data/knowledge', proteger, async (req, res) => {
+    const rows = await db.all("SELECT searchable FROM inventory");
+    res.json(rows);
+});
+
+app.post('/api/test-ai', proteger, async (req, res) => {
+    try {
+        const c = await getCfg('prompt', "");
+        const web = await getCfg('website_data', "");
+        const fullPrompt = `PROMPT: ${c}\nWEB: ${web}\nUSER: ${req.body.message}`;
+        const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+            { contents: [{ parts: [{ text: fullPrompt }] }] });
+        res.json({ response: res.data.candidates[0].content.parts[0].text, logic_log: fullPrompt });
+    } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
@@ -331,7 +358,7 @@ app.post('/webhook', async (req, res) => {
     if (contact) {
         const m = await db.get("SELECT addedManual FROM metadata WHERE phone = ?", [contact.wa_id]);
         if (!m || m.addedManual === 0) {
-            await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=contactName", [contact.wa_id, contact.profile.name]);
+            await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName", [contact.wa_id, contact.profile.name]);
         }
     }
     if (msg) {
@@ -342,7 +369,8 @@ app.post('/webhook', async (req, res) => {
 });
 
 app.use(express.static(__dirname, { index: false }));
-app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
+app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
+app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 
-app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 7.0 SQL - THE VAULT (FIDELIDAD TOTAL)"));
+app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 7.1 SQL - THE VAULT (FIDELIDAD TOTAL)"));
