@@ -38,7 +38,7 @@ app.use((req, res, next) => {
 });
 
 // ============================================================
-// 2. MOTOR SQLITE CON AUTO-MIGRACIÓN
+// 2. MOTOR SQLITE CON AUTO-REPARACIÓN DE ESTRUCTURA
 // ============================================================
 let db;
 (async () => {
@@ -50,7 +50,7 @@ let db;
         driver: sqlite3.Database
     });
 
-    // 1. Creación de tablas base
+    // 1. Creación de tablas base con todas las columnas
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
         CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT);
@@ -60,12 +60,21 @@ let db;
         CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
     `);
 
-    // 2. MIGRACIÓN: Forzar columnas nuevas si la tabla ya existía sin ellas
-    try { await db.exec("ALTER TABLE leads ADD COLUMN ciudad TEXT;"); } catch(e) {}
-    try { await db.exec("ALTER TABLE leads ADD COLUMN correo TEXT;"); } catch(e) {}
+    // 2. MIGRACIÓN FORZADA: Si la tabla ya existía sin estas columnas, las agregamos individualmente
+    const tableInfo = await db.all("PRAGMA table_info(leads)");
+    const columns = tableInfo.map(c => c.name);
+    
+    if (!columns.includes('ciudad')) {
+        await db.exec("ALTER TABLE leads ADD COLUMN ciudad TEXT DEFAULT 'No indicada'");
+        console.log("⚠️ Columna 'ciudad' añadida a Leads");
+    }
+    if (!columns.includes('correo')) {
+        await db.exec("ALTER TABLE leads ADD COLUMN correo TEXT DEFAULT 'No indicado'");
+        console.log("⚠️ Columna 'correo' añadida a Leads");
+    }
 
     await refreshKnowledge();
-    console.log("🚀 LORENA 7.2 SQL - MOTOR Y TABLAS ACTUALIZADAS");
+    console.log("🚀 LORENA 7.5 SQL - BASE DE DATOS BLINDADA Y LISTA");
 })();
 
 let globalKnowledge = [];
@@ -125,7 +134,7 @@ async function uploadToMeta(buffer, mimeType, filename) {
 }
 
 // ============================================================
-// 4. IA LORENA (REFORZADA PARA CAPTURA)
+// 4. IA LORENA (REFORZADA PARA RECOPILACIÓN)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -153,11 +162,10 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
     const chatPrevio = historyRows.reverse();
     const stock = buscarEnCatalogo(message);
 
-    const promptLorena = `ERES LORENA DE ICC.
-    [MISIÓN] Captura nombre, ciudad, correo e interés del cliente.
-    [FORMATO] Si hay datos, termina con:
+    const promptLorena = `ERES LORENA DE ICC. Tu misión es vender y obtener datos.
+    [FORMATO OBLIGATORIO] Cuando detectes datos o interés, finaliza CON:
     [DATA] { "es_lead": true, "nombre": "...", "interes": "...", "ciudad": "...", "correo": "...", "etiqueta": "Lead Caliente" } [DATA]
-    Reglas: ${reglasTexto}. Personalidad: ${promptBase}. Web: ${websiteData}. Inventario: ${JSON.stringify(stock)}`;
+    Reglas: ${reglasTexto}. Personalidad: ${promptBase}. Info: ${websiteData}.`;
 
     try {
         const resAI = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
@@ -166,7 +174,7 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
         let fullText = resAI.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText;
         
-        // Buscador de datos corregido para mayor flexibilidad
+        // Regex mejorado para capturar JSON robustamente
         const regexData = /\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/i;
         const match = fullText.match(regexData);
 
@@ -176,23 +184,19 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
                 const info = JSON.parse(match[1]);
                 if(info.es_lead) {
                     let nombreFinal = info.nombre || "Desconocido";
-                    const meta = await db.get("SELECT addedManual, contactName FROM metadata WHERE phone = ?", [sessionId]);
-                    
-                    if (nombreFinal && !nombreFinal.toLowerCase().includes("desconocido")) {
-                        if (!meta || meta.addedManual === 0) {
-                            await db.run("INSERT INTO metadata (phone, contactName, addedManual) VALUES (?, ?, 0) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName", [sessionId, nombreFinal]);
-                        }
-                    } else if (meta?.contactName) {
+                    const meta = await db.get("SELECT contactName FROM metadata WHERE phone = ?", [sessionId]);
+                    if (meta?.contactName && (nombreFinal.toLowerCase().includes("desconocido") || nombreFinal === "")) {
                         nombreFinal = meta.contactName;
                     }
 
-                    // GUARDADO SQL REFORZADO CON COLUMNAS NUEVAS
+                    // GUARDADO SQL COMPLETO
                     await db.run(
                         "INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)", 
-                        [sessionId, nombreFinal, info.interes || "General", info.etiqueta || "Lead", new Date().toLocaleString(), info.ciudad || "No indicada", info.correo || "No indicado"]
+                        [sessionId, nombreFinal, info.interes || "General", info.etiqueta || "Lead", new Date().toLocaleString(), info.ciudad || "No capturada", info.correo || "No capturado"]
                     );
+                    console.log("🎯 Lead capturado en SQL:", nombreFinal);
                 }
-            } catch(e) { console.error("Error capturando Lead:", e); }
+            } catch(e) { console.error("Error parseando Lead:", e); }
         }
 
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', textoVisible, new Date().toISOString()]);
@@ -201,7 +205,7 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
 }
 
 // ============================================================
-// 5. API ENDPOINTS (TRANSPOSICIÓN 1:1)
+// 5. API ENDPOINTS
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
@@ -217,6 +221,7 @@ app.get('/api/data/:type', proteger, async (req, res) => {
     try {
         if (t === 'leads') {
             const rows = await db.all("SELECT * FROM leads ORDER BY id DESC");
+            // Mapeamos para compatibilidad con el front
             return res.json(rows.map(r => ({ ...r, telefono: r.phone, fecha: r.fecha })));
         }
         if (t === 'config') return res.json({ prompt: await getCfg('prompt', ""), website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []) });
@@ -372,4 +377,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 7.2 SQL - THE VAULT (FIDELIDAD TOTAL)"));
+app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 7.5 SQL - BLINDADA"));
