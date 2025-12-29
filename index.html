@@ -3,38 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICC | Dashboard 6.0</title>
+    <title>ICC | Panel Manager v6.2</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
     <style>
-        :root { --naranja: #FF8C00; --dark: #202c33; --bg: #f0f2f5; --white: #fff; }
+        :root { --naranja: #FF8C00; --dark: #202c33; --bg: #f0f2f5; --white: #fff; --danger: #ef5350; }
         body { margin: 0; font-family: 'Montserrat', sans-serif; background: var(--bg); display: flex; height: 100vh; overflow: hidden; }
         
-        /* SIDEBAR */
+        /* NAV LATERAL */
         .nav-bar { width: 60px; background: var(--dark); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 200; }
         .nav-btn { color: #aebac1; font-size: 20px; margin-bottom: 25px; cursor: pointer; width: 100%; text-align: center; padding: 10px 0; transition: 0.2s; position: relative; }
-        .nav-btn:hover, .nav-btn.active { color: var(--naranja); background: rgba(255,255,255,0.05); }
-        
-        /* APP */
+        .nav-btn:hover, .nav-btn.active { color: var(--naranja); background: rgba(255,255,255,0.05); border-left: 3px solid var(--naranja); }
+        .tooltip { position: absolute; left: 60px; background: #000; color: #fff; padding: 5px; border-radius: 4px; font-size: 10px; display: none; white-space: nowrap; z-index: 300; }
+        .nav-btn:hover .tooltip { display: block; }
+
+        /* LAYOUT */
         .app-container { flex: 1; display: flex; }
         .view { display: none; width: 100%; height: 100%; flex-direction: column; animation: fadeIn 0.3s; }
         .view.active { display: flex; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .page-content { padding: 30px; overflow-y: auto; flex: 1; }
 
-        /* CHAT */
+        /* CHAT UI */
+        .chat-layout { display: flex; height: 100%; }
         .chat-sidebar { width: 320px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
         .chat-header { height: 60px; background: #f0f2f5; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; border-bottom: 1px solid #ddd; }
         .search-row { padding: 10px; border-bottom: 1px solid #eee; display: flex; gap: 5px; }
         .search-input { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 20px; outline: none; background: #f0f2f5; }
         
         .chat-list { flex: 1; overflow-y: auto; }
-        .chat-item { display: flex; padding: 12px; cursor: pointer; border-bottom: 1px solid #f5f5f5; }
+        .chat-item { display: flex; padding: 12px; cursor: pointer; border-bottom: 1px solid #f5f5f5; transition: 0.2s; }
         .chat-item:hover { background: #f5f5f5; }
         .chat-item.active { background: #e9edef; }
+        
         .avatar { width: 45px; height: 45px; border-radius: 50%; background: #dfe5e7; display: flex; align-items: center; justify-content: center; margin-right: 10px; color: #fff; font-size: 18px; }
+        .label-tag { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: #dcf8c6; color: #075e54; margin-right: 5px; }
 
         .chat-main { flex: 1; display: flex; flex-direction: column; background: #efe7dd; position: relative; }
         .chat-bg { position: absolute; inset: 0; opacity: 0.4; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); pointer-events: none; }
@@ -48,39 +53,53 @@
         .input-bar { min-height: 60px; background: #f0f2f5; padding: 10px; display: flex; gap: 10px; z-index: 10; align-items: center; }
         .input-msg { flex: 1; padding: 12px; border-radius: 8px; border: none; outline: none; background: #fff; }
 
-        /* UTIL */
-        .card { background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
-        .btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; color: white; background: var(--dark); display: inline-flex; align-items: center; gap: 5px; }
+        /* CARDS & UI */
+        .card { background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid #eee; }
+        .btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; color: white; background: var(--dark); display: inline-flex; align-items: center; gap: 5px; font-size: 13px; transition: 0.2s; }
+        .btn:hover { opacity: 0.9; }
         .btn-orange { background: var(--naranja); }
+        .btn-red { background: var(--danger); }
         .recording { animation: pulse 1s infinite; background: red !important; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         
+        /* LISTA DE REGLAS */
+        .rule-list { list-style: none; padding: 0; margin-top: 15px; max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 5px; }
+        .rule-item { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fafafa; font-size: 13px; }
+        .rule-item:last-child { border-bottom: none; }
+        .rule-item:hover { background: #f0f0f0; }
+
+        /* TABLES */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; padding: 10px; border-bottom: 2px solid #ddd; background: #f9f9f9; color: #555; }
+        td { padding: 10px; border-bottom: 1px solid #eee; }
+        
+        /* CONTEXT MENU */
         #ctx-menu { display: none; position: absolute; background: #fff; width: 160px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 1000; border-radius: 5px; }
         .ctx-item { padding: 12px; cursor: pointer; font-size: 13px; }
         .ctx-item:hover { background: #eee; }
-        
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th { text-align: left; padding: 10px; border-bottom: 2px solid #eee; }
-        td { padding: 10px; border-bottom: 1px solid #eee; }
     </style>
 </head>
 <body>
+
     <div class="nav-bar">
-        <div class="nav-btn active" onclick="nav('chat')"><i class="fas fa-comments"></i></div>
-        <div class="nav-btn" onclick="nav('dashboard')"><i class="fas fa-chart-pie"></i></div>
-        <div class="nav-btn" onclick="nav('leads')"><i class="fas fa-address-book"></i></div>
-        <div class="nav-btn" onclick="nav('config')"><i class="fas fa-cogs"></i></div>
+        <div class="nav-btn active" onclick="nav('chat')"><i class="fas fa-comments"></i><span class="tooltip">Chat</span></div>
+        <div class="nav-btn" onclick="nav('dashboard')"><i class="fas fa-chart-pie"></i><span class="tooltip">Dashboard</span></div>
+        <div class="nav-btn" onclick="nav('leads')"><i class="fas fa-address-book"></i><span class="tooltip">Leads</span></div>
+        <div class="nav-btn" onclick="nav('inventory')"><i class="fas fa-boxes"></i><span class="tooltip">Inventario</span></div>
+        <div class="nav-btn" onclick="nav('config')"><i class="fas fa-cogs"></i><span class="tooltip">Config</span></div>
+        <div class="nav-btn" onclick="nav('sandbox')"><i class="fas fa-vial"></i><span class="tooltip">Pruebas</span></div>
+        <div style="flex:1"></div>
         <div class="nav-btn" onclick="location.href='/logout'" style="color:#ef5350;"><i class="fas fa-power-off"></i></div>
     </div>
 
     <div class="app-container">
         
         <div id="view-chat" class="view active">
-            <div style="display:flex; height:100%;">
+            <div class="chat-layout">
                 <div class="chat-sidebar">
                     <div class="chat-header"><b>ICC Chat</b> <span style="font-size:10px; color:green;">● Online</span></div>
                     <div class="search-row">
-                        <input id="search" class="search-input" placeholder="Buscar..." oninput="renderChats()">
+                        <input id="search" class="search-input" placeholder="Buscar chat..." oninput="renderChats()">
                         <button class="btn btn-orange" onclick="addContactPrompt()">+</button>
                     </div>
                     <div class="chat-list" id="chat-list-box"></div>
@@ -94,29 +113,24 @@
                         </div>
                         <button id="btn-bot" class="btn" onclick="toggleBot()" style="font-size:11px;">IA</button>
                     </div>
-                    <div class="msgs-box" id="msgs-box"></div>
+                    
+                    <div class="msgs-box" id="msgs-box">
+                        <div style="text-align:center; margin-top:100px; color:#aaa;">Selecciona un chat</div>
+                    </div>
                     
                     <div class="input-bar" id="input-bar" style="display:none;">
                         <input type="file" id="file-input" hidden onchange="handleFileUpload(this)">
-                        
-                        <button class="btn" style="background:transparent; color:#555;" onclick="document.getElementById('file-input').click()" title="Adjuntar Imagen/PDF">
-                            <i class="fas fa-paperclip" style="font-size:20px;"></i>
-                        </button>
-                        
-                        <input type="text" id="msg-input" class="input-msg" placeholder="Mensaje..." onkeypress="if(event.key==='Enter') sendMsg()">
-                        
+                        <button class="btn" style="background:transparent; color:#555;" onclick="document.getElementById('file-input').click()"><i class="fas fa-paperclip" style="font-size:20px;"></i></button>
+                        <input type="text" id="msg-input" class="input-msg" placeholder="Escribe..." onkeypress="if(event.key==='Enter') sendMsg()">
                         <button class="btn btn-orange" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button>
-                        
-                        <button id="btn-mic" class="btn" style="border-radius:50%; width:40px; height:40px; justify-content:center;" onclick="toggleRecord()">
-                            <i class="fas fa-microphone"></i>
-                        </button>
+                        <button id="btn-mic" class="btn" style="border-radius:50%; width:40px; height:40px;" onclick="toggleRecord()"><i class="fas fa-microphone"></i></button>
                     </div>
                 </div>
             </div>
         </div>
 
         <div id="view-dashboard" class="view page-content">
-            <h2>Dashboard</h2>
+            <h2>Dashboard General</h2>
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
                 <div class="card"><h3>Leads</h3><h1 id="kpi-leads" style="color:var(--naranja)">0</h1></div>
                 <div class="card"><h3>Chats</h3><h1 id="kpi-chats">0</h1></div>
@@ -125,9 +139,9 @@
         </div>
 
         <div id="view-leads" class="view page-content">
-            <h2>Leads</h2>
+            <h2>Base de Leads</h2>
             <div class="card">
-                <button class="btn btn-orange" style="float:right; margin-bottom:10px;" onclick="exportExcel()">Excel</button>
+                <button class="btn btn-orange" style="float:right; margin-bottom:10px;" onclick="exportExcel()">Exportar Excel</button>
                 <table id="leads-table">
                     <thead><tr><th>Fecha</th><th>Nombre</th><th>Teléfono</th><th>Interés</th></tr></thead>
                     <tbody id="leads-body"></tbody>
@@ -135,12 +149,67 @@
             </div>
         </div>
 
-        <div id="view-config" class="view page-content">
-            <h2>Configuración IA</h2>
+        <div id="view-inventory" class="view page-content">
+            <h2>Inventario de Productos</h2>
             <div class="card">
-                <h3>Prompt</h3><textarea id="cfg-prompt" style="width:100%; height:100px;"></textarea>
-                <br><br><h3>Reglas</h3><textarea id="cfg-rules" style="width:100%; height:100px;"></textarea>
-                <br><br><button class="btn btn-orange" onclick="saveConfig()">Guardar</button>
+                <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center;">
+                    <input type="file" id="csv-file">
+                    <button class="btn btn-orange" onclick="uploadCSV()">Cargar CSV</button>
+                    <small style="color:#666;">Formato: ID, Nombre, Precio, Descripcion</small>
+                </div>
+                <div style="max-height:400px; overflow-y:auto;">
+                    <table id="inv-table">
+                        <thead><tr><th>Producto (Búsqueda IA)</th><th>Acción</th></tr></thead>
+                        <tbody id="inv-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-config" class="view page-content">
+            <h2>Configuración del Cerebro IA</h2>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:25px;">
+                
+                <div class="card">
+                    <h3 style="color:var(--naranja);">🤖 Personalidad & Web</h3>
+                    <label style="font-size:12px; font-weight:bold;">Prompt del Sistema (Personalidad)</label>
+                    <textarea id="cfg-prompt" style="width:100%; height:120px; padding:10px; border:1px solid #ddd; border-radius:5px; margin-bottom:15px;"></textarea>
+                    
+                    <label style="font-size:12px; font-weight:bold;">Datos de Página Web (URLs, Enlaces)</label>
+                    <textarea id="cfg-web" style="width:100%; height:120px; padding:10px; border:1px solid #ddd; border-radius:5px;" placeholder="Pega aquí textos de la web, enlaces importantes, etc."></textarea>
+                    
+                    <div style="margin-top:15px;">
+                        <button class="btn btn-orange" onclick="savePromptWeb()">Guardar Cambios</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 style="color:#202c33;">📜 Reglas de Negocio</h3>
+                    <p style="font-size:11px; color:#666;">Agrega reglas puntuales (Horarios, Qué NO vendemos, Políticas).</p>
+                    
+                    <div style="display:flex; gap:10px; margin-bottom:10px;">
+                        <input type="text" id="rule-input" placeholder="Ej: No atendemos domingos" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:5px;">
+                        <button class="btn btn-orange" onclick="addRule()">Agregar</button>
+                    </div>
+
+                    <ul id="rule-list-box" class="rule-list">
+                        </ul>
+                </div>
+
+            </div>
+        </div>
+
+        <div id="view-sandbox" class="view page-content">
+            <h2>Laboratorio de Pruebas</h2>
+            <div class="card">
+                <div style="display:flex; gap:10px;">
+                    <input id="sand-in" style="flex:1; padding:10px; border:1px solid #ddd;" placeholder="Prueba un mensaje...">
+                    <button class="btn btn-orange" onclick="runTest()">Enviar</button>
+                </div>
+                <div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                    <div style="background:#f9f9f9; padding:15px; border-radius:5px;"><b>Respuesta:</b><p id="sand-res">...</p></div>
+                    <div style="background:#222; color:#0f0; padding:15px; border-radius:5px; font-family:monospace; font-size:11px; height:150px; overflow:auto;" id="sand-log">LOG</div>
+                </div>
             </div>
         </div>
 
@@ -153,22 +222,32 @@
 
     <script>
         let chats=[], selectedId=null, ctxId=null, timer=null;
-        let mediaRecorder, audioChunks = [];
-        let isRecording = false;
+        let mediaRecorder, audioChunks = [], isRecording = false;
 
+        // NAVEGACIÓN
         function nav(v) {
             document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
             document.getElementById('view-'+v).classList.add('active');
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            if(v==='chat') document.querySelectorAll('.nav-btn')[0].classList.add('active');
             
+            // Mapeo simple de botones
+            const btns = document.querySelectorAll('.nav-btn');
+            if(v==='chat') btns[0].classList.add('active');
+            if(v==='dashboard') btns[1].classList.add('active');
+            if(v==='leads') btns[2].classList.add('active');
+            if(v==='inventory') btns[3].classList.add('active');
+            if(v==='config') btns[4].classList.add('active');
+            if(v==='sandbox') btns[5].classList.add('active');
+
             if(timer) clearInterval(timer);
             if(v==='chat') { sync(); timer = setInterval(sync, 3000); }
             if(v==='dashboard') loadDash();
             if(v==='leads') loadLeads();
+            if(v==='inventory') loadInventory();
             if(v==='config') loadCfg();
         }
 
+        // --- 1. CHAT & MEDIA ---
         async function sync() {
             try {
                 const res = await fetch('/api/chats-full');
@@ -183,14 +262,22 @@
 
         function renderChats() {
             const q = document.getElementById('search').value.toLowerCase();
-            document.getElementById('chat-list-box').innerHTML = chats.filter(c => (c.name||c.id).toLowerCase().includes(q)).map(c => `
+            document.getElementById('chat-list-box').innerHTML = chats.filter(c => (c.name||c.id).toLowerCase().includes(q)).map(c => {
+                let labelsHtml = (c.labels||[]).map(l => `<span class="label-tag">${l}</span>`).join('');
+                return `
                 <div class="chat-item ${c.id===selectedId?'active':''}" onclick="selChat('${c.id}')" oncontextmenu="openCtx(event, '${c.id}')">
                     <div class="avatar" style="background:${c.botActive?'var(--naranja)':'#ccc'}"><i class="fas fa-user"></i></div>
-                    <div style="flex:1;">
-                        <div style="font-weight:bold; display:flex; justify-content:space-between;">${c.name} <small>${c.pinned?'📌':''}</small></div>
-                        <div style="font-size:12px; color:#666; overflow:hidden; height:15px;">${(c.lastMessage.text||'').substring(0,30)}</div>
+                    <div style="flex:1; overflow:hidden;">
+                        <div style="font-weight:bold; display:flex; justify-content:space-between;">
+                            ${c.name} <small>${c.pinned?'📌':''}</small>
+                        </div>
+                        <div>${labelsHtml}</div>
+                        <div style="font-size:12px; color:#666; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">
+                            ${(c.lastMessage.text||'').substring(0,25)}
+                        </div>
                     </div>
-                </div>`).join('');
+                </div>`;
+            }).join('');
         }
 
         function selChat(id) {
@@ -208,10 +295,9 @@
         async function renderMsgs(id) {
             const h = await fetch('/api/data/history').then(r=>r.json());
             const msgs = h[id] || [];
-            document.getElementById('msgs-box').innerHTML = msgs.map(m => `
-                <div class="bubble ${m.role==='bot'?'bubble-out':(m.role==='manual'?'bubble-manual':'bubble-in')}">${m.text}</div>
-            `).join('');
-            document.getElementById('msgs-box').scrollTop = 100000;
+            const box = document.getElementById('msgs-box');
+            box.innerHTML = msgs.map(m => `<div class="bubble ${m.role==='bot'?'bubble-out':(m.role==='manual'?'bubble-manual':'bubble-in')}">${m.text}</div>`).join('');
+            box.scrollTop = box.scrollHeight;
         }
 
         async function sendMsg() {
@@ -222,95 +308,113 @@
             sync();
         }
 
-        // --- SUBIDA DE ARCHIVOS (IMAGEN / PDF) ---
         async function handleFileUpload(input) {
             if (input.files.length === 0 || !selectedId) return;
-            const file = input.files[0];
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append('file', input.files[0]);
             formData.append('phone', selectedId);
-            formData.append('type', file.type.includes('image') ? 'image' : 'document');
-
-            const btn = document.querySelector('.fa-paperclip').parentElement;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; // Loading
-
-            try {
-                await fetch('/api/chat/upload-send', { method: 'POST', body: formData });
-                alert("Archivo enviado");
-            } catch (e) { alert("Error enviando archivo"); }
-            
-            btn.innerHTML = '<i class="fas fa-paperclip" style="font-size:20px;"></i>';
-            input.value = ''; // Reset
-            sync();
+            formData.append('type', input.files[0].type.includes('image') ? 'image' : 'document');
+            await fetch('/api/chat/upload-send', { method: 'POST', body: formData });
+            input.value = ''; sync();
         }
 
-        // --- GRABADORA DE AUDIO ---
         async function toggleRecord() {
-            if (!navigator.mediaDevices) return alert("Tu navegador no soporta audio");
-            const btn = document.getElementById('btn-mic');
-
             if (!isRecording) {
-                // INICIAR GRABACIÓN
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    mediaRecorder = new MediaRecorder(stream);
-                    audioChunks = [];
-                    mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
-                    
-                    mediaRecorder.onstop = async () => {
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/ogg; codecs=opus' });
-                        const formData = new FormData();
-                        formData.append('file', audioBlob, 'audio_nota.ogg');
-                        formData.append('phone', selectedId);
-                        formData.append('type', 'audio');
-
-                        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-                        await fetch('/api/chat/upload-send', { method: 'POST', body: formData });
-                        btn.innerHTML = '<i class="fas fa-microphone"></i>';
-                        sync();
-                    };
-
-                    mediaRecorder.start();
-                    isRecording = true;
-                    btn.classList.add('recording');
-                } catch(e) { alert("Permiso de micrófono denegado"); }
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(audioChunks, { type: 'audio/ogg; codecs=opus' });
+                    const fd = new FormData(); fd.append('file', blob, 'audio.ogg'); fd.append('phone', selectedId); fd.append('type', 'audio');
+                    await fetch('/api/chat/upload-send', { method: 'POST', body: fd });
+                    document.getElementById('btn-mic').classList.remove('recording'); sync();
+                };
+                mediaRecorder.start(); isRecording = true; document.getElementById('btn-mic').classList.add('recording');
             } else {
-                // DETENER Y ENVIAR
-                mediaRecorder.stop();
-                isRecording = false;
-                btn.classList.remove('recording');
+                mediaRecorder.stop(); isRecording = false;
             }
         }
 
-        // Utilidades
-        async function addContactPrompt() {
-            const p = prompt("Número:"); if(!p) return;
-            const n = prompt("Nombre:");
-            await fetch('/api/contacts/add', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:p,name:n})});
-            sync();
+        // --- 2. CONFIGURACIÓN (LÓGICA NUEVA) ---
+        async function loadCfg() {
+            const d = await fetch('/api/data/config').then(r=>r.json());
+            document.getElementById('cfg-prompt').value = d.prompt || '';
+            document.getElementById('cfg-web').value = d.website_data || ''; // Recuperado
+            renderRules(d.tech_rules || []);
         }
-        async function toggleBot() {
-            const c = chats.find(x=>x.id===selectedId);
-            await fetch('/api/chat/toggle-bot', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedId,active:!c.botActive})});
-            sync();
+
+        function renderRules(rules) {
+            const list = document.getElementById('rule-list-box');
+            if(Array.isArray(rules)) {
+                list.innerHTML = rules.map((r, i) => `
+                    <li class="rule-item">
+                        <span>${r}</span>
+                        <i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="deleteRule(${i})"></i>
+                    </li>`).join('');
+            } else {
+                list.innerHTML = `<li class="rule-item">${rules} (Formato antiguo) <i class="fas fa-trash" onclick="deleteRule(0)"></i></li>`;
+            }
         }
-        function updateBotBtn(a) { document.getElementById('btn-bot').innerText = a ? "IA: ON" : "IA: OFF"; document.getElementById('btn-bot').style.background = a ? "#202c33":"#d32f2f"; }
-        
+
+        async function addRule() {
+            const r = document.getElementById('rule-input').value;
+            if(!r) return;
+            const res = await fetch('/api/config/rules/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({rule:r})}).then(r=>r.json());
+            renderRules(res.rules);
+            document.getElementById('rule-input').value = '';
+        }
+
+        async function deleteRule(idx) {
+            const res = await fetch('/api/config/rules/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:idx})}).then(r=>r.json());
+            renderRules(res.rules);
+        }
+
+        async function savePromptWeb() {
+            await fetch('/api/save-prompt-web', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+                prompt: document.getElementById('cfg-prompt').value,
+                website_data: document.getElementById('cfg-web').value
+            })});
+            alert("Personalidad y Web Guardados");
+        }
+
+        // --- 3. INVENTARIO & EXTRAS ---
+        async function loadInventory() {
+            const inv = await fetch('/api/data/knowledge').then(r=>r.json());
+            document.getElementById('inv-body').innerHTML = inv.map((item, i) => `
+                <tr><td>${item.searchable}</td><td><button class="btn btn-red" onclick="delInv(${i})">X</button></td></tr>
+            `).join('');
+        }
+        async function delInv(i) { await fetch('/api/knowledge/delete', {method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); }
+        async function uploadCSV() { const f = document.getElementById('csv-file').files[0]; const fd = new FormData(); fd.append('file', f); await fetch('/api/knowledge/csv', {method:'POST', body:fd}); loadInventory(); }
+
         async function loadDash() {
             const [l,c,s] = await Promise.all([fetch('/api/data/leads').then(r=>r.json()), fetch('/api/chats-full').then(r=>r.json()), fetch('/api/data/knowledge').then(r=>r.json())]);
             document.getElementById('kpi-leads').innerText=l.length; document.getElementById('kpi-chats').innerText=c.length; document.getElementById('kpi-stock').innerText=s.length;
         }
+
+        async function runTest() {
+            const r = await fetch('/api/test-ai', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:document.getElementById('sand-in').value})}).then(x=>x.json());
+            document.getElementById('sand-res').innerText = r.response; document.getElementById('sand-log').innerText = r.logic_log;
+        }
+        
         async function loadLeads() {
             const l = await fetch('/api/data/leads').then(r=>r.json());
-            document.getElementById('leads-body').innerHTML=l.reverse().map(x=>`<tr><td>${x.fecha}</td><td>${x.nombre}</td><td>${x.telefono}</td><td>${x.interes}</td></tr>`).join('');
+            document.getElementById('leads-body').innerHTML = l.reverse().map(x=>`<tr><td>${x.fecha}</td><td>${x.nombre}</td><td>${x.telefono}</td><td>${x.interes}</td></tr>`).join('');
         }
-        function exportExcel() { XLSX.writeFile(XLSX.utils.table_to_book(document.getElementById('leads-table')), "Leads.xlsx"); }
-        async function loadCfg() { const d=await fetch('/api/data/config').then(r=>r.json()); document.getElementById('cfg-prompt').value=d.prompt||''; document.getElementById('cfg-rules').value=d.tech_rules||''; }
-        async function saveConfig() { await fetch('/api/save-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:document.getElementById('cfg-prompt').value,tech_rules:document.getElementById('cfg-rules').value})}); alert("Guardado"); }
+        function exportExcel() { XLSX.writeFile(XLSX.utils.table_to_book(document.getElementById('leads-table')), "Leads_ICC.xlsx"); }
+
+        function addContactPrompt() { const p=prompt("Teléfono:"); const n=prompt("Nombre:"); if(p) fetch('/api/contacts/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:p,name:n})}).then(sync); }
+        async function toggleBot() { const c=chats.find(x=>x.id===selectedId); await fetch('/api/chat/toggle-bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedId,active:!c.botActive})}); sync(); }
+        function updateBotBtn(a) { document.getElementById('btn-bot').innerText = a ? "IA: ON" : "IA: OFF"; document.getElementById('btn-bot').style.background = a?"#202c33":"#ef5350"; }
         
         function openCtx(e,id) { e.preventDefault(); ctxId=id; const m=document.getElementById('ctx-menu'); m.style.display='block'; m.style.left=e.pageX+'px'; m.style.top=e.pageY+'px'; }
         document.onclick = (e) => { if(!e.target.closest('#ctx-menu')) document.getElementById('ctx-menu').style.display='none'; }
-        async function ctxAction(a) { const c=chats.find(x=>x.id===ctxId); await fetch('/api/chat/action', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:ctxId,action:a,value:a==='pin'?!c.pinned:null})}); sync(); }
+        async function ctxAction(a) { 
+            const c=chats.find(x=>x.id===ctxId); 
+            await fetch('/api/chat/action', {method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:ctxId, action:a, value:a==='pin'?!c.pinned:null})}); 
+            sync(); 
+        }
 
         window.onload = () => nav('dashboard');
     </script>
