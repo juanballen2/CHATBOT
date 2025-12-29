@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICC | Panel Manager v6.2</title>
+    <title>ICC | Manager v6.3</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -12,7 +12,7 @@
         :root { --naranja: #FF8C00; --dark: #202c33; --bg: #f0f2f5; --white: #fff; --danger: #ef5350; }
         body { margin: 0; font-family: 'Montserrat', sans-serif; background: var(--bg); display: flex; height: 100vh; overflow: hidden; }
         
-        /* NAV LATERAL */
+        /* NAV */
         .nav-bar { width: 60px; background: var(--dark); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 200; }
         .nav-btn { color: #aebac1; font-size: 20px; margin-bottom: 25px; cursor: pointer; width: 100%; text-align: center; padding: 10px 0; transition: 0.2s; position: relative; }
         .nav-btn:hover, .nav-btn.active { color: var(--naranja); background: rgba(255,255,255,0.05); border-left: 3px solid var(--naranja); }
@@ -26,7 +26,7 @@
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .page-content { padding: 30px; overflow-y: auto; flex: 1; }
 
-        /* CHAT UI */
+        /* CHAT */
         .chat-layout { display: flex; height: 100%; }
         .chat-sidebar { width: 320px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
         .chat-header { height: 60px; background: #f0f2f5; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; border-bottom: 1px solid #ddd; }
@@ -39,7 +39,8 @@
         .chat-item.active { background: #e9edef; }
         
         .avatar { width: 45px; height: 45px; border-radius: 50%; background: #dfe5e7; display: flex; align-items: center; justify-content: center; margin-right: 10px; color: #fff; font-size: 18px; }
-        .label-tag { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: #dcf8c6; color: #075e54; margin-right: 5px; }
+        .labels-row { display: flex; gap: 3px; margin-top: 3px; flex-wrap: wrap; }
+        .label-tag { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: #ffe0b2; color: #e65100; border: 1px solid #ffcc80; }
 
         .chat-main { flex: 1; display: flex; flex-direction: column; background: #efe7dd; position: relative; }
         .chat-bg { position: absolute; inset: 0; opacity: 0.4; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); pointer-events: none; }
@@ -53,30 +54,30 @@
         .input-bar { min-height: 60px; background: #f0f2f5; padding: 10px; display: flex; gap: 10px; z-index: 10; align-items: center; }
         .input-msg { flex: 1; padding: 12px; border-radius: 8px; border: none; outline: none; background: #fff; }
 
-        /* CARDS & UI */
+        /* CARDS */
         .card { background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid #eee; }
         .btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; color: white; background: var(--dark); display: inline-flex; align-items: center; gap: 5px; font-size: 13px; transition: 0.2s; }
         .btn:hover { opacity: 0.9; }
         .btn-orange { background: var(--naranja); }
         .btn-red { background: var(--danger); }
-        .recording { animation: pulse 1s infinite; background: red !important; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         
-        /* LISTA DE REGLAS */
-        .rule-list { list-style: none; padding: 0; margin-top: 15px; max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 5px; }
-        .rule-item { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fafafa; font-size: 13px; }
+        /* REGLAS */
+        .rule-list { list-style: none; padding: 0; margin-top: 15px; max-height: 350px; overflow-y: auto; border: 1px solid #eee; border-radius: 5px; }
+        .rule-item { padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fafafa; font-size: 13px; }
         .rule-item:last-child { border-bottom: none; }
-        .rule-item:hover { background: #f0f0f0; }
+        .rule-item:hover { background: #fff; }
 
-        /* TABLES */
+        /* TABLAS */
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
         th { text-align: left; padding: 10px; border-bottom: 2px solid #ddd; background: #f9f9f9; color: #555; }
         td { padding: 10px; border-bottom: 1px solid #eee; }
         
-        /* CONTEXT MENU */
-        #ctx-menu { display: none; position: absolute; background: #fff; width: 160px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 1000; border-radius: 5px; }
-        .ctx-item { padding: 12px; cursor: pointer; font-size: 13px; }
-        .ctx-item:hover { background: #eee; }
+        /* MENU CONTEXTUAL */
+        #ctx-menu { display: none; position: absolute; background: #fff; width: 180px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 1000; border-radius: 5px; overflow: hidden; }
+        .ctx-item { padding: 12px; cursor: pointer; font-size: 13px; color: #333; display: flex; gap: 10px; align-items: center; }
+        .ctx-item:hover { background: #f5f5f5; }
+        .recording { animation: pulse 1s infinite; background: red !important; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -109,7 +110,7 @@
                     <div id="chat-top" style="height:60px; background:#f0f2f5; padding:0 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; visibility:hidden; border-bottom:1px solid #ddd;">
                         <div style="display:flex; align-items:center; gap:10px;">
                             <div class="avatar" style="background:var(--naranja);"><i class="fas fa-user"></i></div>
-                            <div><div id="active-name" style="font-weight:bold;">Name</div><div id="active-phone" style="font-size:11px; color:#666;">...</div></div>
+                            <div><div id="active-name" style="font-weight:bold;">Usuario</div><div id="active-phone" style="font-size:11px; color:#666;">...</div></div>
                         </div>
                         <button id="btn-bot" class="btn" onclick="toggleBot()" style="font-size:11px;">IA</button>
                     </div>
@@ -133,8 +134,8 @@
             <h2>Dashboard General</h2>
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
                 <div class="card"><h3>Leads</h3><h1 id="kpi-leads" style="color:var(--naranja)">0</h1></div>
-                <div class="card"><h3>Chats</h3><h1 id="kpi-chats">0</h1></div>
-                <div class="card"><h3>Stock</h3><h1 id="kpi-stock" style="color:#2980b9">0</h1></div>
+                <div class="card"><h3>Chats Activos</h3><h1 id="kpi-chats">0</h1></div>
+                <div class="card"><h3>Productos</h3><h1 id="kpi-stock" style="color:#2980b9">0</h1></div>
             </div>
         </div>
 
@@ -143,7 +144,7 @@
             <div class="card">
                 <button class="btn btn-orange" style="float:right; margin-bottom:10px;" onclick="exportExcel()">Exportar Excel</button>
                 <table id="leads-table">
-                    <thead><tr><th>Fecha</th><th>Nombre</th><th>Teléfono</th><th>Interés</th></tr></thead>
+                    <thead><tr><th>Fecha</th><th>Nombre</th><th>Teléfono</th><th>Interés</th><th>Etiqueta</th></tr></thead>
                     <tbody id="leads-body"></tbody>
                 </table>
             </div>
@@ -155,7 +156,7 @@
                 <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center;">
                     <input type="file" id="csv-file">
                     <button class="btn btn-orange" onclick="uploadCSV()">Cargar CSV</button>
-                    <small style="color:#666;">Formato: ID, Nombre, Precio, Descripcion</small>
+                    <small style="color:#666;">Col: ID, Nombre, Precio, Descripcion</small>
                 </div>
                 <div style="max-height:400px; overflow-y:auto;">
                     <table id="inv-table">
@@ -167,33 +168,29 @@
         </div>
 
         <div id="view-config" class="view page-content">
-            <h2>Configuración del Cerebro IA</h2>
+            <h2>Configuración IA</h2>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:25px;">
                 
                 <div class="card">
-                    <h3 style="color:var(--naranja);">🤖 Personalidad & Web</h3>
-                    <label style="font-size:12px; font-weight:bold;">Prompt del Sistema (Personalidad)</label>
+                    <h3 style="color:var(--naranja); margin-top:0;">🤖 Personalidad & Web</h3>
+                    <label style="font-size:12px; font-weight:bold;">Prompt (Personalidad)</label>
                     <textarea id="cfg-prompt" style="width:100%; height:120px; padding:10px; border:1px solid #ddd; border-radius:5px; margin-bottom:15px;"></textarea>
                     
-                    <label style="font-size:12px; font-weight:bold;">Datos de Página Web (URLs, Enlaces)</label>
-                    <textarea id="cfg-web" style="width:100%; height:120px; padding:10px; border:1px solid #ddd; border-radius:5px;" placeholder="Pega aquí textos de la web, enlaces importantes, etc."></textarea>
+                    <label style="font-size:12px; font-weight:bold;">Información Web (URLs, Nosotros...)</label>
+                    <textarea id="cfg-web" style="width:100%; height:120px; padding:10px; border:1px solid #ddd; border-radius:5px;" placeholder="Pega aquí la info de tu página web..."></textarea>
                     
                     <div style="margin-top:15px;">
-                        <button class="btn btn-orange" onclick="savePromptWeb()">Guardar Cambios</button>
+                        <button class="btn btn-orange" onclick="savePromptWeb()">Guardar Datos Base</button>
                     </div>
                 </div>
 
                 <div class="card">
-                    <h3 style="color:#202c33;">📜 Reglas de Negocio</h3>
-                    <p style="font-size:11px; color:#666;">Agrega reglas puntuales (Horarios, Qué NO vendemos, Políticas).</p>
-                    
+                    <h3 style="color:#202c33; margin-top:0;">📜 Reglas de Negocio</h3>
                     <div style="display:flex; gap:10px; margin-bottom:10px;">
-                        <input type="text" id="rule-input" placeholder="Ej: No atendemos domingos" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:5px;">
+                        <input type="text" id="rule-input" placeholder="Nueva regla (Ej: Horario 8-5pm)" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:5px;">
                         <button class="btn btn-orange" onclick="addRule()">Agregar</button>
                     </div>
-
-                    <ul id="rule-list-box" class="rule-list">
-                        </ul>
+                    <ul id="rule-list-box" class="rule-list"></ul>
                 </div>
 
             </div>
@@ -216,28 +213,24 @@
     </div>
 
     <div id="ctx-menu">
-        <div class="ctx-item" onclick="ctxAction('pin')">📌 Fijar</div>
-        <div class="ctx-item" onclick="ctxAction('delete')" style="color:red;">🗑️ Eliminar</div>
+        <div class="ctx-item" onclick="ctxAction('rename')"><i class="fas fa-pen"></i> Cambiar Nombre</div>
+        <div class="ctx-item" onclick="ctxAction('label')"><i class="fas fa-tag"></i> Etiquetar</div>
+        <div class="ctx-item" onclick="ctxAction('pin')"><i class="fas fa-thumbtack"></i> Fijar/Desfijar</div>
+        <div class="ctx-item" onclick="ctxAction('delete')" style="color:red;"><i class="fas fa-trash"></i> Eliminar</div>
     </div>
 
     <script>
         let chats=[], selectedId=null, ctxId=null, timer=null;
         let mediaRecorder, audioChunks = [], isRecording = false;
 
-        // NAVEGACIÓN
         function nav(v) {
             document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
             document.getElementById('view-'+v).classList.add('active');
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
             
-            // Mapeo simple de botones
             const btns = document.querySelectorAll('.nav-btn');
-            if(v==='chat') btns[0].classList.add('active');
-            if(v==='dashboard') btns[1].classList.add('active');
-            if(v==='leads') btns[2].classList.add('active');
-            if(v==='inventory') btns[3].classList.add('active');
-            if(v==='config') btns[4].classList.add('active');
-            if(v==='sandbox') btns[5].classList.add('active');
+            btns.forEach(b => b.classList.remove('active'));
+            const map = { chat:0, dashboard:1, leads:2, inventory:3, config:4, sandbox:5 };
+            if(btns[map[v]]) btns[map[v]].classList.add('active');
 
             if(timer) clearInterval(timer);
             if(v==='chat') { sync(); timer = setInterval(sync, 3000); }
@@ -247,7 +240,7 @@
             if(v==='config') loadCfg();
         }
 
-        // --- 1. CHAT & MEDIA ---
+        // --- 1. CHAT LOGIC ---
         async function sync() {
             try {
                 const res = await fetch('/api/chats-full');
@@ -268,12 +261,12 @@
                 <div class="chat-item ${c.id===selectedId?'active':''}" onclick="selChat('${c.id}')" oncontextmenu="openCtx(event, '${c.id}')">
                     <div class="avatar" style="background:${c.botActive?'var(--naranja)':'#ccc'}"><i class="fas fa-user"></i></div>
                     <div style="flex:1; overflow:hidden;">
-                        <div style="font-weight:bold; display:flex; justify-content:space-between;">
+                        <div style="font-weight:600; display:flex; justify-content:space-between;">
                             ${c.name} <small>${c.pinned?'📌':''}</small>
                         </div>
-                        <div>${labelsHtml}</div>
-                        <div style="font-size:12px; color:#666; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">
-                            ${(c.lastMessage.text||'').substring(0,25)}
+                        <div class="labels-row">${labelsHtml}</div>
+                        <div style="font-size:12px; color:#666; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            ${(c.lastMessage.text||'').substring(0,30)}
                         </div>
                     </div>
                 </div>`;
@@ -310,11 +303,11 @@
 
         async function handleFileUpload(input) {
             if (input.files.length === 0 || !selectedId) return;
-            const formData = new FormData();
-            formData.append('file', input.files[0]);
-            formData.append('phone', selectedId);
-            formData.append('type', input.files[0].type.includes('image') ? 'image' : 'document');
-            await fetch('/api/chat/upload-send', { method: 'POST', body: formData });
+            const fd = new FormData();
+            fd.append('file', input.files[0]);
+            fd.append('phone', selectedId);
+            fd.append('type', input.files[0].type.includes('image') ? 'image' : 'document');
+            await fetch('/api/chat/upload-send', { method: 'POST', body: fd });
             input.value = ''; sync();
         }
 
@@ -336,11 +329,11 @@
             }
         }
 
-        // --- 2. CONFIGURACIÓN (LÓGICA NUEVA) ---
+        // --- 2. CONFIGURACIÓN (LOGICA SEPARADA) ---
         async function loadCfg() {
             const d = await fetch('/api/data/config').then(r=>r.json());
             document.getElementById('cfg-prompt').value = d.prompt || '';
-            document.getElementById('cfg-web').value = d.website_data || ''; // Recuperado
+            document.getElementById('cfg-web').value = d.website_data || ''; 
             renderRules(d.tech_rules || []);
         }
 
@@ -375,45 +368,73 @@
                 prompt: document.getElementById('cfg-prompt').value,
                 website_data: document.getElementById('cfg-web').value
             })});
-            alert("Personalidad y Web Guardados");
+            alert("✅ Datos Base Guardados");
         }
 
-        // --- 3. INVENTARIO & EXTRAS ---
-        async function loadInventory() {
-            const inv = await fetch('/api/data/knowledge').then(r=>r.json());
-            document.getElementById('inv-body').innerHTML = inv.map((item, i) => `
-                <tr><td>${item.searchable}</td><td><button class="btn btn-red" onclick="delInv(${i})">X</button></td></tr>
-            `).join('');
-        }
-        async function delInv(i) { await fetch('/api/knowledge/delete', {method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); }
-        async function uploadCSV() { const f = document.getElementById('csv-file').files[0]; const fd = new FormData(); fd.append('file', f); await fetch('/api/knowledge/csv', {method:'POST', body:fd}); loadInventory(); }
-
+        // --- 3. EXTRAS & DASHBOARD ---
         async function loadDash() {
             const [l,c,s] = await Promise.all([fetch('/api/data/leads').then(r=>r.json()), fetch('/api/chats-full').then(r=>r.json()), fetch('/api/data/knowledge').then(r=>r.json())]);
             document.getElementById('kpi-leads').innerText=l.length; document.getElementById('kpi-chats').innerText=c.length; document.getElementById('kpi-stock').innerText=s.length;
         }
 
+        async function loadInventory() {
+            const inv = await fetch('/api/data/knowledge').then(r=>r.json());
+            document.getElementById('inv-body').innerHTML = inv.map((item, i) => `<tr><td>${item.searchable}</td><td><button class="btn btn-red" onclick="delInv(${i})">X</button></td></tr>`).join('');
+        }
+        async function delInv(i) { await fetch('/api/knowledge/delete', {method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); }
+        async function uploadCSV() { const f = document.getElementById('csv-file').files[0]; const fd = new FormData(); fd.append('file', f); await fetch('/api/knowledge/csv', {method:'POST', body:fd}); loadInventory(); }
+
+        async function loadLeads() {
+            const l = await fetch('/api/data/leads').then(r=>r.json());
+            document.getElementById('leads-body').innerHTML = l.reverse().map(x=>`<tr><td>${x.fecha}</td><td>${x.nombre}</td><td>${x.telefono}</td><td>${x.interes}</td><td>${x.etiqueta||'-'}</td></tr>`).join('');
+        }
+        function exportExcel() { XLSX.writeFile(XLSX.utils.table_to_book(document.getElementById('leads-table')), "Leads.xlsx"); }
+
+        function addContactPrompt() { 
+            const p=prompt("Teléfono (con país):"); 
+            if(p) {
+                const n=prompt("Nombre:");
+                fetch('/api/contacts/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:p,name:n})}).then(sync);
+            }
+        }
+        
+        async function toggleBot() { const c=chats.find(x=>x.id===selectedId); await fetch('/api/chat/toggle-bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedId,active:!c.botActive})}); sync(); }
+        function updateBotBtn(a) { document.getElementById('btn-bot').innerText = a ? "IA: ON" : "IA: OFF"; document.getElementById('btn-bot').style.background = a?"#202c33":"#ef5350"; }
+        
         async function runTest() {
             const r = await fetch('/api/test-ai', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:document.getElementById('sand-in').value})}).then(x=>x.json());
             document.getElementById('sand-res').innerText = r.response; document.getElementById('sand-log').innerText = r.logic_log;
         }
-        
-        async function loadLeads() {
-            const l = await fetch('/api/data/leads').then(r=>r.json());
-            document.getElementById('leads-body').innerHTML = l.reverse().map(x=>`<tr><td>${x.fecha}</td><td>${x.nombre}</td><td>${x.telefono}</td><td>${x.interes}</td></tr>`).join('');
-        }
-        function exportExcel() { XLSX.writeFile(XLSX.utils.table_to_book(document.getElementById('leads-table')), "Leads_ICC.xlsx"); }
 
-        function addContactPrompt() { const p=prompt("Teléfono:"); const n=prompt("Nombre:"); if(p) fetch('/api/contacts/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:p,name:n})}).then(sync); }
-        async function toggleBot() { const c=chats.find(x=>x.id===selectedId); await fetch('/api/chat/toggle-bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedId,active:!c.botActive})}); sync(); }
-        function updateBotBtn(a) { document.getElementById('btn-bot').innerText = a ? "IA: ON" : "IA: OFF"; document.getElementById('btn-bot').style.background = a?"#202c33":"#ef5350"; }
-        
+        // --- CONTEXT MENU (CLICK DERECHO) ---
         function openCtx(e,id) { e.preventDefault(); ctxId=id; const m=document.getElementById('ctx-menu'); m.style.display='block'; m.style.left=e.pageX+'px'; m.style.top=e.pageY+'px'; }
         document.onclick = (e) => { if(!e.target.closest('#ctx-menu')) document.getElementById('ctx-menu').style.display='none'; }
-        async function ctxAction(a) { 
-            const c=chats.find(x=>x.id===ctxId); 
-            await fetch('/api/chat/action', {method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:ctxId, action:a, value:a==='pin'?!c.pinned:null})}); 
-            sync(); 
+        
+        async function ctxAction(action) {
+            const c = chats.find(x=>x.id===ctxId);
+            let val = null;
+            
+            if(action === 'rename') {
+                val = prompt("Nuevo nombre para " + (c.name || c.id) + ":");
+                if(!val) return;
+                // Para renombrar usamos el endpoint de contactos
+                await fetch('/api/contacts/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:ctxId, name:val})});
+                sync(); return;
+            }
+            
+            if(action === 'label') {
+                val = prompt("Escribe una etiqueta (Ej: Lead, Venta):");
+                if(!val) return;
+            }
+            
+            if(action === 'pin') val = !c.pinned;
+            
+            await fetch('/api/chat/action', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'}, 
+                body:JSON.stringify({phone:ctxId, action:action, value:val})
+            });
+            sync();
         }
 
         window.onload = () => nav('dashboard');
