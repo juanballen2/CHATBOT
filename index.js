@@ -22,7 +22,7 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-secret-v6-3-stable";
+const SESSION_SECRET = "icc-secret-v6-5-smart";
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -37,7 +37,7 @@ app.use((req, res, next) => {
 });
 
 // ============================================================
-// 2. GESTIÓN DE DATOS (PERSISTENCIA MEJORADA)
+// 2. GESTIÓN DE DATOS (PERSISTENCIA)
 // ============================================================
 const DATA_DIR = path.resolve(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -116,7 +116,7 @@ async function uploadToMeta(buffer, mimeType, filename) {
 }
 
 // ============================================================
-// 4. IA LORENA (CORRECCIONES EN LEADS Y CONTEXTO)
+// 4. IA LORENA (DETECTORA INTELIGENTE)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -140,7 +140,8 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
     if (botStatus[sessionId] === false) return null;
 
     const config = readData(FILES.config, {});
-    const chatPrevio = (currentHistory[sessionId] || []).slice(-10);
+    // AUMENTAMOS EL HISTORIAL A 15 PARA QUE VEA SI EL CLIENTE SE PRESENTÓ ANTES
+    const chatPrevio = (currentHistory[sessionId] || []).slice(-15);
     const stock = buscarEnCatalogo(message);
 
     // Preparar Reglas como lista legible
@@ -151,7 +152,7 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
         reglasTexto = config.tech_rules || "Sin reglas definidas.";
     }
 
-    // PROMPT REFORZADO PARA LEADS
+    // --- PROMPT MODIFICADO PARA CAZAR NOMBRES ---
     const prompt = `
     ERES LORENA DE ICC.
     
@@ -161,51 +162,81 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
     [REGLAS DE NEGOCIO - ESTRICTO]
     ${reglasTexto}
     
-    [INFORMACIÓN WEB / CONTEXTO ADICIONAL]
+    [INFORMACIÓN WEB]
     ${config.website_data || "No hay información web extra."}
     
-    [INVENTARIO DISPONIBLE]
+    [INVENTARIO]
     ${JSON.stringify(stock)}
     
-    [INSTRUCCIÓN CRÍTICA PARA LEADS]
-    Si el usuario muestra INTENCIÓN DE COMPRA, PREGUNTA PRECIO o DEJA DATOS, DEBES incluir al final de tu respuesta el siguiente bloque JSON EXACTO (sin markdown):
+    [MISION CRÍTICA: DATOS DEL CLIENTE]
+    Tu trabajo es identificar el NOMBRE del cliente y su INTERÉS.
+    1. Si no sabes su nombre, pregunta amablemente.
+    2. REVISA EL HISTORIAL DE CHAT: Si el usuario dijo "Soy Juan", "Me llamo Carlos" o "Empresa XYZ", ESE es su nombre.
+    
+    [RESPUESTA JSON OBLIGATORIA]
+    Si detectas intención de compra o datos de contacto, FINALIZA tu respuesta con:
     
     [DATA]
-    { "es_lead": true, "nombre": "Nombre o Desconocido", "interes": "Producto o servicio", "etiqueta": "Posible Venta" }
+    { 
+      "es_lead": true, 
+      "nombre": "NOMBRE_EXTRAIDO_DEL_CHAT", 
+      "interes": "PRODUCTO_INTERES", 
+      "etiqueta": "Lead Caliente" 
+    }
     [DATA]
+    
+    Si no encuentras el nombre por ningún lado, pon "Desconocido".
     `;
 
     try {
         const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: prompt + `\nHISTORIAL: ${JSON.stringify(chatPrevio)}\nUSUARIO: ${message}` }] }] });
+            { contents: [{ parts: [{ text: prompt + `\nHISTORIAL CHAT: ${JSON.stringify(chatPrevio)}\nUSUARIO DICE: ${message}` }] }] });
 
         let fullText = res.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText;
 
-        // Regex mejorada para capturar el JSON aunque tenga espacios o saltos
         const regexData = /\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/;
         const match = fullText.match(regexData);
 
         if (match && match[1]) {
-            textoVisible = fullText.replace(regexData, "").trim(); // Limpiar el JSON de la respuesta al usuario
+            textoVisible = fullText.replace(regexData, "").trim(); 
             try {
                 const info = JSON.parse(match[1]);
                 
-                // 1. Guardar en Leads
                 if(info.es_lead) {
+                    // --- AQUÍ ESTÁ LA INTELIGENCIA ---
+                    // Si la IA detectó un nombre real (no desconocido), lo guardamos en METADATA para renombrar el chat
+                    let nombreFinal = info.nombre;
+                    
+                    if (nombreFinal && !nombreFinal.toLowerCase().includes("desconocido") && !nombreFinal.toLowerCase().includes("nombre")) {
+                        // Actualizar nombre en Metadata para que salga en el panel
+                        const m = readData(FILES.metadata, {});
+                        if (!m[sessionId]) m[sessionId] = {};
+                        
+                        // Solo sobrescribimos si no tiene un nombre manual puesto por ti
+                        if (!m[sessionId].addedManual) {
+                            m[sessionId].contactName = nombreFinal;
+                            writeData(FILES.metadata, m);
+                        }
+                    } else {
+                        // Si la IA no supo, intentamos ver si ya tenía nombre en metadata
+                        const m = readData(FILES.metadata, {});
+                        if(m[sessionId]?.contactName) nombreFinal = m[sessionId].contactName;
+                    }
+
+                    // Guardar Lead
                     const leads = readData(FILES.leads, []);
-                    // Evitar duplicados exactos el mismo día
                     const hoy = new Date().toDateString();
                     const existe = leads.some(l => l.telefono === sessionId && new Date(l.fecha).toDateString() === hoy);
                     
                     if (!existe) {
-                        leads.push({ ...info, fecha: new Date().toLocaleString(), telefono: sessionId });
+                        leads.push({ ...info, nombre: nombreFinal, fecha: new Date().toLocaleString(), telefono: sessionId });
                         writeData(FILES.leads, leads);
-                        console.log("Lead capturado:", info);
+                        console.log("Lead capturado:", nombreFinal);
                     }
                 }
 
-                // 2. Guardar Etiqueta en Metadatos
+                // Guardar Etiqueta
                 if(info.etiqueta) {
                     const metadata = readData(FILES.metadata, {});
                     if(!metadata[sessionId]) metadata[sessionId] = {};
@@ -216,7 +247,7 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
                         writeData(FILES.metadata, metadata);
                     }
                 }
-            } catch(e) { console.error("Error parseando JSON del Bot:", e); }
+            } catch(e) { console.error("Error JSON Bot:", e); }
         }
 
         let freshHistory = readData(FILES.history, {});
@@ -232,7 +263,7 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
 }
 
 // ============================================================
-// 5. API ENDPOINTS (DASHBOARD & FUNCIONALIDADES)
+// 5. API ENDPOINTS
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
@@ -246,9 +277,8 @@ app.post('/auth', (req, res) => {
 app.get('/api/data/:type', proteger, (req, res) => {
     const t = req.params.type;
     if (!FILES[t]) return res.status(404).json({});
-    
     let data = readData(FILES[t], []);
-    // Asegurar que tech_rules sea array para el front
+    // Asegurar compatibilidad array para el front
     if (t === 'config') {
         if (!data.tech_rules) data.tech_rules = [];
         if (typeof data.tech_rules === 'string') data.tech_rules = [data.tech_rules];
@@ -256,36 +286,29 @@ app.get('/api/data/:type', proteger, (req, res) => {
     res.json(data);
 });
 
-// --- GESTIÓN DE CONFIGURACIÓN SEPARADA ---
-
-// 1. Guardar Personalidad y Web (Sobrescribe texto)
+// Guardar Personalidad y Web
 app.post('/api/save-prompt-web', proteger, (req, res) => {
     let config = readData(FILES.config, {});
-    // Actualizamos solo estos dos campos
     if (req.body.prompt !== undefined) config.prompt = req.body.prompt;
     if (req.body.website_data !== undefined) config.website_data = req.body.website_data;
-    
     writeData(FILES.config, config);
     res.json({ success: true });
 });
 
-// 2. Agregar Regla (Array Push - NO BORRA LAS ANTERIORES)
+// Agregar Regla (Lista)
 app.post('/api/config/rules/add', proteger, (req, res) => {
     const { rule } = req.body;
     let config = readData(FILES.config, {});
-    
     if (!Array.isArray(config.tech_rules)) config.tech_rules = [];
     if (rule) config.tech_rules.push(rule);
-    
     writeData(FILES.config, config);
     res.json({ success: true, rules: config.tech_rules });
 });
 
-// 3. Borrar Regla (Array Splice)
+// Borrar Regla
 app.post('/api/config/rules/delete', proteger, (req, res) => {
     const { index } = req.body;
     let config = readData(FILES.config, {});
-    
     if (Array.isArray(config.tech_rules)) {
         config.tech_rules.splice(index, 1);
         writeData(FILES.config, config);
@@ -293,22 +316,18 @@ app.post('/api/config/rules/delete', proteger, (req, res) => {
     res.json({ success: true, rules: config.tech_rules });
 });
 
-// --- GESTIÓN DE CONTACTOS Y ETIQUETAS ---
-
-// Agregar/Actualizar Contacto (Nombre)
+// Contactos Manuales
 app.post('/api/contacts/add', proteger, (req, res) => {
     const { phone, name } = req.body;
     let m = readData(FILES.metadata, {});
     if(!m[phone]) m[phone] = {};
-    
-    m[phone].contactName = name; // Guarda el nombre
+    m[phone].contactName = name;
     m[phone].addedManual = true;
-    
     writeData(FILES.metadata, m);
     res.json({ success: true });
 });
 
-// Acciones Chat: Pin, Label, Delete
+// Acciones Chat
 app.post('/api/chat/action', proteger, (req, res) => {
     const { phone, action, value } = req.body;
     let m = readData(FILES.metadata, {});
@@ -316,10 +335,7 @@ app.post('/api/chat/action', proteger, (req, res) => {
     
     if(action === 'pin') m[phone].pinned = value;
     
-    // Aquí está la corrección para ETIQUETAS
     if(action === 'label') {
-        // value debe ser un string (la etiqueta nueva) o null
-        // En un sistema simple, podemos guardar un array de etiquetas
         if(!m[phone].labels) m[phone].labels = [];
         if(value && !m[phone].labels.includes(value)) {
             m[phone].labels.push(value); 
@@ -331,13 +347,11 @@ app.post('/api/chat/action', proteger, (req, res) => {
         delete h[phone]; delete m[phone];
         writeData(FILES.history, h);
     }
-    
     writeData(FILES.metadata, m);
     res.json({ success: true });
 });
 
-// --- RESTO DE ENDPOINTS ---
-
+// Test AI
 app.post('/api/test-ai', proteger, async (req, res) => {
     try {
         const c = readData(FILES.config, {});
@@ -349,6 +363,7 @@ app.post('/api/test-ai', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// Upload Media
 app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => {
     try {
         const { phone, type } = req.body;
@@ -368,7 +383,7 @@ app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, r
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Chats Full List
+// Get Chats
 app.get('/api/chats-full', proteger, (req, res) => {
     const history = readData(FILES.history, {});
     const metadata = readData(FILES.metadata, {});
@@ -379,17 +394,18 @@ app.get('/api/chats-full', proteger, (req, res) => {
         const meta = metadata[id] || {};
         return {
             id,
-            name: meta.contactName || id, // Aquí se envía el nombre guardado
+            name: meta.contactName || id, 
             lastMessage: msgs.length > 0 ? msgs[msgs.length - 1] : { text: "Nuevo", time: new Date().toISOString() },
             botActive: botStatus[id] !== false,
             pinned: meta.pinned || false,
-            labels: meta.labels || [], // Etiquetas
+            labels: meta.labels || [],
             timestamp: msgs.length > 0 ? msgs[msgs.length - 1].time : new Date().toISOString()
         };
     }).sort((a,b) => (a.pinned === b.pinned) ? new Date(b.timestamp) - new Date(a.timestamp) : (a.pinned ? -1 : 1));
     res.json(list);
 });
 
+// Send Msg
 app.post('/api/chat/send', proteger, async (req, res) => {
     if(await enviarWhatsApp(req.body.phone, req.body.message)) {
         let h = readData(FILES.history, {});
@@ -400,6 +416,7 @@ app.post('/api/chat/send', proteger, async (req, res) => {
     } else res.status(500).json({ error: "Error" });
 });
 
+// Toggle Bot
 app.post('/api/chat/toggle-bot', proteger, (req, res) => {
     let s = readData(FILES.bot_status, {});
     s[req.body.phone] = req.body.active;
@@ -407,6 +424,7 @@ app.post('/api/chat/toggle-bot', proteger, (req, res) => {
     res.json({ success: true });
 });
 
+// CSV Upload
 app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
     try {
         const n = parse(req.file.buffer.toString('utf-8'), { columns: true });
@@ -419,6 +437,7 @@ app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
     } catch(e) { res.status(500).json({ error: "CSV Error" }); }
 });
 
+// Delete Inventory
 app.post('/api/knowledge/delete', proteger, (req, res) => {
     let k = readData(FILES.knowledge, []);
     k.splice(req.body.index, 1);
@@ -441,11 +460,11 @@ app.post('/webhook', async (req, res) => {
     } catch(e) {}
 });
 
-// Rutas Estáticas
+// Static
 app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
 app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.get('/index.html', (req, res) => res.redirect('/'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 6.3 - BACKEND FIXED"));
+app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 6.5 - SMART NAME DETECTION"));
