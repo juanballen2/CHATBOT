@@ -38,7 +38,7 @@ app.use((req, res, next) => {
 });
 
 // ============================================================
-// 2. MOTOR SQLITE
+// 2. MOTOR SQLITE CON AUTO-MIGRACIÓN
 // ============================================================
 let db;
 (async () => {
@@ -50,7 +50,7 @@ let db;
         driver: sqlite3.Database
     });
 
-    // ACTUALIZADO: Tabla de leads con columnas ciudad y correo
+    // 1. Creación de tablas base
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
         CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT);
@@ -60,8 +60,12 @@ let db;
         CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
     `);
 
+    // 2. MIGRACIÓN: Forzar columnas nuevas si la tabla ya existía sin ellas
+    try { await db.exec("ALTER TABLE leads ADD COLUMN ciudad TEXT;"); } catch(e) {}
+    try { await db.exec("ALTER TABLE leads ADD COLUMN correo TEXT;"); } catch(e) {}
+
     await refreshKnowledge();
-    console.log("🚀 LORENA 7.1 SQL - MOTOR INICIADO CON ÉXITO");
+    console.log("🚀 LORENA 7.2 SQL - MOTOR Y TABLAS ACTUALIZADAS");
 })();
 
 let globalKnowledge = [];
@@ -121,7 +125,7 @@ async function uploadToMeta(buffer, mimeType, filename) {
 }
 
 // ============================================================
-// 4. IA LORENA
+// 4. IA LORENA (REFORZADA PARA CAPTURA)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -150,28 +154,24 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
     const stock = buscarEnCatalogo(message);
 
     const promptLorena = `ERES LORENA DE ICC.
-    [PERSONALIDAD] ${promptBase}
-    [REGLAS DE NEGOCIO] ${reglasTexto}
-    [INFORMACIÓN WEB] ${websiteData}
-    [INVENTARIO] ${JSON.stringify(stock)}
-    [MISION CRÍTICA: DATOS DEL CLIENTE]
-    Identifica NOMBRE, INTERÉS, CIUDAD y CORREO.
-    [RESPUESTA JSON OBLIGATORIA]
-    Si hay datos, finaliza con:
-    [DATA] { "es_lead": true, "nombre": "...", "interes": "...", "ciudad": "...", "correo": "...", "etiqueta": "Lead Caliente" } [DATA]`;
+    [MISIÓN] Captura nombre, ciudad, correo e interés del cliente.
+    [FORMATO] Si hay datos, termina con:
+    [DATA] { "es_lead": true, "nombre": "...", "interes": "...", "ciudad": "...", "correo": "...", "etiqueta": "Lead Caliente" } [DATA]
+    Reglas: ${reglasTexto}. Personalidad: ${promptBase}. Web: ${websiteData}. Inventario: ${JSON.stringify(stock)}`;
 
     try {
         const resAI = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: promptLorena + `\nHISTORIAL CHAT: ${JSON.stringify(chatPrevio)}\nUSUARIO DICE: ${message}` }] }] });
+            { contents: [{ parts: [{ text: promptLorena + `\nUSUARIO: ${message}\nHISTORIAL: ${JSON.stringify(chatPrevio)}` }] }] });
 
         let fullText = resAI.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText;
-        // Regex mejorado para capturar JSON incluso si la IA agrega saltos de línea
-        const regexData = /\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/;
+        
+        // Buscador de datos corregido para mayor flexibilidad
+        const regexData = /\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/i;
         const match = fullText.match(regexData);
 
         if (match && match[1]) {
-            textoVisible = fullText.replace(regexData, "").trim(); 
+            textoVisible = fullText.replace(/\[DATA\][\s\S]*?\[DATA\]/gi, "").trim(); 
             try {
                 const info = JSON.parse(match[1]);
                 if(info.es_lead) {
@@ -186,27 +186,18 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
                         nombreFinal = meta.contactName;
                     }
 
-                    // GUARDADO COMPLETO EN LEADS
+                    // GUARDADO SQL REFORZADO CON COLUMNAS NUEVAS
                     await db.run(
                         "INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)", 
                         [sessionId, nombreFinal, info.interes || "General", info.etiqueta || "Lead", new Date().toLocaleString(), info.ciudad || "No indicada", info.correo || "No indicado"]
                     );
-                    
-                    if(info.etiqueta) {
-                        const row = await db.get("SELECT labels FROM metadata WHERE phone = ?", [sessionId]);
-                        let labs = JSON.parse(row?.labels || "[]");
-                        if(!labs.includes(info.etiqueta)) {
-                            labs.push(info.etiqueta);
-                            await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [sessionId, JSON.stringify(labs)]);
-                        }
-                    }
                 }
-            } catch(e) { console.error("Error JSON Bot:", e); }
+            } catch(e) { console.error("Error capturando Lead:", e); }
         }
 
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', textoVisible, new Date().toISOString()]);
         return textoVisible;
-    } catch (err) { return "Dame un momento, estoy verificando..."; }
+    } catch (err) { return "Dame un momento..."; }
 }
 
 // ============================================================
@@ -381,4 +372,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 7.1 SQL - THE VAULT (FIDELIDAD TOTAL)"));
+app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 7.2 SQL - THE VAULT (FIDELIDAD TOTAL)"));
