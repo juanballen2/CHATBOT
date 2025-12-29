@@ -38,7 +38,7 @@ app.use((req, res, next) => {
 });
 
 // ============================================================
-// 2. MOTOR SQLITE CON AUTO-REPARACIÓN DE ESTRUCTURA
+// 2. MOTOR SQLITE CON REPARACIÓN FORZADA DE COLUMNAS
 // ============================================================
 let db;
 (async () => {
@@ -50,31 +50,37 @@ let db;
         driver: sqlite3.Database
     });
 
-    // 1. Creación de tablas base con todas las columnas
+    // 1. Crear tablas base (Estructura mínima)
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
-        CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT);
+        CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT);
         CREATE TABLE IF NOT EXISTS metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0);
         CREATE TABLE IF NOT EXISTS bot_status (phone TEXT PRIMARY KEY, active INTEGER DEFAULT 1);
         CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, searchable TEXT UNIQUE, raw_data TEXT);
         CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
     `);
 
-    // 2. MIGRACIÓN FORZADA: Si la tabla ya existía sin estas columnas, las agregamos individualmente
-    const tableInfo = await db.all("PRAGMA table_info(leads)");
-    const columns = tableInfo.map(c => c.name);
-    
-    if (!columns.includes('ciudad')) {
-        await db.exec("ALTER TABLE leads ADD COLUMN ciudad TEXT DEFAULT 'No indicada'");
-        console.log("⚠️ Columna 'ciudad' añadida a Leads");
-    }
-    if (!columns.includes('correo')) {
-        await db.exec("ALTER TABLE leads ADD COLUMN correo TEXT DEFAULT 'No indicado'");
-        console.log("⚠️ Columna 'correo' añadida a Leads");
+    // 2. MIGRACIÓN FORZADA: Inyectar columnas una por una para evitar el SQLITE_ERROR
+    const columnasLeads = [
+        { name: 'nombre', type: 'TEXT' },
+        { name: 'interes', type: 'TEXT' },
+        { name: 'etiqueta', type: 'TEXT' },
+        { name: 'fecha', type: 'TEXT' },
+        { name: 'ciudad', type: 'TEXT' },
+        { name: 'correo', type: 'TEXT' }
+    ];
+
+    for (const col of columnasLeads) {
+        try {
+            await db.exec(`ALTER TABLE leads ADD COLUMN ${col.name} ${col.type};`);
+            console.log(`✅ Columna reparada/añadida: ${col.name}`);
+        } catch (e) {
+            // Ignoramos si la columna ya existe
+        }
     }
 
     await refreshKnowledge();
-    console.log("🚀 LORENA 7.5 SQL - BASE DE DATOS BLINDADA Y LISTA");
+    console.log("🚀 LORENA 7.6 SQL - ESTRUCTURA REPARADA Y LISTA");
 })();
 
 let globalKnowledge = [];
@@ -134,7 +140,7 @@ async function uploadToMeta(buffer, mimeType, filename) {
 }
 
 // ============================================================
-// 4. IA LORENA (REFORZADA PARA RECOPILACIÓN)
+// 4. IA LORENA (RECOPILACIÓN BLINDADA)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -174,7 +180,6 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
         let fullText = resAI.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText;
         
-        // Regex mejorado para capturar JSON robustamente
         const regexData = /\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/i;
         const match = fullText.match(regexData);
 
@@ -189,14 +194,23 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
                         nombreFinal = meta.contactName;
                     }
 
-                    // GUARDADO SQL COMPLETO
+                    // GUARDADO SQL PROTEGIDO CONTRA ERRORES DE COLUMNA
                     await db.run(
-                        "INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)", 
-                        [sessionId, nombreFinal, info.interes || "General", info.etiqueta || "Lead", new Date().toLocaleString(), info.ciudad || "No capturada", info.correo || "No capturado"]
+                        `INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?)`, 
+                        [
+                            sessionId, 
+                            nombreFinal, 
+                            info.interes || "General", 
+                            info.etiqueta || "Lead", 
+                            new Date().toLocaleString(), 
+                            info.ciudad || "No indicada", 
+                            info.correo || "No indicado"
+                        ]
                     );
-                    console.log("🎯 Lead capturado en SQL:", nombreFinal);
+                    console.log("🎯 Lead capturado correctamente en SQL");
                 }
-            } catch(e) { console.error("Error parseando Lead:", e); }
+            } catch(e) { console.error("Error guardando Lead:", e.message); }
         }
 
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', textoVisible, new Date().toISOString()]);
@@ -221,7 +235,6 @@ app.get('/api/data/:type', proteger, async (req, res) => {
     try {
         if (t === 'leads') {
             const rows = await db.all("SELECT * FROM leads ORDER BY id DESC");
-            // Mapeamos para compatibilidad con el front
             return res.json(rows.map(r => ({ ...r, telefono: r.phone, fecha: r.fecha })));
         }
         if (t === 'config') return res.json({ prompt: await getCfg('prompt', ""), website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []) });
@@ -377,4 +390,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 7.5 SQL - BLINDADA"));
+app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 7.6 SQL - ESTRUCTURA REPARADA"));
