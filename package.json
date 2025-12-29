@@ -1,19 +1,20 @@
 {
-  "name": "lorena-ia",
-  "version": "1.0.0",
-  "description": "Bot ICC",
+  "name": "icc-chat-bot",
+  "version": "4.0.0",
+  "description": "Bot WhatsApp ICC con Panel de Control",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
+    "cors": "^2.8.5",
     "csv-parse": "^5.5.0",
     "express": "^4.18.2",
     "express-session": "^1.17.3",
-    "multer": "^1.4.4"
+    "multer": "^1.4.5-lts.1"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "18.x"
   }
 }
