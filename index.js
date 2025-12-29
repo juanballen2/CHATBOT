@@ -27,7 +27,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
 
-// 🛡️ SEGURIDAD
+// 🛡️ SEGURIDAD DE ARCHIVOS
 app.use((req, res, next) => {
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
         return res.status(403).send('Acceso Prohibido');
@@ -36,7 +36,7 @@ app.use((req, res, next) => {
 });
 
 // ============================================================
-// 📂 DATOS
+// 📂 GESTIÓN DE DATOS
 // ============================================================
 const DATA_DIR = path.resolve(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -47,7 +47,8 @@ const FILES = {
     leads: path.join(DATA_DIR, 'leads.json'),
     history: path.join(DATA_DIR, 'history.json'),
     bot_status: path.join(DATA_DIR, 'bot_status.json'),
-    metadata: path.join(DATA_DIR, 'metadata.json') // Aquí guardaremos los nombres de contactos
+    tags: path.join(DATA_DIR, 'tags.json'),
+    metadata: path.join(DATA_DIR, 'metadata.json')
 };
 
 const readData = (file, fallback) => {
@@ -85,7 +86,7 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
 }
 
 // ============================================================
-// 🧠 CEREBRO (FIXED)
+// 🧠 CEREBRO LORENA (REGEX + LEADS FIXED)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -192,7 +193,7 @@ app.post('/webhook', async (req, res) => {
 });
 
 // ============================================================
-// ⚙️ API PANEL
+// ⚙️ API PANEL (DASHBOARD & FRONTEND)
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
@@ -204,18 +205,23 @@ app.post('/auth', (req, res) => {
     res.status(401).json({ success: false });
 });
 
+// ✅ CORRECCIÓN DASHBOARD: Fallback inteligente para no romper el front
 app.get('/api/data/:type', proteger, (req, res) => {
-    if (!FILES[req.params.type]) return res.status(404).json({});
-    res.json(readData(FILES[req.params.type], [])); // Fallback seguro
+    const t = req.params.type;
+    if (!FILES[t]) return res.status(404).json({});
+    
+    // Si es Historial, Config, BotStatus o Metadata -> Objeto {}
+    // Si es Leads o Knowledge -> Array []
+    const isObject = ['history', 'config', 'bot_status', 'metadata', 'tags'].includes(t);
+    res.json(readData(FILES[t], isObject ? {} : [])); 
 });
 
-// 2. CHATS MERGEADOS CON CONTACTOS (NUEVO)
+// 2. CHATS MERGEADOS CON CONTACTOS
 app.get('/api/chats-full', proteger, (req, res) => {
     const history = readData(FILES.history, {});
     const metadata = readData(FILES.metadata, {}); 
     const botStatus = readData(FILES.bot_status, {});
     
-    // Obtenemos lista única de teléfonos (Historial + Contactos guardados)
     const allPhones = new Set([...Object.keys(history), ...Object.keys(metadata)]);
     
     const chatList = Array.from(allPhones).map(phone => {
@@ -225,7 +231,7 @@ app.get('/api/chats-full', proteger, (req, res) => {
         
         return {
             id: phone,
-            name: meta.contactName || phone, // Si tiene nombre guardado, úsalo
+            name: meta.contactName || phone, 
             lastMessage: lastMsg,
             botActive: botStatus[phone] !== false,
             pinned: meta.pinned || false,
@@ -244,13 +250,13 @@ app.get('/api/chats-full', proteger, (req, res) => {
     res.json(chatList);
 });
 
-// 3. NUEVO: AGREGAR CONTACTO CORPORATIVO
+// 3. AGREGAR CONTACTO CORPORATIVO
 app.post('/api/contacts/add', proteger, (req, res) => {
     const { phone, name } = req.body;
     const metadata = readData(FILES.metadata, {});
     
     if(!metadata[phone]) metadata[phone] = {};
-    metadata[phone].contactName = name; // Guardamos el nombre
+    metadata[phone].contactName = name;
     metadata[phone].addedManual = true;
     
     writeData(FILES.metadata, metadata);
@@ -294,7 +300,7 @@ app.post('/api/chat/toggle-bot', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-// 5. CONFIGURACIÓN (FIXED: SOBRESCRITURA)
+// 5. CONFIGURACIÓN (SOBRESCRITURA CORRECTA)
 app.post('/api/save-config', proteger, (req, res) => {
     let config = readData(FILES.config, {});
     const { prompt, tech_rules } = req.body;
@@ -317,5 +323,53 @@ app.post('/api/test-ai', proteger, async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.use(express.static(__dirname));
-app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 5.0 - CONTACTS ENABLED"));
+// 6. INVENTARIO
+app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
+    try {
+        const newRecords = parse(req.file.buffer.toString('utf-8'), { columns: true, skip_empty_lines: true });
+        const formattedNew = newRecords.map(r => ({ searchable: Object.values(r).join(" "), data: r }));
+        const currentData = readData(FILES.knowledge, []);
+        const combined = [...currentData, ...formattedNew];
+        globalKnowledge = Array.from(new Set(combined.map(a => a.searchable))).map(s => combined.find(a => a.searchable === s));
+        writeData(FILES.knowledge, globalKnowledge);
+        res.json({ success: true, count: globalKnowledge.length });
+    } catch (e) { res.status(500).send("CSV Error"); }
+});
+
+app.post('/api/knowledge/delete', proteger, (req, res) => {
+    globalKnowledge.splice(req.body.index, 1);
+    writeData(FILES.knowledge, globalKnowledge);
+    res.json({ success: true });
+});
+
+// ============================================================
+// 🔒 RUTAS DE SEGURIDAD (ANTI-BYPASS) - ¡AQUÍ ESTÁ EL FIX!
+// ============================================================
+
+app.get('/logout', (req, res) => {
+    req.session.destroy(() => {
+        res.clearCookie('icc_session');
+        res.redirect('/login');
+    });
+});
+
+app.get('/login', (req, res) => {
+    if (req.session.isLogged) return res.redirect('/');
+    res.sendFile(path.join(__dirname, 'login.html'));
+});
+
+app.get('/', (req, res) => {
+    if (!req.session.isLogged) return res.redirect('/login');
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Evita que entren directo a index.html
+app.get('/index.html', (req, res) => {
+    if (!req.session.isLogged) return res.redirect('/login');
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// IMPORTANTE: { index: false } evita servir index.html automáticamente
+app.use(express.static(__dirname, { index: false }));
+
+app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 5.2 - SECURE & DASHBOARD FIX"));
