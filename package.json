@@ -1,7 +1,7 @@
 {
   "name": "icc-chat-bot",
-  "version": "4.0.0",
-  "description": "Bot WhatsApp ICC con Panel de Control",
+  "version": "5.3.0",
+  "description": "Bot WhatsApp ICC & Dashboard - Manager Ready",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
