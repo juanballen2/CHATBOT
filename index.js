@@ -13,7 +13,7 @@ const app = express();
 app.set('trust proxy', 1);
 
 // ============================================================
-// 🔐 CONFIGURACIÓN Y VARIABLES
+// 🔐 VARIABLES DE ENTORNO
 // ============================================================
 const API_KEY = process.env.GEMINI_API_KEY; 
 const META_TOKEN = process.env.META_TOKEN;
@@ -27,9 +27,8 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
 
-// 🛡️ SEGURIDAD DE RUTAS
+// 🛡️ SEGURIDAD
 app.use((req, res, next) => {
-    // Protege archivos JSON directos, pero permite acceso a las rutas API que definimos abajo
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
         return res.status(403).send('Acceso Prohibido');
     }
@@ -37,7 +36,7 @@ app.use((req, res, next) => {
 });
 
 // ============================================================
-// 📂 GESTIÓN DE DATOS (FILE SYSTEM)
+// 📂 DATOS
 // ============================================================
 const DATA_DIR = path.resolve(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -48,8 +47,7 @@ const FILES = {
     leads: path.join(DATA_DIR, 'leads.json'),
     history: path.join(DATA_DIR, 'history.json'),
     bot_status: path.join(DATA_DIR, 'bot_status.json'),
-    tags: path.join(DATA_DIR, 'tags.json'),
-    metadata: path.join(DATA_DIR, 'metadata.json')
+    metadata: path.join(DATA_DIR, 'metadata.json') // Aquí guardaremos los nombres de contactos
 };
 
 const readData = (file, fallback) => {
@@ -62,19 +60,15 @@ const writeData = (file, data) => {
     catch (err) { return false; }
 };
 
-// SESIONES
 app.use(session({
-    name: 'icc_session',
-    secret: SESSION_SECRET,
-    resave: true,
-    saveUninitialized: true,
-    cookie: { secure: false, maxAge: 1000 * 60 * 60 * 24 } // 24 horas
+    name: 'icc_session', secret: SESSION_SECRET, resave: true, saveUninitialized: true,
+    cookie: { secure: false, maxAge: 1000 * 60 * 60 * 24 }
 }));
 
 let globalKnowledge = readData(FILES.knowledge, []);
 
 // ============================================================
-// 📩 MOTOR DE ENVÍO WHATSAPP
+// 📩 WHATSAPP SEND
 // ============================================================
 async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     try {
@@ -87,14 +81,11 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
         return true;
-    } catch (e) { 
-        console.error("Error envío WhatsApp:", e.response?.data || e.message);
-        return false;
-    }
+    } catch (e) { return false; }
 }
 
 // ============================================================
-// 🧠 CEREBRO LORENA (CORREGIDO)
+// 🧠 CEREBRO (FIXED)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -125,31 +116,39 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
 
     const prompt = `
     ${config.prompt || "Eres Lorena de ICC."}
+    CONTEXTO: ${config.tech_rules || ""}
+    WEB: ${config.website_data || ''}
+    STOCK: ${JSON.stringify(stock)}
     
-    REGLAS TÉCNICAS: ${config.tech_rules || "Sé profesional."}
-    INFO WEB: ${config.website_data || ''}
-    STOCK DISPONIBLE: ${JSON.stringify(stock)}
-    HISTORIAL: ${JSON.stringify(chatPrevio)}
-    
-    INSTRUCCIÓN: Responde corto y natural. Si es venta, usa [DATA].
+    SI DETECTAS OPORTUNIDAD DE VENTA O DATOS DE CONTACTO, FINALIZA TU RESPUESTA CON:
+    [DATA]
+    { "es_lead": true, "nombre": "...", "interes": "...", "etiqueta": "lead_caliente" }
+    [DATA]
     `;
 
     try {
         const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: prompt + `\nMENSAJE USUARIO: ${message}` }] }] });
+            { contents: [{ parts: [{ text: prompt + `\nHISTORIAL: ${JSON.stringify(chatPrevio)}\nUSER: ${message}` }] }] });
 
         let fullText = res.data.candidates[0].content.parts[0].text;
-        let textoVisible = fullText.split('[DATA]')[0].trim();
-        
-        // Procesar Leads
-        if (fullText.includes('[DATA]')) {
+        let textoVisible = fullText;
+
+        // --- EXTRACCIÓN ROBUSTA DE LEADS ---
+        const regexData = /\[DATA\]([\s\S]*?)\[DATA\]/;
+        const match = fullText.match(regexData);
+
+        if (match && match[1]) {
+            textoVisible = fullText.replace(regexData, "").trim();
             try {
-                const jsonStr = fullText.split('[DATA]')[1].replace(/```json|```/g, "").trim();
-                const info = JSON.parse(jsonStr);
+                const jsonClean = match[1].replace(/```json|```/g, "").trim();
+                const info = JSON.parse(jsonClean);
                 if(info.es_lead) {
                     const leads = readData(FILES.leads, []);
-                    leads.push({ ...info, fecha: new Date().toLocaleString(), telefono: sessionId });
-                    writeData(FILES.leads, leads);
+                    const yaExiste = leads.some(l => l.telefono === sessionId && new Date(l.fecha).toDateString() === new Date().toDateString());
+                    if (!yaExiste) {
+                        leads.push({ ...info, fecha: new Date().toLocaleString(), telefono: sessionId });
+                        writeData(FILES.leads, leads);
+                    }
                 }
                 if(info.etiqueta) {
                     const metadata = readData(FILES.metadata, {});
@@ -157,20 +156,17 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
                     metadata[sessionId].labels = [info.etiqueta]; 
                     writeData(FILES.metadata, metadata);
                 }
-            } catch(e) { console.error("Error parsing DATA json", e); }
+            } catch(e) {}
         }
 
-        // 2. Guardar mensaje Bot (Releyendo historial por si acaso)
+        // 2. Guardar Bot
         let freshHistory = readData(FILES.history, {});
         if (!freshHistory[sessionId]) freshHistory[sessionId] = [];
         freshHistory[sessionId].push({ role: 'bot', text: textoVisible, time: new Date().toISOString() });
         writeData(FILES.history, freshHistory);
 
         return textoVisible;
-    } catch (err) { 
-        console.error(err);
-        return "Lorena ICC: Dame un momento, estoy consultando..."; 
-    }
+    } catch (err) { return "Un momento, revisando sistema..."; }
 }
 
 // ============================================================
@@ -184,21 +180,19 @@ app.get('/webhook', (req, res) => {
 app.post('/webhook', async (req, res) => {
     res.sendStatus(200); 
     try {
-        const body = req.body;
-        const entry = body.entry?.[0]?.changes?.[0]?.value;
+        const entry = req.body.entry?.[0]?.changes?.[0]?.value;
         const msg = entry?.messages?.[0];
         if (msg) {
-            let texto = msg.text ? msg.text.body : "";
-            let desc = msg.image ? "📷 [Imagen]" : msg.document ? "📄 [Documento]" : "";
+            let texto = msg.text ? msg.text.body : (msg.image ? "📷 [Imagen]" : (msg.document ? "📄 [Doc]" : ""));
             const from = msg.from;
-            const respuesta = await procesarConLorena(texto || desc, from, desc);
+            const respuesta = await procesarConLorena(texto, from);
             if (respuesta) await enviarWhatsApp(from, respuesta);
         }
-    } catch (e) { console.error("Error Webhook:", e); }
+    } catch (e) {}
 });
 
 // ============================================================
-// ⚙️ API PANEL (DASHBOARD & FRONTEND)
+// ⚙️ API PANEL
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
@@ -210,38 +204,28 @@ app.post('/auth', (req, res) => {
     res.status(401).json({ success: false });
 });
 
-app.get('/logout', (req, res) => {
-    req.session.destroy(() => {
-        res.clearCookie('icc_session');
-        res.redirect('/login');
-    });
-});
-
-// ✅ RUTA NUEVA: Esta faltaba para que funcione el Dashboard y el Inventario
 app.get('/api/data/:type', proteger, (req, res) => {
-    const type = req.params.type;
-    // Mapeo seguro para saber qué archivos se pueden leer
-    if (!FILES[type]) return res.status(404).json({ error: "Data type not found" });
-    
-    // Si es tipo 'history' devuelve objeto {}, si es lista (leads/knowledge) devuelve []
-    const fallback = (type === 'history' || type === 'tags' || type === 'bot_status' || type === 'metadata' || type === 'config') ? {} : [];
-    
-    res.json(readData(FILES[type], fallback));
+    if (!FILES[req.params.type]) return res.status(404).json({});
+    res.json(readData(FILES[req.params.type], [])); // Fallback seguro
 });
 
-// 2. CHATS LIST (Sidebar)
+// 2. CHATS MERGEADOS CON CONTACTOS (NUEVO)
 app.get('/api/chats-full', proteger, (req, res) => {
     const history = readData(FILES.history, {});
     const metadata = readData(FILES.metadata, {}); 
     const botStatus = readData(FILES.bot_status, {});
     
-    const chatList = Object.keys(history).map(phone => {
-        const msgs = history[phone];
-        const lastMsg = msgs[msgs.length - 1] || {};
-        const meta = metadata[phone] || { pinned: false, labels: [], muted: false };
+    // Obtenemos lista única de teléfonos (Historial + Contactos guardados)
+    const allPhones = new Set([...Object.keys(history), ...Object.keys(metadata)]);
+    
+    const chatList = Array.from(allPhones).map(phone => {
+        const msgs = history[phone] || [];
+        const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : { text: "Nuevo contacto", time: new Date().toISOString() };
+        const meta = metadata[phone] || {};
         
         return {
             id: phone,
+            name: meta.contactName || phone, // Si tiene nombre guardado, úsalo
             lastMessage: lastMsg,
             botActive: botStatus[phone] !== false,
             pinned: meta.pinned || false,
@@ -260,7 +244,20 @@ app.get('/api/chats-full', proteger, (req, res) => {
     res.json(chatList);
 });
 
-// 3. ACCIONES DE CHAT
+// 3. NUEVO: AGREGAR CONTACTO CORPORATIVO
+app.post('/api/contacts/add', proteger, (req, res) => {
+    const { phone, name } = req.body;
+    const metadata = readData(FILES.metadata, {});
+    
+    if(!metadata[phone]) metadata[phone] = {};
+    metadata[phone].contactName = name; // Guardamos el nombre
+    metadata[phone].addedManual = true;
+    
+    writeData(FILES.metadata, metadata);
+    res.json({ success: true });
+});
+
+// 4. ACCIONES Y BOT
 app.post('/api/chat/action', proteger, (req, res) => {
     const { phone, action, value } = req.body; 
     const metadata = readData(FILES.metadata, {});
@@ -272,15 +269,13 @@ app.post('/api/chat/action', proteger, (req, res) => {
     else if (action === 'delete') {
         let h = readData(FILES.history, {});
         delete h[phone]; delete metadata[phone];
-        writeData(FILES.history, h);
-        writeData(FILES.metadata, metadata);
-        return res.json({ success: true, deleted: true });
+        writeData(FILES.history, h); writeData(FILES.metadata, metadata);
+        return res.json({ success: true });
     }
     writeData(FILES.metadata, metadata);
     res.json({ success: true });
 });
 
-// 4. ENVÍOS Y BOT
 app.post('/api/chat/send', proteger, async (req, res) => {
     const { phone, message } = req.body;
     if (await enviarWhatsApp(phone, message)) {
@@ -299,14 +294,10 @@ app.post('/api/chat/toggle-bot', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-// 5. CONFIG Y PRUEBAS IA
-app.get('/api/config', proteger, (req, res) => {
-    res.json(readData(FILES.config, { prompt: "", tech_rules: "", website_data: "" }));
-});
-
+// 5. CONFIGURACIÓN (FIXED: SOBRESCRITURA)
 app.post('/api/save-config', proteger, (req, res) => {
-    const { prompt, tech_rules, website_data } = req.body;
-    const config = readData(FILES.config, {});
+    let config = readData(FILES.config, {});
+    const { prompt, tech_rules } = req.body;
     
     if (prompt !== undefined) config.prompt = prompt;
     if (tech_rules !== undefined) config.tech_rules = tech_rules;
@@ -315,50 +306,16 @@ app.post('/api/save-config', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-// ✅ CORREGIDO: Ahora devuelve 'logic_log' para ver qué piensa el bot
 app.post('/api/test-ai', proteger, async (req, res) => {
     const { message, context } = req.body;
     try {
         const config = readData(FILES.config, {});
-        // Guardamos el prompt real para mostrarlo en el frontend
-        const fullPrompt = `
-        ${config.prompt || ""}
-        CONTEXTO DE PRUEBA: ${context || config.tech_rules || ""}
-        Responde al mensaje: "${message}"
-        `;
-        
-        const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+        const fullPrompt = `${config.prompt || ""} \nCTX: ${context || ""} \nUser: "${message}"`;
+        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
             { contents: [{ parts: [{ text: fullPrompt }] }] });
-            
-        res.json({ 
-            response: response.data.candidates[0].content.parts[0].text,
-            logic_log: fullPrompt // ¡Esto es lo que faltaba!
-        });
+        res.json({ response: r.data.candidates[0].content.parts[0].text, logic_log: fullPrompt });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 6. INVENTARIO
-app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
-    try {
-        const newRecords = parse(req.file.buffer.toString('utf-8'), { columns: true, skip_empty_lines: true });
-        const formattedNew = newRecords.map(r => ({ searchable: Object.values(r).join(" "), data: r }));
-        const currentData = readData(FILES.knowledge, []);
-        const combined = [...currentData, ...formattedNew];
-        globalKnowledge = Array.from(new Set(combined.map(a => a.searchable))).map(s => combined.find(a => a.searchable === s));
-        writeData(FILES.knowledge, globalKnowledge);
-        res.json({ success: true, count: globalKnowledge.length });
-    } catch (e) { res.status(500).send("CSV Error"); }
-});
-
-app.post('/api/knowledge/delete', proteger, (req, res) => {
-    globalKnowledge.splice(req.body.index, 1);
-    writeData(FILES.knowledge, globalKnowledge);
-    res.json({ success: true });
-});
-
-// STATIC
 app.use(express.static(__dirname));
-app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
-app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
-
-app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA ICC 4.5 - FULLY CONNECTED"));
+app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 5.0 - CONTACTS ENABLED"));
