@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICC | Chat Center Pro</title>
+    <title>ICC | Panel de Control v4.5</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -11,116 +11,95 @@
     <style>
         :root {
             --naranja: #FF8C00;
-            --dark-bg: #111b21; /* WhatsApp Darkish */
-            --sidebar-bg: #ffffff;
+            --dark-side: #202c33;
+            --bg-gray: #f0f2f5;
             --chat-bg: #efe7dd;
-            --msg-out: #d9fdd3;
-            --msg-in: #ffffff;
-            --danger: #ef5350;
+            --green-wa: #25d366;
+            --white: #ffffff;
+            --border: #e0e0e0;
         }
 
-        body { margin: 0; font-family: 'Montserrat', sans-serif; background: #f0f2f5; display: flex; height: 100vh; overflow: hidden; }
-
-        /* SIDEBAR DE NAVEGACIÓN (IZQUIERDA) */
-        .nav-bar { width: 60px; background: #202c33; display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 100; }
-        .nav-btn { color: #aebac1; font-size: 20px; margin-bottom: 25px; cursor: pointer; transition: 0.2s; position: relative; }
-        .nav-btn:hover, .nav-btn.active { color: var(--naranja); }
-        .nav-tooltip { display: none; position: absolute; left: 50px; background: #000; color: #fff; padding: 5px 10px; font-size: 10px; border-radius: 4px; white-space: nowrap; }
+        body { margin: 0; font-family: 'Montserrat', sans-serif; background: var(--bg-gray); display: flex; height: 100vh; overflow: hidden; }
+        
+        /* --- NAVEGACIÓN LATERAL --- */
+        .nav-bar { width: 60px; background: var(--dark-side); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 200; box-shadow: 2px 0 5px rgba(0,0,0,0.2); }
+        .nav-btn { color: #aebac1; font-size: 20px; margin-bottom: 30px; cursor: pointer; transition: 0.2s; position: relative; width: 100%; text-align: center; padding: 10px 0; }
+        .nav-btn:hover, .nav-btn.active { color: var(--naranja); background: rgba(255,255,255,0.05); border-left: 3px solid var(--naranja); }
+        .nav-tooltip { display: none; position: absolute; left: 60px; top: 15px; background: #000; color: #fff; padding: 4px 8px; font-size: 10px; border-radius: 4px; white-space: nowrap; z-index: 300; }
         .nav-btn:hover .nav-tooltip { display: block; }
 
-        /* MAIN LAYOUT */
-        .app-container { flex: 1; display: flex; height: 100vh; position: relative; }
-
-        /* VISTAS */
-        .view { display: none; width: 100%; height: 100%; }
+        /* --- CONTENEDOR VISTAS --- */
+        .app-container { flex: 1; display: flex; position: relative; overflow: hidden; }
+        .view { display: none; width: 100%; height: 100%; animation: fadeIn 0.3s; flex-direction: column; }
         .view.active { display: flex; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-        /* --- VISTA CHAT (ESTILO WHATSAPP) --- */
-        .chat-sidebar { width: 350px; background: #fff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
-        .chat-sidebar-header { height: 60px; background: #f0f2f5; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; border-bottom: 1px solid #d1d7db; }
+        /* --- ESTILOS GENERALES PÁGINAS --- */
+        .page-content { padding: 30px; overflow-y: auto; height: 100%; box-sizing: border-box; }
+        h1 { margin-top: 0; color: #333; font-size: 22px; border-bottom: 2px solid var(--naranja); display: inline-block; padding-bottom: 5px; margin-bottom: 20px; }
         
-        .search-box { padding: 10px; background: #fff; border-bottom: 1px solid #f0f2f5; }
-        .search-input { width: 100%; background: #f0f2f5; border: none; padding: 8px 15px; border-radius: 8px; outline: none; box-sizing: border-box; font-size: 13px; }
+        .card { background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid var(--border); }
+        .card h3 { margin-top: 0; font-size: 14px; color: #555; text-transform: uppercase; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
 
-        .chat-list { flex: 1; overflow-y: auto; }
-        .chat-item { display: flex; padding: 12px 15px; cursor: pointer; border-bottom: 1px solid #f5f6f6; transition: 0.2s; position: relative; }
-        .chat-item:hover { background: #f5f6f6; }
-        .chat-item.active { background: #f0f2f5; }
-        
-        .avatar { width: 45px; height: 45px; background: #ddd; border-radius: 50%; margin-right: 15px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #fff; background: #dfe5e7; }
-        
-        .chat-info { flex: 1; min-width: 0; }
-        .chat-top { display: flex; justify-content: space-between; margin-bottom: 3px; }
-        .chat-name { font-weight: 600; font-size: 14px; color: #111b21; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .chat-time { font-size: 11px; color: #667781; }
-        
-        .chat-preview { font-size: 12px; color: #667781; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
-        
-        .icons-row { display: flex; gap: 5px; font-size: 10px; color: #8696a0; }
-        .pinned-icon { transform: rotate(45deg); color: #8696a0; }
+        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 13px; transition: 0.2s; display: inline-flex; align-items: center; gap: 8px; }
+        .btn-primary { background: var(--naranja); color: white; }
+        .btn-primary:hover { background: #e67e00; }
+        .btn-secondary { background: #54656f; color: white; }
+        .btn-danger { background: #ef5350; color: white; }
 
-        /* VENTANA DE CHAT */
-        .chat-area { flex: 1; display: flex; flex-direction: column; background: #efe7dd; position: relative; }
-        .chat-bg { position: absolute; width: 100%; height: 100%; opacity: 0.4; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); z-index: 0; pointer-events: none; }
+        /* --- VISTA CHAT WHATSAPP --- */
+        .chat-layout { display: flex; height: 100%; }
+        .chat-sidebar { width: 350px; background: var(--white); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+        .chat-header-side { height: 60px; background: #f0f2f5; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; border-bottom: 1px solid #d1d7db; }
+        .chat-list-box { flex: 1; overflow-y: auto; }
         
-        .chat-header { height: 60px; background: #f0f2f5; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; z-index: 10; border-bottom: 1px solid #d1d7db; }
-        .chat-header-info { display: flex; align-items: center; gap: 15px; }
+        .chat-item { display: flex; padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #f0f0f0; transition: 0.2s; position: relative; }
+        .chat-item:hover { background: #f5f5f5; }
+        .chat-item.active { background: #e9edef; }
+        .avatar { width: 45px; height: 45px; border-radius: 50%; background: #dfe5e7; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 20px; margin-right: 10px; }
+        .chat-info { flex: 1; overflow: hidden; }
+        .chat-name { font-weight: 600; font-size: 14px; color: #111b21; display: flex; justify-content: space-between; }
+        .chat-msg { font-size: 12px; color: #667781; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
         
-        .messages-box { flex: 1; padding: 20px 40px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; z-index: 5; }
+        .chat-main { flex: 1; display: flex; flex-direction: column; background: var(--chat-bg); position: relative; }
+        .chat-bg-pattern { position: absolute; inset: 0; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); opacity: 0.4; pointer-events: none; }
         
-        .bubble { max-width: 65%; padding: 8px 12px; border-radius: 8px; font-size: 13.5px; line-height: 19px; position: relative; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); }
-        .bubble-in { align-self: flex-start; background: var(--msg-in); border-top-left-radius: 0; }
-        .bubble-out { align-self: flex-end; background: var(--msg-out); border-top-right-radius: 0; }
-        .bubble-manual { align-self: flex-end; background: #e3f2fd; border: 1px solid #bbdefb; border-top-right-radius: 0; }
+        .chat-header-main { height: 60px; background: #f0f2f5; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; z-index: 10; border-bottom: 1px solid #d1d7db; }
+        .messages-container { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; z-index: 5; }
         
-        .msg-meta { display: flex; justify-content: flex-end; font-size: 10px; color: #667781; margin-top: 2px; }
+        .bubble { max-width: 70%; padding: 8px 12px; border-radius: 7px; font-size: 14px; line-height: 19px; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .bubble-in { align-self: flex-start; background: var(--white); border-top-left-radius: 0; }
+        .bubble-out { align-self: flex-end; background: #d9fdd3; border-top-right-radius: 0; }
+        .bubble-manual { align-self: flex-end; background: #e3f2fd; border: 1px dashed #2196f3; border-top-right-radius: 0; }
+        
+        .chat-input-bar { min-height: 60px; background: #f0f2f5; padding: 10px 15px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+        .chat-input { flex: 1; padding: 12px; border-radius: 8px; border: none; outline: none; font-size: 14px; }
 
-        .input-area { min-height: 60px; background: #f0f2f5; padding: 10px 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
-        .input-box { flex: 1; background: #fff; border-radius: 8px; padding: 12px; border: 1px solid #fff; outline: none; font-size: 14px; }
-        
-        /* MENU CONTEXTUAL (CLICK DERECHO) */
-        #context-menu { 
-            display: none; position: absolute; z-index: 1000; 
-            background: #fff; width: 200px; border-radius: 6px; 
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2); 
-            padding: 5px 0;
-            animation: fadeIn 0.1s;
-        }
-        .ctx-item { padding: 10px 20px; font-size: 13px; color: #3b4a54; cursor: pointer; display: flex; align-items: center; gap: 10px; }
-        .ctx-item:hover { background: #f0f2f5; }
-        .ctx-danger { color: #ef5350; }
-        .ctx-danger:hover { background: #ffebee; }
+        /* --- MENÚ CONTEXTUAL --- */
+        #context-menu { display: none; position: absolute; z-index: 1000; background: var(--white); width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 5px; padding: 5px 0; }
+        .ctx-option { padding: 10px 15px; font-size: 13px; color: #333; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+        .ctx-option:hover { background: #f5f5f5; }
+        .ctx-red { color: #d32f2f; }
 
-        /* VISTAS EXTRAS (PANEL) */
-        .dashboard-view { padding: 40px; width: 100%; overflow-y: auto; box-sizing: border-box; }
-        .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
-        
-        /* UTILIDADES */
-        .badge { padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: bold; text-transform: uppercase; margin-right: 5px; }
-        .tag-lead { background: #e8f5e9; color: #2e7d32; }
-        .tag-cotizacion { background: #fff3e0; color: #ef6c00; }
-        .tag-tecnico { background: #e3f2fd; color: #1565c0; }
+        /* --- TABLAS E INVENTARIO --- */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; padding: 12px; background: #f8f9fa; color: #555; font-weight: 600; border-bottom: 2px solid #ddd; }
+        td { padding: 12px; border-bottom: 1px solid #eee; }
+        tr:hover { background: #fafafa; }
 
-        /* SCROLLBAR */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 3px; }
-
-        /* BOTON FLOTANTE DE IA */
-        .ai-status-indicator {
-            font-size: 11px; padding: 5px 10px; border-radius: 20px; 
-            background: #dcf8c6; color: #075e54; font-weight: bold;
-            display: flex; align-items: center; gap: 5px; cursor: pointer;
-        }
-        .ai-off { background: #eceff1; color: #54656f; }
+        /* --- LOGICA IA (SANDBOX) --- */
+        .log-box { background: #2d3436; color: #00cec9; font-family: 'Courier New', monospace; padding: 15px; border-radius: 5px; font-size: 12px; height: 150px; overflow-y: auto; margin-top: 10px; white-space: pre-wrap; border: 1px solid #333; }
     </style>
 </head>
 <body>
 
     <div class="nav-bar">
-        <div class="nav-btn active" onclick="nav('chat', this)"><i class="fas fa-comment-alt"></i><span class="nav-tooltip">Chat</span></div>
-        <div class="nav-btn" onclick="nav('dashboard', this)"><i class="fas fa-chart-pie"></i><span class="nav-tooltip">Métricas</span></div>
-        <div class="nav-btn" onclick="nav('config', this)"><i class="fas fa-robot"></i><span class="nav-tooltip">Configurar IA</span></div>
-        <div class="nav-btn" onclick="nav('inventory', this)"><i class="fas fa-box"></i><span class="nav-tooltip">Inventario</span></div>
+        <div class="nav-btn active" onclick="nav('chat', this)"><i class="fas fa-comments"></i><span class="nav-tooltip">Chat WhatsApp</span></div>
+        <div class="nav-btn" onclick="nav('dashboard', this)"><i class="fas fa-chart-pie"></i><span class="nav-tooltip">Dashboard</span></div>
+        <div class="nav-btn" onclick="nav('leads', this)"><i class="fas fa-address-book"></i><span class="nav-tooltip">Base Leads</span></div>
+        <div class="nav-btn" onclick="nav('config', this)"><i class="fas fa-cogs"></i><span class="nav-tooltip">Configurar IA</span></div>
+        <div class="nav-btn" onclick="nav('sandbox', this)"><i class="fas fa-vial"></i><span class="nav-tooltip">Pruebas / Sandbox</span></div>
+        <div class="nav-btn" onclick="nav('inventory', this)"><i class="fas fa-boxes"></i><span class="nav-tooltip">Inventario</span></div>
         <div style="flex:1"></div>
         <div class="nav-btn" onclick="location.href='/logout'" style="color: #ef5350;"><i class="fas fa-power-off"></i></div>
     </div>
@@ -128,360 +107,347 @@
     <div class="app-container">
 
         <div id="view-chat" class="view active">
-            
-            <div class="chat-sidebar">
-                <div class="chat-sidebar-header">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/1200px-WhatsApp.svg.png" style="height:30px;">
-                    <div style="font-weight:bold; color:#41525d;">Importadora Casa Colombia</div>
-                    <div><i class="fas fa-ellipsis-v" style="color:#54656f; cursor:pointer;"></i></div>
-                </div>
-                <div class="search-box">
-                    <input type="text" class="search-input" id="search-chat" placeholder="Buscar o iniciar un nuevo chat" oninput="renderChats()">
-                </div>
-                <div class="chat-list" id="chat-list-box">
+            <div class="chat-layout">
+                <div class="chat-sidebar">
+                    <div class="chat-header-side">
+                        <span style="font-weight:bold; color:#54656f;">Chats Recientes</span>
+                        <div style="font-size:12px; color:#aaa;" id="status-conn">● Conectado</div>
                     </div>
-            </div>
+                    <div style="padding:10px; background:#fff;">
+                        <input type="text" id="search-chat" placeholder="🔍 Buscar chat..." style="width:100%; padding:8px; border:1px solid #ddd; border-radius:5px;" oninput="renderChatList()">
+                    </div>
+                    <div class="chat-list-box" id="chat-list-container">
+                        </div>
+                </div>
 
-            <div class="chat-area">
-                <div class="chat-bg"></div>
-                
-                <div class="chat-header">
-                    <div class="chat-header-info" id="chat-header-content" style="opacity:0;">
-                        <div class="avatar" style="background:var(--naranja);"><i class="fas fa-user"></i></div>
-                        <div>
-                            <div class="chat-name" id="active-phone" style="font-size:16px;">Seleccione un chat</div>
-                            <div style="font-size:12px; color:#667781;">Click para ver info del contacto</div>
+                <div class="chat-main">
+                    <div class="chat-bg-pattern"></div>
+                    <div class="chat-header-main" id="chat-top-bar" style="visibility:hidden;">
+                        <div style="display:flex; align-items:center;">
+                            <div class="avatar" style="background:var(--naranja); margin-right:10px;"><i class="fas fa-user"></i></div>
+                            <div>
+                                <div style="font-weight:bold;" id="active-phone-display">Selecciona un chat</div>
+                                <div style="font-size:11px; color:#666;">ICC Cliente</div>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:15px;">
+                            <button id="btn-bot-toggle" class="btn btn-secondary" onclick="toggleBot()" style="font-size:11px; padding:5px 10px;">IA: ...</button>
                         </div>
                     </div>
-                    <div style="display:flex; gap:15px; align-items:center;">
-                        <div id="ai-toggle-btn" class="ai-status-indicator" onclick="toggleAI()">
-                            <i class="fas fa-robot"></i> LORENA ACTIVA
+
+                    <div class="messages-container" id="msgs-box">
+                        <div style="text-align:center; margin-top:150px; opacity:0.5;">
+                            <i class="fab fa-whatsapp" style="font-size:60px; color:#ccc;"></i>
+                            <h3>ICC Chat Center</h3>
+                            <p>Selecciona una conversación para comenzar.</p>
                         </div>
-                        <i class="fas fa-search" style="color:#54656f;"></i>
-                        <i class="fas fa-paperclip" style="color:#54656f; cursor:pointer;" onclick="sendMediaPrompt()"></i>
                     </div>
-                </div>
 
-                <div class="messages-box" id="messages-box">
-                    <div style="text-align:center; margin-top:100px; color:#667781;">
-                        <i class="fas fa-laptop" style="font-size:50px; margin-bottom:20px;"></i>
-                        <h2>ICC Web Pro</h2>
-                        <p>Envía y recibe mensajes sin mantener tu teléfono conectado.<br>Usa ICC Web en hasta 4 dispositivos vinculados y 1 teléfono.</p>
+                    <div class="chat-input-bar" id="input-bar" style="display:none;">
+                        <i class="far fa-smile" style="font-size:20px; color:#888; cursor:pointer;" onclick="alert('Emojis pronto...')"></i>
+                        <i class="fas fa-paperclip" style="font-size:20px; color:#888; cursor:pointer; margin:0 10px;" onclick="sendMediaPrompt()"></i>
+                        <input type="text" class="chat-input" id="msg-input" placeholder="Escribe un mensaje..." onkeypress="if(event.key==='Enter') sendManualMsg()">
+                        <i class="fas fa-microphone" style="font-size:20px; color:#888; cursor:pointer; margin-left:10px;" onclick="alert('Audio pronto...')"></i>
+                        <button class="btn btn-primary" onclick="sendManualMsg()" style="padding:10px 15px; margin-left:10px;"><i class="fas fa-paper-plane"></i></button>
                     </div>
-                </div>
-
-                <div class="input-area" id="input-area" style="display:none;">
-                    <i class="far fa-smile" style="color:#8696a0; font-size:24px; cursor:pointer;"></i>
-                    <input type="text" class="input-box" id="msg-input" placeholder="Escribe un mensaje" onkeypress="if(event.key==='Enter') sendMsg()">
-                    <i class="fas fa-microphone" style="color:#8696a0; font-size:24px; cursor:pointer;" onclick="sendMsg()"></i>
                 </div>
             </div>
-
         </div>
 
-        <div id="view-dashboard" class="view dashboard-view" style="background:#f0f2f5;">
+        <div id="view-dashboard" class="view page-content">
             <h1>Dashboard Comercial</h1>
-            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:20px;">
-                <div class="card"><h3>Leads Totales</h3><h1 style="color:var(--naranja)" id="kpi-leads">0</h1></div>
-                <div class="card"><h3>Inventario</h3><h1 style="color:#2196f3" id="kpi-stock">0</h1></div>
-            </div>
-            <div class="card">
-                <h3>Últimos Leads Detectados</h3>
-                <table style="width:100%; text-align:left;">
-                    <thead><tr><th>Fecha</th><th>Teléfono</th><th>Interés</th><th>Estado</th></tr></thead>
-                    <tbody id="leads-table"></tbody>
-                </table>
-                <button onclick="exportExcel()" style="margin-top:15px; padding:10px; cursor:pointer;">Exportar Excel</button>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:20px;">
+                <div class="card">
+                    <h3>Leads Capturados</h3>
+                    <h1 style="color:var(--naranja); font-size:40px; margin:10px 0;" id="kpi-leads">0</h1>
+                    <small>Clientes potenciales</small>
+                </div>
+                <div class="card">
+                    <h3>Inventario</h3>
+                    <h1 style="color:#2980b9; font-size:40px; margin:10px 0;" id="kpi-stock">0</h1>
+                    <small>Referencias activas</small>
+                </div>
+                <div class="card">
+                    <h3>Chats Activos</h3>
+                    <h1 style="color:var(--green-wa); font-size:40px; margin:10px 0;" id="kpi-chats">0</h1>
+                    <small>En historial</small>
+                </div>
             </div>
         </div>
 
-        <div id="view-config" class="view dashboard-view">
-            <h1>Configuración de Lorena</h1>
+        <div id="view-leads" class="view page-content">
+            <h1>Base de Leads</h1>
+            <div class="card">
+                <div style="display:flex; justify-content:flex-end; margin-bottom:15px;">
+                    <button class="btn btn-secondary" onclick="exportLeads()"><i class="fas fa-file-excel"></i> Exportar Excel</button>
+                </div>
+                <table id="leads-table">
+                    <thead><tr><th>Fecha</th><th>Nombre</th><th>Teléfono</th><th>Interés</th><th>Estado</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="view-config" class="view page-content">
+            <h1>Configuración del Cerebro (Lorena)</h1>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
                 <div class="card">
                     <h3>Personalidad (Prompt)</h3>
-                    <textarea id="cfg-prompt" style="width:100%; height:200px; padding:10px;"></textarea>
-                    <button onclick="saveConfig()" style="margin-top:10px; padding:10px; background:var(--naranja); color:white; border:none; cursor:pointer;">Guardar Cambios</button>
+                    <p style="font-size:11px; color:#777;">Define quién es Lorena, su tono de voz y objetivos.</p>
+                    <textarea id="cfg-prompt" style="width:100%; height:200px; padding:10px; border:1px solid #ddd; resize:none;"></textarea>
+                    <div style="margin-top:10px; display:flex; gap:10px;">
+                        <button class="btn btn-primary" onclick="saveConfig()">Guardar Cambios</button>
+                        <button class="btn btn-danger" onclick="document.getElementById('cfg-prompt').value=''">Limpiar</button>
+                    </div>
                 </div>
                 <div class="card">
-                    <h3>Reglas de Negocio</h3>
-                    <textarea id="cfg-rules" style="width:100%; height:200px; padding:10px;"></textarea>
+                    <h3>Reglas de Negocio & Contexto</h3>
+                    <p style="font-size:11px; color:#777;">Precios base, políticas de envío, horarios.</p>
+                    <textarea id="cfg-rules" style="width:100%; height:200px; padding:10px; border:1px solid #ddd; resize:none;"></textarea>
+                    <div style="margin-top:10px;">
+                         <button class="btn btn-primary" onclick="saveConfig()">Actualizar Reglas</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-sandbox" class="view page-content">
+            <h1>Laboratorio de Pruebas IA</h1>
+            <div class="card">
+                <div style="display:flex; gap:10px; margin-bottom:15px;">
+                    <input type="text" id="sandbox-input" placeholder="Escribe algo para probar a Lorena (ej: Hola, precio de filtro...)" style="flex:1; padding:12px; border:1px solid #ccc; border-radius:5px;">
+                    <button class="btn btn-primary" onclick="runTest()">ENVIAR PRUEBA</button>
+                </div>
+                
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                    <div>
+                        <h3>Respuesta de Lorena:</h3>
+                        <div id="sandbox-response" style="background:#f9f9f9; padding:15px; border-radius:5px; min-height:100px; border:1px solid #eee;">Esperando prueba...</div>
+                    </div>
+                    <div>
+                        <h3>Lógica Interna (Log):</h3>
+                        <div id="sandbox-log" class="log-box">Aquí verás el prompt oculto que se envía a Gemini...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-inventory" class="view page-content">
+            <h1>Gestión de Inventario</h1>
+            <div class="card">
+                <h3>Subir Productos Masivos (CSV)</h3>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <input type="file" id="csv-file">
+                    <button class="btn btn-primary" onclick="uploadCSV()">Cargar Inventario</button>
                 </div>
             </div>
             <div class="card">
-                <h3>Prueba Rápida (Sandbox)</h3>
-                <div style="display:flex; gap:10px;">
-                    <input id="test-msg" type="text" placeholder="Escribe algo para probar a Lorena..." style="flex:1; padding:10px;">
-                    <button onclick="testAI()">Probar</button>
+                <h3>Productos en Base de Datos</h3>
+                <div style="max-height:400px; overflow-y:auto;">
+                    <table id="inventory-table">
+                        <thead><tr><th>Descripción / Búsqueda</th><th>Acción</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
-                <div id="test-result" style="margin-top:10px; padding:10px; background:#f0f0f0; min-height:50px;"></div>
             </div>
         </div>
-        
-        <div id="view-inventory" class="view dashboard-view">
-             <h1>Gestión de Inventario</h1>
-             <div class="card">
-                <h3>Cargar CSV</h3>
-                <input type="file" id="csv-file">
-                <button onclick="uploadCSV()">Subir</button>
-             </div>
-             <div class="card">
-                <div id="inventory-list"></div>
-             </div>
-        </div>
 
-    </div>
-
-    <div id="context-menu">
-        <div class="ctx-item" onclick="ctxAction('pin')"><i class="fas fa-thumbtack"></i> Fijar chat</div>
-        <div class="ctx-item" onclick="ctxAction('mute')"><i class="fas fa-volume-mute"></i> Silenciar notificaciones</div>
-        <div class="ctx-item" onclick="ctxAction('label_lead')"><i class="fas fa-tag"></i> Marcar como Lead</div>
-        <div class="ctx-item" onclick="ctxAction('label_done')"><i class="fas fa-check"></i> Marcar finalizado</div>
-        <div style="height:1px; background:#e0e0e0; margin:5px 0;"></div>
-        <div class="ctx-item ctx-danger" onclick="ctxAction('delete')"><i class="fas fa-trash-alt"></i> Eliminar chat</div>
+    </div> <div id="context-menu">
+        <div class="ctx-option" onclick="ctxAction('pin')"><i class="fas fa-thumbtack"></i> Fijar / Desfijar</div>
+        <div class="ctx-option" onclick="ctxAction('mute')"><i class="fas fa-volume-mute"></i> Silenciar</div>
+        <div class="ctx-option" onclick="ctxAction('lead')"><i class="fas fa-fire" style="color:orange;"></i> Marcar Lead Hot</div>
+        <div class="ctx-option" onclick="ctxAction('done')"><i class="fas fa-check-circle" style="color:green;"></i> Finalizar Pedido</div>
+        <div style="height:1px; background:#eee; margin:5px 0;"></div>
+        <div class="ctx-option ctx-red" onclick="ctxAction('delete')"><i class="fas fa-trash-alt"></i> Eliminar Chat</div>
     </div>
 
     <script>
-        // --- ESTADO GLOBAL ---
         let currentChats = [];
         let selectedChatId = null;
-        let ctxTargetId = null; // ID del chat donde se hizo click derecho
-        let pollingInterval = null;
+        let contextTarget = null;
+        let pollTimer = null;
 
-        // --- INICIO ---
-        window.onload = function() {
-            startPolling();
-        };
-
-        function nav(screen, btn) {
+        // --- NAVEGACIÓN ---
+        function nav(viewId, btn) {
+            // Ocultar todas las vistas
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.getElementById('view-' + screen).classList.add('active');
+            // Mostrar la seleccionada
+            document.getElementById('view-' + viewId).classList.add('active');
+            
+            // Actualizar botones menú
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
+            if(btn) btn.classList.add('active');
 
-            if(screen === 'chat') startPolling();
-            else stopPolling();
-
-            if(screen === 'dashboard') loadDashboard();
-            if(screen === 'config') loadConfig();
-            if(screen === 'inventory') loadInventory();
+            // Lógica específica por vista
+            if(pollTimer) clearInterval(pollTimer);
+            
+            if(viewId === 'chat') {
+                syncChats();
+                pollTimer = setInterval(syncChats, 3000);
+            } else if(viewId === 'config') {
+                loadConfigData(); // ¡IMPORTANTE: CARGAR DATOS GUARDADOS!
+            } else if(viewId === 'dashboard') {
+                loadDashboardData();
+            } else if(viewId === 'leads') {
+                loadLeadsData();
+            } else if(viewId === 'inventory') {
+                loadInventoryData();
+            }
         }
 
-        // --- LÓGICA DEL CHAT (POLLING INTELIGENTE) ---
-        function startPolling() {
-            if(pollingInterval) clearInterval(pollingInterval);
-            syncChats();
-            pollingInterval = setInterval(syncChats, 3000); // Cada 3 segundos
-        }
-        function stopPolling() { clearInterval(pollingInterval); }
-
+        // --- 1. LÓGICA CHAT ---
         async function syncChats() {
             try {
-                // USAMOS EL NUEVO ENDPOINT PODEROSO
                 const res = await fetch('/api/chats-full');
                 const data = await res.json();
-                
-                // Solo renderizar si hubo cambios (comprobación básica)
                 if(JSON.stringify(data) !== JSON.stringify(currentChats)) {
                     currentChats = data;
-                    renderChats();
-                    // Si hay un chat abierto, refrescar sus mensajes
-                    if(selectedChatId) {
-                        const activeChat = currentChats.find(c => c.id === selectedChatId);
-                        if(activeChat) renderMessages(selectedChatId);
-                    }
+                    renderChatList();
+                    // Si hay un chat abierto, refrescar mensajes
+                    if(selectedChatId) renderMessages(selectedChatId);
                 }
-            } catch(e) { console.error("Error sync", e); }
+            } catch(e) { console.error("Sync error", e); }
         }
 
-        function renderChats() {
-            const query = document.getElementById('search-chat').value.toLowerCase();
-            const box = document.getElementById('chat-list-box');
+        function renderChatList() {
+            const container = document.getElementById('chat-list-container');
+            const search = document.getElementById('search-chat').value.toLowerCase();
             
-            box.innerHTML = currentChats
-                .filter(c => c.id.includes(query))
+            container.innerHTML = currentChats
+                .filter(c => c.id.includes(search))
                 .map(c => {
-                    const lastMsg = c.lastMessage.text || "";
-                    const time = c.timestamp ? new Date(c.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : "";
+                    const activeClass = c.id === selectedChatId ? 'active' : '';
+                    let badges = c.pinned ? '<i class="fas fa-thumbtack" style="font-size:10px; color:#888;"></i> ' : '';
+                    let muted = c.muted ? '<i class="fas fa-volume-mute" style="font-size:10px; color:#888;"></i> ' : '';
+                    let labels = (c.labels||[]).map(l => `<span style="font-size:9px; background:#dcf8c6; padding:2px 4px; border-radius:3px; margin-left:3px;">${l}</span>`).join('');
                     
-                    // Lógica de iconos y etiquetas
-                    let badges = "";
-                    if(c.pinned) badges += `<i class="fas fa-thumbtack pinned-icon"></i>`;
-                    if(c.muted) badges += `<i class="fas fa-volume-mute" style="margin-left:5px;"></i>`;
-                    
-                    // Etiquetas visuales
-                    let tagsHtml = "";
-                    if(c.labels && c.labels.length > 0) {
-                        c.labels.forEach(l => {
-                            let colorClass = l.includes('lead') ? 'tag-lead' : (l.includes('cotizacion') ? 'tag-cotizacion' : 'tag-tecnico');
-                            tagsHtml += `<span class="badge ${colorClass}">${l}</span>`;
-                        });
-                    }
-
                     return `
-                    <div class="chat-item ${selectedChatId === c.id ? 'active' : ''}" 
-                         onclick="openChat('${c.id}')"
-                         oncontextmenu="showContext(event, '${c.id}')">
+                    <div class="chat-item ${activeClass}" 
+                         onclick="selectChat('${c.id}')"
+                         oncontextmenu="openContextMenu(event, '${c.id}')">
                         <div class="avatar"><i class="fas fa-user"></i></div>
                         <div class="chat-info">
-                            <div class="chat-top">
-                                <div class="chat-name">${c.id}</div>
-                                <div class="chat-time">${time}</div>
+                            <div class="chat-name">
+                                <span>${c.id}</span>
+                                <span style="font-size:10px; color:#999;">${new Date(c.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
                             </div>
-                            <div class="chat-preview">
-                                ${badges} ${tagsHtml} ${lastMsg.substring(0, 30)}...
+                            <div class="chat-msg">
+                                ${badges}${muted}${labels} ${(c.lastMessage.text||'').substring(0,30)}...
                             </div>
-                        </div>
-                    </div>
-                    `;
-                }).join('');
-        }
-
-        function openChat(id) {
-            selectedChatId = id;
-            const chat = currentChats.find(c => c.id === id);
-            
-            document.getElementById('chat-header-content').style.opacity = 1;
-            document.getElementById('active-phone').innerText = id;
-            document.getElementById('input-area').style.display = 'flex';
-            
-            // Actualizar botón IA
-            const btn = document.getElementById('ai-toggle-btn');
-            if(chat.botActive) {
-                btn.className = "ai-status-indicator";
-                btn.innerHTML = '<i class="fas fa-robot"></i> LORENA ACTIVA';
-            } else {
-                btn.className = "ai-status-indicator ai-off";
-                btn.innerHTML = '<i class="fas fa-pause-circle"></i> PAUSADA';
-            }
-
-            renderMessages(id);
-            renderChats(); // Para marcar el active en la lista
-        }
-
-        function renderMessages(id) {
-            const chat = currentChats.find(c => c.id === id);
-            if(!chat) return;
-
-            // Extraemos los mensajes del objeto chat (el endpoint full ya trae un resumen, 
-            // pero para ver todo el historial detallado, seguimos usando el array local o pedimos detalle.
-            // *NOTA PARA EL USUARIO:* El endpoint /api/chats-full devuelve el lastMessage. 
-            // Para ver todos, usamos el history global o filtramos.
-            // Aquí asumo que el endpoint devuelve un array de mensajes o usamos la logica anterior de history.
-            
-            // SIMPLIFICACIÓN: Como /api/chats-full podría pesar mucho con todos los mensajes,
-            // usaremos una llamada auxiliar si es necesario, o asumiremos que data/history json es accesible.
-            // Para mantener consistencia con v3, usaremos fetch globalHistory:
-            fetch('/api/data/history').then(r=>r.json()).then(hist => {
-                const msgs = hist[id] || [];
-                const box = document.getElementById('messages-box');
-                
-                const html = msgs.map(m => {
-                    let typeClass = 'bubble-in';
-                    if(m.role === 'bot') typeClass = 'bubble-out';
-                    if(m.role === 'manual') typeClass = 'bubble-manual';
-                    
-                    return `
-                    <div class="bubble ${typeClass}">
-                        ${m.text}
-                        <div class="msg-meta">
-                            ${new Date(m.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                            <i class="fas fa-check-double" style="margin-left:5px; color:#53bdeb;"></i>
                         </div>
                     </div>`;
                 }).join('');
-
-                if(box.innerHTML !== html) {
-                    box.innerHTML = html;
-                    box.scrollTop = box.scrollHeight;
-                }
-            });
         }
 
-        async function sendMsg() {
+        function selectChat(id) {
+            selectedChatId = id;
+            document.getElementById('active-phone-display').innerText = id;
+            document.getElementById('chat-top-bar').style.visibility = 'visible';
+            document.getElementById('input-bar').style.display = 'flex';
+            
+            const chat = currentChats.find(c => c.id === id);
+            updateBotButton(chat ? chat.botActive : true);
+            
+            renderMessages(id);
+            renderChatList(); // Para marcar activo
+        }
+
+        async function renderMessages(id) {
+            // Asumiendo que tenemos acceso al history completo via API auxiliar o en memoria
+            // Para simplificar, usaremos el endpoint de data raw. 
+            // *Nota: En prod, el endpoint /api/chats-full podría traer los mensajes dentro si no son muchos*
+            const res = await fetch('/api/data/history'); 
+            const history = await res.json();
+            const msgs = history[id] || [];
+            
+            const box = document.getElementById('msgs-box');
+            
+            const html = msgs.map(m => {
+                let cls = m.role === 'bot' ? 'bubble-out' : (m.role === 'manual' ? 'bubble-manual' : 'bubble-in');
+                return `<div class="bubble ${cls}">
+                            ${m.text}
+                            <div style="text-align:right; font-size:10px; opacity:0.6; margin-top:3px;">${new Date(m.time).toLocaleTimeString()}</div>
+                        </div>`;
+            }).join('');
+            
+            if(box.innerHTML !== html) {
+                box.innerHTML = html;
+                box.scrollTop = box.scrollHeight;
+            }
+        }
+
+        async function sendManualMsg() {
             const txt = document.getElementById('msg-input').value;
             if(!txt || !selectedChatId) return;
             
             await fetch('/api/chat/send', {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({phone: selectedChatId, message: txt})
+                body: JSON.stringify({ phone: selectedChatId, message: txt })
             });
             document.getElementById('msg-input').value = '';
             syncChats();
         }
 
-        // --- MENÚ CONTEXTUAL (CLICK DERECHO) ---
-        function showContext(e, id) {
+        async function sendMediaPrompt() {
+            if(!selectedChatId) return;
+            const url = prompt("Pegue el link de la imagen/PDF:");
+            if(url) {
+                let type = url.includes('.pdf') ? 'document' : 'image';
+                await fetch('/api/chat/send-media', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({ phone: selectedChatId, url: url, type: type })
+                });
+                alert("Enviado");
+            }
+        }
+
+        // --- 2. MENÚ CONTEXTUAL (FIX) ---
+        function openContextMenu(e, id) {
             e.preventDefault();
-            ctxTargetId = id;
+            contextTarget = id;
             const menu = document.getElementById('context-menu');
             menu.style.display = 'block';
-            menu.style.left = e.pageX + 'px';
+            // Ajuste para que no se salga de pantalla
+            menu.style.left = Math.min(e.pageX, window.innerWidth - 200) + 'px';
             menu.style.top = e.pageY + 'px';
         }
 
-        // Cierra el menú si clickeas en otro lado
-        document.addEventListener('click', function(e) {
-            if(e.target.closest('#context-menu') === null) {
-                document.getElementById('context-menu').style.display = 'none';
-            }
+        document.addEventListener('click', (e) => {
+            if(!e.target.closest('#context-menu')) document.getElementById('context-menu').style.display = 'none';
         });
 
         async function ctxAction(action) {
-            if(!ctxTargetId) return;
-            const chat = currentChats.find(c => c.id === ctxTargetId);
+            if(!contextTarget) return;
+            let val = null;
             
-            let payload = { phone: ctxTargetId };
-
-            if(action === 'delete') {
-                if(!confirm("¿Seguro que quieres eliminar este chat?")) return;
-                payload.action = 'delete';
-            } else if(action === 'pin') {
-                payload.action = 'pin';
-                payload.value = !chat.pinned; // Toggle
-            } else if(action === 'mute') {
-                payload.action = 'mute';
-                payload.value = !chat.muted; // Toggle
-            } else if(action === 'label_lead') {
-                payload.action = 'label';
-                payload.value = ['Lead Caliente'];
-            } else if(action === 'label_done') {
-                payload.action = 'label';
-                payload.value = ['Finalizado'];
+            if(action === 'pin') {
+                const c = currentChats.find(x => x.id === contextTarget);
+                val = !c.pinned;
+            } else if(action === 'lead') {
+                val = ['Lead Caliente'];
+                action = 'label';
+            } else if(action === 'done') {
+                val = ['Finalizado'];
+                action = 'label';
             }
 
             await fetch('/api/chat/action', {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify(payload)
+                body: JSON.stringify({ phone: contextTarget, action: action, value: val })
             });
-
-            document.getElementById('context-menu').style.display = 'none';
-            syncChats(); // Refrescar lista inmediata
+            
+            syncChats(); // Update inmediato
         }
 
-        async function toggleAI() {
-            if(!selectedChatId) return;
-            const chat = currentChats.find(c => c.id === selectedChatId);
-            await fetch('/api/chat/toggle-bot', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({phone: selectedChatId, active: !chat.botActive})
-            });
-            syncChats();
-        }
-
-        // --- DASHBOARD & OTROS ---
-        async function loadDashboard() {
-            const leads = await fetch('/api/data/leads').then(r=>r.json());
-            document.getElementById('kpi-leads').innerText = leads.length;
-            document.getElementById('leads-table').innerHTML = leads.slice(-5).reverse().map(l => 
-                `<tr><td>${l.fecha}</td><td>${l.telefono}</td><td>${l.interes}</td><td><span class="badge tag-lead">Nuevo</span></td></tr>`
-            ).join('');
-        }
-
-        async function loadConfig() {
-            const cfg = await fetch('/api/config').then(r=>r.json());
-            document.getElementById('cfg-prompt').value = cfg.prompt || '';
-            document.getElementById('cfg-rules').value = cfg.tech_rules || '';
+        // --- 3. CONFIGURACIÓN & SANDBOX ---
+        async function loadConfigData() {
+            // Esta función arregla que los campos aparezcan vacíos
+            try {
+                const res = await fetch('/api/config');
+                const data = await res.json();
+                document.getElementById('cfg-prompt').value = data.prompt || '';
+                document.getElementById('cfg-rules').value = data.tech_rules || '';
+            } catch(e) { alert("Error cargando config"); }
         }
 
         async function saveConfig() {
@@ -492,25 +458,108 @@
                     tech_rules: document.getElementById('cfg-rules').value
                 })
             });
-            alert("Configuración guardada");
+            alert("¡Cerebro actualizado!");
         }
-        
-        async function testAI() {
+
+        async function runTest() {
+            const msg = document.getElementById('sandbox-input').value;
+            const ctx = document.getElementById('cfg-rules').value; // Usar reglas actuales
+            
+            document.getElementById('sandbox-response').innerText = "Pensando...";
+            
             const res = await fetch('/api/test-ai', {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({
-                    message: document.getElementById('test-msg').value,
-                    context: document.getElementById('cfg-rules').value
-                })
+                body: JSON.stringify({ message: msg, context: ctx })
             });
             const data = await res.json();
-            document.getElementById('test-result').innerText = data.response;
+            
+            document.getElementById('sandbox-response').innerText = data.response;
+            document.getElementById('sandbox-log').innerText = data.logic_log || "No se recibió log del servidor (revisar server.js)";
+        }
+
+        async function toggleBot() {
+            if(!selectedChatId) return;
+            const current = currentChats.find(c => c.id === selectedChatId);
+            const newState = !current.botActive;
+            
+            await fetch('/api/chat/toggle-bot', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ phone: selectedChatId, active: newState })
+            });
+            updateBotButton(newState);
+            syncChats();
         }
         
-        function exportExcel() {
-            const wb = XLSX.utils.table_to_book(document.querySelector("#leads-table"), {sheet:"Leads"});
+        function updateBotButton(isActive) {
+            const btn = document.getElementById('btn-bot-toggle');
+            if(isActive) {
+                btn.className = "btn btn-primary";
+                btn.innerText = "IA: ACTIVA";
+            } else {
+                btn.className = "btn btn-danger";
+                btn.innerText = "IA: PAUSADA";
+            }
+        }
+
+        // --- 4. DASHBOARD & OTROS ---
+        async function loadDashboardData() {
+            const [leads, chats, stock] = await Promise.all([
+                fetch('/api/data/leads').then(r=>r.json()),
+                fetch('/api/chats-full').then(r=>r.json()),
+                fetch('/api/data/knowledge').then(r=>r.json())
+            ]);
+            document.getElementById('kpi-leads').innerText = leads.length;
+            document.getElementById('kpi-chats').innerText = chats.length;
+            document.getElementById('kpi-stock').innerText = stock.length;
+        }
+
+        async function loadLeadsData() {
+            const leads = await fetch('/api/data/leads').then(r=>r.json());
+            const tbody = document.querySelector('#leads-table tbody');
+            tbody.innerHTML = leads.reverse().map(l => `<tr>
+                <td>${l.fecha}</td>
+                <td>${l.nombre||'-'}</td>
+                <td>${l.telefono}</td>
+                <td>${l.interes||'-'}</td>
+                <td><span style="background:#d4edda; color:#155724; padding:3px 8px; border-radius:10px; font-size:11px;">Capturado</span></td>
+            </tr>`).join('');
+        }
+        
+        function exportLeads() {
+            const wb = XLSX.utils.table_to_book(document.getElementById('leads-table'), {sheet:"Leads"});
             XLSX.writeFile(wb, "Leads_ICC.xlsx");
         }
+
+        // --- 5. INVENTARIO (FIX CSS) ---
+        async function loadInventoryData() {
+            const inv = await fetch('/api/data/knowledge').then(r=>r.json());
+            const tbody = document.querySelector('#inventory-table tbody');
+            tbody.innerHTML = inv.map((item, idx) => `<tr>
+                <td>${item.searchable}</td>
+                <td><button class="btn btn-danger" style="padding:5px 10px; font-size:11px;" onclick="deleteItem(${idx})">Eliminar</button></td>
+            </tr>`).join('');
+        }
+
+        async function deleteItem(idx) {
+            if(confirm("¿Borrar?")) {
+                await fetch('/api/knowledge/delete', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({ index: idx })
+                });
+                loadInventoryData();
+            }
+        }
+
+        async function uploadCSV() {
+            const f = document.getElementById('csv-file').files[0];
+            if(!f) return alert("Elige archivo");
+            const fd = new FormData(); fd.append('file', f);
+            await fetch('/api/knowledge/csv', { method:'POST', body: fd });
+            alert("Cargado"); loadInventoryData();
+        }
+
+        // Init
+        window.onload = () => nav('dashboard'); // Arrancar en Dashboard
     </script>
 </body>
 </html>
