@@ -3,174 +3,143 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICC | Panel de Control v4.5</title>
+    <title>ICC | Panel 5.0</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
     <style>
-        :root {
-            --naranja: #FF8C00;
-            --dark-side: #202c33;
-            --bg-gray: #f0f2f5;
-            --chat-bg: #efe7dd;
-            --green-wa: #25d366;
-            --white: #ffffff;
-            --border: #e0e0e0;
-        }
-
-        body { margin: 0; font-family: 'Montserrat', sans-serif; background: var(--bg-gray); display: flex; height: 100vh; overflow: hidden; }
+        :root { --naranja: #FF8C00; --dark: #202c33; --bg: #f0f2f5; --white: #fff; }
+        body { margin: 0; font-family: 'Montserrat', sans-serif; background: var(--bg); display: flex; height: 100vh; overflow: hidden; }
         
-        /* --- NAVEGACIÓN LATERAL --- */
-        .nav-bar { width: 60px; background: var(--dark-side); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 200; box-shadow: 2px 0 5px rgba(0,0,0,0.2); }
-        .nav-btn { color: #aebac1; font-size: 20px; margin-bottom: 30px; cursor: pointer; transition: 0.2s; position: relative; width: 100%; text-align: center; padding: 10px 0; }
-        .nav-btn:hover, .nav-btn.active { color: var(--naranja); background: rgba(255,255,255,0.05); border-left: 3px solid var(--naranja); }
-        .nav-tooltip { display: none; position: absolute; left: 60px; top: 15px; background: #000; color: #fff; padding: 4px 8px; font-size: 10px; border-radius: 4px; white-space: nowrap; z-index: 300; }
-        .nav-btn:hover .nav-tooltip { display: block; }
-
-        /* --- CONTENEDOR VISTAS --- */
-        .app-container { flex: 1; display: flex; position: relative; overflow: hidden; }
-        .view { display: none; width: 100%; height: 100%; animation: fadeIn 0.3s; flex-direction: column; }
+        /* NAV LATERAL */
+        .nav-bar { width: 60px; background: var(--dark); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 200; }
+        .nav-btn { color: #aebac1; font-size: 20px; margin-bottom: 30px; cursor: pointer; width: 100%; text-align: center; padding: 10px 0; transition: 0.2s; }
+        .nav-btn:hover, .nav-btn.active { color: var(--naranja); border-left: 3px solid var(--naranja); background: rgba(255,255,255,0.05); }
+        
+        /* LAYOUT */
+        .app-container { flex: 1; display: flex; }
+        .view { display: none; width: 100%; height: 100%; }
         .view.active { display: flex; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .page-content { padding: 30px; overflow-y: auto; width: 100%; box-sizing: border-box; }
 
-        /* --- ESTILOS GENERALES PÁGINAS --- */
-        .page-content { padding: 30px; overflow-y: auto; height: 100%; box-sizing: border-box; }
-        h1 { margin-top: 0; color: #333; font-size: 22px; border-bottom: 2px solid var(--naranja); display: inline-block; padding-bottom: 5px; margin-bottom: 20px; }
+        /* ESTILOS CHAT */
+        .chat-sidebar { width: 350px; background: var(--white); border-right: 1px solid #ddd; display: flex; flex-direction: column; }
+        .chat-header-side { height: 60px; background: #f0f2f5; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; border-bottom: 1px solid #ddd; }
         
-        .card { background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid var(--border); }
-        .card h3 { margin-top: 0; font-size: 14px; color: #555; text-transform: uppercase; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
-
-        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 13px; transition: 0.2s; display: inline-flex; align-items: center; gap: 8px; }
-        .btn-primary { background: var(--naranja); color: white; }
-        .btn-primary:hover { background: #e67e00; }
-        .btn-secondary { background: #54656f; color: white; }
-        .btn-danger { background: #ef5350; color: white; }
-
-        /* --- VISTA CHAT WHATSAPP --- */
-        .chat-layout { display: flex; height: 100%; }
-        .chat-sidebar { width: 350px; background: var(--white); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
-        .chat-header-side { height: 60px; background: #f0f2f5; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; border-bottom: 1px solid #d1d7db; }
-        .chat-list-box { flex: 1; overflow-y: auto; }
+        /* BARRA DE BÚSQUEDA Y BOTÓN AGREGAR (+) */
+        .search-row { padding: 10px; display: flex; gap: 5px; border-bottom: 1px solid #eee; background: #fff; }
+        .search-input { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; outline: none; }
         
-        .chat-item { display: flex; padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #f0f0f0; transition: 0.2s; position: relative; }
+        .chat-list { flex: 1; overflow-y: auto; }
+        .chat-item { display: flex; padding: 12px; cursor: pointer; border-bottom: 1px solid #f0f0f0; transition: 0.2s; }
         .chat-item:hover { background: #f5f5f5; }
         .chat-item.active { background: #e9edef; }
-        .avatar { width: 45px; height: 45px; border-radius: 50%; background: #dfe5e7; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 20px; margin-right: 10px; }
+        
+        .avatar { width: 45px; height: 45px; border-radius: 50%; background: #dfe5e7; display: flex; align-items: center; justify-content: center; margin-right: 10px; color: #fff; font-size: 20px; }
         .chat-info { flex: 1; overflow: hidden; }
-        .chat-name { font-weight: 600; font-size: 14px; color: #111b21; display: flex; justify-content: space-between; }
-        .chat-msg { font-size: 12px; color: #667781; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
         
-        .chat-main { flex: 1; display: flex; flex-direction: column; background: var(--chat-bg); position: relative; }
-        .chat-bg-pattern { position: absolute; inset: 0; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); opacity: 0.4; pointer-events: none; }
+        .chat-main { flex: 1; display: flex; flex-direction: column; background: #efe7dd; position: relative; }
+        .chat-pattern { position: absolute; inset: 0; opacity: 0.4; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); pointer-events: none; }
         
-        .chat-header-main { height: 60px; background: #f0f2f5; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; z-index: 10; border-bottom: 1px solid #d1d7db; }
-        .messages-container { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; z-index: 5; }
+        .chat-header-main { height: 60px; background: #f0f2f5; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; z-index: 10; border-bottom: 1px solid #ddd; }
+        .msgs-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; z-index: 5; }
         
-        .bubble { max-width: 70%; padding: 8px 12px; border-radius: 7px; font-size: 14px; line-height: 19px; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .bubble-in { align-self: flex-start; background: var(--white); border-top-left-radius: 0; }
+        .bubble { max-width: 70%; padding: 8px 12px; border-radius: 7px; font-size: 14px; position: relative; box-shadow: 0 1px 1px rgba(0,0,0,0.1); word-wrap: break-word; }
+        .bubble-in { align-self: flex-start; background: #fff; border-top-left-radius: 0; }
         .bubble-out { align-self: flex-end; background: #d9fdd3; border-top-right-radius: 0; }
-        .bubble-manual { align-self: flex-end; background: #e3f2fd; border: 1px dashed #2196f3; border-top-right-radius: 0; }
+        .bubble-manual { align-self: flex-end; background: #e3f2fd; border-top-right-radius: 0; border: 1px dashed #2196f3; }
+
+        .input-bar { min-height: 60px; background: #f0f2f5; padding: 10px; display: flex; gap: 10px; z-index: 10; align-items: center; }
+        .input-field { flex: 1; padding: 12px; border-radius: 8px; border: none; outline: none; font-size: 14px; }
+
+        /* UI ELEMENTS */
+        .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; color: white; background: var(--dark); font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+        .btn-orange { background: var(--naranja); }
+        .btn-orange:hover { background: #e67e00; }
         
-        .chat-input-bar { min-height: 60px; background: #f0f2f5; padding: 10px 15px; display: flex; align-items: center; gap: 10px; z-index: 10; }
-        .chat-input { flex: 1; padding: 12px; border-radius: 8px; border: none; outline: none; font-size: 14px; }
-
-        /* --- MENÚ CONTEXTUAL --- */
-        #context-menu { display: none; position: absolute; z-index: 1000; background: var(--white); width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 5px; padding: 5px 0; }
-        .ctx-option { padding: 10px 15px; font-size: 13px; color: #333; cursor: pointer; display: flex; align-items: center; gap: 10px; }
-        .ctx-option:hover { background: #f5f5f5; }
-        .ctx-red { color: #d32f2f; }
-
-        /* --- TABLAS E INVENTARIO --- */
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th { text-align: left; padding: 12px; background: #f8f9fa; color: #555; font-weight: 600; border-bottom: 2px solid #ddd; }
-        td { padding: 12px; border-bottom: 1px solid #eee; }
-        tr:hover { background: #fafafa; }
-
-        /* --- LOGICA IA (SANDBOX) --- */
-        .log-box { background: #2d3436; color: #00cec9; font-family: 'Courier New', monospace; padding: 15px; border-radius: 5px; font-size: 12px; height: 150px; overflow-y: auto; margin-top: 10px; white-space: pre-wrap; border: 1px solid #333; }
+        /* MENU CONTEXTUAL */
+        #ctx-menu { display: none; position: absolute; background: #fff; width: 160px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 1000; border-radius: 5px; overflow: hidden; }
+        .ctx-item { padding: 12px; cursor: pointer; font-size: 13px; color: #333; transition: 0.2s; }
+        .ctx-item:hover { background: #f0f2f5; }
+        
+        /* TABLAS */
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 10px; background: #f9f9f9; border-bottom: 2px solid #eee; color: #555; }
+        td { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; }
     </style>
 </head>
 <body>
-
     <div class="nav-bar">
-        <div class="nav-btn active" onclick="nav('chat', this)"><i class="fas fa-comments"></i><span class="nav-tooltip">Chat WhatsApp</span></div>
-        <div class="nav-btn" onclick="nav('dashboard', this)"><i class="fas fa-chart-pie"></i><span class="nav-tooltip">Dashboard</span></div>
-        <div class="nav-btn" onclick="nav('leads', this)"><i class="fas fa-address-book"></i><span class="nav-tooltip">Base Leads</span></div>
-        <div class="nav-btn" onclick="nav('config', this)"><i class="fas fa-cogs"></i><span class="nav-tooltip">Configurar IA</span></div>
-        <div class="nav-btn" onclick="nav('sandbox', this)"><i class="fas fa-vial"></i><span class="nav-tooltip">Pruebas / Sandbox</span></div>
-        <div class="nav-btn" onclick="nav('inventory', this)"><i class="fas fa-boxes"></i><span class="nav-tooltip">Inventario</span></div>
+        <div class="nav-btn active" onclick="nav('chat')"><i class="fas fa-comments"></i></div>
+        <div class="nav-btn" onclick="nav('dashboard')"><i class="fas fa-chart-pie"></i></div>
+        <div class="nav-btn" onclick="nav('leads')"><i class="fas fa-address-book"></i></div>
+        <div class="nav-btn" onclick="nav('config')"><i class="fas fa-cogs"></i></div>
+        <div class="nav-btn" onclick="nav('sandbox')"><i class="fas fa-vial"></i></div>
         <div style="flex:1"></div>
-        <div class="nav-btn" onclick="location.href='/logout'" style="color: #ef5350;"><i class="fas fa-power-off"></i></div>
+        <div class="nav-btn" onclick="location.href='/logout'" style="color:#ef5350;"><i class="fas fa-sign-out-alt"></i></div>
     </div>
 
     <div class="app-container">
-
+        
         <div id="view-chat" class="view active">
-            <div class="chat-layout">
-                <div class="chat-sidebar">
-                    <div class="chat-header-side">
-                        <span style="font-weight:bold; color:#54656f;">Chats Recientes</span>
-                        <div style="font-size:12px; color:#aaa;" id="status-conn">● Conectado</div>
+            <div class="chat-sidebar">
+                <div class="chat-header-side">
+                    <b>ICC Chat</b>
+                    <div style="font-size:12px; color:green; display:flex; align-items:center; gap:5px;">
+                        <i class="fas fa-circle" style="font-size:8px;"></i> Online
                     </div>
-                    <div style="padding:10px; background:#fff;">
-                        <input type="text" id="search-chat" placeholder="🔍 Buscar chat..." style="width:100%; padding:8px; border:1px solid #ddd; border-radius:5px;" oninput="renderChatList()">
+                </div>
+                <div class="search-row">
+                    <input type="text" id="search" class="search-input" placeholder="🔍 Buscar o escribir número..." oninput="renderChats()">
+                    <button class="btn btn-orange" onclick="addContactPrompt()" title="Agregar Nuevo Contacto"><i class="fas fa-plus"></i></button>
+                </div>
+                <div class="chat-list" id="chat-list-box">
                     </div>
-                    <div class="chat-list-box" id="chat-list-container">
+            </div>
+
+            <div class="chat-main">
+                <div class="chat-pattern"></div>
+                
+                <div class="chat-header-main" id="chat-top" style="visibility:hidden;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <div class="avatar" style="background:var(--naranja);"><i class="fas fa-user"></i></div>
+                        <div>
+                            <div id="active-name" style="font-weight:bold; font-size:15px;">Nombre</div>
+                            <div id="active-phone" style="font-size:12px; color:#666;">...</div>
                         </div>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button id="btn-bot" class="btn" onclick="toggleBot()" style="font-size:12px;">IA: ...</button>
+                    </div>
                 </div>
 
-                <div class="chat-main">
-                    <div class="chat-bg-pattern"></div>
-                    <div class="chat-header-main" id="chat-top-bar" style="visibility:hidden;">
-                        <div style="display:flex; align-items:center;">
-                            <div class="avatar" style="background:var(--naranja); margin-right:10px;"><i class="fas fa-user"></i></div>
-                            <div>
-                                <div style="font-weight:bold;" id="active-phone-display">Selecciona un chat</div>
-                                <div style="font-size:11px; color:#666;">ICC Cliente</div>
-                            </div>
-                        </div>
-                        <div style="display:flex; gap:15px;">
-                            <button id="btn-bot-toggle" class="btn btn-secondary" onclick="toggleBot()" style="font-size:11px; padding:5px 10px;">IA: ...</button>
-                        </div>
+                <div class="msgs-box" id="msgs-box">
+                    <div style="text-align:center; margin-top:100px; opacity:0.5;">
+                        <i class="fab fa-whatsapp" style="font-size:50px; color:#ccc; margin-bottom:10px;"></i>
+                        <p>Selecciona un chat para comenzar</p>
                     </div>
+                </div>
 
-                    <div class="messages-container" id="msgs-box">
-                        <div style="text-align:center; margin-top:150px; opacity:0.5;">
-                            <i class="fab fa-whatsapp" style="font-size:60px; color:#ccc;"></i>
-                            <h3>ICC Chat Center</h3>
-                            <p>Selecciona una conversación para comenzar.</p>
-                        </div>
-                    </div>
-
-                    <div class="chat-input-bar" id="input-bar" style="display:none;">
-                        <i class="far fa-smile" style="font-size:20px; color:#888; cursor:pointer;" onclick="alert('Emojis pronto...')"></i>
-                        <i class="fas fa-paperclip" style="font-size:20px; color:#888; cursor:pointer; margin:0 10px;" onclick="sendMediaPrompt()"></i>
-                        <input type="text" class="chat-input" id="msg-input" placeholder="Escribe un mensaje..." onkeypress="if(event.key==='Enter') sendManualMsg()">
-                        <i class="fas fa-microphone" style="font-size:20px; color:#888; cursor:pointer; margin-left:10px;" onclick="alert('Audio pronto...')"></i>
-                        <button class="btn btn-primary" onclick="sendManualMsg()" style="padding:10px 15px; margin-left:10px;"><i class="fas fa-paper-plane"></i></button>
-                    </div>
+                <div class="input-bar" id="input-bar" style="display:none;">
+                    <button class="btn" style="background:transparent; color:#555;" onclick="sendMediaPrompt()" title="Adjuntar"><i class="fas fa-paperclip" style="font-size:20px;"></i></button>
+                    <input type="text" id="msg-input" class="input-field" placeholder="Escribe un mensaje..." onkeypress="if(event.key==='Enter') sendMsg()">
+                    <button class="btn btn-orange" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button>
                 </div>
             </div>
         </div>
 
         <div id="view-dashboard" class="view page-content">
             <h1>Dashboard Comercial</h1>
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:20px;">
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
                 <div class="card">
                     <h3>Leads Capturados</h3>
-                    <h1 style="color:var(--naranja); font-size:40px; margin:10px 0;" id="kpi-leads">0</h1>
-                    <small>Clientes potenciales</small>
+                    <h1 id="kpi-leads" style="color:var(--naranja); font-size:40px;">0</h1>
                 </div>
                 <div class="card">
-                    <h3>Inventario</h3>
-                    <h1 style="color:#2980b9; font-size:40px; margin:10px 0;" id="kpi-stock">0</h1>
-                    <small>Referencias activas</small>
-                </div>
-                <div class="card">
-                    <h3>Chats Activos</h3>
-                    <h1 style="color:var(--green-wa); font-size:40px; margin:10px 0;" id="kpi-chats">0</h1>
-                    <small>En historial</small>
+                    <h3>Total Chats</h3>
+                    <h1 id="kpi-chats" style="color:#202c33; font-size:40px;">0</h1>
                 </div>
             </div>
         </div>
@@ -179,387 +148,256 @@
             <h1>Base de Leads</h1>
             <div class="card">
                 <div style="display:flex; justify-content:flex-end; margin-bottom:15px;">
-                    <button class="btn btn-secondary" onclick="exportLeads()"><i class="fas fa-file-excel"></i> Exportar Excel</button>
+                    <button class="btn btn-orange" onclick="exportLeads()"><i class="fas fa-file-excel"></i> Descargar Excel</button>
                 </div>
-                <table id="leads-table">
-                    <thead><tr><th>Fecha</th><th>Nombre</th><th>Teléfono</th><th>Interés</th><th>Estado</th></tr></thead>
-                    <tbody></tbody>
+                <table style="width:100%;">
+                    <thead><tr><th>Fecha</th><th>Nombre</th><th>Teléfono</th><th>Interés</th><th>Etiqueta</th></tr></thead>
+                    <tbody id="leads-body"></tbody>
                 </table>
             </div>
         </div>
 
         <div id="view-config" class="view page-content">
-            <h1>Configuración del Cerebro (Lorena)</h1>
+            <h1>Configuración IA (Lorena)</h1>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
                 <div class="card">
                     <h3>Personalidad (Prompt)</h3>
-                    <p style="font-size:11px; color:#777;">Define quién es Lorena, su tono de voz y objetivos.</p>
-                    <textarea id="cfg-prompt" style="width:100%; height:200px; padding:10px; border:1px solid #ddd; resize:none;"></textarea>
+                    <textarea id="cfg-prompt" style="width:100%; height:150px; padding:10px; border:1px solid #ddd;"></textarea>
                     <div style="margin-top:10px; display:flex; gap:10px;">
-                        <button class="btn btn-primary" onclick="saveConfig()">Guardar Cambios</button>
-                        <button class="btn btn-danger" onclick="document.getElementById('cfg-prompt').value=''">Limpiar</button>
+                        <button class="btn btn-orange" onclick="saveConfig()">Guardar Cambios</button>
+                        <button class="btn" style="background:#d32f2f;" onclick="document.getElementById('cfg-prompt').value=''">Borrar Todo</button>
                     </div>
                 </div>
                 <div class="card">
-                    <h3>Reglas de Negocio & Contexto</h3>
-                    <p style="font-size:11px; color:#777;">Precios base, políticas de envío, horarios.</p>
-                    <textarea id="cfg-rules" style="width:100%; height:200px; padding:10px; border:1px solid #ddd; resize:none;"></textarea>
+                    <h3>Reglas de Negocio</h3>
+                    <textarea id="cfg-rules" style="width:100%; height:150px; padding:10px; border:1px solid #ddd;"></textarea>
                     <div style="margin-top:10px;">
-                         <button class="btn btn-primary" onclick="saveConfig()">Actualizar Reglas</button>
+                         <button class="btn btn-orange" onclick="saveConfig()">Guardar Reglas</button>
                     </div>
                 </div>
             </div>
         </div>
 
         <div id="view-sandbox" class="view page-content">
-            <h1>Laboratorio de Pruebas IA</h1>
+            <h1>Laboratorio de Pruebas</h1>
             <div class="card">
-                <div style="display:flex; gap:10px; margin-bottom:15px;">
-                    <input type="text" id="sandbox-input" placeholder="Escribe algo para probar a Lorena (ej: Hola, precio de filtro...)" style="flex:1; padding:12px; border:1px solid #ccc; border-radius:5px;">
-                    <button class="btn btn-primary" onclick="runTest()">ENVIAR PRUEBA</button>
+                <div style="display:flex; gap:10px;">
+                    <input id="sand-in" style="flex:1; padding:10px; border:1px solid #ddd;" placeholder="Prueba qué responde Lorena...">
+                    <button class="btn btn-orange" onclick="runTest()">Enviar</button>
                 </div>
-                
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
-                    <div>
-                        <h3>Respuesta de Lorena:</h3>
-                        <div id="sandbox-response" style="background:#f9f9f9; padding:15px; border-radius:5px; min-height:100px; border:1px solid #eee;">Esperando prueba...</div>
-                    </div>
-                    <div>
-                        <h3>Lógica Interna (Log):</h3>
-                        <div id="sandbox-log" class="log-box">Aquí verás el prompt oculto que se envía a Gemini...</div>
-                    </div>
+                <div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                    <div class="card" style="background:#f9f9f9;"><b>Respuesta Lorena:</b><p id="sand-res" style="color:#333;">...</p></div>
+                    <div class="card" style="background:#222; color:#0f0; font-family:monospace; font-size:11px; height:100px; overflow:auto;" id="sand-log">LOG LÓGICO</div>
                 </div>
             </div>
         </div>
 
-        <div id="view-inventory" class="view page-content">
-            <h1>Gestión de Inventario</h1>
-            <div class="card">
-                <h3>Subir Productos Masivos (CSV)</h3>
-                <div style="display:flex; gap:10px; align-items:center;">
-                    <input type="file" id="csv-file">
-                    <button class="btn btn-primary" onclick="uploadCSV()">Cargar Inventario</button>
-                </div>
-            </div>
-            <div class="card">
-                <h3>Productos en Base de Datos</h3>
-                <div style="max-height:400px; overflow-y:auto;">
-                    <table id="inventory-table">
-                        <thead><tr><th>Descripción / Búsqueda</th><th>Acción</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+    </div>
 
-    </div> <div id="context-menu">
-        <div class="ctx-option" onclick="ctxAction('pin')"><i class="fas fa-thumbtack"></i> Fijar / Desfijar</div>
-        <div class="ctx-option" onclick="ctxAction('mute')"><i class="fas fa-volume-mute"></i> Silenciar</div>
-        <div class="ctx-option" onclick="ctxAction('lead')"><i class="fas fa-fire" style="color:orange;"></i> Marcar Lead Hot</div>
-        <div class="ctx-option" onclick="ctxAction('done')"><i class="fas fa-check-circle" style="color:green;"></i> Finalizar Pedido</div>
-        <div style="height:1px; background:#eee; margin:5px 0;"></div>
-        <div class="ctx-option ctx-red" onclick="ctxAction('delete')"><i class="fas fa-trash-alt"></i> Eliminar Chat</div>
+    <div id="ctx-menu">
+        <div class="ctx-item" onclick="ctxAction('pin')"><i class="fas fa-thumbtack"></i> Fijar Chat</div>
+        <div class="ctx-item" onclick="ctxAction('delete')" style="color:red;"><i class="fas fa-trash"></i> Eliminar</div>
     </div>
 
     <script>
-        let currentChats = [];
-        let selectedChatId = null;
-        let contextTarget = null;
-        let pollTimer = null;
+        let chats = [], selectedId = null, ctxId = null, timer = null;
 
-        // --- NAVEGACIÓN ---
-        function nav(viewId, btn) {
-            // Ocultar todas las vistas
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            // Mostrar la seleccionada
-            document.getElementById('view-' + viewId).classList.add('active');
+        // NAVEGACIÓN
+        function nav(v) {
+            document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
+            document.getElementById('view-'+v).classList.add('active');
             
-            // Actualizar botones menú
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            if(btn) btn.classList.add('active');
+            // Botones activos
+            const btns = document.querySelectorAll('.nav-btn');
+            btns.forEach(b => b.classList.remove('active'));
+            // Lógica simple para iluminar el botón correcto
+            if(v==='chat') btns[0].classList.add('active');
+            if(v==='dashboard') btns[1].classList.add('active');
+            if(v==='leads') btns[2].classList.add('active');
+            if(v==='config') btns[3].classList.add('active');
+            if(v==='sandbox') btns[4].classList.add('active');
 
-            // Lógica específica por vista
-            if(pollTimer) clearInterval(pollTimer);
+            if(timer) clearInterval(timer);
             
-            if(viewId === 'chat') {
-                syncChats();
-                pollTimer = setInterval(syncChats, 3000);
-            } else if(viewId === 'config') {
-                loadConfigData(); // ¡IMPORTANTE: CARGAR DATOS GUARDADOS!
-            } else if(viewId === 'dashboard') {
-                loadDashboardData();
-            } else if(viewId === 'leads') {
-                loadLeadsData();
-            } else if(viewId === 'inventory') {
-                loadInventoryData();
-            }
+            if(v==='chat') { sync(); timer = setInterval(sync, 3000); }
+            if(v==='config') loadCfg();
+            if(v==='dashboard') loadDash();
+            if(v==='leads') loadLeads();
         }
 
-        // --- 1. LÓGICA CHAT ---
-        async function syncChats() {
+        // CHAT SYNC
+        async function sync() {
             try {
                 const res = await fetch('/api/chats-full');
                 const data = await res.json();
-                if(JSON.stringify(data) !== JSON.stringify(currentChats)) {
-                    currentChats = data;
-                    renderChatList();
-                    // Si hay un chat abierto, refrescar mensajes
-                    if(selectedChatId) renderMessages(selectedChatId);
+                // Actualizar solo si hay cambios para no parpadear
+                if(JSON.stringify(data) !== JSON.stringify(chats)) {
+                    chats = data;
+                    renderChats();
+                    if(selectedId) renderMsgs(selectedId);
                 }
-            } catch(e) { console.error("Sync error", e); }
+            } catch(e) {}
         }
 
-        function renderChatList() {
-            const container = document.getElementById('chat-list-container');
-            const search = document.getElementById('search-chat').value.toLowerCase();
+        function renderChats() {
+            const q = document.getElementById('search').value.toLowerCase();
+            const list = document.getElementById('chat-list-box');
             
-            container.innerHTML = currentChats
-                .filter(c => c.id.includes(search))
-                .map(c => {
-                    const activeClass = c.id === selectedChatId ? 'active' : '';
-                    let badges = c.pinned ? '<i class="fas fa-thumbtack" style="font-size:10px; color:#888;"></i> ' : '';
-                    let muted = c.muted ? '<i class="fas fa-volume-mute" style="font-size:10px; color:#888;"></i> ' : '';
-                    let labels = (c.labels||[]).map(l => `<span style="font-size:9px; background:#dcf8c6; padding:2px 4px; border-radius:3px; margin-left:3px;">${l}</span>`).join('');
-                    
-                    return `
-                    <div class="chat-item ${activeClass}" 
-                         onclick="selectChat('${c.id}')"
-                         oncontextmenu="openContextMenu(event, '${c.id}')">
-                        <div class="avatar"><i class="fas fa-user"></i></div>
-                        <div class="chat-info">
-                            <div class="chat-name">
-                                <span>${c.id}</span>
-                                <span style="font-size:10px; color:#999;">${new Date(c.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
-                            </div>
-                            <div class="chat-msg">
-                                ${badges}${muted}${labels} ${(c.lastMessage.text||'').substring(0,30)}...
-                            </div>
+            list.innerHTML = chats
+                .filter(c => (c.name || c.id).toLowerCase().includes(q))
+                .map(c => `
+                <div class="chat-item ${c.id===selectedId?'active':''}" onclick="selChat('${c.id}')" oncontextmenu="openCtx(event, '${c.id}')">
+                    <div class="avatar"><i class="fas fa-user"></i></div>
+                    <div class="chat-info">
+                        <div style="font-weight:600; display:flex; justify-content:space-between; align-items:center;">
+                            ${c.name || c.id}
+                            <span style="font-size:12px; color:#888;">${c.pinned ? '📌' : ''}</span>
                         </div>
-                    </div>`;
-                }).join('');
+                        <div style="font-size:12px; color:#666;">
+                             ${c.botActive ? '' : '⏸️'} ${(c.lastMessage.text||'').substring(0,25)}...
+                        </div>
+                    </div>
+                </div>`).join('');
         }
 
-        function selectChat(id) {
-            selectedChatId = id;
-            document.getElementById('active-phone-display').innerText = id;
-            document.getElementById('chat-top-bar').style.visibility = 'visible';
+        function selChat(id) {
+            selectedId = id;
+            const c = chats.find(x => x.id === id);
+            document.getElementById('chat-top').style.visibility = 'visible';
             document.getElementById('input-bar').style.display = 'flex';
+            document.getElementById('active-name').innerText = c.name || id;
+            document.getElementById('active-phone').innerText = id;
             
-            const chat = currentChats.find(c => c.id === id);
-            updateBotButton(chat ? chat.botActive : true);
-            
-            renderMessages(id);
-            renderChatList(); // Para marcar activo
+            updateBotBtn(c.botActive);
+            renderMsgs(id);
+            renderChats(); // Para refrescar clase active
         }
 
-        async function renderMessages(id) {
-            // Asumiendo que tenemos acceso al history completo via API auxiliar o en memoria
-            // Para simplificar, usaremos el endpoint de data raw. 
-            // *Nota: En prod, el endpoint /api/chats-full podría traer los mensajes dentro si no son muchos*
-            const res = await fetch('/api/data/history'); 
-            const history = await res.json();
-            const msgs = history[id] || [];
-            
+        async function renderMsgs(id) {
+            const h = await fetch('/api/data/history').then(r=>r.json());
+            const msgs = h[id] || [];
             const box = document.getElementById('msgs-box');
             
-            const html = msgs.map(m => {
-                let cls = m.role === 'bot' ? 'bubble-out' : (m.role === 'manual' ? 'bubble-manual' : 'bubble-in');
-                return `<div class="bubble ${cls}">
-                            ${m.text}
-                            <div style="text-align:right; font-size:10px; opacity:0.6; margin-top:3px;">${new Date(m.time).toLocaleTimeString()}</div>
-                        </div>`;
-            }).join('');
-            
-            if(box.innerHTML !== html) {
-                box.innerHTML = html;
-                box.scrollTop = box.scrollHeight;
+            const html = msgs.map(m => `
+                <div class="bubble ${m.role==='bot'?'bubble-out':(m.role==='manual'?'bubble-manual':'bubble-in')}">
+                    ${m.text}
+                    <div style="text-align:right; font-size:9px; opacity:0.5; margin-top:2px;">${new Date(m.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
+                </div>`).join('');
+                
+            if(box.innerHTML !== html) { 
+                box.innerHTML = html; 
+                box.scrollTop = box.scrollHeight; 
             }
         }
 
-        async function sendManualMsg() {
+        async function sendMsg() {
             const txt = document.getElementById('msg-input').value;
-            if(!txt || !selectedChatId) return;
-            
-            await fetch('/api/chat/send', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ phone: selectedChatId, message: txt })
+            if(!txt || !selectedId) return;
+            await fetch('/api/chat/send', { 
+                method:'POST', headers:{'Content-Type':'application/json'}, 
+                body:JSON.stringify({phone:selectedId, message:txt})
             });
             document.getElementById('msg-input').value = '';
-            syncChats();
+            sync();
         }
 
-        async function sendMediaPrompt() {
-            if(!selectedChatId) return;
-            const url = prompt("Pegue el link de la imagen/PDF:");
-            if(url) {
-                let type = url.includes('.pdf') ? 'document' : 'image';
-                await fetch('/api/chat/send-media', {
-                    method:'POST', headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({ phone: selectedChatId, url: url, type: type })
-                });
-                alert("Enviado");
-            }
-        }
-
-        // --- 2. MENÚ CONTEXTUAL (FIX) ---
-        function openContextMenu(e, id) {
-            e.preventDefault();
-            contextTarget = id;
-            const menu = document.getElementById('context-menu');
-            menu.style.display = 'block';
-            // Ajuste para que no se salga de pantalla
-            menu.style.left = Math.min(e.pageX, window.innerWidth - 200) + 'px';
-            menu.style.top = e.pageY + 'px';
-        }
-
-        document.addEventListener('click', (e) => {
-            if(!e.target.closest('#context-menu')) document.getElementById('context-menu').style.display = 'none';
-        });
-
-        async function ctxAction(action) {
-            if(!contextTarget) return;
-            let val = null;
+        // --- FUNCIÓN NUEVA: AGREGAR CONTACTO ---
+        async function addContactPrompt() {
+            const phone = prompt("Ingresa el número completo (Ej: 573001234567):");
+            if(!phone) return;
+            const name = prompt("Nombre del Cliente/Empresa:");
             
-            if(action === 'pin') {
-                const c = currentChats.find(x => x.id === contextTarget);
-                val = !c.pinned;
-            } else if(action === 'lead') {
-                val = ['Lead Caliente'];
-                action = 'label';
-            } else if(action === 'done') {
-                val = ['Finalizado'];
-                action = 'label';
-            }
-
-            await fetch('/api/chat/action', {
+            await fetch('/api/contacts/add', {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ phone: contextTarget, action: action, value: val })
+                body: JSON.stringify({ phone: phone, name: name || "Nuevo Contacto" })
             });
             
-            syncChats(); // Update inmediato
+            // Limpiamos busqueda y recargamos
+            document.getElementById('search').value = '';
+            sync();
         }
 
-        // --- 3. CONFIGURACIÓN & SANDBOX ---
-        async function loadConfigData() {
-            // Esta función arregla que los campos aparezcan vacíos
-            try {
-                const res = await fetch('/api/config');
-                const data = await res.json();
-                document.getElementById('cfg-prompt').value = data.prompt || '';
-                document.getElementById('cfg-rules').value = data.tech_rules || '';
-            } catch(e) { alert("Error cargando config"); }
+        // --- EXTRAS ---
+        function openCtx(e, id) {
+            e.preventDefault(); ctxId = id;
+            const m = document.getElementById('ctx-menu');
+            m.style.display = 'block'; m.style.left = e.pageX+'px'; m.style.top = e.pageY+'px';
+        }
+        document.onclick = (e) => { if(!e.target.closest('#ctx-menu')) document.getElementById('ctx-menu').style.display = 'none'; };
+
+        async function ctxAction(act) {
+            const c = chats.find(x=>x.id===ctxId);
+            await fetch('/api/chat/action', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ phone:ctxId, action:act, value: act==='pin' ? !c.pinned : null })
+            });
+            sync();
+        }
+
+        async function loadCfg() {
+            const d = await fetch('/api/config').then(r=>r.json());
+            document.getElementById('cfg-prompt').value = d.prompt || '';
+            document.getElementById('cfg-rules').value = d.tech_rules || '';
         }
 
         async function saveConfig() {
             await fetch('/api/save-config', {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({
-                    prompt: document.getElementById('cfg-prompt').value,
-                    tech_rules: document.getElementById('cfg-rules').value
-                })
+                body: JSON.stringify({ prompt:document.getElementById('cfg-prompt').value, tech_rules:document.getElementById('cfg-rules').value })
             });
-            alert("¡Cerebro actualizado!");
-        }
-
-        async function runTest() {
-            const msg = document.getElementById('sandbox-input').value;
-            const ctx = document.getElementById('cfg-rules').value; // Usar reglas actuales
-            
-            document.getElementById('sandbox-response').innerText = "Pensando...";
-            
-            const res = await fetch('/api/test-ai', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ message: msg, context: ctx })
-            });
-            const data = await res.json();
-            
-            document.getElementById('sandbox-response').innerText = data.response;
-            document.getElementById('sandbox-log').innerText = data.logic_log || "No se recibió log del servidor (revisar server.js)";
-        }
-
-        async function toggleBot() {
-            if(!selectedChatId) return;
-            const current = currentChats.find(c => c.id === selectedChatId);
-            const newState = !current.botActive;
-            
-            await fetch('/api/chat/toggle-bot', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ phone: selectedChatId, active: newState })
-            });
-            updateBotButton(newState);
-            syncChats();
+            alert("Guardado");
         }
         
-        function updateBotButton(isActive) {
-            const btn = document.getElementById('btn-bot-toggle');
-            if(isActive) {
-                btn.className = "btn btn-primary";
-                btn.innerText = "IA: ACTIVA";
-            } else {
-                btn.className = "btn btn-danger";
-                btn.innerText = "IA: PAUSADA";
-            }
+        async function runTest() {
+            document.getElementById('sand-res').innerText = "Pensando...";
+            const r = await fetch('/api/test-ai', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ message:document.getElementById('sand-in').value, context:document.getElementById('cfg-rules').value })
+            }).then(x=>x.json());
+            document.getElementById('sand-res').innerText = r.response;
+            document.getElementById('sand-log').innerText = r.logic_log;
         }
 
-        // --- 4. DASHBOARD & OTROS ---
-        async function loadDashboardData() {
-            const [leads, chats, stock] = await Promise.all([
-                fetch('/api/data/leads').then(r=>r.json()),
-                fetch('/api/chats-full').then(r=>r.json()),
-                fetch('/api/data/knowledge').then(r=>r.json())
-            ]);
-            document.getElementById('kpi-leads').innerText = leads.length;
-            document.getElementById('kpi-chats').innerText = chats.length;
-            document.getElementById('kpi-stock').innerText = stock.length;
+        async function loadDash() {
+            const l = await fetch('/api/data/leads').then(r=>r.json());
+            const c = await fetch('/api/chats-full').then(r=>r.json());
+            document.getElementById('kpi-leads').innerText = l.length;
+            document.getElementById('kpi-chats').innerText = c.length;
         }
 
-        async function loadLeadsData() {
-            const leads = await fetch('/api/data/leads').then(r=>r.json());
-            const tbody = document.querySelector('#leads-table tbody');
-            tbody.innerHTML = leads.reverse().map(l => `<tr>
-                <td>${l.fecha}</td>
-                <td>${l.nombre||'-'}</td>
-                <td>${l.telefono}</td>
-                <td>${l.interes||'-'}</td>
-                <td><span style="background:#d4edda; color:#155724; padding:3px 8px; border-radius:10px; font-size:11px;">Capturado</span></td>
-            </tr>`).join('');
+        async function loadLeads() {
+            const l = await fetch('/api/data/leads').then(r=>r.json());
+            document.getElementById('leads-body').innerHTML = l.reverse().map(x=>`<tr><td>${x.fecha}</td><td>${x.nombre||'-'}</td><td>${x.telefono}</td><td>${x.interes||'-'}</td><td><span style="background:#d4edda; padding:2px 5px; border-radius:4px; font-size:10px;">${x.etiqueta||'LEAD'}</span></td></tr>`).join('');
         }
         
         function exportLeads() {
-            const wb = XLSX.utils.table_to_book(document.getElementById('leads-table'), {sheet:"Leads"});
+            const wb = XLSX.utils.table_to_book(document.getElementById('leads-body').parentElement, {sheet:"Leads"});
             XLSX.writeFile(wb, "Leads_ICC.xlsx");
         }
 
-        // --- 5. INVENTARIO (FIX CSS) ---
-        async function loadInventoryData() {
-            const inv = await fetch('/api/data/knowledge').then(r=>r.json());
-            const tbody = document.querySelector('#inventory-table tbody');
-            tbody.innerHTML = inv.map((item, idx) => `<tr>
-                <td>${item.searchable}</td>
-                <td><button class="btn btn-danger" style="padding:5px 10px; font-size:11px;" onclick="deleteItem(${idx})">Eliminar</button></td>
-            </tr>`).join('');
+        async function toggleBot() {
+            const c = chats.find(x=>x.id===selectedId);
+            await fetch('/api/chat/toggle-bot', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ phone:selectedId, active: !c.botActive })
+            });
+            sync();
         }
 
-        async function deleteItem(idx) {
-            if(confirm("¿Borrar?")) {
-                await fetch('/api/knowledge/delete', {
-                    method:'POST', headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({ index: idx })
-                });
-                loadInventoryData();
-            }
+        function updateBotBtn(act) {
+            const btn = document.getElementById('btn-bot');
+            btn.innerText = act ? "IA: ACTIVA" : "IA: PAUSADA";
+            btn.style.background = act ? "#202c33" : "#d32f2f";
+            btn.style.color = "#fff";
+        }
+        
+        async function sendMediaPrompt() {
+            if(!selectedId) return;
+            const url = prompt("Link Imagen/PDF:");
+            if(url) await fetch('/api/chat/send-media', {method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, url:url, type: url.includes('.pdf')?'document':'image'})});
         }
 
-        async function uploadCSV() {
-            const f = document.getElementById('csv-file').files[0];
-            if(!f) return alert("Elige archivo");
-            const fd = new FormData(); fd.append('file', f);
-            await fetch('/api/knowledge/csv', { method:'POST', body: fd });
-            alert("Cargado"); loadInventoryData();
-        }
-
-        // Init
-        window.onload = () => nav('dashboard'); // Arrancar en Dashboard
+        window.onload = () => nav('dashboard');
     </script>
 </body>
 </html>
