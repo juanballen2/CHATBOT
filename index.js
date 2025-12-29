@@ -22,7 +22,7 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-secret-rules-v6-2";
+const SESSION_SECRET = "icc-secret-v6-3-stable";
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -37,7 +37,7 @@ app.use((req, res, next) => {
 });
 
 // ============================================================
-// 2. GESTIÓN DE DATOS
+// 2. GESTIÓN DE DATOS (PERSISTENCIA MEJORADA)
 // ============================================================
 const DATA_DIR = path.resolve(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -51,14 +51,17 @@ const FILES = {
     metadata: path.join(DATA_DIR, 'metadata.json')
 };
 
+// Función auxiliar para leer con seguridad
 const readData = (file, fallback) => {
-    try { return JSON.parse(fs.readFileSync(file, 'utf8')); } 
-    catch (err) { return fallback; }
+    try { 
+        const content = fs.readFileSync(file, 'utf8');
+        return content ? JSON.parse(content) : fallback;
+    } catch (err) { return fallback; }
 };
 
 const writeData = (file, data) => {
     try { fs.writeFileSync(file, JSON.stringify(data, null, 2)); return true; }
-    catch (err) { return false; }
+    catch (err) { console.error(`Error escribiendo ${file}:`, err); return false; }
 };
 
 app.use(session({
@@ -69,7 +72,7 @@ app.use(session({
 let globalKnowledge = readData(FILES.knowledge, []);
 
 // ============================================================
-// 3. WHATSAPP ENGINE (MEDIA + TEXTO)
+// 3. WHATSAPP ENGINE
 // ============================================================
 async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     try {
@@ -92,7 +95,10 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
         return true;
-    } catch (e) { return false; }
+    } catch (e) { 
+        console.error("Meta Error:", e.response?.data || e.message);
+        return false; 
+    }
 }
 
 async function uploadToMeta(buffer, mimeType, filename) {
@@ -110,7 +116,7 @@ async function uploadToMeta(buffer, mimeType, filename) {
 }
 
 // ============================================================
-// 4. IA LORENA (LÓGICA MEJORADA DE REGLAS)
+// 4. IA LORENA (CORRECCIONES EN LEADS Y CONTEXTO)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -137,7 +143,7 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
     const chatPrevio = (currentHistory[sessionId] || []).slice(-10);
     const stock = buscarEnCatalogo(message);
 
-    // ✅ AQUÍ ESTÁ LA MAGIA: Convertimos la lista de reglas en texto para la IA
+    // Preparar Reglas como lista legible
     let reglasTexto = "";
     if (Array.isArray(config.tech_rules)) {
         reglasTexto = config.tech_rules.map(r => `- ${r}`).join("\n");
@@ -145,18 +151,27 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
         reglasTexto = config.tech_rules || "Sin reglas definidas.";
     }
 
+    // PROMPT REFORZADO PARA LEADS
     const prompt = `
-    PERSONALIDAD: ${config.prompt || "Eres Lorena, asistente de ICC."}
+    ERES LORENA DE ICC.
     
-    REGLAS DE NEGOCIO OBLIGATORIAS:
+    [PERSONALIDAD]
+    ${config.prompt || "Eres amable y profesional."}
+    
+    [REGLAS DE NEGOCIO - ESTRICTO]
     ${reglasTexto}
     
-    DATOS WEB: ${config.website_data || ""}
-    INVENTARIO: ${JSON.stringify(stock)}
+    [INFORMACIÓN WEB / CONTEXTO ADICIONAL]
+    ${config.website_data || "No hay información web extra."}
     
-    SI DETECTAS LEAD O VENTA, FINALIZA CON:
+    [INVENTARIO DISPONIBLE]
+    ${JSON.stringify(stock)}
+    
+    [INSTRUCCIÓN CRÍTICA PARA LEADS]
+    Si el usuario muestra INTENCIÓN DE COMPRA, PREGUNTA PRECIO o DEJA DATOS, DEBES incluir al final de tu respuesta el siguiente bloque JSON EXACTO (sin markdown):
+    
     [DATA]
-    { "es_lead": true, "nombre": "...", "interes": "...", "etiqueta": "lead_caliente" }
+    { "es_lead": true, "nombre": "Nombre o Desconocido", "interes": "Producto o servicio", "etiqueta": "Posible Venta" }
     [DATA]
     `;
 
@@ -167,30 +182,41 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
         let fullText = res.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText;
 
-        const regexData = /\[DATA\]([\s\S]*?)\[DATA\]/;
+        // Regex mejorada para capturar el JSON aunque tenga espacios o saltos
+        const regexData = /\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/;
         const match = fullText.match(regexData);
 
         if (match && match[1]) {
-            textoVisible = fullText.replace(regexData, "").trim();
+            textoVisible = fullText.replace(regexData, "").trim(); // Limpiar el JSON de la respuesta al usuario
             try {
-                const info = JSON.parse(match[1].replace(/```json|```/g, "").trim());
+                const info = JSON.parse(match[1]);
+                
+                // 1. Guardar en Leads
                 if(info.es_lead) {
                     const leads = readData(FILES.leads, []);
-                    if (!leads.some(l => l.telefono === sessionId && new Date(l.fecha).toDateString() === new Date().toDateString())) {
+                    // Evitar duplicados exactos el mismo día
+                    const hoy = new Date().toDateString();
+                    const existe = leads.some(l => l.telefono === sessionId && new Date(l.fecha).toDateString() === hoy);
+                    
+                    if (!existe) {
                         leads.push({ ...info, fecha: new Date().toLocaleString(), telefono: sessionId });
                         writeData(FILES.leads, leads);
+                        console.log("Lead capturado:", info);
                     }
                 }
+
+                // 2. Guardar Etiqueta en Metadatos
                 if(info.etiqueta) {
                     const metadata = readData(FILES.metadata, {});
                     if(!metadata[sessionId]) metadata[sessionId] = {};
                     if(!metadata[sessionId].labels) metadata[sessionId].labels = [];
+                    
                     if(!metadata[sessionId].labels.includes(info.etiqueta)) {
                         metadata[sessionId].labels.push(info.etiqueta);
                         writeData(FILES.metadata, metadata);
                     }
                 }
-            } catch(e) {}
+            } catch(e) { console.error("Error parseando JSON del Bot:", e); }
         }
 
         let freshHistory = readData(FILES.history, {});
@@ -199,11 +225,14 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
         writeData(FILES.history, freshHistory);
 
         return textoVisible;
-    } catch (err) { return "Dame un momento..."; }
+    } catch (err) { 
+        console.error("Gemini Error:", err);
+        return "Dame un momento, estoy verificando..."; 
+    }
 }
 
 // ============================================================
-// 5. API ENDPOINTS 
+// 5. API ENDPOINTS (DASHBOARD & FUNCIONALIDADES)
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
@@ -214,51 +243,25 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-// GET DATOS (Incluyendo las reglas como array)
 app.get('/api/data/:type', proteger, (req, res) => {
     const t = req.params.type;
     if (!FILES[t]) return res.status(404).json({});
     
     let data = readData(FILES[t], []);
-    
-    // Si piden config, aseguramos que tech_rules sea array para que el Front no falle
+    // Asegurar que tech_rules sea array para el front
     if (t === 'config') {
         if (!data.tech_rules) data.tech_rules = [];
-        if (typeof data.tech_rules === 'string') data.tech_rules = [data.tech_rules]; // Migración automática
+        if (typeof data.tech_rules === 'string') data.tech_rules = [data.tech_rules];
     }
-
     res.json(data);
 });
 
-// NUEVO: GESTIÓN DE REGLAS (AGREGAR / BORRAR)
-app.post('/api/config/rules/add', proteger, (req, res) => {
-    const { rule } = req.body;
-    let config = readData(FILES.config, {});
-    
-    if (!Array.isArray(config.tech_rules)) config.tech_rules = []; // Asegurar Array
-    
-    // Agregamos la nueva regla
-    config.tech_rules.push(rule);
-    
-    writeData(FILES.config, config);
-    res.json({ success: true, rules: config.tech_rules });
-});
+// --- GESTIÓN DE CONFIGURACIÓN SEPARADA ---
 
-app.post('/api/config/rules/delete', proteger, (req, res) => {
-    const { index } = req.body;
-    let config = readData(FILES.config, {});
-    
-    if (Array.isArray(config.tech_rules)) {
-        config.tech_rules.splice(index, 1); // Borramos por índice
-        writeData(FILES.config, config);
-    }
-    
-    res.json({ success: true, rules: config.tech_rules });
-});
-
-// Guardar Personalidad y Web (Por separado)
+// 1. Guardar Personalidad y Web (Sobrescribe texto)
 app.post('/api/save-prompt-web', proteger, (req, res) => {
     let config = readData(FILES.config, {});
+    // Actualizamos solo estos dos campos
     if (req.body.prompt !== undefined) config.prompt = req.body.prompt;
     if (req.body.website_data !== undefined) config.website_data = req.body.website_data;
     
@@ -266,22 +269,86 @@ app.post('/api/save-prompt-web', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-// Test AI
+// 2. Agregar Regla (Array Push - NO BORRA LAS ANTERIORES)
+app.post('/api/config/rules/add', proteger, (req, res) => {
+    const { rule } = req.body;
+    let config = readData(FILES.config, {});
+    
+    if (!Array.isArray(config.tech_rules)) config.tech_rules = [];
+    if (rule) config.tech_rules.push(rule);
+    
+    writeData(FILES.config, config);
+    res.json({ success: true, rules: config.tech_rules });
+});
+
+// 3. Borrar Regla (Array Splice)
+app.post('/api/config/rules/delete', proteger, (req, res) => {
+    const { index } = req.body;
+    let config = readData(FILES.config, {});
+    
+    if (Array.isArray(config.tech_rules)) {
+        config.tech_rules.splice(index, 1);
+        writeData(FILES.config, config);
+    }
+    res.json({ success: true, rules: config.tech_rules });
+});
+
+// --- GESTIÓN DE CONTACTOS Y ETIQUETAS ---
+
+// Agregar/Actualizar Contacto (Nombre)
+app.post('/api/contacts/add', proteger, (req, res) => {
+    const { phone, name } = req.body;
+    let m = readData(FILES.metadata, {});
+    if(!m[phone]) m[phone] = {};
+    
+    m[phone].contactName = name; // Guarda el nombre
+    m[phone].addedManual = true;
+    
+    writeData(FILES.metadata, m);
+    res.json({ success: true });
+});
+
+// Acciones Chat: Pin, Label, Delete
+app.post('/api/chat/action', proteger, (req, res) => {
+    const { phone, action, value } = req.body;
+    let m = readData(FILES.metadata, {});
+    if(!m[phone]) m[phone] = {};
+    
+    if(action === 'pin') m[phone].pinned = value;
+    
+    // Aquí está la corrección para ETIQUETAS
+    if(action === 'label') {
+        // value debe ser un string (la etiqueta nueva) o null
+        // En un sistema simple, podemos guardar un array de etiquetas
+        if(!m[phone].labels) m[phone].labels = [];
+        if(value && !m[phone].labels.includes(value)) {
+            m[phone].labels.push(value); 
+        }
+    }
+    
+    if(action === 'delete') {
+        let h = readData(FILES.history, {});
+        delete h[phone]; delete m[phone];
+        writeData(FILES.history, h);
+    }
+    
+    writeData(FILES.metadata, m);
+    res.json({ success: true });
+});
+
+// --- RESTO DE ENDPOINTS ---
+
 app.post('/api/test-ai', proteger, async (req, res) => {
     try {
         const c = readData(FILES.config, {});
-        // Simulamos el prompt igual que en producción
         let reglasTexto = Array.isArray(c.tech_rules) ? c.tech_rules.join("\n") : c.tech_rules;
-        
         const fullPrompt = `PERSONALIDAD: ${c.prompt}\nREGLAS: ${reglasTexto}\nWEB: ${c.website_data}\nUSER: "${req.body.message}"`;
-        
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
             { contents: [{ parts: [{ text: fullPrompt }] }] });
         res.json({ response: r.data.candidates[0].content.parts[0].text, logic_log: fullPrompt });
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// Media Upload
 app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => {
     try {
         const { phone, type } = req.body;
@@ -301,48 +368,26 @@ app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, r
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Chat Management
+// Chats Full List
 app.get('/api/chats-full', proteger, (req, res) => {
     const history = readData(FILES.history, {});
     const metadata = readData(FILES.metadata, {});
     const botStatus = readData(FILES.bot_status, {});
+    
     const list = Array.from(new Set([...Object.keys(history), ...Object.keys(metadata)])).map(id => {
         const msgs = history[id] || [];
         const meta = metadata[id] || {};
         return {
             id,
-            name: meta.contactName || id,
+            name: meta.contactName || id, // Aquí se envía el nombre guardado
             lastMessage: msgs.length > 0 ? msgs[msgs.length - 1] : { text: "Nuevo", time: new Date().toISOString() },
             botActive: botStatus[id] !== false,
             pinned: meta.pinned || false,
-            labels: meta.labels || [],
+            labels: meta.labels || [], // Etiquetas
             timestamp: msgs.length > 0 ? msgs[msgs.length - 1].time : new Date().toISOString()
         };
     }).sort((a,b) => (a.pinned === b.pinned) ? new Date(b.timestamp) - new Date(a.timestamp) : (a.pinned ? -1 : 1));
     res.json(list);
-});
-
-app.post('/api/contacts/add', proteger, (req, res) => {
-    let m = readData(FILES.metadata, {});
-    if(!m[req.body.phone]) m[req.body.phone] = {};
-    m[req.body.phone].contactName = req.body.name;
-    writeData(FILES.metadata, m);
-    res.json({ success: true });
-});
-
-app.post('/api/chat/action', proteger, (req, res) => {
-    const { phone, action, value } = req.body;
-    let m = readData(FILES.metadata, {});
-    if(!m[phone]) m[phone] = {};
-    if(action === 'pin') m[phone].pinned = value;
-    if(action === 'label') m[phone].labels = value;
-    if(action === 'delete') {
-        let h = readData(FILES.history, {});
-        delete h[phone]; delete m[phone];
-        writeData(FILES.history, h);
-    }
-    writeData(FILES.metadata, m);
-    res.json({ success: true });
 });
 
 app.post('/api/chat/send', proteger, async (req, res) => {
@@ -382,6 +427,7 @@ app.post('/api/knowledge/delete', proteger, (req, res) => {
     res.json({ success: true });
 });
 
+// Webhook
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
 app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
@@ -395,10 +441,11 @@ app.post('/webhook', async (req, res) => {
     } catch(e) {}
 });
 
+// Rutas Estáticas
 app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
 app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.get('/index.html', (req, res) => res.redirect('/'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 6.2 - RULES ENGINE READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 6.3 - BACKEND FIXED"));
