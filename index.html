@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICC | Manager v6.3</title>
+    <title>ICC | Manager v6.6</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -140,11 +140,16 @@
         </div>
 
         <div id="view-leads" class="view page-content">
-            <h2>Base de Leads</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2>Base de Leads</h2>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" id="filter-leads" placeholder="Filtrar por nombre o producto..." oninput="filterLeadsTable()" style="padding:8px; border-radius:5px; border:1px solid #ddd; width:250px;">
+                    <button class="btn btn-orange" onclick="exportExcel()"><i class="fas fa-file-excel"></i> Exportar Excel</button>
+                </div>
+            </div>
             <div class="card">
-                <button class="btn btn-orange" style="float:right; margin-bottom:10px;" onclick="exportExcel()">Exportar Excel</button>
                 <table id="leads-table">
-                    <thead><tr><th>Fecha</th><th>Nombre</th><th>Teléfono</th><th>Interés</th><th>Etiqueta</th></tr></thead>
+                    <thead><tr><th>Fecha</th><th>Nombre</th><th>Teléfono</th><th>Interés</th><th>Etiqueta</th><th>Acción</th></tr></thead>
                     <tbody id="leads-body"></tbody>
                 </table>
             </div>
@@ -220,7 +225,7 @@
     </div>
 
     <script>
-        let chats=[], selectedId=null, ctxId=null, timer=null;
+        let chats=[], selectedId=null, ctxId=null, timer=null, allLeads = [];
         let mediaRecorder, audioChunks = [], isRecording = false;
 
         function nav(v) {
@@ -240,7 +245,6 @@
             if(v==='config') loadCfg();
         }
 
-        // --- 1. CHAT LOGIC ---
         async function sync() {
             try {
                 const res = await fetch('/api/chats-full');
@@ -329,7 +333,6 @@
             }
         }
 
-        // --- 2. CONFIGURACIÓN (LOGICA SEPARADA) ---
         async function loadCfg() {
             const d = await fetch('/api/data/config').then(r=>r.json());
             document.getElementById('cfg-prompt').value = d.prompt || '';
@@ -340,11 +343,7 @@
         function renderRules(rules) {
             const list = document.getElementById('rule-list-box');
             if(Array.isArray(rules)) {
-                list.innerHTML = rules.map((r, i) => `
-                    <li class="rule-item">
-                        <span>${r}</span>
-                        <i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="deleteRule(${i})"></i>
-                    </li>`).join('');
+                list.innerHTML = rules.map((r, i) => `<li class="rule-item"><span>${r}</span><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="deleteRule(${i})"></i></li>`).join('');
             } else {
                 list.innerHTML = `<li class="rule-item">${rules} (Formato antiguo) <i class="fas fa-trash" onclick="deleteRule(0)"></i></li>`;
             }
@@ -371,7 +370,6 @@
             alert("✅ Datos Base Guardados");
         }
 
-        // --- 3. EXTRAS & DASHBOARD ---
         async function loadDash() {
             const [l,c,s] = await Promise.all([fetch('/api/data/leads').then(r=>r.json()), fetch('/api/chats-full').then(r=>r.json()), fetch('/api/data/knowledge').then(r=>r.json())]);
             document.getElementById('kpi-leads').innerText=l.length; document.getElementById('kpi-chats').innerText=c.length; document.getElementById('kpi-stock').innerText=s.length;
@@ -384,11 +382,51 @@
         async function delInv(i) { await fetch('/api/knowledge/delete', {method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); }
         async function uploadCSV() { const f = document.getElementById('csv-file').files[0]; const fd = new FormData(); fd.append('file', f); await fetch('/api/knowledge/csv', {method:'POST', body:fd}); loadInventory(); }
 
+        // --- FUNCIONES LEADS MEJORADAS (CON FILTRO Y BORRADO) ---
         async function loadLeads() {
-            const l = await fetch('/api/data/leads').then(r=>r.json());
-            document.getElementById('leads-body').innerHTML = l.reverse().map(x=>`<tr><td>${x.fecha}</td><td>${x.nombre}</td><td>${x.telefono}</td><td>${x.interes}</td><td>${x.etiqueta||'-'}</td></tr>`).join('');
+            allLeads = await fetch('/api/data/leads').then(r=>r.json());
+            renderLeadsTable(allLeads);
         }
-        function exportExcel() { XLSX.writeFile(XLSX.utils.table_to_book(document.getElementById('leads-table')), "Leads.xlsx"); }
+
+        function renderLeadsTable(data) {
+            const body = document.getElementById('leads-body');
+            body.innerHTML = data.slice().reverse().map(x => `
+                <tr>
+                    <td>${x.fecha}</td>
+                    <td><b>${x.nombre}</b></td>
+                    <td>${x.telefono}</td>
+                    <td>${x.interes}</td>
+                    <td>${x.etiqueta||'-'}</td>
+                    <td>
+                        <button class="btn btn-red" onclick="deleteLead(${x.id})" style="padding:4px 8px;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filterLeadsTable() {
+            const q = document.getElementById('filter-leads').value.toLowerCase();
+            const filtered = allLeads.filter(l => 
+                (l.nombre||'').toLowerCase().includes(q) || 
+                (l.interes||'').toLowerCase().includes(q) || 
+                l.telefono.includes(q)
+            );
+            renderLeadsTable(filtered);
+        }
+
+        async function deleteLead(id) {
+            if(!confirm("¿Borrar este lead?")) return;
+            await fetch('/api/leads/delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id })
+            });
+            loadLeads();
+        }
+
+        function exportExcel() { XLSX.writeFile(XLSX.utils.table_to_book(document.getElementById('leads-table')), "Leads_ICC.xlsx"); }
 
         function addContactPrompt() { 
             const p=prompt("Teléfono (con país):"); 
@@ -406,29 +444,23 @@
             document.getElementById('sand-res').innerText = r.response; document.getElementById('sand-log').innerText = r.logic_log;
         }
 
-        // --- CONTEXT MENU (CLICK DERECHO) ---
         function openCtx(e,id) { e.preventDefault(); ctxId=id; const m=document.getElementById('ctx-menu'); m.style.display='block'; m.style.left=e.pageX+'px'; m.style.top=e.pageY+'px'; }
         document.onclick = (e) => { if(!e.target.closest('#ctx-menu')) document.getElementById('ctx-menu').style.display='none'; }
         
         async function ctxAction(action) {
             const c = chats.find(x=>x.id===ctxId);
             let val = null;
-            
             if(action === 'rename') {
-                val = prompt("Nuevo nombre para " + (c.name || c.id) + ":");
+                val = prompt("Nuevo nombre:", c.name || c.id);
                 if(!val) return;
-                // Para renombrar usamos el endpoint de contactos
                 await fetch('/api/contacts/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:ctxId, name:val})});
                 sync(); return;
             }
-            
             if(action === 'label') {
-                val = prompt("Escribe una etiqueta (Ej: Lead, Venta):");
+                val = prompt("Etiqueta:");
                 if(!val) return;
             }
-            
             if(action === 'pin') val = !c.pinned;
-            
             await fetch('/api/chat/action', {
                 method:'POST',
                 headers:{'Content-Type':'application/json'}, 
