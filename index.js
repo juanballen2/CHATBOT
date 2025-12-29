@@ -23,14 +23,22 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-secret-v7-sql-full-resurrected";
+const SESSION_SECRET = "icc-secret-v6-5-smart";
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
 
+// 🛡️ SEGURIDAD DE ARCHIVOS
+app.use((req, res, next) => {
+    if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
+        return res.status(403).send('Acceso Prohibido');
+    }
+    next();
+});
+
 // ============================================================
-// 2. MOTOR DE BASE DE DATOS (SQLITE)
+// 2. MOTOR SQLITE (REEMPLAZA readData / writeData)
 // ============================================================
 let db;
 (async () => {
@@ -42,17 +50,18 @@ let db;
         driver: sqlite3.Database
     });
 
-    // CONEXIÓN DE TABLAS: Se asegura que las columnas email y city existan
+    // Creamos las tablas para alojar cada uno de tus antiguos archivos JSON
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
-        CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, name TEXT, email TEXT, city TEXT, interest TEXT, label TEXT, time TEXT, original_timestamp TEXT);
-        CREATE TABLE IF NOT EXISTS metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0, botActive INTEGER DEFAULT 1);
+        CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT);
+        CREATE TABLE IF NOT EXISTS metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS bot_status (phone TEXT PRIMARY KEY, active INTEGER DEFAULT 1);
         CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, searchable TEXT UNIQUE, raw_data TEXT);
         CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
     `);
-    
+
     await refreshKnowledge();
-    console.log("🚀 LORENA 7.1 SQL - MOTOR INICIADO CON ÉXITO");
+    console.log("🚀 LORENA 7.0 SQL - MOTOR INICIADO CON ÉXITO");
 })();
 
 let globalKnowledge = [];
@@ -63,6 +72,7 @@ async function refreshKnowledge() {
     } catch(e) { globalKnowledge = []; }
 }
 
+// Auxiliares para Config (Fieles a tu lógica de config.json)
 async function getCfg(key, fallback) {
     const res = await db.get("SELECT value FROM config WHERE key = ?", [key]);
     return res ? JSON.parse(res.value) : fallback;
@@ -77,17 +87,19 @@ app.use(session({
 }));
 
 // ============================================================
-// 3. WHATSAPP ENGINE
+// 3. WHATSAPP ENGINE (IDÉNTICO v6.6)
 // ============================================================
 async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     try {
         let payload = { messaging_product: "whatsapp", to: destinatario, type: tipo };
         if (tipo === "text") { payload.text = { body: contenido }; } 
         else if (contenido.id) { 
-            payload[tipo] = { id: contenido.id };
-            if (tipo === 'document') payload.document.filename = "Archivo_ICC.pdf";
+            if(tipo === 'image') payload.image = { id: contenido.id };
+            if(tipo === 'document') payload.document = { id: contenido.id, filename: "Archivo_ICC.pdf" };
+            if(tipo === 'audio') payload.audio = { id: contenido.id };
         } else {
-            payload[tipo] = { link: contenido };
+            if(tipo === 'image') payload.image = { link: contenido };
+            if(tipo === 'document') payload.document = { link: contenido };
         }
         await axios.post(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`, payload, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
@@ -110,7 +122,7 @@ async function uploadToMeta(buffer, mimeType, filename) {
 }
 
 // ============================================================
-// 4. IA LORENA (CORRECCIÓN DE CONEXIÓN JSON -> DB)
+// 4. IA LORENA (SQL EDITION - MISMAS FUNCIONES)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -125,65 +137,87 @@ function buscarEnCatalogo(query) {
 }
 
 async function procesarConLorena(message, sessionId, mediaDesc = "") {
+    // Guardar Mensaje Usuario en SQL
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
 
-    const meta = await db.get("SELECT botActive, contactName, addedManual FROM metadata WHERE phone = ?", [sessionId]);
-    if (meta && meta.botActive === 0) return null;
+    // Verificar Bot Status
+    const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
+    if (status && status.active === 0) return null;
 
-    const configPrompt = await getCfg('prompt', "Eres Lorena.");
-    const websiteData = await getCfg('website_data', "");
+    // Obtener Config y Reglas
+    const promptBase = await getCfg('prompt', "Eres amable y profesional.");
+    const websiteData = await getCfg('website_data', "No hay información web extra.");
     const techRules = await getCfg('tech_rules', []);
+    const reglasTexto = Array.isArray(techRules) ? techRules.map(r => `- ${r}`).join("\n") : "Sin reglas definidas.";
+
+    // Historial SQL (Últimos 15 como v6.6)
     const historyRows = await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId]);
     const chatPrevio = historyRows.reverse();
     const stock = buscarEnCatalogo(message);
 
-    let reglasTexto = Array.isArray(techRules) ? techRules.map(r => `- ${r}`).join("\n") : techRules;
-
-    const prompt = `ERES LORENA DE ICC. Personalidad: ${configPrompt}. Web: ${websiteData}. Inventario: ${JSON.stringify(stock)}. Reglas: ${reglasTexto}.
-    MISION: Extraer NOMBRE, CORREO, CIUDAD e INTERÉS.
-    [RESPUESTA JSON]: [DATA] {"es_lead": true, "nombre": "...", "correo": "...", "ciudad": "...", "interes": "...", "etiqueta": "Lead Caliente"} [DATA]`;
+    const promptLorena = `ERES LORENA DE ICC.
+    [PERSONALIDAD] ${promptBase}
+    [REGLAS DE NEGOCIO] ${reglasTexto}
+    [INFORMACIÓN WEB] ${websiteData}
+    [INVENTARIO] ${JSON.stringify(stock)}
+    [MISION CRÍTICA: DATOS DEL CLIENTE]
+    Tu trabajo es identificar el NOMBRE del cliente y su INTERÉS.
+    1. Si no sabes su nombre, pregunta amablemente.
+    2. REVISA EL HISTORIAL DE CHAT: Si el usuario dijo "Soy Juan", "Me llamo Carlos" o "Empresa XYZ", ESE es su nombre.
+    [RESPUESTA JSON OBLIGATORIA]
+    Si detectas intención de compra o datos de contacto, FINALIZA tu respuesta con:
+    [DATA] { "es_lead": true, "nombre": "...", "interes": "...", "etiqueta": "Lead Caliente" } [DATA]
+    Si no encuentras el nombre por ningún lado, pon "Desconocido".`;
 
     try {
-        const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: prompt + `\nHISTORIAL: ${JSON.stringify(chatPrevio)}\nUSUARIO: ${message}` }] }] });
+        const resAI = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+            { contents: [{ parts: [{ text: promptLorena + `\nHISTORIAL CHAT: ${JSON.stringify(chatPrevio)}\nUSUARIO DICE: ${message}` }] }] });
 
-        let fullText = res.data.candidates[0].content.parts[0].text;
+        let fullText = resAI.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText;
-        const match = fullText.match(/\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/);
+        const regexData = /\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/;
+        const match = fullText.match(regexData);
 
-        if (match) {
-            textoVisible = fullText.replace(/\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/, "").trim();
+        if (match && match[1]) {
+            textoVisible = fullText.replace(regexData, "").trim(); 
             try {
                 const info = JSON.parse(match[1]);
-
                 if(info.es_lead) {
-                    const seisHorasAtras = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
-                    const yaExiste = await db.get("SELECT id FROM leads WHERE phone = ? AND interest = ? AND time > ?", [sessionId, info.interes, seisHorasAtras]);
-
-                    if (!yaExiste) {
-                        let nombreFinal = info.nombre;
-                        if (nombreFinal && !nombreFinal.toLowerCase().includes("desconocido")) {
-                            if (!meta || meta.addedManual === 0) {
-                                await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName", [sessionId, nombreFinal]);
-                            }
+                    let nombreFinal = info.nombre;
+                    // Lógica Metadata (Fiel v6.6)
+                    const meta = await db.get("SELECT addedManual, contactName FROM metadata WHERE phone = ?", [sessionId]);
+                    if (nombreFinal && !nombreFinal.toLowerCase().includes("desconocido") && !nombreFinal.toLowerCase().includes("nombre")) {
+                        if (!meta || meta.addedManual === 0) {
+                            await db.run("INSERT INTO metadata (phone, contactName, addedManual) VALUES (?, ?, 0) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName", [sessionId, nombreFinal]);
                         }
-                        const updatedMeta = await db.get("SELECT contactName FROM metadata WHERE phone = ?", [sessionId]);
-                        nombreFinal = updatedMeta?.contactName || sessionId;
+                    } else if (meta?.contactName) {
+                        nombreFinal = meta.contactName;
+                    }
 
-                        // CONEXIÓN CORREGIDA: Se mapean los nombres del JSON (ciudad, correo) a las columnas DB (city, email)
-                        await db.run("INSERT INTO leads (phone, name, email, city, interest, label, time, original_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
-                            [sessionId, nombreFinal, info.correo || "", info.ciudad || "", info.interes || "", info.etiqueta || "Lead", new Date().toLocaleString(), Date.now().toString()]);
+                    // Guardar Lead SQL
+                    await db.run("INSERT INTO leads (phone, nombre, interes, etiqueta, fecha) VALUES (?, ?, ?, ?, ?)", 
+                        [sessionId, nombreFinal, info.interes, info.etiqueta, new Date().toLocaleString()]);
+                    
+                    // Guardar Etiqueta en Metadata
+                    if(info.etiqueta) {
+                        const row = await db.get("SELECT labels FROM metadata WHERE phone = ?", [sessionId]);
+                        let labs = JSON.parse(row?.labels || "[]");
+                        if(!labs.includes(info.etiqueta)) {
+                            labs.push(info.etiqueta);
+                            await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [sessionId, JSON.stringify(labs)]);
+                        }
                     }
                 }
-            } catch (e) { console.error("Error en parsing de DATA:", e); }
+            } catch(e) { console.error("Error JSON Bot:", e); }
         }
+
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', textoVisible, new Date().toISOString()]);
         return textoVisible;
-    } catch (e) { return "Un momento..."; }
+    } catch (err) { return "Dame un momento, estoy verificando..."; }
 }
 
 // ============================================================
-// 5. API ENDPOINTS (CONEXIÓN CON FRONT-END)
+// 5. API ENDPOINTS (TRANSPOSICIÓN 1:1)
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
@@ -194,43 +228,14 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-app.get('/api/chats-full', proteger, async (req, res) => {
-    const rows = await db.all(`
-        SELECT m.*, 
-        (SELECT text FROM history WHERE phone = m.phone ORDER BY id DESC LIMIT 1) as lastText,
-        (SELECT time FROM history WHERE phone = m.phone ORDER BY id DESC LIMIT 1) as lastTime
-        FROM metadata m ORDER BY pinned DESC, lastTime DESC
-    `);
-    res.json(rows.map(r => ({
-        id: r.phone, name: r.contactName || r.phone, pinned: !!r.pinned,
-        botActive: !!r.botActive, labels: JSON.parse(r.labels || "[]"),
-        lastMessage: { text: r.lastText || "Nuevo", time: r.lastTime }
-    })));
-});
-
-app.get('/api/data/history', proteger, async (req, res) => {
-    const rows = await db.all("SELECT * FROM history ORDER BY id ASC");
-    const grouped = rows.reduce((acc, curr) => {
-        if(!acc[curr.phone]) acc[curr.phone] = [];
-        acc[curr.phone].push({ role: curr.role, text: curr.text, time: curr.time });
-        return acc;
-    }, {});
-    res.json(grouped);
-});
-
-// CONEXIÓN CORREGIDA: Se asegura que el Front reciba los nombres en español que espera el HTML
-app.get('/api/data/leads', proteger, async (req, res) => {
-    const rows = await db.all("SELECT * FROM leads ORDER BY id DESC");
-    res.json(rows.map(r => ({ 
-        ...r, 
-        fecha: r.time, 
-        nombre: r.name, 
-        telefono: r.phone, 
-        interes: r.interest, 
-        ciudad: r.city, 
-        correo: r.email,
-        etiqueta: r.label
-    })));
+// Endpoint data inteligente (Fiel a v6.6)
+app.get('/api/data/:type', proteger, async (req, res) => {
+    const t = req.params.type;
+    try {
+        if (t === 'leads') res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
+        if (t === 'config') res.json({ prompt: await getCfg('prompt', ""), website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []) });
+        if (t === 'knowledge') res.json(await db.all("SELECT * FROM inventory"));
+    } catch (e) { res.status(500).json([]); }
 });
 
 app.post('/api/leads/delete', proteger, async (req, res) => {
@@ -239,14 +244,14 @@ app.post('/api/leads/delete', proteger, async (req, res) => {
 });
 
 app.post('/api/save-prompt-web', proteger, async (req, res) => {
-    if(req.body.prompt !== undefined) await setCfg('prompt', req.body.prompt);
-    if(req.body.website_data !== undefined) await setCfg('website_data', req.body.website_data);
+    if (req.body.prompt !== undefined) await setCfg('prompt', req.body.prompt);
+    if (req.body.website_data !== undefined) await setCfg('website_data', req.body.website_data);
     res.json({ success: true });
 });
 
 app.post('/api/config/rules/add', proteger, async (req, res) => {
     let rules = await getCfg('tech_rules', []);
-    rules.push(req.body.rule);
+    if (req.body.rule) rules.push(req.body.rule);
     await setCfg('tech_rules', rules);
     res.json({ success: true, rules });
 });
@@ -259,57 +264,82 @@ app.post('/api/config/rules/delete', proteger, async (req, res) => {
 });
 
 app.post('/api/contacts/add', proteger, async (req, res) => {
-    await db.run("INSERT INTO metadata (phone, contactName, addedManual) VALUES (?, ?, 1) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName", [req.body.phone, req.body.name]);
+    await db.run("INSERT INTO metadata (phone, contactName, addedManual) VALUES (?, ?, 1) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName, addedManual=1", [req.body.phone, req.body.name]);
     res.json({ success: true });
 });
 
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
-    if(action === 'rename') await db.run("UPDATE metadata SET contactName = ?, addedManual = 1 WHERE phone = ?", [value, phone]);
-    if(action === 'pin') await db.run("UPDATE metadata SET pinned = ? WHERE phone = ?", [value ? 1 : 0, phone]);
+    if(action === 'pin') await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET pinned=excluded.pinned", [phone, value ? 1 : 0]);
+    if(action === 'label') {
+        const row = await db.get("SELECT labels FROM metadata WHERE phone = ?", [phone]);
+        let labs = JSON.parse(row?.labels || "[]");
+        if(value && !labs.includes(value)) labs.push(value);
+        await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [phone, JSON.stringify(labs)]);
+    }
     if(action === 'delete') {
         await db.run("DELETE FROM history WHERE phone = ?", [phone]);
         await db.run("DELETE FROM metadata WHERE phone = ?", [phone]);
     }
-    if(action === 'label') {
-        const row = await db.get("SELECT labels FROM metadata WHERE phone = ?", [phone]);
-        let labels = JSON.parse(row?.labels || "[]");
-        if(!labels.includes(value)) labels.push(value);
-        await db.run("UPDATE metadata SET labels = ? WHERE phone = ?", [JSON.stringify(labels), phone]);
-    }
     res.json({ success: true });
 });
 
+app.post('/api/test-ai', proteger, async (req, res) => {
+    try {
+        const prompt = await getCfg('prompt', "");
+        const web = await getCfg('website_data', "");
+        const rules = await getCfg('tech_rules', []);
+        const fullPrompt = `PERSONALIDAD: ${prompt}\nREGLAS: ${rules.join("\n")}\nWEB: ${web}\nUSER: "${req.body.message}"`;
+        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+            { contents: [{ parts: [{ text: fullPrompt }] }] });
+        res.json({ response: r.data.candidates[0].content.parts[0].text, logic_log: fullPrompt });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/chats-full', proteger, async (req, res) => {
+    const historyPhones = await db.all("SELECT DISTINCT phone FROM history");
+    const metadataList = await db.all("SELECT * FROM metadata");
+    const statusList = await db.all("SELECT * FROM bot_status");
+    
+    const phones = Array.from(new Set([...historyPhones.map(h=>h.phone), ...metadataList.map(m=>m.phone)]));
+    
+    const list = await Promise.all(phones.map(async id => {
+        const lastMsg = await db.get("SELECT text, time FROM history WHERE phone = ? ORDER BY id DESC LIMIT 1", [id]);
+        const meta = metadataList.find(m => m.phone === id) || {};
+        const bStatus = statusList.find(s => s.phone === id);
+        return {
+            id,
+            name: meta.contactName || id,
+            lastMessage: lastMsg || { text: "Nuevo", time: new Date().toISOString() },
+            botActive: bStatus ? bStatus.active === 1 : true,
+            pinned: meta.pinned === 1,
+            labels: JSON.parse(meta.labels || "[]"),
+            timestamp: lastMsg ? lastMsg.time : new Date().toISOString()
+        };
+    }));
+    
+    list.sort((a,b) => (a.pinned === b.pinned) ? new Date(b.timestamp) - new Date(a.timestamp) : (a.pinned ? -1 : 1));
+    res.json(list);
+});
+
 app.post('/api/chat/send', proteger, async (req, res) => {
-    if (await enviarWhatsApp(req.body.phone, req.body.message)) {
+    if(await enviarWhatsApp(req.body.phone, req.body.message)) {
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [req.body.phone, 'manual', req.body.message, new Date().toISOString()]);
         res.json({ success: true });
     } else res.status(500).json({ error: "Error" });
 });
 
-app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => {
-    try {
-        const { phone, type } = req.body;
-        const metaId = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname);
-        if (await enviarWhatsApp(phone, { id: metaId }, type)) {
-            let icon = type === 'audio' ? '🎤 [Audio]' : (type === 'image' ? '📷 [Imagen]' : '📄 [Archivo]');
-            await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'manual', icon, new Date().toISOString()]);
-            res.json({ success: true });
-        } else res.status(500).json({ error: "Error" });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
 app.post('/api/chat/toggle-bot', proteger, async (req, res) => {
-    await db.run("INSERT INTO metadata (phone, botActive) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET botActive=excluded.botActive", [req.body.phone, req.body.active ? 1 : 0]);
+    await db.run("INSERT OR REPLACE INTO bot_status (phone, active) VALUES (?, ?)", [req.body.phone, req.body.active ? 1 : 0]);
     res.json({ success: true });
 });
 
 app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res) => {
     try {
         const n = parse(req.file.buffer.toString('utf-8'), { columns: true });
-        for(const r of n) {
-            const searchable = Object.values(r).join(" ");
-            await db.run("INSERT OR IGNORE INTO inventory (searchable, raw_data) VALUES (?, ?)", [searchable, JSON.stringify(r)]);
+        for (const row of n) {
+            const searchable = Object.values(row).join(" ");
+            await db.run("INSERT OR IGNORE INTO inventory (searchable, raw_data) VALUES (?, ?)", [searchable, JSON.stringify(row)]);
         }
         await refreshKnowledge();
         res.json({ success: true });
@@ -317,53 +347,36 @@ app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res)
 });
 
 app.post('/api/knowledge/delete', proteger, async (req, res) => {
-    const rows = await db.all("SELECT searchable FROM inventory");
-    if(rows[req.body.index]) {
-        await db.run("DELETE FROM inventory WHERE searchable = ?", [rows[req.body.index].searchable]);
+    const items = await db.all("SELECT id FROM inventory");
+    if (items[req.body.index]) {
+        await db.run("DELETE FROM inventory WHERE id = ?", [items[req.body.index].id]);
         await refreshKnowledge();
-        res.json({ success: true });
-    } else res.status(404).json({ error: "No encontrado" });
-});
-
-app.get('/api/data/knowledge', proteger, async (req, res) => {
-    const rows = await db.all("SELECT searchable FROM inventory");
-    res.json(rows);
-});
-
-app.post('/api/test-ai', proteger, async (req, res) => {
-    try {
-        const c = await getCfg('prompt', "");
-        const web = await getCfg('website_data', "");
-        const fullPrompt = `PROMPT: ${c}\nWEB: ${web}\nUSER: ${req.body.message}`;
-        const responseAI = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: fullPrompt }] }] });
-        res.json({ response: responseAI.data.candidates[0].content.parts[0].text, logic_log: fullPrompt });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    }
+    res.json({ success: true });
 });
 
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
 app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
-    const value = req.body.entry?.[0]?.changes?.[0]?.value;
-    const msg = value?.messages?.[0];
-    const contact = value?.contacts?.[0];
-
-    if (contact) {
-        const m = await db.get("SELECT addedManual FROM metadata WHERE phone = ?", [contact.wa_id]);
-        if (!m || m.addedManual === 0) {
-            await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName", [contact.wa_id, contact.profile.name]);
+    try {
+        const value = req.body.entry?.[0]?.changes?.[0]?.value;
+        const msg = value?.messages?.[0];
+        if (value?.contacts?.[0]) {
+            const cName = value.contacts[0].profile.name;
+            const phone = value.contacts[0].wa_id;
+            await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=contactName WHERE addedManual=0", [phone, cName]);
         }
-    }
-    if (msg) {
-        let txt = msg.text?.body || (msg.image ? "📷 Foto" : (msg.audio ? "🎤 Audio" : "Archivo"));
-        let r = await procesarConLorena(txt, msg.from);
-        if (r) await enviarWhatsApp(msg.from, r);
-    }
+        if(msg) {
+            let txt = msg.text?.body || (msg.image ? "📷 Foto" : (msg.audio ? "🎤 Audio" : "Archivo"));
+            let r = await procesarConLorena(txt, msg.from);
+            if(r) await enviarWhatsApp(msg.from, r);
+        }
+    } catch(e) {}
 });
 
-app.use(express.static(__dirname, { index: false }));
 app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
 app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
+app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 7.1 SQL - THE VAULT (FIDELIDAD TOTAL)"));
+app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 7.0 SQL - THE VAULT (FIDELIDAD TOTAL)"));
