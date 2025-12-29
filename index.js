@@ -23,9 +23,13 @@ const SESSION_SECRET = "icc-ultra-secret-2025";
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// ARREGLO DE SEGURIDAD: Bloquear acceso directo a los JSONs desde el navegador
+// ============================================================
+// 🛡️ ARREGLO DE SEGURIDAD (CORREGIDO)
+// ============================================================
+// Antes bloqueaba todo lo que dijera "/data/". 
+// Ahora permite pasar si la ruta empieza por "/api/"
 app.use((req, res, next) => {
-    if (req.path.endsWith('.json') || req.path.includes('/data/')) {
+    if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
         return res.status(403).send('Acceso Prohibido');
     }
     next();
@@ -274,6 +278,7 @@ app.post('/api/chat/toggle-bot', proteger, (req, res) => {
     res.json({ success: true });
 });
 
+// ESTA ES LA RUTA QUE FALLABA Y AHORA DEBE FUNCIONAR
 app.get('/api/data/:type', proteger, (req, res) => {
     const type = req.params.type;
     const fallback = (type==='history'||type==='tags'||type==='bot_status') ? {} : [];
@@ -298,4 +303,4 @@ app.use(express.static(__dirname));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
 
-app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA ICC 3.2 (CORREGIDA) ACTIVADA"));
+app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA ICC 3.3 (FIXED PERMISOS) ACTIVADA"));
