@@ -205,35 +205,31 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
                 
                 if(info.es_lead) {
                     // --- AQUÍ ESTÁ LA INTELIGENCIA ---
-                    // Si la IA detectó un nombre real (no desconocido), lo guardamos en METADATA para renombrar el chat
                     let nombreFinal = info.nombre;
                     
                     if (nombreFinal && !nombreFinal.toLowerCase().includes("desconocido") && !nombreFinal.toLowerCase().includes("nombre")) {
-                        // Actualizar nombre en Metadata para que salga en el panel
                         const m = readData(FILES.metadata, {});
                         if (!m[sessionId]) m[sessionId] = {};
-                        
-                        // Solo sobrescribimos si no tiene un nombre manual puesto por ti
                         if (!m[sessionId].addedManual) {
                             m[sessionId].contactName = nombreFinal;
                             writeData(FILES.metadata, m);
                         }
                     } else {
-                        // Si la IA no supo, intentamos ver si ya tenía nombre en metadata
                         const m = readData(FILES.metadata, {});
                         if(m[sessionId]?.contactName) nombreFinal = m[sessionId].contactName;
                     }
 
-                    // Guardar Lead
+                    // Guardar Lead (Modificado para no bloquear por día y añadir ID)
                     const leads = readData(FILES.leads, []);
-                    const hoy = new Date().toDateString();
-                    const existe = leads.some(l => l.telefono === sessionId && new Date(l.fecha).toDateString() === hoy);
-                    
-                    if (!existe) {
-                        leads.push({ ...info, nombre: nombreFinal, fecha: new Date().toLocaleString(), telefono: sessionId });
-                        writeData(FILES.leads, leads);
-                        console.log("Lead capturado:", nombreFinal);
-                    }
+                    leads.push({ 
+                        ...info, 
+                        nombre: nombreFinal, 
+                        fecha: new Date().toLocaleString(), 
+                        telefono: sessionId,
+                        id: Date.now() 
+                    });
+                    writeData(FILES.leads, leads);
+                    console.log("Lead capturado:", nombreFinal);
                 }
 
                 // Guardar Etiqueta
@@ -286,7 +282,15 @@ app.get('/api/data/:type', proteger, (req, res) => {
     res.json(data);
 });
 
-// Guardar Personalidad y Web
+// NUEVO: Borrar Leads
+app.post('/api/leads/delete', proteger, (req, res) => {
+    const { id } = req.body;
+    let leads = readData(FILES.leads, []);
+    leads = leads.filter(l => l.id !== id);
+    writeData(FILES.leads, leads);
+    res.json({ success: true });
+});
+
 app.post('/api/save-prompt-web', proteger, (req, res) => {
     let config = readData(FILES.config, {});
     if (req.body.prompt !== undefined) config.prompt = req.body.prompt;
@@ -295,7 +299,6 @@ app.post('/api/save-prompt-web', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-// Agregar Regla (Lista)
 app.post('/api/config/rules/add', proteger, (req, res) => {
     const { rule } = req.body;
     let config = readData(FILES.config, {});
@@ -305,7 +308,6 @@ app.post('/api/config/rules/add', proteger, (req, res) => {
     res.json({ success: true, rules: config.tech_rules });
 });
 
-// Borrar Regla
 app.post('/api/config/rules/delete', proteger, (req, res) => {
     const { index } = req.body;
     let config = readData(FILES.config, {});
@@ -316,7 +318,6 @@ app.post('/api/config/rules/delete', proteger, (req, res) => {
     res.json({ success: true, rules: config.tech_rules });
 });
 
-// Contactos Manuales
 app.post('/api/contacts/add', proteger, (req, res) => {
     const { phone, name } = req.body;
     let m = readData(FILES.metadata, {});
@@ -327,7 +328,6 @@ app.post('/api/contacts/add', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-// Acciones Chat
 app.post('/api/chat/action', proteger, (req, res) => {
     const { phone, action, value } = req.body;
     let m = readData(FILES.metadata, {});
@@ -351,7 +351,6 @@ app.post('/api/chat/action', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-// Test AI
 app.post('/api/test-ai', proteger, async (req, res) => {
     try {
         const c = readData(FILES.config, {});
@@ -363,7 +362,6 @@ app.post('/api/test-ai', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// Upload Media
 app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => {
     try {
         const { phone, type } = req.body;
@@ -383,7 +381,6 @@ app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, r
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Get Chats
 app.get('/api/chats-full', proteger, (req, res) => {
     const history = readData(FILES.history, {});
     const metadata = readData(FILES.metadata, {});
@@ -405,7 +402,6 @@ app.get('/api/chats-full', proteger, (req, res) => {
     res.json(list);
 });
 
-// Send Msg
 app.post('/api/chat/send', proteger, async (req, res) => {
     if(await enviarWhatsApp(req.body.phone, req.body.message)) {
         let h = readData(FILES.history, {});
@@ -416,7 +412,6 @@ app.post('/api/chat/send', proteger, async (req, res) => {
     } else res.status(500).json({ error: "Error" });
 });
 
-// Toggle Bot
 app.post('/api/chat/toggle-bot', proteger, (req, res) => {
     let s = readData(FILES.bot_status, {});
     s[req.body.phone] = req.body.active;
@@ -424,7 +419,6 @@ app.post('/api/chat/toggle-bot', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-// CSV Upload
 app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
     try {
         const n = parse(req.file.buffer.toString('utf-8'), { columns: true });
@@ -437,7 +431,6 @@ app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
     } catch(e) { res.status(500).json({ error: "CSV Error" }); }
 });
 
-// Delete Inventory
 app.post('/api/knowledge/delete', proteger, (req, res) => {
     let k = readData(FILES.knowledge, []);
     k.splice(req.body.index, 1);
@@ -446,12 +439,27 @@ app.post('/api/knowledge/delete', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-// Webhook
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
 app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
     try {
-        const msg = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+        const changes = req.body.entry?.[0]?.changes?.[0]?.value;
+        const msg = changes?.messages?.[0];
+        
+        // CAPTURA AUTOMATICA DE NOMBRE DE WHATSAPP (FALLBACK)
+        if (changes?.contacts?.[0]) {
+            const contactName = changes.contacts[0].profile.name;
+            const phone = changes.contacts[0].wa_id;
+            if (contactName && phone) {
+                let m = readData(FILES.metadata, {});
+                if (!m[phone]) m[phone] = {};
+                if (!m[phone].contactName || m[phone].contactName === phone) {
+                    m[phone].contactName = contactName;
+                    writeData(FILES.metadata, m);
+                }
+            }
+        }
+
         if(msg) {
             let txt = msg.text?.body || (msg.image ? "📷 Foto" : (msg.audio ? "🎤 Audio" : "Archivo"));
             let r = await procesarConLorena(txt, msg.from);
@@ -460,11 +468,10 @@ app.post('/webhook', async (req, res) => {
     } catch(e) {}
 });
 
-// Static
 app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
 app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.get('/index.html', (req, res) => res.redirect('/'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 6.5 - SMART NAME DETECTION"));
+app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 6.6 - FIDELIDAD RESTAURADA"));
