@@ -5,13 +5,16 @@ const path = require('path');
 const multer = require('multer');
 const { parse } = require('csv-parse/sync');
 const axios = require('axios');
+const cors = require('cors'); // Recomendado si el front está separado, si no, no estorba.
 
 const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 
 app.set('trust proxy', 1);
 
-// CONFIGURACIÓN DE VARIABLES
+// ============================================================
+// 🔐 CONFIGURACIÓN Y VARIABLES
+// ============================================================
 const API_KEY = process.env.GEMINI_API_KEY; 
 const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
@@ -22,19 +25,20 @@ const SESSION_SECRET = "icc-ultra-secret-2025";
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(cors());
 
-// ============================================================
-// 🛡️ ARREGLO DE SEGURIDAD (CORREGIDO)
-// ============================================================
-// Antes bloqueaba todo lo que dijera "/data/". 
-// Ahora permite pasar si la ruta empieza por "/api/"
+// 🛡️ SEGURIDAD DE RUTAS
 app.use((req, res, next) => {
+    // Protege archivos JSON y carpetas de data, pero permite acceso a /api/
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
         return res.status(403).send('Acceso Prohibido');
     }
     next();
 });
 
+// ============================================================
+// 📂 GESTIÓN DE DATOS (FILE SYSTEM)
+// ============================================================
 const DATA_DIR = path.resolve(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -44,7 +48,8 @@ const FILES = {
     leads: path.join(DATA_DIR, 'leads.json'),
     history: path.join(DATA_DIR, 'history.json'),
     bot_status: path.join(DATA_DIR, 'bot_status.json'),
-    tags: path.join(DATA_DIR, 'tags.json')
+    tags: path.join(DATA_DIR, 'tags.json'),
+    metadata: path.join(DATA_DIR, 'metadata.json') // NUEVO: Para guardar Pinned, Muted, etc.
 };
 
 const readData = (file, fallback) => {
@@ -57,26 +62,26 @@ const writeData = (file, data) => {
     catch (err) { return false; }
 };
 
-// ARREGLO DE LOGOUT: Nombre de cookie específico
+// SESIONES
 app.use(session({
-    name: 'icc_session', // Nombre único para identificar la cookie
+    name: 'icc_session',
     secret: SESSION_SECRET,
     resave: true,
     saveUninitialized: true,
-    cookie: { secure: false, maxAge: 1000 * 60 * 60 * 24 }
+    cookie: { secure: false, maxAge: 1000 * 60 * 60 * 24 } // 24 horas
 }));
 
 let globalKnowledge = readData(FILES.knowledge, []);
 
 // ============================================================
-// 📩 MOTOR DE ENVÍO
+// 📩 MOTOR DE ENVÍO WHATSAPP
 // ============================================================
 async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     try {
         let payload = { messaging_product: "whatsapp", to: destinatario, type: tipo };
         if (tipo === "text") payload.text = { body: contenido };
         else if (tipo === "image") payload.image = { link: contenido };
-        else if (tipo === "document") payload.document = { link: contenido, filename: "Archivo_ICC.pdf" };
+        else if (tipo === "document") payload.document = { link: contenido, filename: "Adjunto_ICC.pdf" };
 
         await axios.post(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`, payload, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
@@ -89,7 +94,7 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
 }
 
 // ============================================================
-// 🧠 CEREBRO LORENA (CORREGIDO: PERSONALIDAD DINÁMICA)
+// 🧠 CEREBRO LORENA (CORREGIDO Y OPTIMIZADO)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -105,35 +110,30 @@ function buscarEnCatalogo(query) {
 
 async function procesarConLorena(message, sessionId, mediaDesc = "") {
     const botStatus = readData(FILES.bot_status, {});
-    let allHistory = readData(FILES.history, {});
     
-    // Si el bot está apagado, solo guardamos historial
-    if (botStatus[sessionId] === false) {
-        if (!allHistory[sessionId]) allHistory[sessionId] = [];
-        allHistory[sessionId].push({ role: 'user', text: mediaDesc || message, time: new Date().toISOString() });
-        writeData(FILES.history, allHistory);
-        return null; 
-    }
+    // 1. Guardamos mensaje del usuario INMEDIATAMENTE para evitar pérdida
+    let currentHistory = readData(FILES.history, {});
+    if (!currentHistory[sessionId]) currentHistory[sessionId] = [];
+    currentHistory[sessionId].push({ role: 'user', text: mediaDesc || message, time: new Date().toISOString() });
+    writeData(FILES.history, currentHistory);
+
+    // Si el bot está apagado, paramos aquí
+    if (botStatus[sessionId] === false) return null;
 
     const config = readData(FILES.config, {});
-    const chatPrevio = (allHistory[sessionId] || []).slice(-10);
+    // Leemos de nuevo el historial para el contexto (por si hubo updates milimétricos)
+    const chatPrevio = (currentHistory[sessionId] || []).slice(-10);
     const stock = buscarEnCatalogo(message);
 
-    // ARREGLO DE PERSONALIDAD: Ahora lee LO QUE TÚ ESCRIBAS en el Dashboard
-    const personalidad = config.prompt || "Eres Lorena de ICC. Vende repuestos y maquinaria.";
-    const reglas = config.tech_rules || "Sé profesional.";
-
     const prompt = `
-    ${personalidad}
+    ${config.prompt || "Eres Lorena de ICC. Vende repuestos y maquinaria."}
     
-    REGLAS TÉCNICAS: ${reglas}
+    REGLAS TÉCNICAS: ${config.tech_rules || "Sé profesional."}
     INFO WEB: ${config.website_data || ''}
     STOCK DISPONIBLE: ${JSON.stringify(stock)}
-    HISTORIAL RECIENTE: ${JSON.stringify(chatPrevio)}
+    HISTORIAL: ${JSON.stringify(chatPrevio)}
     
-    INSTRUCCIÓN FINAL:
-    Responde al cliente. Si detectas datos de contacto o interés claro, finaliza tu respuesta con:
-    [DATA] {"es_lead":true, "nombre":"...", "interes":"...", "etiqueta":"cotizacion"|"tecnico"} [DATA]
+    INSTRUCCIÓN: Responde corto y natural. Si es venta, usa [DATA].
     `;
 
     try {
@@ -143,33 +143,42 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
         let fullText = res.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText.split('[DATA]')[0].trim();
         
-        // Procesar metadatos
+        // Procesar Leads
         if (fullText.includes('[DATA]')) {
             try {
-                const info = JSON.parse(fullText.split('[DATA]')[1].replace(/```json|```/g, "").trim());
+                const jsonStr = fullText.split('[DATA]')[1].replace(/```json|```/g, "").trim();
+                const info = JSON.parse(jsonStr);
                 if(info.es_lead) {
                     const leads = readData(FILES.leads, []);
                     leads.push({ ...info, fecha: new Date().toLocaleString(), telefono: sessionId });
                     writeData(FILES.leads, leads);
                 }
-                const tags = readData(FILES.tags, {});
-                tags[sessionId] = info.etiqueta || "lead";
-                writeData(FILES.tags, tags);
-            } catch(e) {}
+                // Actualizar etiqueta automáticamente
+                if(info.etiqueta) {
+                    const metadata = readData(FILES.metadata, {});
+                    if(!metadata[sessionId]) metadata[sessionId] = {};
+                    metadata[sessionId].labels = [info.etiqueta]; // Sobrescribe o agrega lógica push
+                    writeData(FILES.metadata, metadata);
+                }
+            } catch(e) { console.error("Error parsing DATA json", e); }
         }
 
-        // Guardar historial
-        if (!allHistory[sessionId]) allHistory[sessionId] = [];
-        allHistory[sessionId].push({ role: 'user', text: mediaDesc || message, time: new Date().toISOString() });
-        allHistory[sessionId].push({ role: 'bot', text: textoVisible, time: new Date().toISOString() });
-        writeData(FILES.history, allHistory);
+        // 🚑 FIX CRÍTICO: RE-LEER HISTORIAL ANTES DE ESCRIBIR LA RESPUESTA DEL BOT
+        // Esto evita que si el usuario mandó otro mensaje mientras la IA pensaba, se borre.
+        let freshHistory = readData(FILES.history, {});
+        if (!freshHistory[sessionId]) freshHistory[sessionId] = [];
+        freshHistory[sessionId].push({ role: 'bot', text: textoVisible, time: new Date().toISOString() });
+        writeData(FILES.history, freshHistory);
 
         return textoVisible;
-    } catch (err) { return "Lorena ICC: Estoy verificando la información en sistema, un momento..."; }
+    } catch (err) { 
+        console.error(err);
+        return "Lorena ICC: Dame un momento, estoy consultando..."; 
+    }
 }
 
 // ============================================================
-// 🚦 WEBHOOK
+// 🚦 WEBHOOK DE WHATSAPP
 // ============================================================
 app.get('/webhook', (req, res) => {
     if (req.query['hub.verify_token'] === 'ICC_2025') return res.send(req.query['hub.challenge']);
@@ -177,25 +186,33 @@ app.get('/webhook', (req, res) => {
 });
 
 app.post('/webhook', async (req, res) => {
-    const body = req.body;
-    if (body.object === 'whatsapp_business_account') {
-        res.sendStatus(200);
+    res.sendStatus(200); // Responder rápido a Meta
+    try {
+        const body = req.body;
         const entry = body.entry?.[0]?.changes?.[0]?.value;
         const msg = entry?.messages?.[0];
+        
         if (msg) {
+            // Marcar como leído (Opcional, mejora UX)
+            // await axios.post(...) 
+
             let texto = msg.text ? msg.text.body : "";
-            let desc = msg.image ? "📷 [Imagen recibida]" : msg.document ? "📄 [Documento recibido]" : "";
-            const r = await procesarConLorena(texto || desc, msg.from, desc);
-            if (r) await enviarWhatsApp(msg.from, r);
+            let desc = msg.image ? "📷 [Imagen]" : msg.document ? "📄 [Documento]" : "";
+            const from = msg.from;
+
+            // Procesar
+            const respuesta = await procesarConLorena(texto || desc, from, desc);
+            if (respuesta) await enviarWhatsApp(from, respuesta);
         }
-    } else { res.sendStatus(200); }
+    } catch (e) { console.error("Error Webhook:", e); }
 });
 
 // ============================================================
-// ⚙️ APIS PANEL
+// ⚙️ API PARA EL FRONTEND (DASHBOARD)
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
+// 1. AUTH
 app.post('/auth', (req, res) => {
     if (req.body.user === ADMIN_USER && req.body.pass === ADMIN_PASS) {
         req.session.isLogged = true;
@@ -204,62 +221,76 @@ app.post('/auth', (req, res) => {
     res.status(401).json({ success: false });
 });
 
-// ARREGLO DE LOGOUT: Borra la cookie explícitamente
 app.get('/logout', (req, res) => {
-    req.session.destroy(err => {
+    req.session.destroy(() => {
         res.clearCookie('icc_session');
         res.redirect('/login');
     });
 });
 
-app.post('/api/chat/delete', proteger, (req, res) => {
-    const { phone } = req.body;
-    let h = readData(FILES.history, {});
-    let t = readData(FILES.tags, {});
-    delete h[phone]; delete t[phone];
-    writeData(FILES.history, h); writeData(FILES.tags, t);
-    res.json({ success: true });
+// 2. OBTENER CHATS (ESTRUCTURA UNIFICADA PARA EL SIDEBAR)
+app.get('/api/chats-full', proteger, (req, res) => {
+    const history = readData(FILES.history, {});
+    const metadata = readData(FILES.metadata, {}); // Aquí guardamos pinned, labels, muted
+    const botStatus = readData(FILES.bot_status, {});
+    
+    // Transformar objeto history a array para el frontend
+    const chatList = Object.keys(history).map(phone => {
+        const msgs = history[phone];
+        const lastMsg = msgs[msgs.length - 1] || {};
+        const meta = metadata[phone] || { pinned: false, labels: [], muted: false };
+        
+        return {
+            id: phone,
+            phone: phone, // O nombre si tuvieramos agenda
+            lastMessage: lastMsg,
+            botActive: botStatus[phone] !== false, // Default true
+            pinned: meta.pinned || false,
+            labels: meta.labels || [],
+            muted: meta.muted || false,
+            timestamp: lastMsg.time // Para ordenar
+        };
+    });
+
+    // Ordenar: Primero Pinned, luego por fecha más reciente
+    chatList.sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return new Date(b.timestamp) - new Date(a.timestamp);
+    });
+
+    res.json(chatList);
 });
 
-app.post('/api/chat/send-media', proteger, async (req, res) => {
-    const { phone, url, type } = req.body;
-    if (await enviarWhatsApp(phone, url, type)) {
+// 3. ACCIONES DE CHAT (MENÚ CONTEXTUAL)
+app.post('/api/chat/action', proteger, (req, res) => {
+    const { phone, action, value } = req.body; 
+    // actions: 'pin', 'mute', 'delete', 'label'
+    
+    const metadata = readData(FILES.metadata, {});
+    if (!metadata[phone]) metadata[phone] = {};
+
+    if (action === 'pin') {
+        metadata[phone].pinned = value; // true/false
+    } else if (action === 'mute') {
+        metadata[phone].muted = value; // true/false
+    } else if (action === 'label') {
+        metadata[phone].labels = value; // array de etiquetas
+    } else if (action === 'delete') {
+        // Hard Delete (Borrar todo)
         let h = readData(FILES.history, {});
-        if (!h[phone]) h[phone] = [];
-        h[phone].push({ role: 'manual', text: `📎 [Enviado ${type}]: ${url}`, time: new Date().toISOString() });
+        delete h[phone];
+        delete metadata[phone];
         writeData(FILES.history, h);
-        res.json({ success: true });
-    } else { res.status(500).send("Error"); }
-});
+        writeData(FILES.metadata, metadata);
+        return res.json({ success: true, deleted: true });
+    }
 
-app.post('/save-website', proteger, (req, res) => {
-    const config = readData(FILES.config, {});
-    config.website_data = req.body.urlData;
-    writeData(FILES.config, config);
+    writeData(FILES.metadata, metadata);
     res.json({ success: true });
 });
 
-app.post('/api/knowledge/delete', proteger, (req, res) => {
-    globalKnowledge.splice(req.body.index, 1);
-    writeData(FILES.knowledge, globalKnowledge);
-    res.json({ success: true });
-});
-
-// ARREGLO DE PERSONALIDAD: Endpoint para guardar
-app.post('/api/save-personality', proteger, (req, res) => {
-    const config = readData(FILES.config, {});
-    config.prompt = req.body.prompt;
-    writeData(FILES.config, config);
-    res.json({ success: true });
-});
-
-app.post('/save-context', proteger, (req, res) => {
-    const config = readData(FILES.config, {});
-    config.tech_rules = req.body.context;
-    writeData(FILES.config, config);
-    res.json({ success: true });
-});
-
+// 4. ENVÍO MANUAL Y MEDIA
 app.post('/api/chat/send', proteger, async (req, res) => {
     const { phone, message } = req.body;
     if (await enviarWhatsApp(phone, message)) {
@@ -278,29 +309,67 @@ app.post('/api/chat/toggle-bot', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-// ESTA ES LA RUTA QUE FALLABA Y AHORA DEBE FUNCIONAR
-app.get('/api/data/:type', proteger, (req, res) => {
-    const type = req.params.type;
-    const fallback = (type==='history'||type==='tags'||type==='bot_status') ? {} : [];
-    res.json(readData(FILES[type], fallback));
+// 5. CONFIGURACIÓN Y PRUEBAS IA
+app.get('/api/config', proteger, (req, res) => {
+    res.json(readData(FILES.config, { prompt: "", tech_rules: "", website_data: "" }));
 });
 
+app.post('/api/save-config', proteger, (req, res) => {
+    const { prompt, tech_rules, website_data } = req.body;
+    const config = readData(FILES.config, {});
+    
+    if (prompt !== undefined) config.prompt = prompt;
+    if (tech_rules !== undefined) config.tech_rules = tech_rules;
+    if (website_data !== undefined) config.website_data = website_data;
+    
+    writeData(FILES.config, config);
+    res.json({ success: true });
+});
+
+// Endpoint para el botón "PRUEBAS IA" (No envía a WhatsApp, solo simula)
+app.post('/api/test-ai', proteger, async (req, res) => {
+    const { message, context } = req.body; // context puede ser reglas temporales para probar
+    try {
+        const config = readData(FILES.config, {});
+        const prompt = `
+        ${config.prompt}
+        CONTEXTO DE PRUEBA: ${context || config.tech_rules}
+        Responde al mensaje: "${message}"
+        `;
+        
+        const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+            { contents: [{ parts: [{ text: prompt }] }] });
+            
+        res.json({ response: response.data.candidates[0].content.parts[0].text });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 6. CARGA DE BASE DE CONOCIMIENTOS (CSV)
 app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
     try {
         const newRecords = parse(req.file.buffer.toString('utf-8'), { columns: true, skip_empty_lines: true });
         const formattedNew = newRecords.map(r => ({ searchable: Object.values(r).join(" "), data: r }));
         const currentData = readData(FILES.knowledge, []);
         const combined = [...currentData, ...formattedNew];
+        // Eliminar duplicados simples
         globalKnowledge = Array.from(new Set(combined.map(a => a.searchable))).map(s => combined.find(a => a.searchable === s));
         writeData(FILES.knowledge, globalKnowledge);
         res.json({ success: true, count: globalKnowledge.length });
     } catch (e) { res.status(500).send("CSV Error"); }
 });
 
-// Servir estáticos AL FINAL para que no pisen las rutas de API
+app.get('/api/knowledge', proteger, (req, res) => res.json(readData(FILES.knowledge, [])));
+
+app.post('/api/knowledge/delete', proteger, (req, res) => {
+    globalKnowledge.splice(req.body.index, 1);
+    writeData(FILES.knowledge, globalKnowledge);
+    res.json({ success: true });
+});
+
+// SERVIR ARCHIVOS ESTÁTICOS AL FINAL
 app.use(express.static(__dirname));
 
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
 
-app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA ICC 3.3 (FIXED PERMISOS) ACTIVADA"));
+app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA ICC 4.0 - WHATSAPP STYLE READY"));
