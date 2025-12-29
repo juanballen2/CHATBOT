@@ -50,9 +50,10 @@ let db;
         driver: sqlite3.Database
     });
 
+    // ACTUALIZADO: Tabla de leads con columnas ciudad y correo
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
-        CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT);
+        CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT);
         CREATE TABLE IF NOT EXISTS metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0);
         CREATE TABLE IF NOT EXISTS bot_status (phone TEXT PRIMARY KEY, active INTEGER DEFAULT 1);
         CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, searchable TEXT UNIQUE, raw_data TEXT);
@@ -60,7 +61,7 @@ let db;
     `);
 
     await refreshKnowledge();
-    console.log("🚀 LORENA 7.0 SQL - MOTOR INICIADO CON ÉXITO");
+    console.log("🚀 LORENA 7.1 SQL - MOTOR INICIADO CON ÉXITO");
 })();
 
 let globalKnowledge = [];
@@ -154,13 +155,10 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
     [INFORMACIÓN WEB] ${websiteData}
     [INVENTARIO] ${JSON.stringify(stock)}
     [MISION CRÍTICA: DATOS DEL CLIENTE]
-    Tu trabajo es identificar el NOMBRE del cliente y su INTERÉS.
-    1. Si no sabes su nombre, pregunta amablemente.
-    2. REVISA EL HISTORIAL DE CHAT: Si el usuario dijo "Soy Juan", "Me llamo Carlos" o "Empresa XYZ", ESE es su nombre.
+    Identifica NOMBRE, INTERÉS, CIUDAD y CORREO.
     [RESPUESTA JSON OBLIGATORIA]
-    Si detectas intención de compra o datos de contacto, FINALIZA tu respuesta con:
-    [DATA] { "es_lead": true, "nombre": "...", "interes": "...", "etiqueta": "Lead Caliente" } [DATA]
-    Si no encuentras el nombre por ningún lado, pon "Desconocido".`;
+    Si hay datos, finaliza con:
+    [DATA] { "es_lead": true, "nombre": "...", "interes": "...", "ciudad": "...", "correo": "...", "etiqueta": "Lead Caliente" } [DATA]`;
 
     try {
         const resAI = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
@@ -168,6 +166,7 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
 
         let fullText = resAI.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText;
+        // Regex mejorado para capturar JSON incluso si la IA agrega saltos de línea
         const regexData = /\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/;
         const match = fullText.match(regexData);
 
@@ -176,9 +175,10 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
             try {
                 const info = JSON.parse(match[1]);
                 if(info.es_lead) {
-                    let nombreFinal = info.nombre;
+                    let nombreFinal = info.nombre || "Desconocido";
                     const meta = await db.get("SELECT addedManual, contactName FROM metadata WHERE phone = ?", [sessionId]);
-                    if (nombreFinal && !nombreFinal.toLowerCase().includes("desconocido") && !nombreFinal.toLowerCase().includes("nombre")) {
+                    
+                    if (nombreFinal && !nombreFinal.toLowerCase().includes("desconocido")) {
                         if (!meta || meta.addedManual === 0) {
                             await db.run("INSERT INTO metadata (phone, contactName, addedManual) VALUES (?, ?, 0) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName", [sessionId, nombreFinal]);
                         }
@@ -186,8 +186,11 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
                         nombreFinal = meta.contactName;
                     }
 
-                    await db.run("INSERT INTO leads (phone, nombre, interes, etiqueta, fecha) VALUES (?, ?, ?, ?, ?)", 
-                        [sessionId, nombreFinal, info.interes, info.etiqueta, new Date().toLocaleString()]);
+                    // GUARDADO COMPLETO EN LEADS
+                    await db.run(
+                        "INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)", 
+                        [sessionId, nombreFinal, info.interes || "General", info.etiqueta || "Lead", new Date().toLocaleString(), info.ciudad || "No indicada", info.correo || "No indicado"]
+                    );
                     
                     if(info.etiqueta) {
                         const row = await db.get("SELECT labels FROM metadata WHERE phone = ?", [sessionId]);
@@ -200,13 +203,14 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
                 }
             } catch(e) { console.error("Error JSON Bot:", e); }
         }
+
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', textoVisible, new Date().toISOString()]);
         return textoVisible;
     } catch (err) { return "Dame un momento, estoy verificando..."; }
 }
 
 // ============================================================
-// 5. API ENDPOINTS
+// 5. API ENDPOINTS (TRANSPOSICIÓN 1:1)
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
@@ -217,13 +221,11 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-// CORRECCIÓN: Endpoint de datos para que el Front no se rompa
 app.get('/api/data/:type', proteger, async (req, res) => {
     const t = req.params.type;
     try {
         if (t === 'leads') {
             const rows = await db.all("SELECT * FROM leads ORDER BY id DESC");
-            // Mapeamos para que el front reciba 'telefono' y 'fecha' como antes
             return res.json(rows.map(r => ({ ...r, telefono: r.phone, fecha: r.fecha })));
         }
         if (t === 'config') return res.json({ prompt: await getCfg('prompt', ""), website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []) });
@@ -379,4 +381,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 7.0 SQL - THE VAULT (FIDELIDAD TOTAL)"));
+app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 7.1 SQL - THE VAULT (FIDELIDAD TOTAL)"));
