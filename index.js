@@ -42,6 +42,7 @@ let db;
         driver: sqlite3.Database
     });
 
+    // CONEXIÓN DE TABLAS: Se asegura que las columnas email y city existan
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
         CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, name TEXT, email TEXT, city TEXT, interest TEXT, label TEXT, time TEXT, original_timestamp TEXT);
@@ -109,7 +110,7 @@ async function uploadToMeta(buffer, mimeType, filename) {
 }
 
 // ============================================================
-// 4. IA LORENA (CORREGIDA PARA CAPTURA DE DATOS)
+// 4. IA LORENA (CORRECCIÓN DE CONEXIÓN JSON -> DB)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -139,8 +140,8 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
     let reglasTexto = Array.isArray(techRules) ? techRules.map(r => `- ${r}`).join("\n") : techRules;
 
     const prompt = `ERES LORENA DE ICC. Personalidad: ${configPrompt}. Web: ${websiteData}. Inventario: ${JSON.stringify(stock)}. Reglas: ${reglasTexto}.
-    MISION: Identificar NOMBRE, CORREO, CIUDAD e INTERÉS.
-    [RESPUESTA JSON OBLIGATORIA]: [DATA] {"es_lead": true, "nombre": "...", "correo": "...", "ciudad": "...", "interes": "...", "etiqueta": "Lead Caliente"} [DATA]`;
+    MISION: Extraer NOMBRE, CORREO, CIUDAD e INTERÉS.
+    [RESPUESTA JSON]: [DATA] {"es_lead": true, "nombre": "...", "correo": "...", "ciudad": "...", "interes": "...", "etiqueta": "Lead Caliente"} [DATA]`;
 
     try {
         const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
@@ -148,8 +149,6 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
 
         let fullText = res.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText;
-        
-        // Regex mejorado para capturar el JSON incluso con saltos de línea
         const match = fullText.match(/\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/);
 
         if (match) {
@@ -163,26 +162,20 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
 
                     if (!yaExiste) {
                         let nombreFinal = info.nombre;
-                        
-                        // Si detecta nombre y no es manual, actualiza metadata
                         if (nombreFinal && !nombreFinal.toLowerCase().includes("desconocido")) {
                             if (!meta || meta.addedManual === 0) {
                                 await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName", [sessionId, nombreFinal]);
                             }
                         }
-                        
                         const updatedMeta = await db.get("SELECT contactName FROM metadata WHERE phone = ?", [sessionId]);
                         nombreFinal = updatedMeta?.contactName || sessionId;
 
-                        // CORRECCIÓN DE CAMPOS: Mapeo exacto del JSON de la IA a las columnas de la DB
-                        await db.run(
-                            "INSERT INTO leads (phone, name, email, city, interest, label, time, original_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
-                            [sessionId, nombreFinal, info.correo || "", info.ciudad || "", info.interes || "", info.etiqueta || "Lead", new Date().toLocaleString(), Date.now().toString()]
-                        );
-                        console.log("✅ Lead Capturado con éxito:", nombreFinal);
+                        // CONEXIÓN CORREGIDA: Se mapean los nombres del JSON (ciudad, correo) a las columnas DB (city, email)
+                        await db.run("INSERT INTO leads (phone, name, email, city, interest, label, time, original_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
+                            [sessionId, nombreFinal, info.correo || "", info.ciudad || "", info.interes || "", info.etiqueta || "Lead", new Date().toLocaleString(), Date.now().toString()]);
                     }
                 }
-            } catch (jsonErr) { console.error("Error parseando JSON de IA:", jsonErr); }
+            } catch (e) { console.error("Error en parsing de DATA:", e); }
         }
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', textoVisible, new Date().toISOString()]);
         return textoVisible;
@@ -190,7 +183,7 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
 }
 
 // ============================================================
-// 5. API ENDPOINTS (TRANSPOSICIÓN TOTAL)
+// 5. API ENDPOINTS (CONEXIÓN CON FRONT-END)
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
@@ -225,9 +218,9 @@ app.get('/api/data/history', proteger, async (req, res) => {
     res.json(grouped);
 });
 
+// CONEXIÓN CORREGIDA: Se asegura que el Front reciba los nombres en español que espera el HTML
 app.get('/api/data/leads', proteger, async (req, res) => {
     const rows = await db.all("SELECT * FROM leads ORDER BY id DESC");
-    // Mapeo para que el Front reciba los nombres de campo que espera
     res.json(rows.map(r => ({ 
         ...r, 
         fecha: r.time, 
@@ -235,7 +228,8 @@ app.get('/api/data/leads', proteger, async (req, res) => {
         telefono: r.phone, 
         interes: r.interest, 
         ciudad: r.city, 
-        correo: r.email 
+        correo: r.email,
+        etiqueta: r.label
     })));
 });
 
@@ -323,7 +317,6 @@ app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res)
 });
 
 app.post('/api/knowledge/delete', proteger, async (req, res) => {
-    // En SQL es mejor borrar por el contenido searchable único
     const rows = await db.all("SELECT searchable FROM inventory");
     if(rows[req.body.index]) {
         await db.run("DELETE FROM inventory WHERE searchable = ?", [rows[req.body.index].searchable]);
@@ -342,9 +335,9 @@ app.post('/api/test-ai', proteger, async (req, res) => {
         const c = await getCfg('prompt', "");
         const web = await getCfg('website_data', "");
         const fullPrompt = `PROMPT: ${c}\nWEB: ${web}\nUSER: ${req.body.message}`;
-        const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+        const responseAI = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
             { contents: [{ parts: [{ text: fullPrompt }] }] });
-        res.json({ response: res.data.candidates[0].content.parts[0].text, logic_log: fullPrompt });
+        res.json({ response: responseAI.data.candidates[0].content.parts[0].text, logic_log: fullPrompt });
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
