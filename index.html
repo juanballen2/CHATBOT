@@ -282,6 +282,7 @@
 
         async function renderMsgs(id) {
             try {
+                // Modificado para usar el endpoint /api/data/history mapeado en SQL
                 const h = await fetch('/api/data/history').then(r=>r.json());
                 const msgs = h[id] || [];
                 const box = document.getElementById('msgs-box');
@@ -374,7 +375,7 @@
 
         async function loadInventory() {
             const inv = await fetch('/api/data/knowledge').then(r=>r.json());
-            // En SQL el inv viene como array de objetos
+            // Actualizado para manejar la estructura de tabla SQL
             document.getElementById('inv-body').innerHTML = (Array.isArray(inv) ? inv : []).map((item, i) => `<tr><td>${item.searchable}</td><td><button class="btn btn-red" onclick="delInv(${i})">X</button></td></tr>`).join('');
         }
         async function delInv(i) { await fetch('/api/knowledge/delete', {method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); }
@@ -382,6 +383,7 @@
 
         async function loadLeads() {
             try {
+                // Modificado para coincidir con el endpoint de datos mapeado en SQL
                 allLeads = await fetch('/api/data/leads').then(r=>r.json());
                 renderLeadsTable(allLeads);
             } catch(e) { console.error("Leads error", e); }
@@ -389,16 +391,16 @@
 
         function renderLeadsTable(data) {
             const body = document.getElementById('leads-body');
-            // Mapeamos para que soporte los nombres del Backend SQL
+            // Mapeo blindado para soportar tanto r.phone como r.telefono (SQL vs Front)
             body.innerHTML = (data || []).map(x => `
                 <tr>
-                    <td>${x.fecha || x.time || '-'}</td>
-                    <td><b>${x.nombre || x.name || 'Desconocido'}</b></td>
+                    <td>${x.fecha || '-'}</td>
+                    <td><b>${x.nombre || 'Desconocido'}</b></td>
                     <td>${x.telefono || x.phone || '-'}</td>
-                    <td>${x.ciudad || x.city || '-'}</td>
-                    <td>${x.correo || x.email || '-'}</td>
-                    <td>${x.interes || x.interest || '-'}</td>
-                    <td><span class="label-tag">${x.etiqueta || x.label || 'Lead'}</span></td>
+                    <td>${x.ciudad || '-'}</td>
+                    <td>${x.correo || '-'}</td>
+                    <td>${x.interes || '-'}</td>
+                    <td><span class="label-tag">${x.etiqueta || 'Lead'}</span></td>
                     <td><button class="btn btn-red" onclick="deleteLead(${x.id})" style="padding:4px 8px;"><i class="fas fa-trash"></i></button></td>
                 </tr>
             `).join('');
@@ -407,9 +409,9 @@
         function filterLeadsTable() {
             const q = document.getElementById('filter-leads').value.toLowerCase();
             const filtered = allLeads.filter(l => 
-                (l.nombre||l.name||'').toLowerCase().includes(q) || 
-                (l.interes||l.interest||'').toLowerCase().includes(q) || 
-                (l.ciudad||l.city||'').toLowerCase().includes(q) || 
+                (l.nombre||'').toLowerCase().includes(q) || 
+                (l.interes||'').toLowerCase().includes(q) || 
+                (l.ciudad||'').toLowerCase().includes(q) || 
                 (l.telefono||l.phone||'').includes(q)
             );
             renderLeadsTable(filtered);
