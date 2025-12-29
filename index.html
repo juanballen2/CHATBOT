@@ -388,15 +388,15 @@
 
         function renderLeadsTable(data) {
             const body = document.getElementById('leads-body');
-            body.innerHTML = (data || []).map(x => `
+            body.innerHTML = (data || []).slice().reverse().map(x => `
                 <tr>
-                    <td>${x.fecha || '-'}</td>
-                    <td><b>${x.nombre || 'Desconocido'}</b></td>
-                    <td>${x.telefono || '-'}</td>
-                    <td>${x.ciudad || '-'}</td>
-                    <td>${x.correo || '-'}</td>
-                    <td>${x.interes || '-'}</td>
-                    <td>${x.etiqueta||'-'}</td>
+                    <td>${x.fecha || x.time || '-'}</td>
+                    <td><b>${x.nombre || x.name || 'Desconocido'}</b></td>
+                    <td>${x.telefono || x.phone || '-'}</td>
+                    <td>${x.ciudad || x.city || '-'}</td>
+                    <td>${x.correo || x.email || '-'}</td>
+                    <td>${x.interes || x.interest || '-'}</td>
+                    <td><span class="label-tag">${x.etiqueta || x.label || 'Lead'}</span></td>
                     <td><button class="btn btn-red" onclick="deleteLead(${x.id})" style="padding:4px 8px;"><i class="fas fa-trash"></i></button></td>
                 </tr>
             `).join('');
@@ -405,10 +405,10 @@
         function filterLeadsTable() {
             const q = document.getElementById('filter-leads').value.toLowerCase();
             const filtered = allLeads.filter(l => 
-                (l.nombre||'').toLowerCase().includes(q) || 
-                (l.interes||'').toLowerCase().includes(q) || 
-                (l.ciudad||'').toLowerCase().includes(q) || 
-                (l.telefono||'').includes(q)
+                (l.nombre||l.name||'').toLowerCase().includes(q) || 
+                (l.interes||l.interest||'').toLowerCase().includes(q) || 
+                (l.ciudad||l.city||'').toLowerCase().includes(q) || 
+                (l.telefono||l.phone||'').includes(q)
             );
             renderLeadsTable(filtered);
         }
