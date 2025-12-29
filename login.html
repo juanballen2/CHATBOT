@@ -3,355 +3,222 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICC | Panel de Control Pro</title>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet">
+    <title>Acceso Seguro | ICC IA</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
     <style>
         :root {
             --naranja: #FF8C00;
-            --naranja-light: #fff3e6;
             --dark-bg: #1a2a3a;
-            --light-bg: #f4f7f6;
-            --whatsapp: #25D366;
-            --success: #27ae60;
+            --dark-overlay: rgba(26, 42, 58, 0.9);
             --danger: #e74c3c;
-            --text-main: #333;
-            --text-muted: #777;
         }
 
-        body { margin: 0; font-family: 'Montserrat', sans-serif; background: var(--light-bg); display: flex; height: 100vh; color: var(--text-main); }
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--dark-bg);
+            /* Fondo industrial sutil */
+            background-image: linear-gradient(var(--dark-overlay), var(--dark-overlay)), url('https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=2070&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            color: white;
+            overflow: hidden;
+        }
 
-        /* SIDEBAR */
-        .sidebar { width: 260px; background: var(--dark-bg); color: white; display: flex; flex-direction: column; z-index: 100; }
-        .logo-box { padding: 30px 20px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
-        .nav-label { font-size: 10px; text-transform: uppercase; color: rgba(255,255,255,0.4); padding: 25px 25px 10px; letter-spacing: 1.5px; font-weight: 700; }
-        .nav-item { padding: 14px 25px; cursor: pointer; color: rgba(255,255,255,0.7); display: flex; align-items: center; gap: 12px; font-size: 14px; transition: all 0.3s; text-decoration: none; }
-        .nav-item:hover, .nav-item.active { background: rgba(255,255,255,0.05); color: var(--naranja); box-shadow: inset 4px 0 0 var(--naranja); }
+        .login-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            padding: 50px 40px;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+            width: 100%;
+            max-width: 380px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+            animation: slideUp 0.6s ease-out;
+        }
 
-        /* MAIN */
-        .main-content { flex: 1; padding: 40px; overflow-y: auto; }
-        .view { display: none; }
-        .view.active { display: block; animation: fadeIn 0.4s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
 
-        .card { background: white; border-radius: 12px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); margin-bottom: 25px; }
+        h2 {
+            margin: 0 0 10px 0;
+            font-size: 28px;
+            letter-spacing: 1px;
+        }
 
-        /* CHAT CENTER */
-        .chat-container { display: grid; grid-template-columns: 320px 1fr; height: 75vh; background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        .chat-list { border-right: 1px solid #eee; display: flex; flex-direction: column; background: #fff; }
-        .search-area { padding: 20px; border-bottom: 1px solid #eee; }
-        .search-area input { width: 100%; padding: 10px 15px; border-radius: 8px; border: 1px solid #ddd; outline: none; box-sizing: border-box; }
-        
-        .chat-user { padding: 18px 20px; border-bottom: 1px solid #f8f8f8; cursor: pointer; transition: 0.2s; }
-        .chat-user.active { background: var(--naranja-light); border-right: 4px solid var(--naranja); }
-        .tag-badge { font-size: 9px; padding: 3px 8px; border-radius: 4px; font-weight: 700; text-transform: uppercase; margin-top: 5px; display: inline-block; }
+        p {
+            color: rgba(255,255,255,0.6);
+            font-size: 13px;
+            margin-bottom: 40px;
+        }
 
-        .chat-window { display: flex; flex-direction: column; background: #f0f2f5; }
-        .chat-header { padding: 15px 25px; background: #fff; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
-        .chat-messages { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-        
-        .bubble { max-width: 70%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .user-row { align-self: flex-start; background: #fff; }
-        .bot-row { align-self: flex-end; background: #dcf8c6; }
-        .manual-row { align-self: flex-end; background: #e3f2fd; border: 1px solid #bbdefb; }
+        .input-group {
+            position: relative;
+            margin-bottom: 25px;
+        }
 
-        .chat-input-area { padding: 20px; background: #fff; border-top: 1px solid #eee; display: flex; gap: 15px; align-items: center; }
-        .chat-input-area input { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #ddd; outline: none; }
+        .input-group i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255,255,255,0.5);
+            font-size: 16px;
+            transition: 0.3s;
+        }
 
-        /* TABLES */
-        table { width: 100%; border-collapse: collapse; }
-        th { text-align: left; padding: 15px; background: #fbfbfb; font-size: 12px; color: var(--text-muted); border-bottom: 1px solid #eee; }
-        td { padding: 15px; border-bottom: 1px solid #eee; font-size: 13px; }
-        
-        textarea { width: 100%; padding: 15px; border-radius: 8px; border: 1px solid #ddd; font-family: inherit; font-size: 14px; line-height: 1.6; margin-bottom: 15px; box-sizing: border-box; }
-        .btn { padding: 12px 24px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-family: inherit; }
-        .btn-naranja { background: var(--naranja); color: white; }
-        .btn-danger { background: #fee; color: var(--danger); }
-        .btn-icon { background: none; color: #777; font-size: 18px; padding: 10px; }
-        .btn-icon:hover { color: var(--naranja); }
+        input {
+            width: 100%;
+            padding: 15px 15px 15px 45px;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            color: white;
+            font-family: inherit;
+            font-size: 14px;
+            box-sizing: border-box;
+            outline: none;
+            transition: 0.3s;
+        }
 
-        #toast { position: fixed; bottom: 30px; right: 30px; background: var(--dark-bg); color: white; padding: 15px 30px; border-radius: 10px; transform: translateY(200%); transition: 0.4s; z-index: 9999; }
+        input:focus {
+            background: rgba(0,0,0,0.4);
+            border-color: var(--naranja);
+        }
+
+        input:focus + i {
+            color: var(--naranja);
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background: var(--naranja);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(255, 140, 0, 0.3);
+            background: #e67e00;
+        }
+
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error-msg {
+            color: #ff6b6b;
+            font-size: 12px;
+            margin-top: 20px;
+            display: none;
+            background: rgba(255, 107, 107, 0.1);
+            padding: 10px;
+            border-radius: 8px;
+            animation: shake 0.4s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .logo-img {
+            width: 80px;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 0 10px rgba(255,255,255,0.2));
+        }
+
     </style>
 </head>
 <body>
 
-    <div id="toast">Acción realizada</div>
+    <div class="login-card">
+        <h2 style="color:var(--naranja);">ICC <span style="color:white; font-weight:300;">IA</span></h2>
+        <p>Sistema de Gestión Inteligente</p>
 
-    <div class="sidebar">
-        <div class="logo-box"><h2 style="color:var(--naranja);">ICC <span style="color:white; font-weight:400;">IA</span></h2></div>
-        <div class="nav-label">Ventas</div>
-        <div class="nav-item active" onclick="navTo('dashboard', this)"><i class="fas fa-chart-line"></i> Dashboard</div>
-        <div class="nav-item" onclick="navTo('whatsapp', this)"><i class="fab fa-whatsapp"></i> Chat Center</div>
-        <div class="nav-item" onclick="navTo('leads', this)"><i class="fas fa-user-friends"></i> Leads</div>
-        <div class="nav-label">Ajustes</div>
-        <div class="nav-item" onclick="navTo('cerebro', this)"><i class="fas fa-brain"></i> Entrenamiento</div>
-        <div style="margin-top: auto; padding: 20px;"><a href="/logout" class="nav-item" style="color:#ff4d4d;"><i class="fas fa-power-off"></i> CERRAR SESIÓN</a></div>
-    </div>
-
-    <div class="main-content">
-        <div id="dashboard" class="view active">
-            <h2>Resumen General</h2>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px;">
-                <div class="card"><h3>Total Leads</h3><h1 id="kpi-leads" style="color:var(--naranja)">0</h1></div>
-                <div class="card"><h3>Productos</h3><h1 id="kpi-stock" style="color:var(--success)">0</h1></div>
-                <div class="card"><h3>Estado</h3><h1 style="color:var(--whatsapp)">🟢 ONLINE</h1></div>
-            </div>
+        <div class="input-group">
+            <input type="text" id="user" placeholder="Usuario" autocomplete="off">
+            <i class="fas fa-user"></i>
         </div>
 
-        <div id="whatsapp" class="view">
-            <div class="chat-container">
-                <div class="chat-list">
-                    <div class="search-area"><input type="text" id="search-chat" placeholder="Buscar número..." oninput="renderChatList()"></div>
-                    <div id="chat-list-items" style="flex:1; overflow-y:auto;"></div>
-                </div>
-                <div class="chat-window">
-                    <div class="chat-header">
-                        <div id="chat-target-info"><strong>Seleccione un chat</strong></div>
-                        <div id="chat-actions" style="display:none; gap:12px; align-items:center;">
-                            <select id="tag-selector" onchange="updateTag()" style="padding:8px; border-radius:6px; border:1px solid #ddd;">
-                                <option value="curioso">Curioso</option>
-                                <option value="lead_caliente">Lead Caliente</option>
-                                <option value="duda_tecnica">Duda Técnica</option>
-                            </select>
-                            <button class="btn-icon" onclick="deleteChat()" title="Borrar Chat"><i class="fas fa-trash-alt"></i></button>
-                            <button id="btn-toggle-ia" class="btn" style="padding:8px 15px; font-size:12px;" onclick="toggleBot()">PAUSAR IA</button>
-                        </div>
-                    </div>
-                    <div class="chat-messages" id="chat-messages-box"></div>
-                    <div class="chat-input-area" id="chat-input-box" style="display:none;">
-                        <button class="btn-icon" onclick="sendMediaPrompt()" title="Enviar Multimedia"><i class="fas fa-paperclip"></i></button>
-                        <input type="text" id="manual-msg-input" placeholder="Mensaje manual..." onkeypress="if(event.key==='Enter') sendManual()">
-                        <button class="btn-icon" style="color:var(--whatsapp)" onclick="sendManual()"><i class="fas fa-paper-plane"></i></button>
-                    </div>
-                </div>
-            </div>
+        <div class="input-group">
+            <input type="password" id="pass" placeholder="Contraseña" onkeypress="handleEnter(event)">
+            <i class="fas fa-lock"></i>
         </div>
 
-        <div id="leads" class="view">
-            <h2>Base de Clientes</h2>
-            <div class="card" style="padding:0; overflow:hidden;">
-                <table>
-                    <thead><tr><th>Fecha</th><th>Nombre</th><th>Teléfono</th><th>Interés</th><th>Etiqueta</th></tr></thead>
-                    <tbody id="leads-table-body"></tbody>
-                </table>
-            </div>
+        <button onclick="login()" id="btn-login">INGRESAR</button>
+        
+        <div id="error-box" class="error-msg">
+            <i class="fas fa-exclamation-triangle"></i> Credenciales incorrectas
         </div>
 
-        <div id="cerebro" class="view">
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:30px;">
-                <div>
-                    <div class="card">
-                        <h3>Personalidad y Tono</h3>
-                        <textarea id="prompt-area" rows="10"></textarea>
-                        <button class="btn btn-naranja" style="width:100%" onclick="savePrompt()">GUARDAR</button>
-                    </div>
-                    <div class="card">
-                        <h3>Info Web (Scraping)</h3>
-                        <textarea id="web-data-area" rows="6"></textarea>
-                        <button class="btn btn-naranja" style="width:100%" onclick="saveWebData()">SINCRONIZAR</button>
-                    </div>
-                </div>
-                <div>
-                    <div class="card">
-                        <h3>Subir CSV (Acumulativo)</h3>
-                        <input type="file" id="csv-file" accept=".csv" style="margin-bottom:15px;">
-                        <button class="btn btn-naranja" style="width:100%" onclick="uploadCSV()">PROCESAR</button>
-                    </div>
-                    <div class="card">
-                        <h3>Gestión de Inventario</h3>
-                        <div style="max-height: 350px; overflow-y:auto;">
-                            <table>
-                                <tbody id="inventory-body"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div style="margin-top: 30px; font-size: 10px; color: rgba(255,255,255,0.3);">
+            Protected by Render & Gemini 2.0
         </div>
     </div>
 
     <script>
-        let selectedPhone = null;
-        let botIsActive = true;
-        let globalHistory = {};
-        let globalTags = {};
-        let liveTimer = null;
-
-        function navTo(view, el) {
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.getElementById(view).classList.add('active');
-            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-            if(el) el.classList.add('active');
-            
-            if(liveTimer) clearInterval(liveTimer);
-            if(view === 'whatsapp') { syncChat(); liveTimer = setInterval(syncChat, 3000); }
-            if(view === 'dashboard') loadStats();
-            if(view === 'leads') loadLeads();
-            if(view === 'cerebro') { loadInventory(); loadConfig(); }
+        function handleEnter(e) {
+            if(e.key === 'Enter') login();
         }
 
-        async function syncChat() {
+        async function login() {
+            const user = document.getElementById('user').value;
+            const pass = document.getElementById('pass').value;
+            const btn = document.getElementById('btn-login');
+            const errBox = document.getElementById('error-box');
+
+            if(!user || !pass) return;
+
+            // Estado de carga
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> VALIDANDO...';
+            btn.disabled = true;
+            errBox.style.display = 'none';
+
             try {
-                const [hRes, tRes] = await Promise.all([
-                    fetch('/api/data/history').then(r => r.json()),
-                    fetch('/api/data/tags').then(r => r.json())
-                ]);
-                globalHistory = hRes;
-                globalTags = tRes;
-                renderChatList();
-            } catch(e) {}
-        }
+                const res = await fetch('/auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user, pass })
+                });
 
-        function renderChatList() {
-            const list = document.getElementById('chat-list-items');
-            const query = document.getElementById('search-chat').value.toLowerCase();
-            const nums = Object.keys(globalHistory).filter(n => n.includes(query)).reverse();
-            list.innerHTML = nums.map(n => {
-                const tag = globalTags[n] || 'lead';
-                const tagCol = tag === 'lead_caliente' ? 'background:#ffebee;color:#c62828' : 'background:#e3f2fd;color:#1565c0';
-                return `<div class="chat-user ${selectedPhone === n ? 'active' : ''}" onclick="selectChat('${n}')">
-                    <strong>${n}</strong><br><span class="tag-badge" style="${tagCol}">${tag.replace('_',' ')}</span>
-                </div>`;
-            }).join('');
-            if(selectedPhone) renderMessages();
-        }
+                const data = await res.json();
 
-        async function selectChat(phone) {
-            selectedPhone = phone;
-            document.getElementById('chat-target-info').innerHTML = `<strong>${phone}</strong>`;
-            document.getElementById('chat-actions').style.display = 'flex';
-            document.getElementById('chat-input-box').style.display = 'flex';
-            document.getElementById('tag-selector').value = globalTags[phone] || 'curioso';
-            
-            const status = await fetch('/api/data/bot_status').then(r => r.json());
-            botIsActive = status[phone] !== false;
-            updateBotBtn();
-            renderMessages();
+                if (data.success) {
+                    window.location.href = '/'; // Redirigir al Dashboard
+                } else {
+                    throw new Error("Fallo");
+                }
+            } catch (e) {
+                // Estado de error
+                errBox.style.display = 'block';
+                btn.innerHTML = 'INGRESAR';
+                btn.disabled = false;
+                document.getElementById('pass').value = '';
+            }
         }
-
-        function renderMessages() {
-            const box = document.getElementById('chat-messages-box');
-            const msgs = globalHistory[selectedPhone] || [];
-            box.innerHTML = msgs.map(m => `<div class="bubble ${m.role === 'bot' ? 'bot-row' : m.role === 'manual' ? 'manual-row' : 'user-row'}">${m.text}</div>`).join('');
-            box.scrollTop = box.scrollHeight;
-        }
-
-        async function sendManual() {
-            const inp = document.getElementById('manual-msg-input');
-            const txt = inp.value;
-            if(!txt) return;
-            await fetch('/api/chat/send', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedPhone, message:txt})});
-            inp.value = '';
-            syncChat();
-        }
-
-        async function sendMediaPrompt() {
-            const url = prompt("Pega la URL del archivo (Imagen o PDF):");
-            if(!url) return;
-            const type = url.toLowerCase().endsWith('.pdf') ? 'document' : 'image';
-            await fetch('/api/chat/send-media', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedPhone, url, type})});
-            toast("Enviando multimedia...");
-            syncChat();
-        }
-
-        async function deleteChat() {
-            if(!confirm("¿Borrar chat?")) return;
-            await fetch('/api/chat/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedPhone})});
-            selectedPhone = null;
-            document.getElementById('chat-actions').style.display = 'none';
-            document.getElementById('chat-input-box').style.display = 'none';
-            syncChat();
-            toast("Chat eliminado");
-        }
-
-        async function toggleBot() {
-            botIsActive = !botIsActive;
-            await fetch('/api/chat/toggle-bot', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedPhone, active:botIsActive})});
-            updateBotBtn();
-            toast(botIsActive ? "IA Activada" : "IA Pausada");
-        }
-
-        function updateBotBtn() {
-            const btn = document.getElementById('btn-toggle-ia');
-            btn.innerHTML = botIsActive ? "PAUSAR IA" : "RETOMAR IA";
-            btn.style.background = botIsActive ? "var(--naranja)" : "var(--danger)";
-            btn.style.color = "white";
-        }
-
-        async function updateTag() {
-            const val = document.getElementById('tag-selector').value;
-            await fetch('/api/chat/tag', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedPhone, tag:val})});
-            toast("Etiqueta actualizada");
-            syncChat();
-        }
-
-        async function loadConfig() {
-            const data = await fetch('/api/data/config').then(r => r.json());
-            document.getElementById('prompt-area').value = data.tech_rules || '';
-            document.getElementById('web-data-area').value = data.website_data || '';
-        }
-
-        async function savePrompt() {
-            await fetch('/save-context', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({context: document.getElementById('prompt-area').value})});
-            toast("Guardado");
-        }
-
-        async function saveWebData() {
-            await fetch('/save-website', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({urlData: document.getElementById('web-data-area').value})});
-            toast("Sincronizado");
-        }
-
-        async function loadInventory() {
-            const data = await fetch('/api/data/knowledge').then(r => r.json());
-            document.getElementById('inventory-body').innerHTML = data.map((it, idx) => `<tr>
-                <td>${it.searchable.substring(0,30)}...</td>
-                <td style="text-align:right;"><button class="btn btn-danger" style="padding:5px 10px; font-size:11px;" onclick="deleteItem(${idx})">Borrar</button></td>
-            </tr>`).join('');
-            document.getElementById('kpi-stock').innerText = data.length;
-        }
-
-        async function deleteItem(idx) {
-            await fetch('/api/knowledge/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:idx})});
-            loadInventory();
-        }
-
-        async function loadLeads() {
-            const [leads, tags] = await Promise.all([
-                fetch('/api/data/leads').then(r => r.json()),
-                fetch('/api/data/tags').then(r => r.json())
-            ]);
-            document.getElementById('leads-table-body').innerHTML = leads.map(l => `<tr>
-                <td>${l.fecha}</td><td>${l.nombre||'---'}</td><td>${l.telefono}</td><td>${l.interes}</td><td>${tags[l.telefono] || 'lead'}</td>
-            </tr>`).join('');
-            document.getElementById('kpi-leads').innerText = leads.length;
-        }
-
-        async function uploadCSV() {
-            const file = document.getElementById('csv-file').files[0];
-            if(!file) return;
-            const fd = new FormData(); fd.append('file', file);
-            await fetch('/api/knowledge/csv', { method:'POST', body: fd });
-            toast("Cargado exitosamente");
-            loadInventory();
-        }
-
-        function toast(m) {
-            const t = document.getElementById('toast');
-            t.innerText = m;
-            t.style.transform = "translateY(0)";
-            setTimeout(() => t.style.transform = "translateY(200%)", 3000);
-        }
-
-        async function loadStats() {
-            loadLeads();
-            const res = await fetch('/api/data/knowledge');
-            const data = await res.json();
-            document.getElementById('kpi-stock').innerText = data.length;
-        }
-
-        window.onload = loadStats;
     </script>
 </body>
 </html>
