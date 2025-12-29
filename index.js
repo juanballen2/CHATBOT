@@ -22,7 +22,14 @@ const SESSION_SECRET = "icc-ultra-secret-2025";
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.static(__dirname)); 
+
+// ARREGLO DE SEGURIDAD: Bloquear acceso directo a los JSONs desde el navegador
+app.use((req, res, next) => {
+    if (req.path.endsWith('.json') || req.path.includes('/data/')) {
+        return res.status(403).send('Acceso Prohibido');
+    }
+    next();
+});
 
 const DATA_DIR = path.resolve(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -46,7 +53,9 @@ const writeData = (file, data) => {
     catch (err) { return false; }
 };
 
+// ARREGLO DE LOGOUT: Nombre de cookie específico
 app.use(session({
+    name: 'icc_session', // Nombre único para identificar la cookie
     secret: SESSION_SECRET,
     resave: true,
     saveUninitialized: true,
@@ -56,7 +65,7 @@ app.use(session({
 let globalKnowledge = readData(FILES.knowledge, []);
 
 // ============================================================
-// 📩 MOTOR DE ENVÍO (TEXTO / IMAGEN / DOC)
+// 📩 MOTOR DE ENVÍO
 // ============================================================
 async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     try {
@@ -76,7 +85,7 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
 }
 
 // ============================================================
-// 🧠 CEREBRO LORENA (GEMINI 2.0 + LEADS + TAGS)
+// 🧠 CEREBRO LORENA (CORREGIDO: PERSONALIDAD DINÁMICA)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -94,7 +103,7 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
     const botStatus = readData(FILES.bot_status, {});
     let allHistory = readData(FILES.history, {});
     
-    // Si el bot está apagado para este chat, solo guardamos lo que llega
+    // Si el bot está apagado, solo guardamos historial
     if (botStatus[sessionId] === false) {
         if (!allHistory[sessionId]) allHistory[sessionId] = [];
         allHistory[sessionId].push({ role: 'user', text: mediaDesc || message, time: new Date().toISOString() });
@@ -106,26 +115,34 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
     const chatPrevio = (allHistory[sessionId] || []).slice(-10);
     const stock = buscarEnCatalogo(message);
 
-    const prompt = `Eres Lorena de ICC. Vende repuestos Caterpillar/Komatsu.
-    PERSONALIDAD: ${config.tech_rules || 'Profesional'}
+    // ARREGLO DE PERSONALIDAD: Ahora lee LO QUE TÚ ESCRIBAS en el Dashboard
+    const personalidad = config.prompt || "Eres Lorena de ICC. Vende repuestos y maquinaria.";
+    const reglas = config.tech_rules || "Sé profesional.";
+
+    const prompt = `
+    ${personalidad}
+    
+    REGLAS TÉCNICAS: ${reglas}
     INFO WEB: ${config.website_data || ''}
     STOCK DISPONIBLE: ${JSON.stringify(stock)}
-    HISTORIAL: ${JSON.stringify(chatPrevio)}
+    HISTORIAL RECIENTE: ${JSON.stringify(chatPrevio)}
     
-    INSTRUCCIÓN: Responde amable y cierra con pregunta. 
-    AL FINAL añade: [DATA] {"es_lead":Boolean, "nombre":"...", "interes":"...", "etiqueta":"lead_caliente"|"duda_tecnica"|"curioso"} [DATA]`;
+    INSTRUCCIÓN FINAL:
+    Responde al cliente. Si detectas datos de contacto o interés claro, finaliza tu respuesta con:
+    [DATA] {"es_lead":true, "nombre":"...", "interes":"...", "etiqueta":"cotizacion"|"tecnico"} [DATA]
+    `;
 
     try {
         const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: prompt }] }] });
+            { contents: [{ parts: [{ text: prompt + `\nMENSAJE USUARIO: ${message}` }] }] });
 
         let fullText = res.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText.split('[DATA]')[0].trim();
         
-        // Procesar metadatos de la IA
+        // Procesar metadatos
         if (fullText.includes('[DATA]')) {
             try {
-                const info = JSON.parse(fullText.split('[DATA]')[1].trim());
+                const info = JSON.parse(fullText.split('[DATA]')[1].replace(/```json|```/g, "").trim());
                 if(info.es_lead) {
                     const leads = readData(FILES.leads, []);
                     leads.push({ ...info, fecha: new Date().toLocaleString(), telefono: sessionId });
@@ -144,11 +161,11 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
         writeData(FILES.history, allHistory);
 
         return textoVisible;
-    } catch (err) { return "Lorena ICC: Tuvimos un pequeño error, ¿me repites?"; }
+    } catch (err) { return "Lorena ICC: Estoy verificando la información en sistema, un momento..."; }
 }
 
 // ============================================================
-// 🚦 WEBHOOK (DETECCIÓN MULTIMEDIA)
+// 🚦 WEBHOOK
 // ============================================================
 app.get('/webhook', (req, res) => {
     if (req.query['hub.verify_token'] === 'ICC_2025') return res.send(req.query['hub.challenge']);
@@ -171,11 +188,26 @@ app.post('/webhook', async (req, res) => {
 });
 
 // ============================================================
-// ⚙️ APIS PANEL (CRUD Y GESTIÓN)
+// ⚙️ APIS PANEL
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
-// 🆕 Borrar Chat (WhatsApp Style)
+app.post('/auth', (req, res) => {
+    if (req.body.user === ADMIN_USER && req.body.pass === ADMIN_PASS) {
+        req.session.isLogged = true;
+        return req.session.save(() => res.json({ success: true }));
+    }
+    res.status(401).json({ success: false });
+});
+
+// ARREGLO DE LOGOUT: Borra la cookie explícitamente
+app.get('/logout', (req, res) => {
+    req.session.destroy(err => {
+        res.clearCookie('icc_session');
+        res.redirect('/login');
+    });
+});
+
 app.post('/api/chat/delete', proteger, (req, res) => {
     const { phone } = req.body;
     let h = readData(FILES.history, {});
@@ -185,7 +217,6 @@ app.post('/api/chat/delete', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-// 🆕 Enviar Multimedia Manual
 app.post('/api/chat/send-media', proteger, async (req, res) => {
     const { phone, url, type } = req.body;
     if (await enviarWhatsApp(phone, url, type)) {
@@ -197,7 +228,6 @@ app.post('/api/chat/send-media', proteger, async (req, res) => {
     } else { res.status(500).send("Error"); }
 });
 
-// 🆕 Sincronizar Info Web
 app.post('/save-website', proteger, (req, res) => {
     const config = readData(FILES.config, {});
     config.website_data = req.body.urlData;
@@ -205,19 +235,18 @@ app.post('/save-website', proteger, (req, res) => {
     res.json({ success: true });
 });
 
-// 🆕 Borrar Producto Individual
 app.post('/api/knowledge/delete', proteger, (req, res) => {
     globalKnowledge.splice(req.body.index, 1);
     writeData(FILES.knowledge, globalKnowledge);
     res.json({ success: true });
 });
 
-app.post('/auth', (req, res) => {
-    if (req.body.user === ADMIN_USER && req.body.pass === ADMIN_PASS) {
-        req.session.isLogged = true;
-        return req.session.save(() => res.json({ success: true }));
-    }
-    res.status(401).json({ success: false });
+// ARREGLO DE PERSONALIDAD: Endpoint para guardar
+app.post('/api/save-personality', proteger, (req, res) => {
+    const config = readData(FILES.config, {});
+    config.prompt = req.body.prompt;
+    writeData(FILES.config, config);
+    res.json({ success: true });
 });
 
 app.post('/save-context', proteger, (req, res) => {
@@ -251,22 +280,22 @@ app.get('/api/data/:type', proteger, (req, res) => {
     res.json(readData(FILES[type], fallback));
 });
 
-// 🔄 Acumulación de CSV
 app.post('/api/knowledge/csv', proteger, upload.single('file'), (req, res) => {
     try {
         const newRecords = parse(req.file.buffer.toString('utf-8'), { columns: true, skip_empty_lines: true });
         const formattedNew = newRecords.map(r => ({ searchable: Object.values(r).join(" "), data: r }));
         const currentData = readData(FILES.knowledge, []);
         const combined = [...currentData, ...formattedNew];
-        // Quitar duplicados
         globalKnowledge = Array.from(new Set(combined.map(a => a.searchable))).map(s => combined.find(a => a.searchable === s));
         writeData(FILES.knowledge, globalKnowledge);
         res.json({ success: true, count: globalKnowledge.length });
     } catch (e) { res.status(500).send("CSV Error"); }
 });
 
+// Servir estáticos AL FINAL para que no pisen las rutas de API
+app.use(express.static(__dirname));
+
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
-app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
 
-app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA ICC ACTIVADA"));
+app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA ICC 3.2 (CORREGIDA) ACTIVADA"));
