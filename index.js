@@ -23,7 +23,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-secret-v7-final"; // Clave actualizada
+const SESSION_SECRET = "icc-secret-v7-final"; 
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -53,7 +53,7 @@ let db;
     // 1. Tablas Base (Estructura mínima vital)
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
-        CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT); -- Se inicia mínima para forzar la reparación
+        CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT); 
         CREATE TABLE IF NOT EXISTS metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0);
         CREATE TABLE IF NOT EXISTS bot_status (phone TEXT PRIMARY KEY, active INTEGER DEFAULT 1);
         CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, searchable TEXT UNIQUE, raw_data TEXT);
@@ -61,14 +61,13 @@ let db;
     `);
 
     // 2. PROTOCOLO DE REPARACIÓN DE COLUMNAS
-    // Este ciclo asegura que la tabla 'leads' tenga TODAS las columnas necesarias, sin importar su estado anterior.
     const columnasRequeridas = [
         { name: 'nombre', type: 'TEXT' },
         { name: 'interes', type: 'TEXT' },
         { name: 'etiqueta', type: 'TEXT' },
         { name: 'fecha', type: 'TEXT' },
-        { name: 'ciudad', type: 'TEXT' }, // Vital para tu requerimiento
-        { name: 'correo', type: 'TEXT' }  // Vital para tu requerimiento
+        { name: 'ciudad', type: 'TEXT' }, 
+        { name: 'correo', type: 'TEXT' }  
     ];
 
     console.log("🔧 Iniciando diagnóstico de base de datos...");
@@ -101,14 +100,12 @@ async function setCfg(key, value) {
     await db.run("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", [key, JSON.stringify(value)]);
 }
 
-// Configuración de sesión (Nota: MemoryStore es el default, para producción real en Railway se recomienda Redis o FileStore, 
-// pero esta configuración 'resave: false' reduce el ruido en los logs).
 app.use(session({
     name: 'icc_session',
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 horas
+    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } 
 }));
 
 // ============================================================
@@ -162,14 +159,11 @@ function buscarEnCatalogo(query) {
 }
 
 async function procesarConLorena(message, sessionId, mediaDesc = "") {
-    // Registro inmediato del mensaje del usuario
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
     
-    // Verificar si el bot está apagado para este usuario
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    // Carga de contexto
     const promptBase = await getCfg('prompt', "Eres Lorena, asistente de ventas amable y profesional.");
     const websiteData = await getCfg('website_data', "No hay información web extra.");
     const techRules = await getCfg('tech_rules', []);
@@ -179,7 +173,6 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
     const chatPrevio = historyRows.reverse();
     const stock = buscarEnCatalogo(message);
 
-    // PROMPT DE INGENIERÍA PARA CAPTURA DE DATOS
     const promptLorena = `
     ROL: ${promptBase}
     CONTEXTO WEB: ${websiteData}
@@ -211,8 +204,6 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
         let fullText = resAI.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText;
         
-        // Extracción Robusta del Bloque [DATA]
-        // Usamos /i para ignorar mayúsculas/minúsculas y [\s\S] para capturar saltos de línea
         const regexData = /\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/i;
         const match = fullText.match(regexData);
 
@@ -222,18 +213,11 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
                 const info = JSON.parse(match[1]);
                 if(info.es_lead) {
                     let nombreFinal = info.nombre || "Desconocido";
-                    
-                    // Lógica de recuperación de nombre desde Metadata si la IA falla
                     const meta = await db.get("SELECT contactName FROM metadata WHERE phone = ?", [sessionId]);
                     if (meta?.contactName && (nombreFinal.toLowerCase().includes("desconocido") || !nombreFinal)) {
                         nombreFinal = meta.contactName;
                     }
 
-                    // VALIDACIÓN ANTI-DUPLICADOS (Opcional: evita spam en la tabla leads)
-                    // Solo guardamos si no existe un lead para este teléfono hoy
-                    const hoy = new Date().toLocaleDateString();
-                    // Para simplificar, insertamos directo. SQL tiene ID autoincremental, así que no explota.
-                    
                     await db.run(
                         `INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) 
                          VALUES (?, ?, ?, ?, ?, ?, ?)`, 
@@ -242,7 +226,7 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
                             nombreFinal, 
                             info.interes || "General", 
                             info.etiqueta || "Lead", 
-                            new Date().toLocaleString(), // Fecha legible para el Excel
+                            new Date().toLocaleString(), 
                             info.ciudad || "No indicada", 
                             info.correo || "No indicado"
                         ]
@@ -272,21 +256,18 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-// Endpoint central de Datos - Ahora con mapeo SQL consistente
 app.get('/api/data/:type', proteger, async (req, res) => {
     const t = req.params.type;
     try {
         if (t === 'leads') {
-            // Ordenamos por ID descendente para ver los más nuevos primero
             const rows = await db.all("SELECT * FROM leads ORDER BY id DESC");
-            // Mapeamos para asegurar que el frontend reciba las propiedades esperadas
-            return res.json(rows.map(r => ({ 
-                ...r, 
-                telefono: r.phone, // Compatibilidad con Front
-                fecha: r.fecha     // Compatibilidad con Front
-            })));
+            return res.json(rows.map(r => ({ ...r, telefono: r.phone, fecha: r.fecha })));
         }
-        if (t === 'config') return res.json({ prompt: await getCfg('prompt', ""), website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []) });
+        if (t === 'config') return res.json({ 
+            prompt: await getCfg('prompt', ""), 
+            website_data: await getCfg('website_data', ""), 
+            tech_rules: await getCfg('tech_rules', []) 
+        });
         if (t === 'knowledge') return res.json(await db.all("SELECT * FROM inventory"));
         if (t === 'history') {
             const rows = await db.all("SELECT * FROM history ORDER BY id ASC");
