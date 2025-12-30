@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICC | Manager v7.2 SQL</title>
+    <title>ICC | Manager v7.9 SQL</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -92,7 +92,6 @@
     </div>
 
     <div class="app-container">
-        
         <div id="view-chat" class="view active">
             <div class="chat-layout">
                 <div class="chat-sidebar">
@@ -112,11 +111,7 @@
                         </div>
                         <button id="btn-bot" class="btn" onclick="toggleBot()" style="font-size:11px;">IA</button>
                     </div>
-                    
-                    <div class="msgs-box" id="msgs-box">
-                        <div style="text-align:center; margin-top:100px; color:#aaa;">Selecciona un chat</div>
-                    </div>
-                    
+                    <div class="msgs-box" id="msgs-box"><div style="text-align:center; margin-top:100px; color:#aaa;">Selecciona un chat</div></div>
                     <div class="input-bar" id="input-bar" style="display:none;">
                         <input type="file" id="file-input" hidden onchange="handleFileUpload(this)">
                         <button class="btn" style="background:transparent; color:#555;" onclick="document.getElementById('file-input').click()"><i class="fas fa-paperclip" style="font-size:20px;"></i></button>
@@ -141,7 +136,7 @@
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <h2>Base de Leads</h2>
                 <div style="display:flex; gap:10px;">
-                    <input type="text" id="filter-leads" placeholder="Filtrar por nombre, ciudad, producto..." oninput="filterLeadsTable()" style="padding:8px; border-radius:5px; border:1px solid #ddd; width:280px;">
+                    <input type="text" id="filter-leads" placeholder="Nombre, Ciudad, Correo..." oninput="filterLeadsTable()" style="padding:8px; border-radius:5px; border:1px solid #ddd; width:280px;">
                     <button class="btn btn-orange" onclick="exportExcel()"><i class="fas fa-file-excel"></i> Exportar Excel</button>
                 </div>
             </div>
@@ -176,11 +171,9 @@
                     <h3 style="color:var(--naranja); margin-top:0;">🤖 Personalidad & Web</h3>
                     <label style="font-size:12px; font-weight:bold;">Prompt (Personalidad)</label>
                     <textarea id="cfg-prompt" style="width:100%; height:120px; padding:10px; border:1px solid #ddd; border-radius:5px; margin-bottom:15px;"></textarea>
-                    <label style="font-size:12px; font-weight:bold;">Información Web (URLs, Nosotros...)</label>
+                    <label style="font-size:12px; font-weight:bold;">Información Web</label>
                     <textarea id="cfg-web" style="width:100%; height:120px; padding:10px; border:1px solid #ddd; border-radius:5px;" placeholder="Pega aquí la info de tu página web..."></textarea>
-                    <div style="margin-top:15px;">
-                        <button class="btn btn-orange" onclick="savePromptWeb()">Guardar Datos Base</button>
-                    </div>
+                    <div style="margin-top:15px;"><button class="btn btn-orange" onclick="savePromptWeb()">Guardar Datos Base</button></div>
                 </div>
                 <div class="card">
                     <h3 style="color:#202c33; margin-top:0;">📜 Reglas de Negocio</h3>
@@ -206,7 +199,6 @@
                 </div>
             </div>
         </div>
-
     </div>
 
     <div id="ctx-menu">
@@ -252,17 +244,12 @@
             const q = document.getElementById('search').value.toLowerCase();
             document.getElementById('chat-list-box').innerHTML = chats.filter(c => (c.name||c.id).toLowerCase().includes(q)).map(c => {
                 let labelsHtml = (c.labels||[]).map(l => `<span class="label-tag">${l}</span>`).join('');
-                return `
-                <div class="chat-item ${c.id===selectedId?'active':''}" onclick="selChat('${c.id}')" oncontextmenu="openCtx(event, '${c.id}')">
+                return `<div class="chat-item ${c.id===selectedId?'active':''}" onclick="selChat('${c.id}')" oncontextmenu="openCtx(event, '${c.id}')">
                     <div class="avatar" style="background:${c.botActive?'var(--naranja)':'#ccc'}"><i class="fas fa-user"></i></div>
                     <div style="flex:1; overflow:hidden;">
-                        <div style="font-weight:600; display:flex; justify-content:space-between;">
-                            ${c.name} <small>${c.pinned?'📌':''}</small>
-                        </div>
+                        <div style="font-weight:600; display:flex; justify-content:space-between;">${c.name} <small>${c.pinned?'📌':''}</small></div>
                         <div class="labels-row">${labelsHtml}</div>
-                        <div style="font-size:12px; color:#666; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                            ${(c.lastMessage.text||'').substring(0,30)}
-                        </div>
+                        <div style="font-size:12px; color:#666; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${(c.lastMessage.text||'').substring(0,30)}</div>
                     </div>
                 </div>`;
             }).join('');
@@ -282,7 +269,6 @@
 
         async function renderMsgs(id) {
             try {
-                // Modificado para usar el endpoint /api/data/history mapeado en SQL
                 const h = await fetch('/api/data/history').then(r=>r.json());
                 const msgs = h[id] || [];
                 const box = document.getElementById('msgs-box');
@@ -322,9 +308,7 @@
                     document.getElementById('btn-mic').classList.remove('recording'); sync();
                 };
                 mediaRecorder.start(); isRecording = true; document.getElementById('btn-mic').classList.add('recording');
-            } else {
-                mediaRecorder.stop(); isRecording = false;
-            }
+            } else { mediaRecorder.stop(); isRecording = false; }
         }
 
         async function loadCfg() {
@@ -354,8 +338,7 @@
 
         async function savePromptWeb() {
             await fetch('/api/save-prompt-web', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-                prompt: document.getElementById('cfg-prompt').value,
-                website_data: document.getElementById('cfg-web').value
+                prompt: document.getElementById('cfg-prompt').value, website_data: document.getElementById('cfg-web').value
             })});
             alert("✅ Configuración Guardada");
         }
@@ -367,15 +350,14 @@
                     fetch('/api/chats-full').then(r=>r.json()), 
                     fetch('/api/data/knowledge').then(r=>r.json())
                 ]);
-                document.getElementById('kpi-leads').innerText = l.length || 0;
-                document.getElementById('kpi-chats').innerText = c.length || 0;
+                document.getElementById('kpi-leads').innerText = (Array.isArray(l) ? l.length : 0);
+                document.getElementById('kpi-chats').innerText = (Array.isArray(c) ? c.length : 0);
                 document.getElementById('kpi-stock').innerText = (Array.isArray(s) ? s.length : 0);
-            } catch(e) { console.error("Dash Error", e); }
+            } catch(e) {}
         }
 
         async function loadInventory() {
             const inv = await fetch('/api/data/knowledge').then(r=>r.json());
-            // Actualizado para manejar la estructura de tabla SQL
             document.getElementById('inv-body').innerHTML = (Array.isArray(inv) ? inv : []).map((item, i) => `<tr><td>${item.searchable}</td><td><button class="btn btn-red" onclick="delInv(${i})">X</button></td></tr>`).join('');
         }
         async function delInv(i) { await fetch('/api/knowledge/delete', {method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); }
@@ -383,27 +365,27 @@
 
         async function loadLeads() {
             try {
-                // Modificado para coincidir con el endpoint de datos mapeado en SQL
                 allLeads = await fetch('/api/data/leads').then(r=>r.json());
                 renderLeadsTable(allLeads);
-            } catch(e) { console.error("Leads error", e); }
+            } catch(e) {}
         }
 
         function renderLeadsTable(data) {
             const body = document.getElementById('leads-body');
-            // Mapeo blindado para soportar tanto r.phone como r.telefono (SQL vs Front)
-            body.innerHTML = (data || []).map(x => `
-                <tr>
-                    <td>${x.fecha || '-'}</td>
-                    <td><b>${x.nombre || 'Desconocido'}</b></td>
-                    <td>${x.telefono || x.phone || '-'}</td>
-                    <td>${x.ciudad || '-'}</td>
-                    <td>${x.correo || '-'}</td>
-                    <td>${x.interes || '-'}</td>
-                    <td><span class="label-tag">${x.etiqueta || 'Lead'}</span></td>
-                    <td><button class="btn btn-red" onclick="deleteLead(${x.id})" style="padding:4px 8px;"><i class="fas fa-trash"></i></button></td>
-                </tr>
-            `).join('');
+            if (!data || data.length === 0) {
+                body.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px; color:#888;">No hay leads registrados aún</td></tr>';
+                return;
+            }
+            body.innerHTML = data.map(x => `<tr>
+                <td>${x.fecha || '-'}</td>
+                <td><b>${x.nombre || 'Desconocido'}</b></td>
+                <td>${x.telefono || x.phone || '-'}</td>
+                <td>${x.ciudad || 'No indicada'}</td>
+                <td>${x.correo || 'No indicado'}</td>
+                <td>${x.interes || '-'}</td>
+                <td><span class="label-tag">${x.etiqueta || 'Lead'}</span></td>
+                <td><button class="btn btn-red" onclick="deleteLead(${x.id})" style="padding:4px 8px;"><i class="fas fa-trash"></i></button></td>
+            </tr>`).join('');
         }
 
         function filterLeadsTable() {
@@ -412,7 +394,8 @@
                 (l.nombre||'').toLowerCase().includes(q) || 
                 (l.interes||'').toLowerCase().includes(q) || 
                 (l.ciudad||'').toLowerCase().includes(q) || 
-                (l.telefono||l.phone||'').includes(q)
+                (l.correo||'').toLowerCase().includes(q) ||
+                (l.phone||l.telefono||'').includes(q)
             );
             renderLeadsTable(filtered);
         }
@@ -441,8 +424,7 @@
 
         function updateBotBtn(a) { 
             const btn = document.getElementById('btn-bot');
-            btn.innerText = a ? "IA: ON" : "IA: OFF"; 
-            btn.style.background = a ? "#202c33" : "#ef5350"; 
+            btn.innerText = a ? "IA: ON" : "IA: OFF"; btn.style.background = a ? "#202c33" : "#ef5350"; 
         }
         
         async function runTest() {
@@ -463,10 +445,7 @@
                 await fetch('/api/contacts/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:ctxId, name:val})});
                 sync(); return;
             }
-            if(action === 'label') {
-                val = prompt("Etiqueta:");
-                if(!val) return;
-            }
+            if(action === 'label') { val = prompt("Etiqueta:"); if(!val) return; }
             if(action === 'pin') val = !c.pinned;
             await fetch('/api/chat/action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:ctxId, action:action, value:val})});
             sync();
