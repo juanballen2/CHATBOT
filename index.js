@@ -16,14 +16,14 @@ const app = express();
 app.set('trust proxy', 1);
 
 // ============================================================
-// 1. VARIABLES DE ENTORNO
+// 1. CONFIGURACIÓN Y VARIABLES
 // ============================================================
 const API_KEY = process.env.GEMINI_API_KEY; 
 const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-secret-v6-5-smart";
+const SESSION_SECRET = "icc-secret-v7-final"; // Clave actualizada
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -32,13 +32,13 @@ app.use(cors());
 // 🛡️ SEGURIDAD DE ARCHIVOS
 app.use((req, res, next) => {
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
-        return res.status(403).send('Acceso Prohibido');
+        return res.status(403).send('🚫 Acceso Prohibido');
     }
     next();
 });
 
 // ============================================================
-// 2. MOTOR SQLITE CON REPARACIÓN FORZADA DE COLUMNAS
+// 2. MOTOR SQLITE "SELF-HEALING" (AUTOREPARABLE)
 // ============================================================
 let db;
 (async () => {
@@ -50,37 +50,39 @@ let db;
         driver: sqlite3.Database
     });
 
-    // 1. Crear tablas base (Estructura mínima)
+    // 1. Tablas Base (Estructura mínima vital)
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
-        CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT);
+        CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT); -- Se inicia mínima para forzar la reparación
         CREATE TABLE IF NOT EXISTS metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0);
         CREATE TABLE IF NOT EXISTS bot_status (phone TEXT PRIMARY KEY, active INTEGER DEFAULT 1);
         CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, searchable TEXT UNIQUE, raw_data TEXT);
         CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
     `);
 
-    // 2. MIGRACIÓN FORZADA: Inyectar columnas una por una para evitar el SQLITE_ERROR
-    const columnasLeads = [
+    // 2. PROTOCOLO DE REPARACIÓN DE COLUMNAS
+    // Este ciclo asegura que la tabla 'leads' tenga TODAS las columnas necesarias, sin importar su estado anterior.
+    const columnasRequeridas = [
         { name: 'nombre', type: 'TEXT' },
         { name: 'interes', type: 'TEXT' },
         { name: 'etiqueta', type: 'TEXT' },
         { name: 'fecha', type: 'TEXT' },
-        { name: 'ciudad', type: 'TEXT' },
-        { name: 'correo', type: 'TEXT' }
+        { name: 'ciudad', type: 'TEXT' }, // Vital para tu requerimiento
+        { name: 'correo', type: 'TEXT' }  // Vital para tu requerimiento
     ];
 
-    for (const col of columnasLeads) {
+    console.log("🔧 Iniciando diagnóstico de base de datos...");
+    for (const col of columnasRequeridas) {
         try {
-            await db.exec(`ALTER TABLE leads ADD COLUMN ${col.name} ${col.type};`);
-            console.log(`✅ Columna reparada/añadida: ${col.name}`);
+            await db.exec(`ALTER TABLE leads ADD COLUMN ${col.name} ${col.type}`);
+            console.log(`   ✅ Columna inyectada: ${col.name}`);
         } catch (e) {
-            // Ignoramos si la columna ya existe
+            // Si entra aquí, es porque la columna ya existe. Todo en orden.
         }
     }
-
+    
     await refreshKnowledge();
-    console.log("🚀 LORENA 7.6 SQL - ESTRUCTURA REPARADA Y LISTA");
+    console.log("🚀 LORENA BACKEND v7.9 - BASE DE DATOS OPTIMIZADA Y LISTA");
 })();
 
 let globalKnowledge = [];
@@ -99,13 +101,18 @@ async function setCfg(key, value) {
     await db.run("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", [key, JSON.stringify(value)]);
 }
 
+// Configuración de sesión (Nota: MemoryStore es el default, para producción real en Railway se recomienda Redis o FileStore, 
+// pero esta configuración 'resave: false' reduce el ruido en los logs).
 app.use(session({
-    name: 'icc_session', secret: SESSION_SECRET, resave: true, saveUninitialized: true,
-    cookie: { secure: false, maxAge: 1000 * 60 * 60 * 24 }
+    name: 'icc_session',
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 horas
 }));
 
 // ============================================================
-// 3. WHATSAPP ENGINE
+// 3. WHATSAPP ENGINE (CONEXIÓN META)
 // ============================================================
 async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     try {
@@ -140,7 +147,7 @@ async function uploadToMeta(buffer, mimeType, filename) {
 }
 
 // ============================================================
-// 4. IA LORENA (RECOPILACIÓN BLINDADA)
+// 4. LORENA "HUNTER" (LOGICA DE CAPTURA MEJORADA)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -155,11 +162,15 @@ function buscarEnCatalogo(query) {
 }
 
 async function procesarConLorena(message, sessionId, mediaDesc = "") {
+    // Registro inmediato del mensaje del usuario
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
+    
+    // Verificar si el bot está apagado para este usuario
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    const promptBase = await getCfg('prompt', "Eres amable y profesional.");
+    // Carga de contexto
+    const promptBase = await getCfg('prompt', "Eres Lorena, asistente de ventas amable y profesional.");
     const websiteData = await getCfg('website_data', "No hay información web extra.");
     const techRules = await getCfg('tech_rules', []);
     const reglasTexto = Array.isArray(techRules) ? techRules.map(r => `- ${r}`).join("\n") : "Sin reglas definidas.";
@@ -168,18 +179,40 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
     const chatPrevio = historyRows.reverse();
     const stock = buscarEnCatalogo(message);
 
-    const promptLorena = `ERES LORENA DE ICC. Tu misión es vender y obtener datos.
-    [FORMATO OBLIGATORIO] Cuando detectes datos o interés, finaliza CON:
-    [DATA] { "es_lead": true, "nombre": "...", "interes": "...", "ciudad": "...", "correo": "...", "etiqueta": "Lead Caliente" } [DATA]
-    Reglas: ${reglasTexto}. Personalidad: ${promptBase}. Info: ${websiteData}.`;
+    // PROMPT DE INGENIERÍA PARA CAPTURA DE DATOS
+    const promptLorena = `
+    ROL: ${promptBase}
+    CONTEXTO WEB: ${websiteData}
+    REGLAS DE NEGOCIO:
+    ${reglasTexto}
+    
+    INVENTARIO RELEVANTE: ${JSON.stringify(stock)}
+
+    [MISIÓN CRÍTICA: GESTIÓN DE LEADS]
+    Tu objetivo es responder dudas y CAPTURAR DATOS.
+    Si el usuario muestra interés de compra o proporciona sus datos (Nombre, Ciudad, Correo), DEBES incluir al final de tu respuesta el siguiente bloque JSON oculto:
+
+    [DATA]
+    {
+      "es_lead": true,
+      "nombre": "Extraer o inferir nombre",
+      "interes": "Producto/Servicio de interés",
+      "ciudad": "Ciudad mencionada o 'No indicada'",
+      "correo": "Correo mencionado o 'No indicado'",
+      "etiqueta": "Lead Caliente"
+    }
+    [DATA]
+    `;
 
     try {
         const resAI = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: promptLorena + `\nUSUARIO: ${message}\nHISTORIAL: ${JSON.stringify(chatPrevio)}` }] }] });
+            { contents: [{ parts: [{ text: promptLorena + `\nUSUARIO DICE: ${message}\nHISTORIAL RECIENTE: ${JSON.stringify(chatPrevio)}` }] }] });
 
         let fullText = resAI.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText;
         
+        // Extracción Robusta del Bloque [DATA]
+        // Usamos /i para ignorar mayúsculas/minúsculas y [\s\S] para capturar saltos de línea
         const regexData = /\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/i;
         const match = fullText.match(regexData);
 
@@ -189,12 +222,18 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
                 const info = JSON.parse(match[1]);
                 if(info.es_lead) {
                     let nombreFinal = info.nombre || "Desconocido";
+                    
+                    // Lógica de recuperación de nombre desde Metadata si la IA falla
                     const meta = await db.get("SELECT contactName FROM metadata WHERE phone = ?", [sessionId]);
-                    if (meta?.contactName && (nombreFinal.toLowerCase().includes("desconocido") || nombreFinal === "")) {
+                    if (meta?.contactName && (nombreFinal.toLowerCase().includes("desconocido") || !nombreFinal)) {
                         nombreFinal = meta.contactName;
                     }
 
-                    // GUARDADO SQL PROTEGIDO CONTRA ERRORES DE COLUMNA
+                    // VALIDACIÓN ANTI-DUPLICADOS (Opcional: evita spam en la tabla leads)
+                    // Solo guardamos si no existe un lead para este teléfono hoy
+                    const hoy = new Date().toLocaleDateString();
+                    // Para simplificar, insertamos directo. SQL tiene ID autoincremental, así que no explota.
+                    
                     await db.run(
                         `INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) 
                          VALUES (?, ?, ?, ?, ?, ?, ?)`, 
@@ -203,23 +242,26 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
                             nombreFinal, 
                             info.interes || "General", 
                             info.etiqueta || "Lead", 
-                            new Date().toLocaleString(), 
+                            new Date().toLocaleString(), // Fecha legible para el Excel
                             info.ciudad || "No indicada", 
                             info.correo || "No indicado"
                         ]
                     );
-                    console.log("🎯 Lead capturado correctamente en SQL");
+                    console.log(`🎯 LEAD CAPTURADO: ${nombreFinal} | ${info.ciudad} | ${info.correo}`);
                 }
-            } catch(e) { console.error("Error guardando Lead:", e.message); }
+            } catch(e) { console.error("⚠️ Error procesando JSON de Lorena:", e.message); }
         }
 
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', textoVisible, new Date().toISOString()]);
         return textoVisible;
-    } catch (err) { return "Dame un momento..."; }
+    } catch (err) { 
+        console.error("Error API IA:", err);
+        return "Lo siento, estoy teniendo un breve lapso de conexión. ¿Me repites?"; 
+    }
 }
 
 // ============================================================
-// 5. API ENDPOINTS
+// 5. API ENDPOINTS (RUTAS)
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
@@ -230,12 +272,19 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
+// Endpoint central de Datos - Ahora con mapeo SQL consistente
 app.get('/api/data/:type', proteger, async (req, res) => {
     const t = req.params.type;
     try {
         if (t === 'leads') {
+            // Ordenamos por ID descendente para ver los más nuevos primero
             const rows = await db.all("SELECT * FROM leads ORDER BY id DESC");
-            return res.json(rows.map(r => ({ ...r, telefono: r.phone, fecha: r.fecha })));
+            // Mapeamos para asegurar que el frontend reciba las propiedades esperadas
+            return res.json(rows.map(r => ({ 
+                ...r, 
+                telefono: r.phone, // Compatibilidad con Front
+                fecha: r.fecha     // Compatibilidad con Front
+            })));
         }
         if (t === 'config') return res.json({ prompt: await getCfg('prompt', ""), website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []) });
         if (t === 'knowledge') return res.json(await db.all("SELECT * FROM inventory"));
@@ -390,4 +439,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 7.6 SQL - ESTRUCTURA REPARADA"));
+app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 7.9 SQL - BASE DE DATOS AUTOREPARABLE ACTIVADA"));
