@@ -3,144 +3,186 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICC | Manager v7.9 SQL</title>
+    <title>ICC | Manager v8.0 UI/UX</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
     <style>
-        :root { --naranja: #FF8C00; --dark: #202c33; --bg: #f0f2f5; --white: #fff; --danger: #ef5350; }
+        :root { --naranja: #FF8C00; --dark: #202c33; --bg: #f0f2f5; --white: #fff; --danger: #ef5350; --success: #25D366; }
         body { margin: 0; font-family: 'Montserrat', sans-serif; background: var(--bg); display: flex; height: 100vh; overflow: hidden; }
         
-        /* NAV */
-        .nav-bar { width: 60px; background: var(--dark); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 200; }
-        .nav-btn { color: #aebac1; font-size: 20px; margin-bottom: 25px; cursor: pointer; width: 100%; text-align: center; padding: 10px 0; transition: 0.2s; position: relative; }
-        .nav-btn:hover, .nav-btn.active { color: var(--naranja); background: rgba(255,255,255,0.05); border-left: 3px solid var(--naranja); }
-        .tooltip { position: absolute; left: 60px; background: #000; color: #fff; padding: 5px; border-radius: 4px; font-size: 10px; display: none; white-space: nowrap; z-index: 300; }
-        .nav-btn:hover .tooltip { display: block; }
+        /* NAV & LAYOUT */
+        .nav-bar { width: 60px; background: var(--dark); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 200; box-shadow: 2px 0 5px rgba(0,0,0,0.1); }
+        .nav-btn { color: #8696a0; font-size: 20px; margin-bottom: 25px; cursor: pointer; width: 100%; text-align: center; padding: 12px 0; transition: 0.2s; position: relative; }
+        .nav-btn:hover, .nav-btn.active { color: var(--naranja); background: rgba(255,255,255,0.08); border-left: 3px solid var(--naranja); }
+        .tooltip { position: absolute; left: 65px; background: #000; color: #fff; padding: 5px 8px; border-radius: 4px; font-size: 11px; display: none; white-space: nowrap; z-index: 300; pointer-events: none; }
+        .nav-btn:hover .tooltip { display: block; opacity: 1; }
 
-        /* LAYOUT */
         .app-container { flex: 1; display: flex; }
-        .view { display: none; width: 100%; height: 100%; flex-direction: column; animation: fadeIn 0.3s; }
+        .view { display: none; width: 100%; height: 100%; flex-direction: column; animation: fadeIn 0.2s ease-in-out; }
         .view.active { display: flex; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .page-content { padding: 30px; overflow-y: auto; flex: 1; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .page-content { padding: 30px; overflow-y: auto; flex: 1; background: #eef1f4; }
 
-        /* CHAT SIDEBAR */
+        /* NOTIFICACIONES (TOAST) */
+        #toast-box { position: fixed; top: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: #333; color: #fff; padding: 12px 20px; border-radius: 5px; font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: slideIn 0.3s forwards; display: flex; align-items: center; gap: 10px; min-width: 250px; }
+        .toast.success { border-left: 4px solid var(--success); }
+        .toast.error { border-left: 4px solid var(--danger); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* CHAT */
         .chat-layout { display: flex; height: 100%; }
-        .chat-sidebar { width: 320px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
+        .chat-sidebar { width: 340px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
         .chat-header { height: 60px; background: #f0f2f5; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; border-bottom: 1px solid #ddd; }
         .search-row { padding: 10px; border-bottom: 1px solid #eee; display: flex; gap: 5px; }
-        .search-input { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 20px; outline: none; background: #f0f2f5; }
-        
+        .search-input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 8px; outline: none; background: #f0f2f5; font-size: 13px; }
         .chat-list { flex: 1; overflow-y: auto; }
-        .chat-item { display: flex; padding: 12px; cursor: pointer; border-bottom: 1px solid #f5f5f5; transition: 0.2s; }
-        .chat-item:hover { background: #f5f5f5; }
-        .chat-item.active { background: #e9edef; }
-        
-        .avatar { width: 45px; height: 45px; border-radius: 50%; background: #dfe5e7; display: flex; align-items: center; justify-content: center; margin-right: 10px; color: #fff; font-size: 18px; }
-        .labels-row { display: flex; gap: 3px; margin-top: 3px; flex-wrap: wrap; }
-        .label-tag { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: #ffe0b2; color: #e65100; border: 1px solid #ffcc80; }
-
+        .chat-item { display: flex; padding: 15px; cursor: pointer; border-bottom: 1px solid #f9f9f9; transition: 0.2s; align-items: center; }
+        .chat-item:hover { background: #f5f6f6; }
+        .chat-item.active { background: #e9edef; border-left: 4px solid var(--naranja); }
+        .avatar { width: 45px; height: 45px; border-radius: 50%; background: #dfe5e7; display: flex; align-items: center; justify-content: center; margin-right: 12px; color: #fff; font-size: 18px; flex-shrink: 0; }
         .chat-main { flex: 1; display: flex; flex-direction: column; background: #efe7dd; position: relative; }
-        .chat-bg { position: absolute; inset: 0; opacity: 0.4; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); pointer-events: none; }
+        .chat-bg { position: absolute; inset: 0; opacity: 0.06; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); pointer-events: none; }
         
-        .msgs-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; z-index: 5; }
-        .bubble { max-width: 70%; padding: 8px 12px; border-radius: 8px; font-size: 14px; position: relative; box-shadow: 0 1px 1px rgba(0,0,0,0.1); word-wrap: break-word; }
+        .msgs-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; z-index: 5; scroll-behavior: smooth; }
+        .bubble { max-width: 75%; padding: 10px 14px; border-radius: 7.5px; font-size: 14px; position: relative; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); line-height: 1.4; }
         .bubble-in { align-self: flex-start; background: #fff; border-top-left-radius: 0; }
         .bubble-out { align-self: flex-end; background: #d9fdd3; border-top-right-radius: 0; }
-        .bubble-manual { align-self: flex-end; background: #e3f2fd; border-top-right-radius: 0; border: 1px dashed #2196f3; }
+        .bubble-manual { align-self: flex-end; background: #e3f2fd; border-top-right-radius: 0; border: 1px dashed #2196f3; font-size: 13px; opacity: 0.9; }
 
-        .input-bar { min-height: 60px; background: #f0f2f5; padding: 10px; display: flex; gap: 10px; z-index: 10; align-items: center; }
-        .input-msg { flex: 1; padding: 12px; border-radius: 8px; border: none; outline: none; background: #fff; }
+        .input-bar { min-height: 70px; background: #f0f2f5; padding: 10px 20px; display: flex; gap: 10px; z-index: 10; align-items: center; }
+        .input-msg { flex: 1; padding: 14px; border-radius: 8px; border: none; outline: none; background: #fff; font-family: inherit; }
 
-        /* CARDS */
-        .card { background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid #eee; }
-        .btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; color: white; background: var(--dark); display: inline-flex; align-items: center; gap: 5px; font-size: 13px; transition: 0.2s; }
-        .btn:hover { opacity: 0.9; }
+        /* UI ELEMENTS */
+        .card { background: #fff; padding: 25px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 25px; border: 1px solid #f0f0f0; }
+        .btn { padding: 10px 18px; border: none; border-radius: 6px; cursor: pointer; color: white; background: var(--dark); display: inline-flex; align-items: center; gap: 6px; font-size: 13px; transition: all 0.2s; font-weight: 500; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
         .btn-orange { background: var(--naranja); }
         .btn-red { background: var(--danger); }
         
-        /* REGLAS */
-        .rule-list { list-style: none; padding: 0; margin-top: 15px; max-height: 350px; overflow-y: auto; border: 1px solid #eee; border-radius: 5px; }
-        .rule-item { padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fafafa; font-size: 13px; }
+        /* SANDBOX MEJORADO */
+        .sandbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 500px; }
+        .sand-panel { border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+        .sand-header { background: #ddd; padding: 10px; font-weight: bold; font-size: 12px; color: #555; border-bottom: 1px solid #ccc; }
+        .terminal { background: #1e1e1e; color: #00ff00; padding: 15px; font-family: 'Courier New', monospace; font-size: 12px; flex: 1; overflow-y: auto; white-space: pre-wrap; }
+        .terminal-user { background: #fff; color: #333; border: 1px solid #ddd; }
 
-        /* TABLAS */
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th { text-align: left; padding: 10px; border-bottom: 2px solid #ddd; background: #f9f9f9; color: #555; }
-        td { padding: 10px; border-bottom: 1px solid #eee; }
+        th { text-align: left; padding: 12px; border-bottom: 2px solid #eee; background: #fafafa; color: #666; font-weight: 600; }
+        td { padding: 12px; border-bottom: 1px solid #f0f0f0; color: #333; }
+        tr:hover { background: #fafafa; }
         
-        /* MENU CONTEXTUAL */
-        #ctx-menu { display: none; position: absolute; background: #fff; width: 180px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 1000; border-radius: 5px; overflow: hidden; }
-        .ctx-item { padding: 12px; cursor: pointer; font-size: 13px; color: #333; display: flex; gap: 10px; align-items: center; }
-        .ctx-item:hover { background: #f5f5f5; }
-        .recording { animation: pulse 1s infinite; background: red !important; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .label-tag { font-size: 10px; padding: 3px 8px; border-radius: 10px; background: #e0f2f1; color: #00695c; font-weight: 600; }
+        
+        #ctx-menu { display: none; position: absolute; background: #fff; width: 180px; box-shadow: 0 5px 15px rgba(0,0,0,0.15); z-index: 1000; border-radius: 6px; overflow: hidden; border: 1px solid #eee; }
+        .ctx-item { padding: 12px 15px; cursor: pointer; font-size: 13px; color: #444; display: flex; gap: 10px; align-items: center; transition: background 0.2s; }
+        .ctx-item:hover { background: #f5f5f5; color: var(--naranja); }
+        
+        .recording { animation: pulse 1s infinite; background: #ff3b30 !important; color: white !important; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
     </style>
 </head>
 <body>
 
+    <div id="toast-box"></div>
+
     <div class="nav-bar">
-        <div class="nav-btn active" onclick="nav('chat')"><i class="fas fa-comments"></i><span class="tooltip">Chat</span></div>
-        <div class="nav-btn" onclick="nav('dashboard')"><i class="fas fa-chart-pie"></i><span class="tooltip">Dashboard</span></div>
-        <div class="nav-btn" onclick="nav('leads')"><i class="fas fa-address-book"></i><span class="tooltip">Leads</span></div>
-        <div class="nav-btn" onclick="nav('inventory')"><i class="fas fa-boxes"></i><span class="tooltip">Inventario</span></div>
-        <div class="nav-btn" onclick="nav('config')"><i class="fas fa-cogs"></i><span class="tooltip">Config</span></div>
-        <div class="nav-btn" onclick="nav('sandbox')"><i class="fas fa-vial"></i><span class="tooltip">Pruebas</span></div>
+        <div class="nav-btn active" onclick="nav('chat')"><i class="fas fa-comments"></i><span class="tooltip">Chat en Vivo</span></div>
+        <div class="nav-btn" onclick="nav('dashboard')"><i class="fas fa-chart-pie"></i><span class="tooltip">Métricas</span></div>
+        <div class="nav-btn" onclick="nav('leads')"><i class="fas fa-address-book"></i><span class="tooltip">Base de Leads</span></div>
+        <div class="nav-btn" onclick="nav('inventory')"><i class="fas fa-boxes"></i><span class="tooltip">Productos</span></div>
+        <div class="nav-btn" onclick="nav('config')"><i class="fas fa-cogs"></i><span class="tooltip">Configuración IA</span></div>
+        <div class="nav-btn" onclick="nav('sandbox')"><i class="fas fa-terminal"></i><span class="tooltip">Laboratorio</span></div>
         <div style="flex:1"></div>
-        <div class="nav-btn" onclick="location.href='/logout'" style="color:#ef5350;"><i class="fas fa-power-off"></i></div>
+        <div class="nav-btn" onclick="location.href='/logout'" style="color:#ef5350;"><i class="fas fa-power-off"></i><span class="tooltip">Salir</span></div>
     </div>
 
     <div class="app-container">
         <div id="view-chat" class="view active">
             <div class="chat-layout">
                 <div class="chat-sidebar">
-                    <div class="chat-header"><b>ICC Chat SQL</b> <span style="font-size:10px; color:green;">● Online</span></div>
+                    <div class="chat-header">
+                        <div style="font-weight:bold; color:var(--dark);">ICC Chat <span style="color:var(--success); font-size:20px; line-height:0;">•</span></div>
+                        <button class="btn btn-orange" onclick="addContactPrompt()" style="padding: 6px 12px; font-size:12px;">+ Nuevo</button>
+                    </div>
                     <div class="search-row">
-                        <input id="search" class="search-input" placeholder="Buscar chat..." oninput="renderChats()">
-                        <button class="btn btn-orange" onclick="addContactPrompt()">+</button>
+                        <input id="search" class="search-input" placeholder="Buscar por nombre o teléfono..." oninput="renderChats()">
                     </div>
                     <div class="chat-list" id="chat-list-box"></div>
                 </div>
                 <div class="chat-main">
                     <div class="chat-bg"></div>
-                    <div id="chat-top" style="height:60px; background:#f0f2f5; padding:0 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; visibility:hidden; border-bottom:1px solid #ddd;">
-                        <div style="display:flex; align-items:center; gap:10px;">
+                    <div id="chat-top" style="height:60px; background:#fff; padding:0 20px; display:flex; align-items:center; justify-content:space-between; z-index:10; visibility:hidden; border-bottom:1px solid #eee; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                        <div style="display:flex; align-items:center; gap:12px;">
                             <div class="avatar" style="background:var(--naranja);"><i class="fas fa-user"></i></div>
-                            <div><div id="active-name" style="font-weight:bold;">Usuario</div><div id="active-phone" style="font-size:11px; color:#666;">...</div></div>
+                            <div>
+                                <div id="active-name" style="font-weight:700; color:#333;">Usuario</div>
+                                <div id="active-phone" style="font-size:11px; color:#888;">...</div>
+                            </div>
                         </div>
-                        <button id="btn-bot" class="btn" onclick="toggleBot()" style="font-size:11px;">IA</button>
+                        <button id="btn-bot" class="btn" onclick="toggleBot()" style="font-size:11px; box-shadow:none;">IA: ACTIVA</button>
                     </div>
-                    <div class="msgs-box" id="msgs-box"><div style="text-align:center; margin-top:100px; color:#aaa;">Selecciona un chat</div></div>
+                    
+                    <div class="msgs-box" id="msgs-box">
+                        <div style="text-align:center; margin-top:20vh; color:#bbb; display:flex; flex-direction:column; align-items:center; gap:10px;">
+                            <i class="fas fa-comments" style="font-size:40px; opacity:0.3;"></i>
+                            Selecciona un chat para comenzar
+                        </div>
+                    </div>
+                    
                     <div class="input-bar" id="input-bar" style="display:none;">
                         <input type="file" id="file-input" hidden onchange="handleFileUpload(this)">
-                        <button class="btn" style="background:transparent; color:#555;" onclick="document.getElementById('file-input').click()"><i class="fas fa-paperclip" style="font-size:20px;"></i></button>
-                        <input type="text" id="msg-input" class="input-msg" placeholder="Escribe..." onkeypress="if(event.key==='Enter') sendMsg()">
+                        <button class="btn" style="background:transparent; color:#666; padding:8px;" onclick="document.getElementById('file-input').click()"><i class="fas fa-paperclip" style="font-size:20px;"></i></button>
+                        <input type="text" id="msg-input" class="input-msg" placeholder="Escribe un mensaje..." onkeypress="if(event.key==='Enter') sendMsg()">
                         <button class="btn btn-orange" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button>
-                        <button id="btn-mic" class="btn" style="border-radius:50%; width:40px; height:40px;" onclick="toggleRecord()"><i class="fas fa-microphone"></i></button>
+                        <button id="btn-mic" class="btn" style="border-radius:50%; width:44px; height:44px; padding:0; justify-content:center;" onclick="toggleRecord()"><i class="fas fa-microphone"></i></button>
                     </div>
                 </div>
             </div>
         </div>
 
         <div id="view-dashboard" class="view page-content">
-            <h2>Dashboard General</h2>
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
-                <div class="card"><h3>Leads</h3><h1 id="kpi-leads" style="color:var(--naranja)">0</h1></div>
-                <div class="card"><h3>Chats Activos</h3><h1 id="kpi-chats">0</h1></div>
-                <div class="card"><h3>Productos</h3><h1 id="kpi-stock" style="color:#2980b9">0</h1></div>
+            <h2 style="color:var(--dark); margin-bottom:25px;">Resumen General</h2>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:25px;">
+                <div class="card" style="border-top: 4px solid var(--naranja);">
+                    <div style="color:#888; font-size:12px; font-weight:600; margin-bottom:10px;">TOTAL LEADS CAPTURADOS</div>
+                    <div style="display:flex; align-items:center; gap:15px;">
+                        <i class="fas fa-funnel-dollar" style="font-size:30px; color:var(--naranja); opacity:0.8;"></i>
+                        <h1 id="kpi-leads" style="margin:0; font-size:36px; color:#333;">0</h1>
+                    </div>
+                </div>
+                <div class="card" style="border-top: 4px solid #2980b9;">
+                    <div style="color:#888; font-size:12px; font-weight:600; margin-bottom:10px;">CHATS ACTIVOS</div>
+                    <div style="display:flex; align-items:center; gap:15px;">
+                        <i class="fas fa-comments" style="font-size:30px; color:#2980b9; opacity:0.8;"></i>
+                        <h1 id="kpi-chats" style="margin:0; font-size:36px; color:#333;">0</h1>
+                    </div>
+                </div>
+                <div class="card" style="border-top: 4px solid #27ae60;">
+                    <div style="color:#888; font-size:12px; font-weight:600; margin-bottom:10px;">PRODUCTOS EN STOCK</div>
+                    <div style="display:flex; align-items:center; gap:15px;">
+                        <i class="fas fa-boxes" style="font-size:30px; color:#27ae60; opacity:0.8;"></i>
+                        <h1 id="kpi-stock" style="margin:0; font-size:36px; color:#333;">0</h1>
+                    </div>
+                </div>
             </div>
         </div>
 
         <div id="view-leads" class="view page-content">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h2>Base de Leads</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                <div>
+                    <h2 style="margin:0; color:var(--dark);">Base de Leads</h2>
+                    <p style="margin:5px 0 0; color:#888; font-size:13px;">Gestiona los contactos capturados por Lorena</p>
+                </div>
                 <div style="display:flex; gap:10px;">
-                    <input type="text" id="filter-leads" placeholder="Nombre, Ciudad, Correo..." oninput="filterLeadsTable()" style="padding:8px; border-radius:5px; border:1px solid #ddd; width:280px;">
-                    <button class="btn btn-orange" onclick="exportExcel()"><i class="fas fa-file-excel"></i> Exportar Excel</button>
+                    <input type="text" id="filter-leads" placeholder="Buscar nombre, ciudad, correo..." oninput="filterLeadsTable()" style="padding:10px 15px; border-radius:6px; border:1px solid #ddd; width:300px; outline:none;">
+                    <button class="btn btn-orange" onclick="exportExcel()"><i class="fas fa-file-excel"></i> Exportar</button>
                 </div>
             </div>
-            <div class="card">
+            <div class="card" style="padding:0; overflow:hidden;">
                 <table id="leads-table">
                     <thead><tr><th>Fecha</th><th>Nombre</th><th>Teléfono</th><th>Ciudad</th><th>Correo</th><th>Interés</th><th>Etiqueta</th><th>Acción</th></tr></thead>
                     <tbody id="leads-body"></tbody>
@@ -149,15 +191,23 @@
         </div>
 
         <div id="view-inventory" class="view page-content">
-            <h2>Inventario de Productos</h2>
+            <h2 style="margin-bottom:10px; color:var(--dark);">Gestión de Productos</h2>
+            <p style="margin-bottom:25px; color:#666; font-size:13px;">Carga aquí tu archivo CSV (Excel) con los productos. Lorena usará esta información para vender.</p>
+            
             <div class="card">
-                <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center;">
-                    <input type="file" id="csv-file">
-                    <button class="btn btn-orange" onclick="uploadCSV()">Cargar CSV</button>
+                <div style="background:#f8f9fa; padding:20px; border-radius:8px; display:flex; gap:15px; align-items:center; margin-bottom:20px; border:1px dashed #ccc;">
+                    <i class="fas fa-cloud-upload-alt" style="font-size:24px; color:#888;"></i>
+                    <div style="flex:1;">
+                        <input type="file" id="csv-file" style="font-size:14px;">
+                        <div style="font-size:11px; color:#999; margin-top:5px;">Formato soportado: .csv (UTF-8)</div>
+                    </div>
+                    <button class="btn btn-orange" onclick="uploadCSV()">Procesar Archivo</button>
                 </div>
-                <div style="max-height:400px; overflow-y:auto;">
+                
+                <h4 style="margin:0 0 15px 0; color:#444;">Productos Cargados</h4>
+                <div style="max-height:500px; overflow-y:auto; border:1px solid #eee; border-radius:6px;">
                     <table id="inv-table">
-                        <thead><tr><th>Producto (Búsqueda IA)</th><th>Acción</th></tr></thead>
+                        <thead><tr><th>Descripción Detectada por IA</th><th style="width:80px; text-align:center;">Acción</th></tr></thead>
                         <tbody id="inv-body"></tbody>
                     </table>
                 </div>
@@ -165,21 +215,27 @@
         </div>
 
         <div id="view-config" class="view page-content">
-            <h2>Configuración IA</h2>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:25px;">
+            <h2 style="color:var(--dark); margin-bottom:25px;">Cerebro de la IA</h2>
+            <div style="display:grid; grid-template-columns: 1.2fr 0.8fr; gap:30px;">
                 <div class="card">
-                    <h3 style="color:var(--naranja); margin-top:0;">🤖 Personalidad & Web</h3>
-                    <label style="font-size:12px; font-weight:bold;">Prompt (Personalidad)</label>
-                    <textarea id="cfg-prompt" style="width:100%; height:120px; padding:10px; border:1px solid #ddd; border-radius:5px; margin-bottom:15px;"></textarea>
-                    <label style="font-size:12px; font-weight:bold;">Información Web</label>
-                    <textarea id="cfg-web" style="width:100%; height:120px; padding:10px; border:1px solid #ddd; border-radius:5px;" placeholder="Pega aquí la info de tu página web..."></textarea>
-                    <div style="margin-top:15px;"><button class="btn btn-orange" onclick="savePromptWeb()">Guardar Datos Base</button></div>
+                    <h3 style="color:var(--naranja); margin-top:0; display:flex; align-items:center; gap:10px;"><i class="fas fa-robot"></i> Personalidad y Conocimiento</h3>
+                    
+                    <label style="display:block; font-size:12px; font-weight:700; color:#555; margin-bottom:8px;">PROMPT PRINCIPAL (Personalidad)</label>
+                    <textarea id="cfg-prompt" style="width:100%; height:100px; padding:12px; border:1px solid #ddd; border-radius:6px; margin-bottom:20px; font-family:inherit; resize:vertical; box-sizing:border-box;"></textarea>
+                    
+                    <label style="display:block; font-size:12px; font-weight:700; color:#555; margin-bottom:8px;">INFORMACIÓN WEB (Sobre Nosotros, Envíos, Garantía)</label>
+                    <textarea id="cfg-web" style="width:100%; height:180px; padding:12px; border:1px solid #ddd; border-radius:6px; font-family:inherit; resize:vertical; box-sizing:border-box; margin-bottom:20px;" placeholder="Copia y pega aquí los textos de tu página web..."></textarea>
+                    
+                    <div style="text-align:right;">
+                        <button class="btn btn-orange" onclick="savePromptWeb()"><i class="fas fa-save"></i> Guardar Cambios</button>
+                    </div>
                 </div>
+                
                 <div class="card">
-                    <h3 style="color:#202c33; margin-top:0;">📜 Reglas de Negocio</h3>
-                    <div style="display:flex; gap:10px; margin-bottom:10px;">
-                        <input type="text" id="rule-input" placeholder="Horario, formas de pago..." style="flex:1; padding:10px; border:1px solid #ddd; border-radius:5px;">
-                        <button class="btn btn-orange" onclick="addRule()">Agregar</button>
+                    <h3 style="color:#202c33; margin-top:0; display:flex; align-items:center; gap:10px;"><i class="fas fa-list-ul"></i> Reglas de Negocio</h3>
+                    <div style="display:flex; gap:10px; margin-bottom:15px;">
+                        <input type="text" id="rule-input" placeholder="Ej: 'Solo pagos en efectivo'" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:6px; outline:none;">
+                        <button class="btn btn-orange" onclick="addRule()">Añadir</button>
                     </div>
                     <ul id="rule-list-box" class="rule-list"></ul>
                 </div>
@@ -187,15 +243,21 @@
         </div>
 
         <div id="view-sandbox" class="view page-content">
-            <h2>Laboratorio de Pruebas</h2>
-            <div class="card">
-                <div style="display:flex; gap:10px;">
-                    <input id="sand-in" style="flex:1; padding:10px; border:1px solid #ddd;" placeholder="Prueba un mensaje...">
-                    <button class="btn btn-orange" onclick="runTest()">Enviar</button>
+            <h2 style="color:var(--dark); margin-bottom:25px;">Laboratorio de Pruebas <small style="color:#888; font-size:14px; font-weight:400;">(Simulación interna)</small></h2>
+            
+            <div class="sandbox-grid">
+                <div class="sand-panel">
+                    <div class="sand-header"><i class="fas fa-user"></i> Tu Mensaje (Simulando Cliente)</div>
+                    <textarea id="sand-in" class="terminal terminal-user" placeholder="Escribe aquí como si fueras un cliente..."></textarea>
+                    <div style="padding:10px; background:#eee; text-align:right;">
+                        <button class="btn btn-orange" onclick="runTest()">Enviar a Lorena >></button>
+                    </div>
                 </div>
-                <div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">
-                    <div style="background:#f9f9f9; padding:15px; border-radius:5px;"><b>Respuesta:</b><p id="sand-res">...</p></div>
-                    <div style="background:#222; color:#0f0; padding:15px; border-radius:5px; font-family:monospace; font-size:11px; height:150px; overflow:auto;" id="sand-log">LOG</div>
+                
+                <div class="sand-panel">
+                    <div class="sand-header" style="background:#222; color:#fff;"><i class="fas fa-robot"></i> Respuesta y Lógica (Logs)</div>
+                    <div class="terminal" id="sand-log">Esperando input...</div>
+                    <div style="padding:10px; background:#333; color:#fff; font-size:13px; border-top:1px solid #444;" id="sand-res">Respuesta final aparecerá aquí.</div>
                 </div>
             </div>
         </div>
@@ -205,13 +267,24 @@
         <div class="ctx-item" onclick="ctxAction('rename')"><i class="fas fa-pen"></i> Cambiar Nombre</div>
         <div class="ctx-item" onclick="ctxAction('label')"><i class="fas fa-tag"></i> Etiquetar</div>
         <div class="ctx-item" onclick="ctxAction('pin')"><i class="fas fa-thumbtack"></i> Fijar/Desfijar</div>
-        <div class="ctx-item" onclick="ctxAction('delete')" style="color:red;"><i class="fas fa-trash"></i> Eliminar</div>
+        <div class="ctx-item" onclick="ctxAction('delete')" style="color:red;"><i class="fas fa-trash"></i> Eliminar Chat</div>
     </div>
 
     <script>
         let chats=[], selectedId=null, ctxId=null, timer=null, allLeads = [];
         let mediaRecorder, audioChunks = [], isRecording = false;
 
+        // --- SISTEMA DE NOTIFICACIONES (TOAST) ---
+        function showToast(msg, type='success') {
+            const box = document.getElementById('toast-box');
+            const el = document.createElement('div');
+            el.className = `toast ${type}`;
+            el.innerHTML = `<i class="fas fa-${type==='success'?'check-circle':'exclamation-circle'}"></i> ${msg}`;
+            box.appendChild(el);
+            setTimeout(() => el.remove(), 3000);
+        }
+
+        // --- NAVEGACIÓN ---
         function nav(v) {
             document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
             document.getElementById('view-'+v).classList.add('active');
@@ -221,13 +294,15 @@
             if(btns[map[v]]) btns[map[v]].classList.add('active');
 
             if(timer) clearInterval(timer);
-            if(v==='chat') { sync(); timer = setInterval(sync, 3000); }
+            // Sincronización más rápida para chat (2 segundos)
+            if(v==='chat') { sync(); timer = setInterval(sync, 2000); }
             if(v==='dashboard') loadDash();
             if(v==='leads') loadLeads();
             if(v==='inventory') loadInventory();
             if(v==='config') loadCfg();
         }
 
+        // --- CHAT ENGINE ---
         async function sync() {
             try {
                 const res = await fetch('/api/chats-full');
@@ -235,7 +310,8 @@
                 if(JSON.stringify(data) !== JSON.stringify(chats)) {
                     chats = data;
                     renderChats();
-                    if(selectedId) renderMsgs(selectedId);
+                    // Si hay un chat abierto, refrescar mensajes
+                    if(selectedId) await renderMsgs(selectedId);
                 }
             } catch(e) {}
         }
@@ -244,12 +320,17 @@
             const q = document.getElementById('search').value.toLowerCase();
             document.getElementById('chat-list-box').innerHTML = chats.filter(c => (c.name||c.id).toLowerCase().includes(q)).map(c => {
                 let labelsHtml = (c.labels||[]).map(l => `<span class="label-tag">${l}</span>`).join('');
-                return `<div class="chat-item ${c.id===selectedId?'active':''}" onclick="selChat('${c.id}')" oncontextmenu="openCtx(event, '${c.id}')">
+                return `
+                <div class="chat-item ${c.id===selectedId?'active':''}" onclick="selChat('${c.id}')" oncontextmenu="openCtx(event, '${c.id}')">
                     <div class="avatar" style="background:${c.botActive?'var(--naranja)':'#ccc'}"><i class="fas fa-user"></i></div>
                     <div style="flex:1; overflow:hidden;">
-                        <div style="font-weight:600; display:flex; justify-content:space-between;">${c.name} <small>${c.pinned?'📌':''}</small></div>
+                        <div style="font-weight:600; display:flex; justify-content:space-between; margin-bottom:4px; color:#333;">
+                            ${c.name} <small style="color:#888;">${c.pinned?'<i class="fas fa-thumbtack"></i>':''}</small>
+                        </div>
                         <div class="labels-row">${labelsHtml}</div>
-                        <div style="font-size:12px; color:#666; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${(c.lastMessage.text||'').substring(0,30)}</div>
+                        <div style="font-size:12px; color:#666; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            ${(c.lastMessage.text||'').substring(0,35)}
+                        </div>
                     </div>
                 </div>`;
             }).join('');
@@ -263,25 +344,44 @@
             document.getElementById('active-name').innerText=c.name;
             document.getElementById('active-phone').innerText=id;
             updateBotBtn(c.botActive);
-            renderMsgs(id);
+            renderMsgs(id, true); // True para forzar scroll al fondo
             renderChats();
         }
 
-        async function renderMsgs(id) {
+        async function renderMsgs(id, forceScroll=false) {
             try {
                 const h = await fetch('/api/data/history').then(r=>r.json());
                 const msgs = h[id] || [];
                 const box = document.getElementById('msgs-box');
-                box.innerHTML = msgs.map(m => `<div class="bubble ${m.role==='bot'?'bubble-out':(m.role==='manual'?'bubble-manual':'bubble-in')}">${m.text}</div>`).join('');
-                box.scrollTop = box.scrollHeight;
+                
+                // Renderizado optimizado
+                box.innerHTML = msgs.map(m => `
+                    <div class="bubble ${m.role==='bot'?'bubble-out':(m.role==='manual'?'bubble-manual':'bubble-in')}">
+                        ${m.text}
+                        <div style="font-size:9px; opacity:0.5; text-align:right; margin-top:2px;">
+                            ${new Date(m.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </div>
+                    </div>
+                `).join('');
+                
+                // Scroll automático si es necesario
+                if(forceScroll || (box.scrollTop + box.clientHeight >= box.scrollHeight - 50)) {
+                    box.scrollTop = box.scrollHeight;
+                }
             } catch(e) {}
         }
 
         async function sendMsg() {
             const txt = document.getElementById('msg-input').value;
             if(!txt || !selectedId) return;
+            document.getElementById('msg-input').value = ''; // Limpiar inmediato
+            
+            // UI optimista (mostrar mensaje localmente antes de confirmar)
+            const box = document.getElementById('msgs-box');
+            box.innerHTML += `<div class="bubble bubble-manual">${txt} <span style="font-size:9px;">...</span></div>`;
+            box.scrollTop = box.scrollHeight;
+
             await fetch('/api/chat/send', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, message:txt})});
-            document.getElementById('msg-input').value = '';
             sync();
         }
 
@@ -291,164 +391,170 @@
             fd.append('file', input.files[0]);
             fd.append('phone', selectedId);
             fd.append('type', input.files[0].type.includes('image') ? 'image' : 'document');
+            showToast("Enviando archivo...", "success");
             await fetch('/api/chat/upload-send', { method: 'POST', body: fd });
             input.value = ''; sync();
         }
 
-        async function toggleRecord() {
-            if (!isRecording) {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                mediaRecorder.onstop = async () => {
-                    const blob = new Blob(audioChunks, { type: 'audio/ogg; codecs=opus' });
-                    const fd = new FormData(); fd.append('file', blob, 'audio.ogg'); fd.append('phone', selectedId); fd.append('type', 'audio');
-                    await fetch('/api/chat/upload-send', { method: 'POST', body: fd });
-                    document.getElementById('btn-mic').classList.remove('recording'); sync();
-                };
-                mediaRecorder.start(); isRecording = true; document.getElementById('btn-mic').classList.add('recording');
-            } else { mediaRecorder.stop(); isRecording = false; }
-        }
-
+        // --- CONFIGURACIÓN (CORE FIX) ---
         async function loadCfg() {
-            const d = await fetch('/api/data/config').then(r=>r.json());
-            document.getElementById('cfg-prompt').value = d.prompt || '';
-            document.getElementById('cfg-web').value = d.website_data || ''; 
-            renderRules(d.tech_rules || []);
+            try {
+                const d = await fetch('/api/data/config').then(r=>r.json());
+                document.getElementById('cfg-prompt').value = d.prompt || '';
+                // CORRECCIÓN CLAVE: Asegurarse de leer 'website_data'
+                document.getElementById('cfg-web').value = d.website_data || ''; 
+                renderRules(d.tech_rules || []);
+            } catch(e) { console.error(e); }
         }
 
         function renderRules(rules) {
             const list = document.getElementById('rule-list-box');
-            list.innerHTML = (Array.isArray(rules) ? rules : []).map((r, i) => `<li class="rule-item"><span>${r}</span><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="deleteRule(${i})"></i></li>`).join('');
+            if(!rules.length) { list.innerHTML = '<li style="padding:10px; color:#999; text-align:center;">Sin reglas definidas</li>'; return; }
+            list.innerHTML = rules.map((r, i) => `
+                <li class="rule-item">
+                    <span>${r}</span>
+                    <i class="fas fa-trash" style="color:#ef5350; cursor:pointer;" onclick="deleteRule(${i})"></i>
+                </li>`).join('');
         }
 
         async function addRule() {
-            const r = document.getElementById('rule-input').value;
+            const input = document.getElementById('rule-input');
+            const r = input.value;
             if(!r) return;
             const res = await fetch('/api/config/rules/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({rule:r})}).then(r=>r.json());
             renderRules(res.rules);
-            document.getElementById('rule-input').value = '';
+            input.value = ''; // Limpiar input
+            showToast("Regla agregada");
         }
 
         async function deleteRule(idx) {
             const res = await fetch('/api/config/rules/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:idx})}).then(r=>r.json());
             renderRules(res.rules);
+            showToast("Regla eliminada", "error");
         }
 
         async function savePromptWeb() {
             await fetch('/api/save-prompt-web', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-                prompt: document.getElementById('cfg-prompt').value, website_data: document.getElementById('cfg-web').value
+                prompt: document.getElementById('cfg-prompt').value,
+                website_data: document.getElementById('cfg-web').value
             })});
-            alert("✅ Configuración Guardada");
+            showToast("Configuración guardada exitosamente");
         }
 
-        async function loadDash() {
-            try {
-                const [l,c,s] = await Promise.all([
-                    fetch('/api/data/leads').then(r=>r.json()), 
-                    fetch('/api/chats-full').then(r=>r.json()), 
-                    fetch('/api/data/knowledge').then(r=>r.json())
-                ]);
-                document.getElementById('kpi-leads').innerText = (Array.isArray(l) ? l.length : 0);
-                document.getElementById('kpi-chats').innerText = (Array.isArray(c) ? c.length : 0);
-                document.getElementById('kpi-stock').innerText = (Array.isArray(s) ? s.length : 0);
-            } catch(e) {}
-        }
-
+        // --- INVENTARIO ---
         async function loadInventory() {
             const inv = await fetch('/api/data/knowledge').then(r=>r.json());
-            document.getElementById('inv-body').innerHTML = (Array.isArray(inv) ? inv : []).map((item, i) => `<tr><td>${item.searchable}</td><td><button class="btn btn-red" onclick="delInv(${i})">X</button></td></tr>`).join('');
+            const tbody = document.getElementById('inv-body');
+            if(!inv.length) { tbody.innerHTML = '<tr><td colspan="2" style="text-align:center; padding:20px; color:#999;">No hay productos cargados</td></tr>'; return; }
+            tbody.innerHTML = inv.map((item, i) => `
+                <tr>
+                    <td>${item.searchable}</td>
+                    <td style="text-align:center;">
+                        <button class="btn btn-red" onclick="delInv(${i})" style="padding:5px 10px; font-size:11px;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>`).join('');
         }
-        async function delInv(i) { await fetch('/api/knowledge/delete', {method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); }
-        async function uploadCSV() { const f = document.getElementById('csv-file').files[0]; if(!f) return; const fd = new FormData(); fd.append('file', f); await fetch('/api/knowledge/csv', {method:'POST', body:fd}); loadInventory(); }
+        async function delInv(i) { 
+            if(!confirm("¿Eliminar este producto?")) return;
+            await fetch('/api/knowledge/delete', {method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); 
+            loadInventory(); 
+            showToast("Producto eliminado", "error");
+        }
+        async function uploadCSV() { 
+            const input = document.getElementById('csv-file');
+            const f = input.files[0]; 
+            if(!f) return alert("Selecciona un archivo CSV"); 
+            const fd = new FormData(); fd.append('file', f); 
+            showToast("Procesando archivo...");
+            await fetch('/api/knowledge/csv', {method:'POST', body:fd}); 
+            input.value = ''; // Limpiar input
+            loadInventory(); 
+            showToast("Inventario actualizado");
+        }
 
+        // --- SANDBOX ---
+        async function runTest() {
+            const input = document.getElementById('sand-in');
+            const msg = input.value;
+            if(!msg) return;
+            
+            document.getElementById('sand-log').innerHTML = "<span style='color:yellow'>Procesando...</span>";
+            document.getElementById('sand-res').innerText = "...";
+            
+            const r = await fetch('/api/test-ai', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg})}).then(x=>x.json());
+            
+            document.getElementById('sand-res').innerText = r.response; 
+            document.getElementById('sand-log').innerText = r.logic_log;
+            // No limpiamos el input aquí para permitir reintentos rápidos
+        }
+
+        // --- LEADS & DASHBOARD ---
         async function loadLeads() {
-            try {
-                allLeads = await fetch('/api/data/leads').then(r=>r.json());
-                renderLeadsTable(allLeads);
-            } catch(e) {}
+            try { allLeads = await fetch('/api/data/leads').then(r=>r.json()); renderLeadsTable(allLeads); } catch(e) {}
         }
-
         function renderLeadsTable(data) {
             const body = document.getElementById('leads-body');
-            if (!data || data.length === 0) {
-                body.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px; color:#888;">No hay leads registrados aún</td></tr>';
-                return;
-            }
+            if(!data || !data.length) { body.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px; color:#888;">Sin leads registrados aún.</td></tr>'; return; }
             body.innerHTML = data.map(x => `<tr>
-                <td>${x.fecha || '-'}</td>
-                <td><b>${x.nombre || 'Desconocido'}</b></td>
-                <td>${x.telefono || x.phone || '-'}</td>
-                <td>${x.ciudad || 'No indicada'}</td>
-                <td>${x.correo || 'No indicado'}</td>
-                <td>${x.interes || '-'}</td>
-                <td><span class="label-tag">${x.etiqueta || 'Lead'}</span></td>
+                <td>${x.fecha||'-'}</td>
+                <td><b>${x.nombre||'Desconocido'}</b></td>
+                <td>${x.telefono||x.phone||'-'}</td>
+                <td>${x.ciudad||'-'}</td>
+                <td>${x.correo||'-'}</td>
+                <td>${x.interes||'-'}</td>
+                <td><span class="label-tag">${x.etiqueta||'Lead'}</span></td>
                 <td><button class="btn btn-red" onclick="deleteLead(${x.id})" style="padding:4px 8px;"><i class="fas fa-trash"></i></button></td>
             </tr>`).join('');
         }
-
         function filterLeadsTable() {
             const q = document.getElementById('filter-leads').value.toLowerCase();
-            const filtered = allLeads.filter(l => 
-                (l.nombre||'').toLowerCase().includes(q) || 
-                (l.interes||'').toLowerCase().includes(q) || 
-                (l.ciudad||'').toLowerCase().includes(q) || 
-                (l.correo||'').toLowerCase().includes(q) ||
-                (l.phone||l.telefono||'').includes(q)
-            );
+            const filtered = allLeads.filter(l => (l.nombre||'').toLowerCase().includes(q) || (l.ciudad||'').toLowerCase().includes(q) || (l.interes||'').toLowerCase().includes(q) || (l.phone||l.telefono||'').includes(q));
             renderLeadsTable(filtered);
         }
-
-        async function deleteLead(id) {
-            if(!confirm("¿Borrar este lead?")) return;
-            await fetch('/api/leads/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id })});
-            loadLeads();
+        async function deleteLead(id) { 
+            if(!confirm("¿Borrar lead?")) return; 
+            await fetch('/api/leads/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id })}); 
+            loadLeads(); 
+            showToast("Lead eliminado");
         }
-
         function exportExcel() { XLSX.writeFile(XLSX.utils.table_to_book(document.getElementById('leads-table')), "Leads_ICC.xlsx"); }
-
-        function addContactPrompt() { 
-            const p=prompt("Teléfono (con país):"); 
-            if(p) {
-                const n=prompt("Nombre:");
-                fetch('/api/contacts/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:p,name:n})}).then(sync);
-            }
-        }
-        
-        async function toggleBot() { 
-            const c=chats.find(x=>x.id===selectedId); 
-            await fetch('/api/chat/toggle-bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedId,active:!c.botActive})}); 
-            sync(); 
+        async function loadDash() {
+            try {
+                const [l,c,s] = await Promise.all([ fetch('/api/data/leads').then(r=>r.json()), fetch('/api/chats-full').then(r=>r.json()), fetch('/api/data/knowledge').then(r=>r.json()) ]);
+                document.getElementById('kpi-leads').innerText = Array.isArray(l)?l.length:0;
+                document.getElementById('kpi-chats').innerText = Array.isArray(c)?c.length:0;
+                document.getElementById('kpi-stock').innerText = Array.isArray(s)?s.length:0;
+            } catch(e) {}
         }
 
-        function updateBotBtn(a) { 
-            const btn = document.getElementById('btn-bot');
-            btn.innerText = a ? "IA: ON" : "IA: OFF"; btn.style.background = a ? "#202c33" : "#ef5350"; 
-        }
-        
-        async function runTest() {
-            const r = await fetch('/api/test-ai', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:document.getElementById('sand-in').value})}).then(x=>x.json());
-            document.getElementById('sand-res').innerText = r.response; 
-            document.getElementById('sand-log').innerText = r.logic_log;
-        }
-
+        // --- UTILS ---
+        function addContactPrompt() { const p=prompt("Teléfono (con país):"); if(p) { const n=prompt("Nombre:"); fetch('/api/contacts/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:p,name:n})}).then(sync); } }
+        async function toggleBot() { const c=chats.find(x=>x.id===selectedId); await fetch('/api/chat/toggle-bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedId,active:!c.botActive})}); sync(); }
+        function updateBotBtn(a) { const btn = document.getElementById('btn-bot'); btn.innerText = a ? "IA: ACTIVA" : "IA: PAUSADA"; btn.style.background = a ? "#202c33" : "#ef5350"; }
         function openCtx(e,id) { e.preventDefault(); ctxId=id; const m=document.getElementById('ctx-menu'); m.style.display='block'; m.style.left=e.pageX+'px'; m.style.top=e.pageY+'px'; }
         document.onclick = (e) => { if(!e.target.closest('#ctx-menu')) document.getElementById('ctx-menu').style.display='none'; }
-        
         async function ctxAction(action) {
-            const c = chats.find(x=>x.id===ctxId);
-            let val = null;
-            if(action === 'rename') {
-                val = prompt("Nuevo nombre:", c.name || c.id);
-                if(!val) return;
-                await fetch('/api/contacts/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:ctxId, name:val})});
-                sync(); return;
-            }
+            const c = chats.find(x=>x.id===ctxId); let val = null;
+            if(action === 'rename') { val = prompt("Nuevo nombre:", c.name || c.id); if(!val) return; await fetch('/api/contacts/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:ctxId, name:val})}); sync(); return; }
             if(action === 'label') { val = prompt("Etiqueta:"); if(!val) return; }
             if(action === 'pin') val = !c.pinned;
-            await fetch('/api/chat/action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:ctxId, action:action, value:val})});
-            sync();
+            await fetch('/api/chat/action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:ctxId, action:action, value:val})}); sync();
+        }
+        
+        async function toggleRecord() {
+            if (!isRecording) {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); mediaRecorder = new MediaRecorder(stream); audioChunks = [];
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(audioChunks, { type: 'audio/ogg; codecs=opus' }); const fd = new FormData(); fd.append('file', blob, 'audio.ogg'); fd.append('phone', selectedId); fd.append('type', 'audio');
+                    showToast("Audio enviado");
+                    await fetch('/api/chat/upload-send', { method: 'POST', body: fd });
+                    document.getElementById('btn-mic').classList.remove('recording'); sync();
+                };
+                mediaRecorder.start(); isRecording = true; document.getElementById('btn-mic').classList.add('recording');
+            } else { mediaRecorder.stop(); isRecording = false; }
         }
 
         window.onload = () => nav('dashboard');
