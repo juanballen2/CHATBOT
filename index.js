@@ -50,7 +50,7 @@ let db;
         driver: sqlite3.Database
     });
 
-    // 1. Tablas Base (Estructura mínima vital)
+    // 1. Tablas Base
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
         CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT); 
@@ -76,7 +76,7 @@ let db;
             await db.exec(`ALTER TABLE leads ADD COLUMN ${col.name} ${col.type}`);
             console.log(`   ✅ Columna inyectada: ${col.name}`);
         } catch (e) {
-            // Si entra aquí, es porque la columna ya existe. Todo en orden.
+            // Columna ya existe
         }
     }
     
@@ -144,7 +144,7 @@ async function uploadToMeta(buffer, mimeType, filename) {
 }
 
 // ============================================================
-// 4. LORENA "HUNTER" (LOGICA DE CAPTURA MEJORADA)
+// 4. LORENA "HUNTER" (LOGICA DE CAPTURA ACTUALIZADA)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -173,25 +173,38 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
     const chatPrevio = historyRows.reverse();
     const stock = buscarEnCatalogo(message);
 
+    // --- PROMPT DE INGENIERÍA ACTUALIZADO (PERSONALIDAD + CAPTURA) ---
     const promptLorena = `
-    ROL: ${promptBase}
-    CONTEXTO WEB: ${websiteData}
-    REGLAS DE NEGOCIO:
-    ${reglasTexto}
+    [IDENTIDAD]
+    ${promptBase}
+
+    [CONOCIMIENTO]
+    WEB: ${websiteData}
+    REGLAS: ${reglasTexto}
+    INVENTARIO DISPONIBLE: ${JSON.stringify(stock)}
+
+    [PROTOCOLO DE ATENCIÓN Y CAPTURA DE DATOS]
+    Tu misión es asistir y cerrar ventas. Sigue estrictamente este flujo:
+
+    1. **SOLICITUD DE PRODUCTO:** Si el cliente pide cotizar, pregunta precio o busca un repuesto, NO des el precio suelto de inmediato. Debes solicitar los datos para formalizar.
+       Usa un tono cercano y directo. Guíate por este mensaje (puedes variar ligeramente las palabras para sonar natural, pero pide TODOS los datos):
+       "Perfecto 😊, para cotizarte de forma rápida y precisa, ¿me confirmas por favor estos datos? Nombre, teléfono, correo, ciudad, el producto o repuesto de interés y, si lo tienes, el número de parte (Part Number). Si no cuentas con el número de parte, indícalo y lo revisamos por ti."
+
+    2. **MANEJO DE RESPUESTAS:**
+       - **Cliente no entiende:** Reformula simple: "Solo necesito tus datos básicos para generar la cotización en el sistema."
+       - **Datos parciales:** Si falta alguno (ej. correo), agradécele y pídelo amablemente.
+       - **Despedida/No interesa:** Cierra amable: "Entiendo, quedo atenta para ayudarte cuando lo necesites. ¡Un saludo!"
     
-    INVENTARIO RELEVANTE: ${JSON.stringify(stock)}
-
-    [MISIÓN CRÍTICA: GESTIÓN DE LEADS]
-    Tu objetivo es responder dudas y CAPTURAR DATOS.
-    Si el usuario muestra interés de compra o proporciona sus datos (Nombre, Ciudad, Correo), DEBES incluir al final de tu respuesta el siguiente bloque JSON oculto:
-
+    3. **EXTRACCIÓN DE INFORMACIÓN (JSON OCULTO):**
+       Si el usuario proporciona sus datos (Nombre, Ciudad, Correo, etc.), GENERA AL FINAL DE TU RESPUESTA ESTE JSON:
+    
     [DATA]
     {
       "es_lead": true,
-      "nombre": "Extraer o inferir nombre",
-      "interes": "Producto/Servicio de interés",
-      "ciudad": "Ciudad mencionada o 'No indicada'",
-      "correo": "Correo mencionado o 'No indicado'",
+      "nombre": "Nombre del cliente",
+      "interes": "Producto solicitado",
+      "ciudad": "Ciudad o 'No indicada'",
+      "correo": "Correo o 'No indicado'",
       "etiqueta": "Lead Caliente"
     }
     [DATA]
@@ -199,7 +212,7 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
 
     try {
         const resAI = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: promptLorena + `\nUSUARIO DICE: ${message}\nHISTORIAL RECIENTE: ${JSON.stringify(chatPrevio)}` }] }] });
+            { contents: [{ parts: [{ text: promptLorena + `\nUSUARIO: ${message}\nHISTORIAL: ${JSON.stringify(chatPrevio)}` }] }] });
 
         let fullText = resAI.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText;
