@@ -81,7 +81,7 @@ let db;
     }
     
     await refreshKnowledge();
-    console.log("🚀 LORENA BACKEND v7.9 - BASE DE DATOS OPTIMIZADA Y LISTA");
+    console.log("🚀 LORENA BACKEND v8.0 - LÓGICA 24H & SLOT FILLING ACTIVADA");
 })();
 
 let globalKnowledge = [];
@@ -144,7 +144,7 @@ async function uploadToMeta(buffer, mimeType, filename) {
 }
 
 // ============================================================
-// 4. LORENA "HUNTER" (LOGICA DE CAPTURA ACTUALIZADA)
+// 4. LORENA "HUNTER" (LÓGICA ACTUALIZADA v2.0)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -164,59 +164,65 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    const promptBase = await getCfg('prompt', "Eres Lorena, asistente de ventas amable y profesional.");
+    const promptBase = await getCfg('prompt', "Eres Lorena, asistente de ventas ágil de Importadora Casa Colombia.");
     const websiteData = await getCfg('website_data', "No hay información web extra.");
     const techRules = await getCfg('tech_rules', []);
     const reglasTexto = Array.isArray(techRules) ? techRules.map(r => `- ${r}`).join("\n") : "Sin reglas definidas.";
 
+    // Historial reciente para contexto
     const historyRows = await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId]);
     const chatPrevio = historyRows.reverse();
     const stock = buscarEnCatalogo(message);
 
-    // --- PROMPT DE INGENIERÍA ACTUALIZADO (PERSONALIDAD + CAPTURA) ---
+    // --- PROMPT DE INGENIERÍA MEJORADO (ANTI-LORO + SLOT FILLING) ---
     const promptLorena = `
     [IDENTIDAD]
     ${promptBase}
+    Estás en WhatsApp. Sé breve, útil y usa pocos emojis.
+    TU OBJETIVO: Filtrar al cliente y obtener sus datos para crear la cotización. NO das precios finales.
 
     [CONOCIMIENTO]
     WEB: ${websiteData}
-    REGLAS: ${reglasTexto}
-    INVENTARIO DISPONIBLE: ${JSON.stringify(stock)}
+    REGLAS TÉCNICAS: ${reglasTexto}
+    INVENTARIO (Referencia): ${JSON.stringify(stock)}
 
-    [PROTOCOLO DE ATENCIÓN Y CAPTURA DE DATOS]
-    Tu misión es asistir y cerrar ventas. Sigue estrictamente este flujo:
-
-    1. **SOLICITUD DE PRODUCTO:** Si el cliente pide cotizar, pregunta precio o busca un repuesto, NO des el precio suelto de inmediato. Debes solicitar los datos para formalizar.
-       Usa un tono cercano y directo. Guíate por este mensaje (puedes variar ligeramente las palabras para sonar natural, pero pide TODOS los datos):
-       "Perfecto 😊, para cotizarte de forma rápida y precisa, ¿me confirmas por favor estos datos? Nombre, teléfono, correo, ciudad, el producto o repuesto de interés y, si lo tienes, el número de parte (Part Number). Si no cuentas con el número de parte, indícalo y lo revisamos por ti."
-
-    2. **MANEJO DE RESPUESTAS:**
-       - **Cliente no entiende:** Reformula simple: "Solo necesito tus datos básicos para generar la cotización en el sistema."
-       - **Datos parciales:** Si falta alguno (ej. correo), agradécele y pídelo amablemente.
-       - **Despedida/No interesa:** Cierra amable: "Entiendo, quedo atenta para ayudarte cuando lo necesites. ¡Un saludo!"
+    [LÓGICA DE INTERACCIÓN - SLOT FILLING]
+    Analiza el HISTORIAL DE CHAT adjunto.
+    1. Revisa qué datos YA nos dio el cliente anteriormente (Nombre, Ciudad, Repuesto, Correo).
+    2. Identifica qué datos FALTAN.
     
-    3. **EXTRACCIÓN DE INFORMACIÓN (JSON OCULTO):**
-       Si el usuario proporciona sus datos (Nombre, Ciudad, Correo, etc.), GENERA AL FINAL DE TU RESPUESTA ESTE JSON:
+    [REGLAS OBLIGATORIAS]
+    - Si el cliente ya saludó, NO saludes de nuevo. Ve al grano.
+    - Si ya tienes un dato (ej: Nombre), NO lo pidas otra vez.
+    - Si el cliente repite "urgente", confirma que ya lo sabes y pide solo el dato faltante.
     
+    [GUIÓN DINÁMICO]
+    - Inicio: Saluda y pregunta qué repuesto necesita.
+    - Desarrollo: Si sabes el repuesto pero falta Nombre/Ciudad, pídelos amablemente.
+    - Cierre: Si tienes TODO (Nombre + Ciudad + Repuesto), di: "¡Listo! Ya pasé tu solicitud al asesor humano. En breve te contactan con el precio."
+
+    [EXTRACCIÓN DE INFORMACIÓN]
+    Siempre que detectes datos del cliente, genera este JSON al final (invisible para el usuario):
     [DATA]
     {
       "es_lead": true,
-      "nombre": "Nombre del cliente",
-      "interes": "Producto solicitado",
-      "ciudad": "Ciudad o 'No indicada'",
-      "correo": "Correo o 'No indicado'",
-      "etiqueta": "Lead Caliente"
+      "nombre": "Nombre detectado o null",
+      "interes": "Repuesto detectado o null",
+      "ciudad": "Ciudad detectada o null",
+      "correo": "Correo detectado o null",
+      "etiqueta": "Cotización"
     }
     [DATA]
     `;
 
     try {
         const resAI = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: promptLorena + `\nUSUARIO: ${message}\nHISTORIAL: ${JSON.stringify(chatPrevio)}` }] }] });
+            { contents: [{ parts: [{ text: promptLorena + `\n\n--- HISTORIAL CHAT ---\n${JSON.stringify(chatPrevio)}\n\n--- MENSAJE ACTUAL ---\nUSUARIO: ${message}` }] }] });
 
         let fullText = resAI.data.candidates[0].content.parts[0].text;
         let textoVisible = fullText;
         
+        // Extracción y Lógica de Base de Datos
         const regexData = /\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/i;
         const match = fullText.match(regexData);
 
@@ -225,26 +231,60 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
             try {
                 const info = JSON.parse(match[1]);
                 if(info.es_lead) {
-                    let nombreFinal = info.nombre || "Desconocido";
+                    // === LÓGICA DE NEGOCIO: REGLA DE 24 HORAS ===
+                    let nombreFinal = info.nombre;
+                    
+                    // Buscamos SOLO el último lead de este número
+                    const leadExistente = await db.get("SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [sessionId]);
                     const meta = await db.get("SELECT contactName FROM metadata WHERE phone = ?", [sessionId]);
-                    if (meta?.contactName && (nombreFinal.toLowerCase().includes("desconocido") || !nombreFinal)) {
-                        nombreFinal = meta.contactName;
+                    
+                    if (!nombreFinal || nombreFinal.toLowerCase() === "null") {
+                        nombreFinal = leadExistente?.nombre || meta?.contactName || "Cliente WhatsApp";
                     }
 
-                    await db.run(
-                        `INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?)`, 
-                        [
-                            sessionId, 
-                            nombreFinal, 
-                            info.interes || "General", 
-                            info.etiqueta || "Lead", 
-                            new Date().toLocaleString(), 
-                            info.ciudad || "No indicada", 
-                            info.correo || "No indicado"
-                        ]
-                    );
-                    console.log(`🎯 LEAD CAPTURADO: ${nombreFinal} | ${info.ciudad} | ${info.correo}`);
+                    // Calculamos tiempo
+                    let esMismaConversacion = false;
+                    if (leadExistente) {
+                        // Intentamos parsear la fecha (formato locale string puede variar, pero intentamos comparar)
+                        // Para mayor seguridad en update usamos el ID, y asumimos continuidad si es reciente.
+                        // Calculo aproximado basado en ID o si la fecha es parseable:
+                        const fechaLead = new Date(leadExistente.fecha); // Esto depende del locale del servidor
+                        const ahora = new Date();
+                        
+                        if (!isNaN(fechaLead.getTime())) {
+                             const horasDif = (ahora - fechaLead) / (1000 * 60 * 60);
+                             if (horasDif < 24) esMismaConversacion = true;
+                        } else {
+                            // Fallback si la fecha no es parseable: asumimos nueva venta por seguridad
+                            esMismaConversacion = false; 
+                        }
+                    }
+
+                    // Preparamos datos (rellenando huecos con lo viejo si es update)
+                    const datos = {
+                        nombre: nombreFinal,
+                        interes: info.interes && info.interes !== "null" ? info.interes : (esMismaConversacion ? leadExistente.interes : "General"),
+                        ciudad: info.ciudad && info.ciudad !== "null" ? info.ciudad : (esMismaConversacion ? leadExistente.ciudad : "No indicada"),
+                        correo: info.correo && info.correo !== "null" ? info.correo : (esMismaConversacion ? leadExistente.correo : "No indicado"),
+                        etiqueta: info.etiqueta || "Lead"
+                    };
+
+                    if (esMismaConversacion) {
+                        // ACTUALIZAR (UPDATE)
+                        await db.run(
+                            `UPDATE leads SET nombre=?, interes=?, etiqueta=?, ciudad=?, correo=?, fecha=? WHERE id = ?`,
+                            [datos.nombre, datos.interes, datos.etiqueta, datos.ciudad, datos.correo, new Date().toLocaleString(), leadExistente.id]
+                        );
+                        console.log(`🔄 LEAD ACTUALIZADO (Misma sesión <24h): ${datos.nombre}`);
+                    } else {
+                        // CREAR NUEVO (INSERT)
+                        await db.run(
+                            `INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) 
+                             VALUES (?, ?, ?, ?, ?, ?, ?)`, 
+                            [sessionId, datos.nombre, datos.interes, datos.etiqueta, new Date().toLocaleString(), datos.ciudad, datos.correo]
+                        );
+                        console.log(`✅ NUEVO LEAD CREADO: ${datos.nombre}`);
+                    }
                 }
             } catch(e) { console.error("⚠️ Error procesando JSON de Lorena:", e.message); }
         }
@@ -253,7 +293,7 @@ async function procesarConLorena(message, sessionId, mediaDesc = "") {
         return textoVisible;
     } catch (err) { 
         console.error("Error API IA:", err);
-        return "Lo siento, estoy teniendo un breve lapso de conexión. ¿Me repites?"; 
+        return "Dame un segundo, estoy verificando la señal. ¿Me repites eso?"; 
     }
 }
 
