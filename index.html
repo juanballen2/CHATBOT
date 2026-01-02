@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICC | Business Suite v13.5 (Sync Fix)</title>
+    <title>ICC | Business Suite v14.0 (Speed)</title>
     <link rel="icon" href="https://github.com/juanballen2/CHATBOT/blob/main/images/favicon.jpg?raw=true">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -345,7 +345,6 @@
             if(v==='inventory') loadInventory();
         }
 
-        // CHAT ENGINE (SYNC LOGIC FIX)
         async function syncChats() {
             try {
                 // 1. Obtener estado global de chats
@@ -362,10 +361,8 @@
                 if(selectedId) {
                     const current = data.find(c => c.id === selectedId);
                     if(current) {
-                        // Refrescar estado del bot (visual)
                         renderBotStatus(current.botActive);
-                        
-                        // Refrescar mensajes sin parpadeo
+                        // Refrescar mensajes sin parpadeo (usa la nueva ruta rápida)
                         await renderMsgs(selectedId, false);
                     }
                 }
@@ -417,12 +414,14 @@
             }).join('');
         }
 
+        // --- FIX DE VELOCIDAD EN SELECCIÓN ---
         function selChat(id) {
             selectedId = id;
             document.getElementById('chat-placeholder').style.display = 'none';
             document.getElementById('chat-interface').style.display = 'flex';
 
             const c = chats.find(x=>x.id===id);
+            // Renderizado inmediato de datos estáticos (Nombre, Foto, etc.)
             document.getElementById('active-name').innerText = c.name;
             document.getElementById('active-phone').innerText = id;
             
@@ -438,10 +437,15 @@
 
             renderBotStatus(c.botActive);
             renderChatTags(c.labels||[]);
+            
+            // Limpia y carga mensajes asíncronamente
+            document.getElementById('msgs-box').innerHTML = '<div style="text-align:center; padding:20px; color:#999;">Cargando...</div>';
             renderMsgs(id, true);
 
             if(window.innerWidth <= 768) document.querySelector('.chat-area').classList.add('show');
-            renderChatList();
+            // Hack para activar visualmente el item sin recargar toda la lista
+            document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+            // (La lista se refrescará sola en el próximo syncChats, pero esto da feedback instantáneo)
         }
 
         function closeChat() { 
@@ -453,9 +457,10 @@
             }, 300);
         }
 
+        // --- FIX DE VELOCIDAD EN MENSAJES ---
         async function renderMsgs(id, forceScroll=false) {
-            const h = await fetch('/api/data/history').then(r=>r.json());
-            const msgs = h[id] || [];
+            // AQUI ESTÁ EL CAMBIO CLAVE: Usa la ruta específica, no la general
+            const msgs = await fetch(`/api/chat-history/${id}`).then(r=>r.json());
             const box = document.getElementById('msgs-box');
             
             if(msgs.length === 0) {
@@ -479,7 +484,6 @@
                 return `<div class="bubble ${cls}">${content}</div>`;
             }).join('');
 
-            // ANTI-FLICKER: Solo actualizar si el HTML cambió
             if(box.innerHTML !== htmlContent) {
                 box.innerHTML = htmlContent;
                 if(forceScroll || (box.scrollHeight - box.scrollTop < 500)) box.scrollTop = box.scrollHeight;
@@ -509,11 +513,9 @@
         async function sendMsg() {
             const txt = document.getElementById('msg-input').value; if(!txt || !selectedId) return;
             document.getElementById('msg-input').value=''; document.getElementById('quick-replies').style.display='none';
-            // Optimista UI update
             const box = document.getElementById('msgs-box');
             box.innerHTML += `<div class="bubble b-manual">${txt}</div>`;
             box.scrollTop = box.scrollHeight;
-            
             await fetch('/api/chat/send', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, message:txt})});
             syncChats();
         }
@@ -563,7 +565,6 @@
         async function deleteLead(id) { if(!confirm("¿Borrar lead?")) return; await fetch('/api/leads/delete', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); loadLeads(); }
         async function saveLeadChanges() { 
             const id = document.getElementById('edit-lead-id').value;
-            // Simplificado para ahorrar espacio
             const updates = { 
                 nombre: document.getElementById('edit-lead-name').value, 
                 ciudad: document.getElementById('edit-lead-city').value, 
@@ -587,7 +588,6 @@
             const c = chats.find(x=>x.id===selectedId); 
             // Envía el estado INVERSO actual
             await fetch('/api/chat/toggle-bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedId, active:!c.botActive})}); 
-            // Forzamos sync inmediato
             syncChats();
         }
         function renderBotStatus(active) {
