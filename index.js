@@ -23,9 +23,9 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-v10"; 
+const SESSION_SECRET = "icc-valentina-secret-v10-5"; 
 
-// Aumentamos el límite para permitir subida de archivos grandes (imágenes/PDFs)
+// Aumentamos el límite para permitir subida de archivos grandes (imágenes/PDFs/Videos)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
@@ -74,7 +74,7 @@ let db;
     }
     
     await refreshKnowledge();
-    console.log("🚀 BACKEND VALENTINA v10.0 INICIADO CORRECTAMENTE");
+    console.log("🚀 BACKEND VALENTINA v10.5 INICIADO (SOPORTE MULTIMEDIA FULL)");
 })();
 
 let globalKnowledge = [];
@@ -102,7 +102,7 @@ app.use(session({
 }));
 
 // ============================================================
-// 3. MOTOR DE WHATSAPP Y PROXY DE IMÁGENES
+// 3. MOTOR DE WHATSAPP Y PROXY DE IMÁGENES/VIDEO/AUDIO
 // ============================================================
 async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     try {
@@ -115,10 +115,12 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
             if(tipo === 'image') payload.image = { id: contenido.id };
             if(tipo === 'document') payload.document = { id: contenido.id, filename: "Archivo_ICC.pdf" };
             if(tipo === 'audio') payload.audio = { id: contenido.id };
+            if(tipo === 'video') payload.video = { id: contenido.id }; // Nuevo soporte video
         } else {
             // Envío por URL
             if(tipo === 'image') payload.image = { link: contenido };
             if(tipo === 'document') payload.document = { link: contenido };
+            // Video por URL requiere soporte especial de hosting, omitido por seguridad
         }
         
         await axios.post(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`, payload, { 
@@ -131,27 +133,32 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     }
 }
 
-// --- NUEVO: PROXY PARA VER FOTOS ---
-// WhatsApp no permite ver las URLs de las fotos directamente en el navegador por seguridad.
-// Este endpoint actúa de puente: descarga la foto de Meta y se la sirve a tu Dashboard.
+// --- PROXY DE MEDIA MEJORADO (VIDEO/AUDIO STREAMING) ---
 app.get('/api/media-proxy/:id', async (req, res) => {
     if (!req.session.isLogged) return res.status(401).send("No autorizado");
     try {
-        // 1. Obtener la URL real de descarga
+        // 1. Obtener la URL real y el TIPO DE CONTENIDO (Mime Type)
         const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, {
             headers: { 'Authorization': `Bearer ${META_TOKEN}` }
         });
         const mediaUrl = urlRes.data.url;
+        const mimeType = urlRes.data.mime_type; // Ej: 'video/mp4', 'audio/ogg'
         
-        // 2. Descargar el binario de la imagen y enviarlo al cliente (stream)
+        // 2. Descargar el binario y enviarlo con el Header correcto
         const media = await axios.get(mediaUrl, {
             headers: { 'Authorization': `Bearer ${META_TOKEN}` },
             responseType: 'stream'
         });
+        
+        // Esto es CRUCIAL para que el navegador reproduzca el video/audio sin descargarlo
+        if (mimeType) {
+            res.setHeader('Content-Type', mimeType);
+        }
+        
         media.data.pipe(res);
     } catch (e) {
-        console.error("Error proxy imagen:", e.message);
-        res.status(500).send("Error cargando imagen");
+        console.error("Error proxy media:", e.message);
+        res.status(500).send("Error cargando media");
     }
 });
 
@@ -159,7 +166,13 @@ async function uploadToMeta(buffer, mimeType, filename) {
     try {
         const form = new FormData();
         form.append('file', buffer, { filename: filename, contentType: mimeType });
-        form.append('type', mimeType.includes('image') ? 'image' : (mimeType.includes('pdf') ? 'document' : 'audio'));
+        // Determinamos el tipo correcto para Meta
+        let type = 'document';
+        if (mimeType.includes('image')) type = 'image';
+        else if (mimeType.includes('audio')) type = 'audio';
+        else if (mimeType.includes('video')) type = 'video';
+        
+        form.append('type', type);
         form.append('messaging_product', 'whatsapp');
         
         const response = await axios.post(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/media`, form, {
@@ -200,7 +213,7 @@ async function procesarConValentina(message, sessionId, mediaDesc = "") {
     const historyRows = await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId]);
     const chatPrevio = historyRows.reverse();
 
-    // 4. CONSTRUCCIÓN DEL PROMPT DE VALENTINA (TEXTUAL SIN CAMBIOS)
+    // 4. CONSTRUCCIÓN DEL PROMPT DE VALENTINA
     const promptValentina = `
     Usted es Valentina, asistente virtual de Importadora Casa Colombia (ICC) y atiende clientes por WhatsApp.
     Su función NO es cerrar ventas: su misión es filtrar, ordenar la solicitud, recopilar datos clave y dejar el caso “listo para gol” para que un asesor humano continúe con cotización y cierre.
@@ -269,16 +282,12 @@ async function procesarConValentina(message, sessionId, mediaDesc = "") {
         let fullText = resAI.data.candidates[0].content.parts[0].text;
         
         // 5. PROCESAMIENTO Y LIMPIEZA DE RESPUESTA
-        // Buscamos el bloque JSON (ya sea con ```json o sin él)
         const regexJSON = /```json([\s\S]*?)```|{([\s\S]*?)}$/i;
         const match = fullText.match(regexJSON);
         let textoVisible = fullText;
 
         if (match) {
-            // Eliminar el JSON del mensaje que ve el usuario
             textoVisible = fullText.replace(match[0], "").trim();
-            
-            // Procesar el JSON internamente
             try {
                 const jsonStr = match[1] || match[2] || match[0];
                 const cleanJsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
@@ -292,10 +301,8 @@ async function procesarConValentina(message, sessionId, mediaDesc = "") {
             }
         }
 
-        // Limpieza de seguridad adicional
         textoVisible = textoVisible.replace(/\[DATA\][\s\S]*?\[DATA\]/gi, "").trim();
 
-        // Guardar respuesta del bot
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', textoVisible, new Date().toISOString()]);
         return textoVisible;
 
@@ -308,7 +315,6 @@ async function procesarConValentina(message, sessionId, mediaDesc = "") {
 async function gestionarLead(phone, info) {
     let nombreFinal = info.nombre;
     
-    // Intentar recuperar nombre si viene nulo
     const leadExistente = await db.get("SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
     const meta = await db.get("SELECT contactName FROM metadata WHERE phone = ?", [phone]);
     
@@ -316,12 +322,10 @@ async function gestionarLead(phone, info) {
         nombreFinal = leadExistente?.nombre || meta?.contactName || "Cliente WhatsApp";
     }
 
-    // Regla de 24 horas para no duplicar leads en la misma conversación
     let esMismaConversacion = false;
     if (leadExistente) {
         const fechaLead = new Date(leadExistente.fecha);
         const ahora = new Date();
-        // Si la fecha es válida y pasó menos de 24 horas
         if (!isNaN(fechaLead.getTime()) && (ahora - fechaLead)/(1000*60*60) < 24) {
             esMismaConversacion = true;
         }
@@ -336,14 +340,12 @@ async function gestionarLead(phone, info) {
     };
 
     if (esMismaConversacion) {
-        // ACTUALIZAR LEAD EXISTENTE
         await db.run(
             `UPDATE leads SET nombre=?, interes=?, etiqueta=?, ciudad=?, correo=?, fecha=? WHERE id = ?`,
             [datos.nombre, datos.interes, datos.etiqueta, datos.ciudad, datos.correo, new Date().toLocaleString(), leadExistente.id]
         );
         console.log(`🔄 LEAD ACTUALIZADO: ${datos.nombre}`);
     } else {
-        // CREAR NUEVO LEAD
         await db.run(
             `INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
             [phone, datos.nombre, datos.interes, datos.etiqueta, new Date().toLocaleString(), datos.ciudad, datos.correo]
@@ -397,7 +399,6 @@ app.post('/api/leads/delete', proteger, async (req, res) => {
 });
 
 app.post('/api/save-prompt-web', proteger, async (req, res) => {
-    // Aunque Valentina tiene su prompt fijo, guardamos esto por si quieres añadir datos extra
     if (req.body.prompt !== undefined) await setCfg('prompt', req.body.prompt);
     if (req.body.website_data !== undefined) await setCfg('website_data', req.body.website_data);
     res.json({ success: true });
@@ -438,7 +439,6 @@ app.post('/api/chat/action', proteger, async (req, res) => {
     res.json({ success: true });
 });
 
-// Endpoint de Sandbox para pruebas manuales
 app.post('/api/test-ai', proteger, async (req, res) => {
     try {
         const prompt = await getCfg('prompt', "");
@@ -472,6 +472,7 @@ app.get('/api/chats-full', proteger, async (req, res) => {
     res.json(list);
 });
 
+// Soporte de Video en Envío Manual
 app.post('/api/chat/send', proteger, async (req, res) => {
     if(await enviarWhatsApp(req.body.phone, req.body.message)) {
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [req.body.phone, 'manual', req.body.message, new Date().toISOString()]);
@@ -484,7 +485,25 @@ app.post('/api/chat/toggle-bot', proteger, async (req, res) => {
     res.json({ success: true });
 });
 
-// Endpoints de Inventario
+// Endpoints de Upload y Media (Para envio de archivos manuales)
+app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => {
+    try {
+        const { phone, type } = req.body; // type puede ser 'image', 'video', 'document', 'audio'
+        if(!req.file) return res.status(400).json({error: "No file"});
+        
+        const mediaId = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname);
+        if(mediaId) {
+            await enviarWhatsApp(phone, { id: mediaId }, type);
+            // Guardamos en historial con etiqueta especial
+            let tag = `[MEDIA:${type.toUpperCase()}:${mediaId}]`;
+            await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'manual', tag, new Date().toISOString()]);
+            res.json({success: true});
+        } else {
+            res.status(500).json({error: "Error subiendo a Meta"});
+        }
+    } catch(e) { res.status(500).json({error: e.message}); }
+});
+
 app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res) => {
     try {
         const n = parse(req.file.buffer.toString('utf-8'), { columns: true });
@@ -506,7 +525,7 @@ app.post('/api/knowledge/delete', proteger, async (req, res) => {
     res.json({ success: true });
 });
 
-// WEBHOOK DE META (Manejo de Mensajes y Fotos)
+// WEBHOOK DE META (Manejo de Mensajes, Fotos, VIDEOS y Audios)
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
 app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
@@ -514,7 +533,6 @@ app.post('/webhook', async (req, res) => {
         const value = req.body.entry?.[0]?.changes?.[0]?.value;
         const msg = value?.messages?.[0];
         
-        // Guardar nombre del contacto si viene de WhatsApp
         if (value?.contacts?.[0]) {
             const cName = value.contacts[0].profile.name;
             const phone = value.contacts[0].wa_id;
@@ -525,13 +543,15 @@ app.post('/webhook', async (req, res) => {
             let userMsg = "";
             let mediaDesc = "";
 
-            // Manejo de Tipos de Mensaje
+            // Manejo de Tipos de Mensaje EXTENDIDO
             if (msg.type === "text") {
                 userMsg = msg.text.body;
             } else if (msg.type === "image") {
-                // TRUCO: Guardamos el ID de la foto en el texto con formato especial
                 userMsg = `[MEDIA:IMAGE:${msg.image.id}]`; 
                 mediaDesc = "📷 FOTO RECIBIDA";
+            } else if (msg.type === "video") { // SOPORTE VIDEO
+                userMsg = `[MEDIA:VIDEO:${msg.video.id}]`; 
+                mediaDesc = "🎥 VIDEO RECIBIDO";
             } else if (msg.type === "document") {
                 userMsg = `[MEDIA:DOC:${msg.document.id}]`;
                 mediaDesc = "📄 DOCUMENTO RECIBIDO";
@@ -542,7 +562,7 @@ app.post('/webhook', async (req, res) => {
 
             // Enviamos a Valentina (si es foto, le damos contexto en texto plano)
             const inputIA = mediaDesc ? `(El usuario envió: ${mediaDesc})` : userMsg;
-            const respuesta = await procesarConValentina(inputIA, msg.from, userMsg); // userMsg se guarda en BD
+            const respuesta = await procesarConValentina(inputIA, msg.from, userMsg); 
             
             if(respuesta) await enviarWhatsApp(msg.from, respuesta);
         }
@@ -554,4 +574,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🚀 VALENTINA v10.0 SQL - SISTEMA COMPLETO ONLINE"));
+app.listen(process.env.PORT || 10000, () => console.log("🚀 VALENTINA v10.5 ONLINE (VIDEO/AUDIO STREAMING READY)"));
