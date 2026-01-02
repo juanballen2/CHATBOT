@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICC | Intelligent Manager v10.0</title>
+    <title>ICC | Intelligent Manager v10.5</title>
+    <link rel="icon" href="https://github.com/juanballen2/CHATBOT/blob/main/images/favicon.jpg?raw=true">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -48,7 +49,7 @@
         }
         .logo-area {
             width: 45px; height: 45px;
-            background: white; /* Fondo blanco para el logo */
+            background: white; 
             border-radius: 8px;
             display: flex; align-items: center; justify-content: center;
             margin-bottom: 30px;
@@ -87,7 +88,7 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         /* --- VISTA CHAT (ESTILO WHATSAPP WEB MEJORADO) --- */
-        .chat-layout { display: flex; height: 100%; }
+        .chat-layout { display: flex; height: 100%; width: 100%; }
         
         /* Lista de Chats */
         .chat-list-panel {
@@ -100,13 +101,15 @@
             display: flex; justify-content: space-between; align-items: center;
         }
         .cl-title { font-weight: 700; font-size: 18px; color: var(--dark); display: flex; align-items: center; gap: 8px; }
-        .search-box { padding: 10px 20px; }
+        
+        /* FILTROS Y ETIQUETAS */
+        .search-row { padding: 10px 20px; border-bottom: 1px solid var(--border); display: flex; gap: 5px; }
         .search-input {
-            width: 100%; padding: 10px 15px; border-radius: 8px;
+            width: 100%; padding: 8px 12px; border-radius: 8px;
             border: 1px solid var(--border); background: var(--bg);
-            font-size: 14px; transition: 0.2s;
+            font-size: 13px; transition: 0.2s;
         }
-        .search-input:focus { border-color: var(--primary); background: white; box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.1); }
+        .tag-filter { padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: white; cursor: pointer; color: var(--text-light); font-size: 12px; }
         
         .cl-items { flex: 1; overflow-y: auto; }
         .chat-item {
@@ -129,9 +132,10 @@
         .ci-name { font-weight: 600; font-size: 14px; color: var(--text-main); }
         .ci-time { font-size: 11px; color: var(--text-light); }
         .ci-msg { font-size: 13px; color: var(--text-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tag-pill { font-size: 10px; padding: 2px 6px; border-radius: 10px; color: white; margin-left: 5px; font-weight: 600; vertical-align: middle; }
 
         /* Area Conversación */
-        .chat-area { flex: 1; display: flex; flex-direction: column; background: #E5E5E5; position: relative; }
+        .chat-area { flex: 1; display: flex; flex-direction: column; background: #E5E5E5; position: relative; transition: background 0.3s; }
         .chat-bg { 
             position: absolute; inset: 0; opacity: 0.4; pointer-events: none;
             background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
@@ -140,14 +144,16 @@
         .ca-header {
             height: 70px; background: var(--surface); border-bottom: 1px solid var(--border);
             display: flex; align-items: center; justify-content: space-between; padding: 0 25px;
-            z-index: 10; visibility: hidden;
+            z-index: 10; visibility: hidden; cursor: pointer;
         }
+        .ca-header:hover { background: #fafafa; }
+
         .user-details { display: flex; align-items: center; gap: 12px; }
         .user-name { font-weight: 700; color: var(--text-main); font-size: 16px; }
         .user-meta { font-size: 12px; color: var(--text-light); display: flex; align-items: center; gap: 5px; }
         
         .status-badge {
-            padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+            padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; transition: 0.2s; user-select: none;
         }
         .status-on { background: #DCFCE7; color: #166534; border: 1px solid #86EFAC; }
         .status-off { background: #FEE2E2; color: #991B1B; border: 1px solid #FECACA; }
@@ -158,7 +164,7 @@
         }
         .bubble {
             max-width: 65%; padding: 12px 18px; border-radius: 12px; font-size: 14px; line-height: 1.5;
-            position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); word-wrap: break-word;
         }
         .b-user { align-self: flex-start; background: var(--bubble-in); color: var(--text-main); border-top-left-radius: 0; }
         .b-bot { align-self: flex-end; background: var(--bubble-bot); color: var(--dark); border-top-right-radius: 0; border: 1px solid #BBF7D0; }
@@ -181,6 +187,19 @@
         .recording { animation: pulseRed 1.5s infinite; color: var(--danger); background: #FEE2E2; }
         @keyframes pulseRed { 0% {box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);} 70% {box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);} 100% {box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);} }
 
+        /* --- PROFILE PANEL (SLIDE IN) --- */
+        .profile-panel {
+            width: 0; background: white; border-left: 1px solid var(--border);
+            transition: 0.3s ease; overflow: hidden; display: flex; flex-direction: column;
+        }
+        .profile-panel.open { width: 320px; }
+        .pp-header { padding: 30px 20px; background: #F9FAFB; text-align: center; border-bottom: 1px solid var(--border); }
+        .pp-avatar { width: 80px; height: 80px; background: #E5E7EB; border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center; font-size: 32px; color: #6B7280; }
+        .pp-body { padding: 25px; flex: 1; overflow-y: auto; }
+        .pp-row { margin-bottom: 20px; }
+        .pp-label { font-size: 11px; color: #9CA3AF; text-transform: uppercase; font-weight: 700; margin-bottom: 5px; }
+        .pp-val { font-size: 14px; color: #1F2937; }
+        
         /* --- DASHBOARD & GENERAL UI --- */
         .page-container { padding: 40px; overflow-y: auto; flex: 1; max-width: 1400px; margin: 0 auto; width: 100%; }
         .page-title { font-size: 24px; font-weight: 700; color: var(--dark); margin-bottom: 5px; }
@@ -190,7 +209,7 @@
         .card {
             background: var(--surface); border-radius: 16px; padding: 25px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-            border: 1px solid rgba(255,255,255,0.5);
+            border: 1px solid rgba(255,255,255,0.5); margin-bottom: 20px;
         }
         .kpi-card { display: flex; align-items: center; justify-content: space-between; }
         .kpi-val { font-size: 36px; font-weight: 800; color: var(--dark); line-height: 1; }
@@ -208,7 +227,6 @@
         
         .tag { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; }
         .tag-lead { background: #E0E7FF; color: #4338CA; }
-        .tag-hot { background: #FEF3C7; color: #B45309; }
 
         /* Botones */
         .btn { padding: 10px 20px; border-radius: 8px; font-weight: 600; font-size: 13px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: 0.2s; }
@@ -225,6 +243,10 @@
         .form-control { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); font-family: inherit; font-size: 14px; transition: 0.2s; }
         .form-control:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1); }
         
+        /* Opciones de Fondo de Chat */
+        .bg-option { width: 40px; height: 40px; border-radius: 50%; border: 3px solid #E5E7EB; cursor: pointer; transition: 0.2s; }
+        .bg-option:hover { transform: scale(1.1); border-color: var(--primary); }
+
         /* Sandbox Terminal */
         .terminal-window { background: #1E1E1E; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3); font-family: 'JetBrains Mono', monospace; display: flex; flex-direction: column; height: 500px; }
         .term-header { background: #2D2D2D; padding: 10px 15px; display: flex; gap: 6px; }
@@ -321,19 +343,22 @@
             <div class="chat-layout">
                 <div class="chat-list-panel">
                     <div class="cl-header">
-                        <div class="cl-title"><i class="fas fa-inbox"></i> Bandeja de Entrada</div>
+                        <div class="cl-title"><i class="fas fa-inbox"></i> Inbox</div>
                         <button class="btn btn-primary" onclick="addContactPrompt()" style="padding: 6px 12px; font-size: 12px;">+ Nuevo</button>
                     </div>
-                    <div class="search-box">
-                        <input id="search" class="search-input" placeholder="Buscar chat..." oninput="renderChats()">
+                    <div class="search-row">
+                        <input id="search" class="search-input" placeholder="Buscar..." oninput="renderChats()">
+                        <select id="tag-filter" class="tag-filter" onchange="renderChats()">
+                            <option value="">Todas</option>
+                        </select>
                     </div>
-                    <div class="cl-items" id="chat-list-box">
-                        </div>
+                    <div class="cl-items" id="chat-list-box"></div>
                 </div>
-                <div class="chat-area">
+                
+                <div class="chat-area" id="chat-area-bg">
                     <div class="chat-bg"></div>
                     
-                    <div id="chat-top" class="ca-header">
+                    <div id="chat-top" class="ca-header" onclick="toggleProfile()">
                         <div class="user-details">
                             <div class="avatar" style="background: var(--primary); color: white;"><i class="fas fa-user"></i></div>
                             <div>
@@ -341,13 +366,13 @@
                                 <div class="user-meta" id="active-phone">...</div>
                             </div>
                         </div>
-                        <button id="btn-bot" class="status-badge status-on" style="cursor: pointer;" onclick="toggleBot()">BOT ACTIVO</button>
+                        <button id="btn-bot" class="status-badge status-on" onclick="event.stopPropagation(); toggleBot()">BOT ACTIVO</button>
                     </div>
 
                     <div class="messages-box" id="msgs-box">
                         <div style="margin: auto; text-align: center; color: var(--text-light);">
                             <i class="fas fa-paper-plane" style="font-size: 40px; margin-bottom: 20px; opacity: 0.2;"></i>
-                            <div style="font-weight: 500;">Selecciona una conversación para comenzar</div>
+                            <div style="font-weight: 500;">Selecciona una conversación</div>
                         </div>
                     </div>
 
@@ -359,6 +384,32 @@
                         
                         <button class="btn-icon" id="btn-mic" onclick="toggleRecord()"><i class="fas fa-microphone"></i></button>
                         <button class="btn-icon btn-send" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button>
+                    </div>
+                </div>
+
+                <div class="profile-panel" id="profile-panel">
+                    <div class="pp-header">
+                        <div class="pp-avatar"><i class="fas fa-user"></i></div>
+                        <h3 id="prof-name" style="margin:0; color:var(--dark);">Cliente</h3>
+                        <div id="prof-phone" style="color:#666; font-size:13px; margin-top:5px;">+57...</div>
+                    </div>
+                    <div class="pp-body">
+                        <div class="pp-row">
+                            <div class="pp-label">Etiquetas</div>
+                            <div id="prof-tags"></div>
+                        </div>
+                        <div class="pp-row">
+                            <div class="pp-label">Ciudad Detectada</div>
+                            <div id="prof-city" class="pp-val">-</div>
+                        </div>
+                        <div class="pp-row">
+                            <div class="pp-label">Interés</div>
+                            <div id="prof-interest" class="pp-val">-</div>
+                        </div>
+                        <div class="pp-row">
+                            <div class="pp-label">Estado Bot</div>
+                            <div id="prof-bot-status" class="pp-val">Activo</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -375,7 +426,6 @@
                     <button class="btn btn-outline" onclick="exportExcel()"><i class="fas fa-file-excel" style="color: #10B981;"></i> Exportar</button>
                 </div>
             </div>
-            
             <div class="table-container">
                 <table id="leads-table">
                     <thead><tr><th>Fecha</th><th>Nombre</th><th>Teléfono</th><th>Ciudad</th><th>Correo</th><th>Interés</th><th>Etiqueta</th><th>Acción</th></tr></thead>
@@ -414,21 +464,32 @@
                 <div class="card">
                     <h3 style="margin-top: 0; color: var(--primary);">Personalidad (Prompt)</h3>
                     <div class="form-group">
-                        <label class="form-label">Instrucción Principal</label>
-                        <textarea id="cfg-prompt" class="form-control" style="height: 120px;"></textarea>
+                        <label class="form-label">Instrucción Principal (Fija en Backend)</label>
+                        <textarea class="form-control" disabled style="height: 100px; background: #f0f0f0; color: #666;">Valentina v10.5 (Configuración Hardcoded en index.js para seguridad)</textarea>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Información de la Empresa (Web)</label>
-                        <textarea id="cfg-web" class="form-control" style="height: 200px;" placeholder="Pega aquí 'Sobre Nosotros', envíos, etc..."></textarea>
+
+                    <h3 style="margin-top: 20px; color: var(--dark);">Personalización Visual</h3>
+                    <p style="font-size: 13px; color: #666; margin-bottom: 10px;">Elige el fondo del chat:</p>
+                    <div style="display: flex; gap: 15px;">
+                        <div class="bg-option" style="background: #E5E5E5;" onclick="setBg('#E5E5E5')" title="Gris Clásico"></div>
+                        <div class="bg-option" style="background: #efe7dd;" onclick="setBg('#efe7dd')" title="WhatsApp Beige"></div>
+                        <div class="bg-option" style="background: #d1d7db;" onclick="setBg('#d1d7db')" title="Azul Hielo"></div>
+                        <div class="bg-option" style="background: #202c33;" onclick="setBg('#202c33')" title="Modo Oscuro"></div>
                     </div>
-                    <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="savePromptWeb()">Guardar Configuración</button>
                 </div>
 
                 <div class="card">
-                    <h3 style="margin-top: 0; color: var(--dark);">Reglas de Negocio</h3>
-                    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                        <input type="text" id="rule-input" class="form-control" placeholder="Ej: No damos fiado">
-                        <button class="btn btn-primary" onclick="addRule()">Añadir</button>
+                    <h3 style="margin-top: 0; color: var(--dark);">Cerebro Web (Información)</h3>
+                    <p style="font-size: 12px; color: #666;">Pega aquí texto de tu web (Quiénes somos, Envíos, Horarios) para que Valentina lo sepa.</p>
+                    <div class="form-group">
+                        <textarea id="cfg-web" class="form-control" style="height: 150px;" placeholder="Ej: Horario de atención L-V 8am a 5pm..."></textarea>
+                    </div>
+                    <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="saveConfig()">Guardar Información</button>
+
+                    <h3 style="margin-top: 30px; color: var(--dark);">Reglas de Negocio</h3>
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <input type="text" id="rule-input" class="form-control" placeholder="Ej: No damos fiado" style="margin-top:0;">
+                        <button class="btn btn-primary" onclick="addRule()">+</button>
                     </div>
                     <div id="rule-list-box" style="display: flex; flex-direction: column; gap: 10px;"></div>
                 </div>
@@ -437,21 +498,21 @@
 
         <div id="view-sandbox" class="view page-container">
             <h1 class="page-title">Sandbox de IA</h1>
-            <p class="page-subtitle">Entorno de pruebas aislado para verificar respuestas</p>
+            <p class="page-subtitle">Entorno de pruebas aislado</p>
 
             <div class="terminal-window">
                 <div class="term-header">
                     <div class="dot" style="background: #FF5F56;"></div>
                     <div class="dot" style="background: #FFBD2E;"></div>
                     <div class="dot" style="background: #27C93F;"></div>
-                    <span style="margin-left: 10px; color: #aaa; font-size: 12px;">valentina_ai_v1.0.exe</span>
+                    <span style="margin-left: 10px; color: #aaa; font-size: 12px;">valentina_ai_v10.5.exe</span>
                 </div>
                 <div class="term-body" id="sand-log">
-                    > Sistema iniciado. Esperando input de prueba...<br>
+                    > Sistema iniciado. Esperando input...<br>
                 </div>
                 <input type="text" id="sand-in" class="term-input" placeholder="Escribe como cliente y presiona Enter..." onkeypress="if(event.key==='Enter') runTest()">
             </div>
-            <div id="sand-res" style="margin-top: 20px; padding: 20px; background: white; border-radius: 12px; border: 1px solid var(--border);">
+            <div id="sand-res" class="card" style="margin-top: 20px;">
                 <em>La respuesta final aparecerá aquí...</em>
             </div>
         </div>
@@ -468,6 +529,16 @@
     <script>
         let chats=[], selectedId=null, ctxId=null, timer=null, allLeads = [];
         let mediaRecorder, audioChunks = [], isRecording = false;
+
+        // --- COLORES ETIQUETAS ---
+        const TAG_COLORS = { 
+            'Cotización': '#F59E0B', 
+            'Venta': '#10B981', 
+            'Soporte': '#3B82F6', 
+            'Frio': '#9CA3AF', 
+            'Lead': '#8B5CF6' 
+        };
+        function getTagColor(tag) { return TAG_COLORS[tag] || '#6B7280'; }
 
         // --- UTILS UI ---
         function showToast(msg, type='success') {
@@ -493,7 +564,7 @@
             if(v==='dashboard') loadDash();
             if(v==='leads') loadLeads();
             if(v==='inventory') loadInventory();
-            if(v==='config') loadCfg();
+            if(v==='config') loadConfig();
         }
 
         // --- LOGIC: CHAT ---
@@ -504,16 +575,39 @@
                 if(JSON.stringify(data) !== JSON.stringify(chats)) {
                     chats = data;
                     renderChats();
+                    updateFilters(); // Actualizar dropdown
                     if(selectedId) await renderMsgs(selectedId);
                 }
             } catch(e) {}
         }
 
+        function updateFilters() {
+            const sel = document.getElementById('tag-filter');
+            const current = sel.value;
+            const tags = new Set();
+            chats.forEach(c => (c.labels||[]).forEach(l => tags.add(l)));
+            
+            let html = '<option value="">Todas</option>';
+            tags.forEach(t => html += `<option value="${t}">${t}</option>`);
+            sel.innerHTML = html;
+            sel.value = current;
+        }
+
         function renderChats() {
             const q = document.getElementById('search').value.toLowerCase();
+            const tagFilter = document.getElementById('tag-filter').value;
             const list = document.getElementById('chat-list-box');
-            list.innerHTML = chats.filter(c => (c.name||c.id).toLowerCase().includes(q)).map(c => {
+            
+            const filtered = chats.filter(c => {
+                const matchText = (c.name||c.id).toLowerCase().includes(q);
+                const matchTag = tagFilter ? (c.labels||[]).includes(tagFilter) : true;
+                return matchText && matchTag;
+            });
+
+            list.innerHTML = filtered.map(c => {
                 const time = new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const tagsHtml = (c.labels||[]).map(l => `<span class="tag-pill" style="background:${getTagColor(l)}">${l}</span>`).join('');
+                
                 return `
                 <div class="chat-item ${c.id===selectedId?'active':''}" onclick="selChat('${c.id}')" oncontextmenu="openCtx(event, '${c.id}')">
                     <div class="avatar ${c.botActive?'bot-active':''}"><i class="fas fa-user${c.botActive?'-robot':''}"></i></div>
@@ -522,7 +616,10 @@
                             <span class="ci-name">${c.name} ${c.pinned?'<i class="fas fa-thumbtack" style="font-size:10px; color:var(--primary)"></i>':''}</span>
                             <span class="ci-time">${time}</span>
                         </div>
-                        <div class="ci-msg">${c.lastMessage.text || '...'}</div>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div class="ci-msg" style="flex:1;">${c.lastMessage.text || '...'}</div>
+                            <div>${tagsHtml}</div>
+                        </div>
                     </div>
                 </div>`;
             }).join('');
@@ -535,12 +632,21 @@
             document.getElementById('input-bar').style.display='flex';
             document.getElementById('active-name').innerText = c.name;
             document.getElementById('active-phone').innerText = id;
+            
+            // Populate Profile Panel
+            document.getElementById('prof-name').innerText = c.name;
+            document.getElementById('prof-phone').innerText = id;
+            document.getElementById('prof-bot-status').innerText = c.botActive ? "Activo" : "Inactivo";
+            document.getElementById('prof-tags').innerHTML = (c.labels||[]).map(l => `<span class="tag-pill" style="background:${getTagColor(l)}">${l}</span>`).join('');
+            
+            // Buscamos si hay datos de lead para este numero
+            // (Para una version futura, podriamos cruzar datos con allLeads aqui)
+            
             updateBotBtn(c.botActive);
             renderMsgs(id, true);
-            renderChats(); // Update active class
+            renderChats(); 
         }
 
-        // --- RENDERIZADO DE MENSAJES (SOPORTE IMAGENES) ---
         async function renderMsgs(id, forceScroll=false) {
             try {
                 const h = await fetch('/api/data/history').then(r=>r.json());
@@ -549,23 +655,33 @@
                 
                 box.innerHTML = msgs.map(m => {
                     const type = m.role==='bot'?'b-bot':(m.role==='manual'?'b-manual':'b-user');
-                    const icon = m.role==='bot'?'<i class="fas fa-robot" style="margin-right:5px; opacity:0.5"></i>':'';
-                    
-                    // --- DETECTOR DE FOTOS Y MEDIOS ---
                     let content = m.text;
+
+                    // --- MEDIA PARSING (SOPORTE STREAMING) ---
                     if (content.includes('[MEDIA:IMAGE:')) {
-                        const mediaId = content.match(/\[MEDIA:IMAGE:(.*?)\]/)[1];
-                        content = `<img src="/api/media-proxy/${mediaId}" style="max-width:100%; border-radius:8px; cursor:pointer; border:1px solid #ddd; margin-top:5px;" onclick="window.open(this.src)" title="Clic para ampliar">`;
-                    } else if (content.includes('[MEDIA:DOC:')) {
-                        content = `<div style="background:#f0f0f0; padding:10px; border-radius:8px; color:#333;"><i class="fas fa-file-pdf" style="color:#e74c3c;"></i> Documento recibido</div>`;
-                    } else if (content.includes('[MEDIA:AUDIO:')) {
-                        content = `<div style="background:#f0f0f0; padding:10px; border-radius:8px; color:#333;"><i class="fas fa-microphone" style="color:#3498db;"></i> Audio recibido</div>`;
+                        const mid = content.match(/\[MEDIA:IMAGE:(.*?)\]/)[1];
+                        content = `<img src="/api/media-proxy/${mid}" style="max-width:100%; border-radius:8px; cursor:pointer;" onclick="window.open(this.src)">`;
+                    } 
+                    else if (content.includes('[MEDIA:VIDEO:')) {
+                        const mid = content.match(/\[MEDIA:VIDEO:(.*?)\]/)[1];
+                        // VIDEO NATIVO
+                        content = `<video src="/api/media-proxy/${mid}" controls style="max-width:100%; border-radius:8px; background:black;"></video>`;
                     }
-                    // ------------------------------------
+                    else if (content.includes('[MEDIA:AUDIO:')) {
+                        const mid = content.match(/\[MEDIA:AUDIO:(.*?)\]/)[1];
+                        // AUDIO NATIVO
+                        content = `<audio src="/api/media-proxy/${mid}" controls style="width:200px; margin-top:5px;"></audio>`;
+                    }
+                    else if (content.includes('[MEDIA:DOC:')) {
+                        content = `<div style="background:#eee; padding:10px; border-radius:5px; display:flex; gap:10px; align-items:center;">
+                            <i class="fas fa-file-pdf" style="font-size:20px; color:red;"></i> 
+                            <span>Documento Recibido (No previsualizable)</span>
+                        </div>`;
+                    }
 
                     return `
                     <div class="bubble ${type}">
-                        ${icon} ${content}
+                        ${content}
                         <div style="font-size:10px; opacity:0.6; text-align:right; margin-top:4px;">
                             ${new Date(m.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                         </div>
@@ -583,7 +699,6 @@
             if(!txt || !selectedId) return;
             document.getElementById('msg-input').value = '';
             
-            // Optimistic UI
             const box = document.getElementById('msgs-box');
             box.innerHTML += `<div class="bubble b-manual">${txt} <span style="font-size:10px">...</span></div>`;
             box.scrollTop = box.scrollHeight;
@@ -592,25 +707,48 @@
             sync();
         }
 
-        // --- DASHBOARD & LEADS ---
+        // TOGGLE BOT INSTANTANEO
+        async function toggleBot() {
+            const btn = document.getElementById('btn-bot');
+            const isActive = btn.classList.contains('status-on');
+            // Optimistic UI Update
+            updateBotBtn(!isActive);
+            chats.find(x=>x.id===selectedId).botActive = !isActive; 
+            document.getElementById('prof-bot-status').innerText = !isActive ? "Activo" : "Inactivo";
+
+            await fetch('/api/chat/toggle-bot', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, active:!isActive})});
+        }
+        function updateBotBtn(active) { 
+            const btn = document.getElementById('btn-bot'); 
+            if(active) { btn.className='status-badge status-on'; btn.innerText='BOT ACTIVO'; }
+            else { btn.className='status-badge status-off'; btn.innerText='BOT PAUSADO'; }
+        }
+
+        // PERFIL
+        function toggleProfile() {
+            const p = document.getElementById('profile-panel');
+            p.classList.toggle('open');
+        }
+
+        // PERSONALIZACIÓN VISUAL
+        function setBg(color) {
+            localStorage.setItem('chatBg', color);
+            document.getElementById('chat-area-bg').style.background = color;
+        }
+        if(localStorage.getItem('chatBg')) document.getElementById('chat-area-bg').style.background = localStorage.getItem('chatBg');
+
+        // LEADS, CONFIG, INVENTARIO
         async function loadDash() {
             try {
                 const [l,c,s] = await Promise.all([ fetch('/api/data/leads').then(r=>r.json()), fetch('/api/chats-full').then(r=>r.json()), fetch('/api/data/knowledge').then(r=>r.json()) ]);
-                document.getElementById('kpi-leads').innerText = Array.isArray(l)?l.length:0;
-                document.getElementById('kpi-chats').innerText = Array.isArray(c)?c.length:0;
-                document.getElementById('kpi-stock').innerText = Array.isArray(s)?s.length:0;
-                
-                // Mini tabla
-                const miniTable = document.getElementById('dash-leads-body');
-                miniTable.innerHTML = (Array.isArray(l)?l.slice(0,5):[]).map(x => `
-                    <tr><td>${x.nombre}</td><td>${x.ciudad}</td><td>${x.interes}</td><td>${x.fecha.split(',')[0]}</td></tr>
-                `).join('');
+                document.getElementById('kpi-leads').innerText = l.length||0;
+                document.getElementById('kpi-chats').innerText = c.length||0;
+                document.getElementById('kpi-stock').innerText = s.length||0;
+                document.getElementById('dash-leads-body').innerHTML = (l||[]).slice(0,5).map(x => `<tr><td>${x.nombre}</td><td>${x.ciudad}</td><td>${x.interes}</td><td>${x.fecha.split(',')[0]}</td></tr>`).join('');
             } catch(e) {}
         }
 
-        async function loadLeads() {
-            try { allLeads = await fetch('/api/data/leads').then(r=>r.json()); renderLeadsTable(allLeads); } catch(e) {}
-        }
+        async function loadLeads() { try { allLeads = await fetch('/api/data/leads').then(r=>r.json()); renderLeadsTable(allLeads); } catch(e) {} }
         function renderLeadsTable(data) {
             const body = document.getElementById('leads-body');
             if(!data || !data.length) { body.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:30px; color:#999;">No hay datos aún</td></tr>'; return; }
@@ -621,7 +759,7 @@
                 <td>${x.ciudad||'-'}</td>
                 <td>${x.correo||'-'}</td>
                 <td>${x.interes||'-'}</td>
-                <td><span class="tag tag-lead">${x.etiqueta||'Lead'}</span></td>
+                <td><span class="tag-pill" style="background:${getTagColor(x.etiqueta)}">${x.etiqueta||'Lead'}</span></td>
                 <td><button class="btn btn-danger" style="padding:5px 10px;" onclick="deleteLead(${x.id})"><i class="fas fa-trash"></i></button></td>
             </tr>`).join('');
         }
@@ -630,77 +768,44 @@
             const filtered = allLeads.filter(l => JSON.stringify(l).toLowerCase().includes(q));
             renderLeadsTable(filtered);
         }
-        async function deleteLead(id) { 
-            if(!confirm("¿Borrar lead?")) return; 
-            await fetch('/api/leads/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id })}); 
-            loadLeads(); showToast("Lead eliminado");
-        }
+        async function deleteLead(id) { if(!confirm("¿Borrar?")) return; await fetch('/api/leads/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id })}); loadLeads(); }
         function exportExcel() { XLSX.writeFile(XLSX.utils.table_to_book(document.getElementById('leads-table')), "Leads_ICC.xlsx"); }
 
-        // --- INVENTORY & CONFIG ---
         async function loadInventory() {
             const inv = await fetch('/api/data/knowledge').then(r=>r.json());
-            const tbody = document.getElementById('inv-body');
-            tbody.innerHTML = inv.map((item, i) => `<tr>
-                <td>${item.searchable}</td>
-                <td style="text-align:center;"><button class="btn btn-danger" style="padding:6px;" onclick="delInv(${i})"><i class="fas fa-trash"></i></button></td>
-            </tr>`).join('');
+            document.getElementById('inv-body').innerHTML = inv.map((item, i) => `<tr><td>${item.searchable}</td><td style="text-align:center;"><button class="btn btn-danger" style="padding:6px;" onclick="delInv(${i})"><i class="fas fa-trash"></i></button></td></tr>`).join('');
         }
         async function delInv(i) { if(confirm("¿Eliminar?")) { await fetch('/api/knowledge/delete', {method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); } }
-        async function uploadCSV() { 
-            const f = document.getElementById('csv-file').files[0]; if(!f) return; 
-            const fd = new FormData(); fd.append('file', f);
-            await fetch('/api/knowledge/csv', {method:'POST', body:fd}); 
-            loadInventory(); showToast("Inventario actualizado");
-        }
+        async function uploadCSV() { const f = document.getElementById('csv-file').files[0]; if(!f) return; const fd = new FormData(); fd.append('file', f); await fetch('/api/knowledge/csv', {method:'POST', body:fd}); loadInventory(); showToast("Inventario actualizado"); }
 
-        async function loadCfg() {
+        async function loadConfig() {
             const d = await fetch('/api/data/config').then(r=>r.json());
-            document.getElementById('cfg-prompt').value = d.prompt || '';
             document.getElementById('cfg-web').value = d.website_data || '';
             renderRules(d.tech_rules || []);
         }
         function renderRules(rules) {
-            const list = document.getElementById('rule-list-box');
-            list.innerHTML = rules.map((r, i) => `
-                <div style="background:white; padding:10px; border:1px solid var(--border); border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
-                    <span>${r}</span>
-                    <i class="fas fa-times" style="color:var(--danger); cursor:pointer;" onclick="deleteRule(${i})"></i>
-                </div>`).join('');
+            document.getElementById('rule-list-box').innerHTML = rules.map((r, i) => `<div style="background:white; padding:10px; border:1px solid var(--border); border-radius:8px; display:flex; justify-content:space-between; align-items:center;"><span>${r}</span><i class="fas fa-times" style="color:var(--danger); cursor:pointer;" onclick="deleteRule(${i})"></i></div>`).join('');
         }
-        async function addRule() {
-            const r = document.getElementById('rule-input').value; if(!r) return;
-            const res = await fetch('/api/config/rules/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({rule:r})}).then(r=>r.json());
-            renderRules(res.rules); document.getElementById('rule-input').value = '';
-        }
-        async function deleteRule(i) {
-            const res = await fetch('/api/config/rules/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}).then(r=>r.json());
-            renderRules(res.rules);
-        }
-        async function savePromptWeb() {
-            await fetch('/api/save-prompt-web', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-                prompt: document.getElementById('cfg-prompt').value,
-                website_data: document.getElementById('cfg-web').value
-            })});
-            showToast("Configuración guardada");
-        }
+        async function addRule() { const r = document.getElementById('rule-input').value; if(!r) return; const res = await fetch('/api/config/rules/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({rule:r})}).then(r=>r.json()); renderRules(res.rules); document.getElementById('rule-input').value = ''; }
+        async function deleteRule(i) { const res = await fetch('/api/config/rules/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}).then(r=>r.json()); renderRules(res.rules); }
+        async function saveConfig() { await fetch('/api/save-prompt-web', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ website_data: document.getElementById('cfg-web').value })}); showToast("Información guardada"); }
 
-        // --- SANDBOX & OTHERS ---
         async function runTest() {
             const msg = document.getElementById('sand-in').value; if(!msg) return;
-            document.getElementById('sand-log').innerHTML += `> USER: ${msg}<br>`;
-            document.getElementById('sand-in').value = '';
-            document.getElementById('sand-res').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Procesando...';
-            
+            document.getElementById('sand-log').innerHTML += `> USER: ${msg}<br>`; document.getElementById('sand-in').value = '';
+            document.getElementById('sand-res').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> ...';
             const r = await fetch('/api/test-ai', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg})}).then(x=>x.json());
-            document.getElementById('sand-log').innerHTML += `<span style="color:#FCD34D">> VALENTINA: Respuesta generada.</span><br>`;
+            document.getElementById('sand-log').innerHTML += `<span style="color:#FCD34D">> VALENTINA: OK.</span><br>`;
             document.getElementById('sand-res').innerText = r.response;
         }
 
         async function handleFileUpload(input) {
             if (input.files.length === 0 || !selectedId) return;
-            const fd = new FormData(); fd.append('file', input.files[0]); fd.append('phone', selectedId); fd.append('type', input.files[0].type.includes('image') ? 'image' : 'document');
-            showToast("Enviando archivo...");
+            const file = input.files[0];
+            const type = file.type.includes('image') ? 'image' : (file.type.includes('video') ? 'video' : (file.type.includes('audio') ? 'audio' : 'document'));
+            
+            const fd = new FormData(); fd.append('file', file); fd.append('phone', selectedId); fd.append('type', type);
+            showToast(`Enviando ${type}...`);
             await fetch('/api/chat/upload-send', { method: 'POST', body: fd });
             input.value = ''; sync();
         }
@@ -720,19 +825,13 @@
         }
 
         function addContactPrompt() { const p=prompt("Teléfono (con país):"); if(p) { const n=prompt("Nombre:"); fetch('/api/contacts/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:p,name:n})}).then(sync); } }
-        async function toggleBot() { const c=chats.find(x=>x.id===selectedId); await fetch('/api/chat/toggle-bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedId,active:!c.botActive})}); sync(); }
-        function updateBotBtn(a) { 
-            const btn = document.getElementById('btn-bot'); 
-            if(a) { btn.className='status-badge status-on'; btn.innerText='BOT ACTIVO'; }
-            else { btn.className='status-badge status-off'; btn.innerText='BOT PAUSADO'; }
-        }
         
         function openCtx(e,id) { e.preventDefault(); ctxId=id; const m=document.getElementById('ctx-menu'); m.style.display='block'; m.style.left=e.pageX+'px'; m.style.top=e.pageY+'px'; }
         document.onclick = (e) => { if(!e.target.closest('#ctx-menu')) document.getElementById('ctx-menu').style.display='none'; }
         async function ctxAction(action) {
             const c = chats.find(x=>x.id===ctxId); let val = null;
             if(action === 'rename') { val = prompt("Nuevo nombre:", c.name || c.id); if(!val) return; await fetch('/api/contacts/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:ctxId, name:val})}); sync(); return; }
-            if(action === 'label') { val = prompt("Etiqueta:"); if(!val) return; }
+            if(action === 'label') { val = prompt("Etiqueta (Cotización, Venta, Soporte, Frio):"); if(!val) return; }
             if(action === 'pin') val = !c.pinned;
             await fetch('/api/chat/action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:ctxId, action:action, value:val})}); sync();
         }
