@@ -1,6 +1,6 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v13.0
+ * SERVER BACKEND - VALENTINA v13.5 (STABLE FIX)
  * Importadora Casa Colombia (ICC)
  * ============================================================
  */
@@ -82,7 +82,7 @@ let db;
     for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
 
     await refreshKnowledge();
-    console.log("🚀 BACKEND v13.0 ONLINE - (Base de Datos lista)");
+    console.log("🚀 BACKEND v13.5 ONLINE - (DB OK)");
 })();
 
 // Caché de inventario en memoria para velocidad
@@ -125,12 +125,13 @@ async function uploadToMeta(buffer, mimeType, filename) {
         let finalName = filename;
         let type = 'document';
 
-        // Lógica de detección de tipo
-        if (mimeType.includes('audio') || mimeType.includes('webm')) {
+        // Lógica de detección de tipo forzada
+        if (mimeType.includes('audio') || mimeType.includes('webm') || mimeType.includes('ogg')) {
             // FIX: WhatsApp requiere audio/ogg para notas de voz
             type = 'audio';
             finalMime = 'audio/ogg'; 
-            finalName = 'audio_note.ogg';
+            finalName = 'audio.ogg'; // Nombre genérico para asegurar compatibilidad
+            console.log(`🎤 Subiendo Audio: Convertido a ${finalMime}`);
         } else if (mimeType.includes('image')) {
             type = 'image';
         } else if (mimeType.includes('video')) {
@@ -375,6 +376,7 @@ app.post('/api/shortcuts/delete', proteger, async (req, res) => {
 // --- GESTIÓN DE CONTACTOS Y FOTOS ---
 app.post('/api/contacts/upload-photo', proteger, upload.single('file'), async (req, res) => {
     if(!req.file) return res.status(400).send("No file");
+    console.log("📸 Guardando Foto Perfil:", req.body.phone);
     // Convertir a Base64 para almacenar en DB
     const b64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
     await db.run("INSERT INTO metadata (phone, photoUrl) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET photoUrl=excluded.photoUrl", [req.body.phone, b64]);
@@ -420,6 +422,7 @@ app.post('/api/chat/action', proteger, async (req, res) => {
 });
 
 app.post('/api/chat/toggle-bot', proteger, async (req, res) => {
+    console.log(`🤖 Toggle Bot: ${req.body.phone} -> ${req.body.active}`);
     await db.run("INSERT OR REPLACE INTO bot_status (phone, active) VALUES (?, ?)", [req.body.phone, req.body.active ? 1 : 0]);
     res.json({ success: true });
 });
@@ -510,4 +513,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 VALENTINA v13.0 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 VALENTINA v13.5 READY"));
