@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICC | Intelligent Manager v9.0</title>
+    <title>ICC | Intelligent Manager v10.0</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -47,13 +47,14 @@
             box-shadow: 4px 0 10px rgba(0,0,0,0.1);
         }
         .logo-area {
-            width: 40px; height: 40px;
-            background: var(--primary);
+            width: 45px; height: 45px;
+            background: white; /* Fondo blanco para el logo */
             border-radius: 8px;
             display: flex; align-items: center; justify-content: center;
-            color: white; font-weight: 800; font-size: 20px;
             margin-bottom: 30px;
-            box-shadow: 0 0 15px rgba(249, 115, 22, 0.4);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            padding: 2px;
         }
         .nav-item {
             width: 44px; height: 44px;
@@ -248,7 +249,9 @@
     <div id="toast-container"></div>
 
     <div class="sidebar">
-        <div class="logo-area">IC</div>
+        <div class="logo-area">
+            <img src="https://github.com/juanballen2/CHATBOT/blob/main/images/ICC.png?raw=true" alt="ICC" style="width: 100%; height: 100%; object-fit: contain;">
+        </div>
         
         <div class="nav-item active" onclick="nav('dashboard')" id="nav-dashboard">
             <i class="fas fa-chart-pie"></i><span class="tooltip">Dashboard</span>
@@ -405,7 +408,7 @@
 
         <div id="view-config" class="view page-container">
             <h1 class="page-title">Configuración del Agente</h1>
-            <p class="page-subtitle">Personalidad y reglas de negocio de Lorena</p>
+            <p class="page-subtitle">Personalidad y reglas de negocio de Valentina</p>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
                 <div class="card">
@@ -441,7 +444,7 @@
                     <div class="dot" style="background: #FF5F56;"></div>
                     <div class="dot" style="background: #FFBD2E;"></div>
                     <div class="dot" style="background: #27C93F;"></div>
-                    <span style="margin-left: 10px; color: #aaa; font-size: 12px;">lorena_ai_v2.exe</span>
+                    <span style="margin-left: 10px; color: #aaa; font-size: 12px;">valentina_ai_v1.0.exe</span>
                 </div>
                 <div class="term-body" id="sand-log">
                     > Sistema iniciado. Esperando input de prueba...<br>
@@ -537,6 +540,7 @@
             renderChats(); // Update active class
         }
 
+        // --- RENDERIZADO DE MENSAJES (SOPORTE IMAGENES) ---
         async function renderMsgs(id, forceScroll=false) {
             try {
                 const h = await fetch('/api/data/history').then(r=>r.json());
@@ -546,9 +550,22 @@
                 box.innerHTML = msgs.map(m => {
                     const type = m.role==='bot'?'b-bot':(m.role==='manual'?'b-manual':'b-user');
                     const icon = m.role==='bot'?'<i class="fas fa-robot" style="margin-right:5px; opacity:0.5"></i>':'';
+                    
+                    // --- DETECTOR DE FOTOS Y MEDIOS ---
+                    let content = m.text;
+                    if (content.includes('[MEDIA:IMAGE:')) {
+                        const mediaId = content.match(/\[MEDIA:IMAGE:(.*?)\]/)[1];
+                        content = `<img src="/api/media-proxy/${mediaId}" style="max-width:100%; border-radius:8px; cursor:pointer; border:1px solid #ddd; margin-top:5px;" onclick="window.open(this.src)" title="Clic para ampliar">`;
+                    } else if (content.includes('[MEDIA:DOC:')) {
+                        content = `<div style="background:#f0f0f0; padding:10px; border-radius:8px; color:#333;"><i class="fas fa-file-pdf" style="color:#e74c3c;"></i> Documento recibido</div>`;
+                    } else if (content.includes('[MEDIA:AUDIO:')) {
+                        content = `<div style="background:#f0f0f0; padding:10px; border-radius:8px; color:#333;"><i class="fas fa-microphone" style="color:#3498db;"></i> Audio recibido</div>`;
+                    }
+                    // ------------------------------------
+
                     return `
                     <div class="bubble ${type}">
-                        ${icon} ${m.text}
+                        ${icon} ${content}
                         <div style="font-size:10px; opacity:0.6; text-align:right; margin-top:4px;">
                             ${new Date(m.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                         </div>
@@ -676,7 +693,7 @@
             document.getElementById('sand-res').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Procesando...';
             
             const r = await fetch('/api/test-ai', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg})}).then(x=>x.json());
-            document.getElementById('sand-log').innerHTML += `<span style="color:#FCD34D">> LORENA: Respuesta generada.</span><br>`;
+            document.getElementById('sand-log').innerHTML += `<span style="color:#FCD34D">> VALENTINA: Respuesta generada.</span><br>`;
             document.getElementById('sand-res').innerText = r.response;
         }
 
