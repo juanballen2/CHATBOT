@@ -1,6 +1,6 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v14.0 (SPEED OPTIMIZED)
+ * SERVER BACKEND - VALENTINA v14.0 (SPEED FIX FINAL)
  * Importadora Casa Colombia (ICC)
  * ============================================================
  */
@@ -34,7 +34,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-v14-speed"; 
+const SESSION_SECRET = "icc-valentina-secret-v14-final"; 
 
 // Middleware: Aumentamos límites para Videos/Audios pesados
 app.use(express.json({ limit: '100mb' }));
@@ -82,7 +82,7 @@ let db;
     for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
 
     await refreshKnowledge();
-    console.log("🚀 BACKEND v14.0 ONLINE - (HIGH PERFORMANCE MODE)");
+    console.log("🚀 BACKEND v14.0 ONLINE - (SPEED OPTIMIZED)");
 })();
 
 // Caché de inventario en memoria para velocidad
@@ -306,14 +306,14 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-// --- NUEVO ENDPOINT DE ALTA VELOCIDAD (SOLUCIÓN LAG) ---
-// Recupera solo el historial del chat específico solicitado
+// --- !!! FIX DE VELOCIDAD: ENDPOINT ESPECÍFICO PARA HISTORIAL !!! ---
 app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     try {
+        // Carga SOLO los mensajes del teléfono solicitado
         const rows = await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]);
         res.json(rows);
     } catch(e) { 
-        console.error("Error fetching history:", e);
+        console.error("Error history:", e);
         res.status(500).json([]); 
     }
 });
@@ -331,9 +331,12 @@ app.get('/api/data/:type', proteger, async (req, res) => {
         if (t === 'tags') return res.json(await db.all("SELECT * FROM global_tags"));
         if (t === 'shortcuts') return res.json(await db.all("SELECT * FROM shortcuts"));
         if (t === 'knowledge') return res.json(await db.all("SELECT * FROM inventory"));
-        
-        // NOTA: Eliminamos la carga masiva de 'history' aquí para evitar lentitud.
-        // El frontend ahora usa /api/chat-history/:phone
+        if (t === 'history') {
+             // Mantenemos esto por compatibilidad, pero el frontend nuevo usará la ruta rápida
+            const rows = await db.all("SELECT * FROM history ORDER BY id ASC");
+            const grouped = rows.reduce((acc, curr) => { (acc[curr.phone] = acc[curr.phone] || []).push(curr); return acc; }, {});
+            return res.json(grouped);
+        }
         res.json([]);
     } catch(e) { res.json([]); }
 });
@@ -346,7 +349,6 @@ app.get('/api/chats-full', proteger, async (req, res) => {
     const phones = Array.from(new Set([...historyPhones.map(h=>h.phone), ...metadataList.map(m=>m.phone)]));
     
     const list = await Promise.all(phones.map(async id => {
-        // Optimización: Solo traer último mensaje
         const lastMsg = await db.get("SELECT text, time FROM history WHERE phone = ? ORDER BY id DESC LIMIT 1", [id]);
         const meta = metadataList.find(m => m.phone === id) || {};
         const bStatus = statusList.find(s => s.phone === id);
@@ -524,4 +526,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 VALENTINA v14.0 READY (FAST)"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 VALENTINA v14.0 READY"));
