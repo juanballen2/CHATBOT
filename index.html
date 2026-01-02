@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICC | Business Suite v12.5</title>
+    <title>ICC | Business Suite v12.0</title>
     <link rel="icon" href="https://github.com/juanballen2/CHATBOT/blob/main/images/favicon.jpg?raw=true">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -17,19 +17,23 @@
             --border: #E5E7EB;
             --bubble-in: #FFFFFF; --bubble-bot: #DCFCE7; --bubble-human: #E0F2FE;
         }
+
         * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
         body { margin: 0; font-family: 'Inter', sans-serif; background: var(--bg); color: #1F2937; height: 100vh; display: flex; overflow: hidden; }
 
+        /* --- SIDEBAR --- */
         .sidebar { width: 70px; background: var(--dark); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 50; box-shadow: 4px 0 10px rgba(0,0,0,0.1); }
         .logo-area { width: 45px; height: 45px; background: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 30px; overflow: hidden; padding: 2px; }
         .nav-item { width: 44px; height: 44px; border-radius: 10px; color: #9CA3AF; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; cursor: pointer; transition: 0.3s; position: relative; }
         .nav-item:hover, .nav-item.active { background: var(--primary); color: white; }
         
+        /* --- LAYOUT --- */
         .main-content { flex: 1; display: flex; position: relative; overflow: hidden; }
         .view { display: none; width: 100%; height: 100%; flex-direction: column; animation: fadeIn 0.3s; }
         .view.active { display: flex; }
         @keyframes fadeIn { from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);} }
 
+        /* --- CHAT VIEW --- */
         .chat-layout { display: flex; height: 100%; width: 100%; position: relative; }
         .chat-list-panel { width: 350px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 1; }
         .cl-header { padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
@@ -61,6 +65,7 @@
         .recording { animation: pulse 1s infinite; color: red; background: #fee2e2; }
         @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(255,0,0,0.4);}70%{box-shadow:0 0 0 10px rgba(255,0,0,0);}100%{box-shadow:0 0 0 0 rgba(255,0,0,0);} }
 
+        /* --- PROFILE PANEL --- */
         .profile-panel { width: 0; background: white; border-left: 1px solid var(--border); transition: 0.3s; overflow: hidden; display: flex; flex-direction: column; z-index: 20; }
         .profile-panel.open { width: 300px; }
         .pp-header { padding: 30px 20px; background: #F9FAFB; text-align: center; border-bottom: 1px solid var(--border); position: relative; }
@@ -68,17 +73,20 @@
         .pp-avatar-lg:hover:after { content:'Cambiar'; position:absolute; bottom:0; width:100%; background:rgba(0,0,0,0.5); color:white; font-size:10px; padding:4px; }
         .pp-body { padding: 20px; flex: 1; overflow-y: auto; }
 
+        /* --- QUICK REPLIES --- */
         #quick-replies { position: absolute; bottom: 60px; left: 60px; width: 300px; background: white; border-radius: 8px; box-shadow: 0 -5px 20px rgba(0,0,0,0.1); display: none; overflow: hidden; z-index: 100; border: 1px solid var(--border); }
         .qr-item { padding: 10px 15px; border-bottom: 1px solid #f0f0f0; cursor: pointer; font-size: 13px; }
         .qr-item:hover { background: #f9f9f9; color: var(--primary); }
         .qr-key { font-weight: bold; color: var(--primary); margin-right: 5px; }
 
+        /* --- MODALS --- */
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: none; align-items: center; justify-content: center; }
         .modal { background: white; width: 90%; max-width: 500px; border-radius: 12px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
         .tag-pill { font-size: 10px; padding: 2px 8px; border-radius: 10px; color: white; margin-left: 5px; font-weight: 600; vertical-align: middle; display: inline-block; }
         .tag-select-item { display: flex; justify-content: space-between; padding: 8px; cursor: pointer; border-radius: 6px; }
         .tag-select-item:hover { background: #f0f0f0; }
 
+        /* --- COMMON --- */
         .page-container { padding: 20px; overflow-y: auto; flex: 1; max-width: 1400px; margin: 0 auto; width: 100%; }
         .btn { padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; border: none; cursor: pointer; color: white; background: var(--primary); }
         .btn-outline { background: white; border: 1px solid var(--border); color: #333; }
@@ -88,6 +96,7 @@
         th { text-align: left; padding: 10px; background: #f9f9f9; }
         td { padding: 10px; border-bottom: 1px solid #eee; }
         
+        /* --- MOBILE --- */
         @media (max-width: 768px) {
             body { flex-direction: column; }
             .sidebar { width: 100%; height: 60px; flex-direction: row; order: 2; padding: 0; justify-content: space-around; background: white; border-top: 1px solid var(--border); }
@@ -108,7 +117,9 @@
         <div class="nav-item active" onclick="nav('dashboard')" id="nav-dashboard"><i class="fas fa-chart-pie"></i></div>
         <div class="nav-item" onclick="nav('chat')" id="nav-chat"><i class="fas fa-comment-dots"></i></div>
         <div class="nav-item" onclick="nav('leads')" id="nav-leads"><i class="fas fa-users"></i></div>
+        <div class="nav-item" onclick="nav('inventory')" id="nav-inventory"><i class="fas fa-box-open"></i></div>
         <div class="nav-item" onclick="nav('config')" id="nav-config"><i class="fas fa-cog"></i></div>
+        <div class="nav-item" onclick="nav('sandbox')" id="nav-sandbox"><i class="fas fa-code"></i></div>
         <div style="flex:1"></div>
         <div class="nav-item" onclick="location.href='/logout'" style="color:red;"><i class="fas fa-power-off"></i></div>
     </div>
@@ -195,6 +206,20 @@
                 <table id="leads-table"><thead><tr><th>Fecha</th><th>Nombre</th><th>Ciudad</th><th>Interés</th><th>Etiqueta</th><th>Acción</th></tr></thead><tbody id="leads-body"></tbody></table>
             </div>
         </div>
+        
+        <div id="view-inventory" class="view page-container">
+            <h1>Inventario</h1>
+            <div style="background:white; padding:20px; border-radius:12px; border:1px solid #eee; margin-bottom:20px;">
+                <input type="file" id="csv-file" style="margin-bottom:10px; width:100%;">
+                <button class="btn" onclick="uploadCSV()">Subir CSV</button>
+            </div>
+            <div class="table-container" style="background:white; border-radius:12px; border:1px solid #eee; overflow:hidden;">
+                <table id="inv-table">
+                    <thead><tr><th>Producto</th><th style="text-align:center;">Acción</th></tr></thead>
+                    <tbody id="inv-body"></tbody>
+                </table>
+            </div>
+        </div>
 
         <div id="view-config" class="view page-container">
             <h1>Configuración Business</h1>
@@ -229,6 +254,15 @@
                     <div id="rules-list"></div>
                 </div>
             </div>
+        </div>
+        
+        <div id="view-sandbox" class="view page-container">
+            <h1>Sandbox IA</h1>
+            <div class="terminal-window" style="background:#1E1E1E; color:green; padding:20px; border-radius:10px; height:400px; overflow-y:auto;">
+                <div id="sand-log">System Ready...<br></div>
+            </div>
+            <input id="sand-in" class="form-control" placeholder="Comando..." style="margin-top:10px;" onkeypress="if(event.key==='Enter') runTest()">
+            <div id="sand-res" style="margin-top:15px; font-style:italic;"></div>
         </div>
     </div>
 
@@ -286,6 +320,7 @@
             document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
             const btn=document.getElementById('nav-'+v); if(btn) btn.classList.add('active');
             if(v==='leads') loadLeads();
+            if(v==='inventory') loadInventory();
         }
 
         // CHAT ENGINE
@@ -374,17 +409,6 @@
             const msgs = h[id] || [];
             const box = document.getElementById('msgs-box');
             
-            if(msgs.length === 0) {
-                // Si es un chat nuevo, mostrar botón de Plantilla
-                box.innerHTML = `
-                    <div style="text-align:center; padding:30px;">
-                        <i class="fas fa-rocket" style="font-size:40px; color:#ddd; margin-bottom:10px;"></i>
-                        <p style="color:#666;">Chat nuevo. WhatsApp requiere una plantilla para iniciar.</p>
-                        <button class="btn" style="margin-top:10px;" onclick="sendTemplate()">Enviar Plantilla de Inicio</button>
-                    </div>`;
-                return;
-            }
-
             box.innerHTML = msgs.map(m => {
                 const cls = m.role==='bot'?'b-bot':(m.role==='manual'?'b-manual':'b-user');
                 let content = m.text;
@@ -437,13 +461,7 @@
             box.innerHTML += `<div class="bubble b-manual">${txt} <i class="fas fa-clock" style="font-size:10px"></i></div>`;
             box.scrollTop = box.scrollHeight;
             const res = await fetch('/api/chat/send', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, message:txt})});
-            if(res.status !== 200) alert("Error: Posiblemente la ventana de 24h cerró. Intenta enviar una plantilla.");
-            syncChats();
-        }
-
-        async function sendTemplate() {
-            if(!confirm("¿Enviar plantilla de saludo para reactivar/iniciar chat?")) return;
-            await fetch('/api/chat/send-template', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId})});
+            if(res.status !== 200) alert("Error enviando");
             syncChats();
         }
 
@@ -611,6 +629,28 @@
             const fd = new FormData(); fd.append('file', input.files[0]); fd.append('phone', selectedId);
             await fetch('/api/contacts/upload-photo', {method:'POST', body:fd});
             syncChats();
+        }
+
+        // --- INVENTARIO FUNCTIONS (RESTAURADAS) ---
+        async function loadInventory() { const inv = await fetch('/api/data/knowledge').then(r=>r.json()); document.getElementById('inv-body').innerHTML = inv.map((item, i) => `<tr><td>${item.searchable}</td><td style="text-align:center;"><button class="btn" style="background:red; padding:4px 8px;" onclick="delInv(${i})">X</button></td></tr>`).join(''); }
+        async function delInv(i) { if(confirm("¿Eliminar?")) { await fetch('/api/knowledge/delete', {method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); } }
+        async function uploadCSV() { const f = document.getElementById('csv-file').files[0]; if(!f) return; const fd = new FormData(); fd.append('file', f); await fetch('/api/knowledge/csv', {method:'POST', body:fd}); loadInventory(); alert("Inventario actualizado"); }
+        
+        // --- SANDBOX (RESTAURADO) ---
+        async function runTest() { 
+            const msg = document.getElementById('sand-in').value; if(!msg) return; 
+            document.getElementById('sand-log').innerHTML += `> USER: ${msg}<br>`; 
+            document.getElementById('sand-in').value = ''; 
+            const r = await fetch('/api/test-ai', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg})}).then(x=>x.json()); 
+            document.getElementById('sand-res').innerText = r.response; 
+        }
+
+        async function loadDash() { 
+            const [l,c,s] = await Promise.all([ fetch('/api/data/leads').then(r=>r.json()), fetch('/api/chats-full').then(r=>r.json()), fetch('/api/data/knowledge').then(r=>r.json()) ]); 
+            document.getElementById('kpi-leads').innerText = l.length||0; 
+            document.getElementById('kpi-chats').innerText = c.length||0; 
+            document.getElementById('kpi-stock').innerText = s.length||0; 
+            document.getElementById('dash-leads-body').innerHTML = (l||[]).slice(0,5).map(x => `<tr><td>${x.nombre}</td><td>${x.ciudad}</td><td>${x.interes}</td><td>${x.fecha.split(',')[0]}</td></tr>`).join(''); 
         }
 
         // Init App
