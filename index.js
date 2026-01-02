@@ -16,21 +16,23 @@ const app = express();
 app.set('trust proxy', 1);
 
 // ============================================================
-// 1. CONFIGURACIÓN Y VARIABLES
+// 1. CONFIGURACIÓN Y VARIABLES DE ENTORNO
 // ============================================================
 const API_KEY = process.env.GEMINI_API_KEY; 
 const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-secret-v7-final"; 
+const SESSION_SECRET = "icc-valentina-secret-v10"; 
 
+// Aumentamos el límite para permitir subida de archivos grandes (imágenes/PDFs)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
 
-// 🛡️ SEGURIDAD DE ARCHIVOS
+// 🛡️ MIDDLEWARE DE SEGURIDAD DE ARCHIVOS
 app.use((req, res, next) => {
+    // Protege archivos .json o la carpeta /data/ para que no sean accesibles desde la web pública
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
         return res.status(403).send('🚫 Acceso Prohibido');
     }
@@ -38,7 +40,7 @@ app.use((req, res, next) => {
 });
 
 // ============================================================
-// 2. MOTOR SQLITE "SELF-HEALING" (AUTOREPARABLE)
+// 2. MOTOR DE BASE DE DATOS SQLITE
 // ============================================================
 let db;
 (async () => {
@@ -50,7 +52,7 @@ let db;
         driver: sqlite3.Database
     });
 
-    // 1. Tablas Base
+    // Creación de Tablas Base si no existen
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
         CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT); 
@@ -59,29 +61,20 @@ let db;
         CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, searchable TEXT UNIQUE, raw_data TEXT);
         CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
     `);
-
-    // 2. PROTOCOLO DE REPARACIÓN DE COLUMNAS
-    const columnasRequeridas = [
-        { name: 'nombre', type: 'TEXT' },
-        { name: 'interes', type: 'TEXT' },
-        { name: 'etiqueta', type: 'TEXT' },
-        { name: 'fecha', type: 'TEXT' },
-        { name: 'ciudad', type: 'TEXT' }, 
-        { name: 'correo', type: 'TEXT' }  
-    ];
-
-    console.log("🔧 Iniciando diagnóstico de base de datos...");
-    for (const col of columnasRequeridas) {
-        try {
-            await db.exec(`ALTER TABLE leads ADD COLUMN ${col.name} ${col.type}`);
-            console.log(`   ✅ Columna inyectada: ${col.name}`);
-        } catch (e) {
-            // Columna ya existe
+    
+    // Verificación y reparación de columnas de Leads
+    const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
+    for (const c of cols) {
+        try { 
+            await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); 
+            console.log(`✅ Columna reparada: ${c}`);
+        } catch (e) { 
+            // La columna ya existe, ignoramos el error
         }
     }
     
     await refreshKnowledge();
-    console.log("🚀 LORENA BACKEND v8.0 - LÓGICA 24H & SLOT FILLING ACTIVADA");
+    console.log("🚀 BACKEND VALENTINA v10.0 INICIADO CORRECTAMENTE");
 })();
 
 let globalKnowledge = [];
@@ -109,26 +102,58 @@ app.use(session({
 }));
 
 // ============================================================
-// 3. WHATSAPP ENGINE (CONEXIÓN META)
+// 3. MOTOR DE WHATSAPP Y PROXY DE IMÁGENES
 // ============================================================
 async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     try {
         let payload = { messaging_product: "whatsapp", to: destinatario, type: tipo };
-        if (tipo === "text") { payload.text = { body: contenido }; } 
-        else if (contenido.id) { 
+        
+        if (tipo === "text") { 
+            payload.text = { body: contenido }; 
+        } else if (contenido.id) { 
+            // Reenvío de media existente por ID
             if(tipo === 'image') payload.image = { id: contenido.id };
             if(tipo === 'document') payload.document = { id: contenido.id, filename: "Archivo_ICC.pdf" };
             if(tipo === 'audio') payload.audio = { id: contenido.id };
         } else {
+            // Envío por URL
             if(tipo === 'image') payload.image = { link: contenido };
             if(tipo === 'document') payload.document = { link: contenido };
         }
+        
         await axios.post(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`, payload, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
         return true;
-    } catch (e) { return false; }
+    } catch (e) { 
+        console.error("Error enviando WhatsApp:", e.response?.data || e.message);
+        return false; 
+    }
 }
+
+// --- NUEVO: PROXY PARA VER FOTOS ---
+// WhatsApp no permite ver las URLs de las fotos directamente en el navegador por seguridad.
+// Este endpoint actúa de puente: descarga la foto de Meta y se la sirve a tu Dashboard.
+app.get('/api/media-proxy/:id', async (req, res) => {
+    if (!req.session.isLogged) return res.status(401).send("No autorizado");
+    try {
+        // 1. Obtener la URL real de descarga
+        const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, {
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` }
+        });
+        const mediaUrl = urlRes.data.url;
+        
+        // 2. Descargar el binario de la imagen y enviarlo al cliente (stream)
+        const media = await axios.get(mediaUrl, {
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` },
+            responseType: 'stream'
+        });
+        media.data.pipe(res);
+    } catch (e) {
+        console.error("Error proxy imagen:", e.message);
+        res.status(500).send("Error cargando imagen");
+    }
+});
 
 async function uploadToMeta(buffer, mimeType, filename) {
     try {
@@ -136,6 +161,7 @@ async function uploadToMeta(buffer, mimeType, filename) {
         form.append('file', buffer, { filename: filename, contentType: mimeType });
         form.append('type', mimeType.includes('image') ? 'image' : (mimeType.includes('pdf') ? 'document' : 'audio'));
         form.append('messaging_product', 'whatsapp');
+        
         const response = await axios.post(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/media`, form, {
             headers: { 'Authorization': `Bearer ${META_TOKEN}`, ...form.getHeaders() }
         });
@@ -144,7 +170,7 @@ async function uploadToMeta(buffer, mimeType, filename) {
 }
 
 // ============================================================
-// 4. LORENA "HUNTER" (LÓGICA ACTUALIZADA v2.0)
+// 4. LÓGICA DE INTELIGENCIA (VALENTINA)
 // ============================================================
 function buscarEnCatalogo(query) {
     if (!query) return [];
@@ -158,147 +184,176 @@ function buscarEnCatalogo(query) {
     }).filter(i => i.score > 0).sort((a,b) => b.score - a.score).slice(0, 5);
 }
 
-async function procesarConLorena(message, sessionId, mediaDesc = "") {
+async function procesarConValentina(message, sessionId, mediaDesc = "") {
+    // 1. Guardar mensaje del usuario en historial
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
     
+    // 2. Verificar si el bot está activo para este usuario
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
-    if (status && status.active === 0) return null;
+    if (status && status.active === 0) return null; // Bot apagado manualmente
 
-    const promptBase = await getCfg('prompt', "Eres Lorena, asistente de ventas ágil de Importadora Casa Colombia.");
+    // 3. Recuperar contexto y conocimiento
     const websiteData = await getCfg('website_data', "No hay información web extra.");
     const techRules = await getCfg('tech_rules', []);
-    const reglasTexto = Array.isArray(techRules) ? techRules.map(r => `- ${r}`).join("\n") : "Sin reglas definidas.";
-
-    // Historial reciente para contexto
+    const stock = buscarEnCatalogo(message);
+    
     const historyRows = await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId]);
     const chatPrevio = historyRows.reverse();
-    const stock = buscarEnCatalogo(message);
 
-    // --- PROMPT DE INGENIERÍA MEJORADO (ANTI-LORO + SLOT FILLING) ---
-    const promptLorena = `
-    [IDENTIDAD]
-    ${promptBase}
-    Estás en WhatsApp. Sé breve, útil y usa pocos emojis.
-    TU OBJETIVO: Filtrar al cliente y obtener sus datos para crear la cotización. NO das precios finales.
+    // 4. CONSTRUCCIÓN DEL PROMPT DE VALENTINA (TEXTUAL SIN CAMBIOS)
+    const promptValentina = `
+    Usted es Valentina, asistente virtual de Importadora Casa Colombia (ICC) y atiende clientes por WhatsApp.
+    Su función NO es cerrar ventas: su misión es filtrar, ordenar la solicitud, recopilar datos clave y dejar el caso “listo para gol” para que un asesor humano continúe con cotización y cierre.
 
-    [CONOCIMIENTO]
-    WEB: ${websiteData}
-    REGLAS TÉCNICAS: ${reglasTexto}
-    INVENTARIO (Referencia): ${JSON.stringify(stock)}
+    OBJETIVO PRINCIPAL
+    1) Recibir y atender con tono formal y claro.
+    2) Identificar intención: repuestos / maquinaria / martillos hidráulicos / volquetas / servicio / soporte / otros.
+    3) Recolectar datos mínimos viables para cotizar (sin abrumar).
+    4) Confirmar que la información quedó completa.
+    5) Escalar y asignar a un ejecutivo humano (handoff) con resumen limpio.
 
-    [LÓGICA DE INTERACCIÓN - SLOT FILLING]
-    Analiza el HISTORIAL DE CHAT adjunto.
-    1. Revisa qué datos YA nos dio el cliente anteriormente (Nombre, Ciudad, Repuesto, Correo).
-    2. Identifica qué datos FALTAN.
+    TONO Y ESTILO (WHATSAPP)
+    - Formal, cordial y eficiente: use “usted”, nunca tutee.
+    - Mensajes breves, fáciles de leer en celular (1–3 líneas por mensaje idealmente).
+    - Emojis mínimos y funcionales (máximo 1 por mensaje y solo si aporta): 👋 ✅ 🔧 🛑
+    - No escriba párrafos largos. No sea efusiva.
+    - Siempre avance el proceso con UNA pregunta por turno.
+    - NO bombardee con múltiples preguntas seguidas: espere la respuesta del cliente antes de seguir.
+    - Si el cliente manda varios mensajes, espere a que termine (cuando haya una pausa) y luego responda integrando todo.
+    - Antes de pedir datos, confirme qué necesita (para no pedir información innecesaria).
+
+    PAUTAS DE CONVERSACIÓN (REGLAS DE ORO)
+    - Un paso a la vez: primero entender necesidad → luego pedir datos → luego confirmar → luego pasar a asesor.
+    - Si falta info crítica, pida SOLO la siguiente pieza más importante.
+    - Si el cliente escribe “urgente”, “varado”, “parado”, marque PRIORIDAD y acelere la recolección mínima.
+    - Nunca invente precios, stock o compatibilidades. Si faltan datos, pida evidencia (número de parte / foto / placa / referencia).
+    - No prometa tiempos exactos. Use “en breve” o “lo antes posible”.
+    - Proteja la experiencia: si el cliente está molesto, valide con calma y enfoque en solución.
+
+    DATOS A CAPTURAR (LEAD / FICHA)
+    Mínimos (obligatorios):
+    1) Nombre
+    2) Ciudad
+    3) Qué necesita (repuesto o máquina) + marca y modelo de la máquina
+    4) Cantidad (si aplica)
     
-    [REGLAS OBLIGATORIAS]
-    - Si el cliente ya saludó, NO saludes de nuevo. Ve al grano.
-    - Si ya tienes un dato (ej: Nombre), NO lo pidas otra vez.
-    - Si el cliente repite "urgente", confirma que ya lo sabes y pide solo el dato faltante.
-    
-    [GUIÓN DINÁMICO]
-    - Inicio: Saluda y pregunta qué repuesto necesita.
-    - Desarrollo: Si sabes el repuesto pero falta Nombre/Ciudad, pídelos amablemente.
-    - Cierre: Si tienes TODO (Nombre + Ciudad + Repuesto), di: "¡Listo! Ya pasé tu solicitud al asesor humano. En breve te contactan con el precio."
+    GUIONES BASE (REFERENCIA):
+    - SALUDO: "¡Hola! 👋 Soy Valentina, asistente virtual de Importadora Casa Colombia. Para orientarle mejor, ¿qué repuesto o qué máquina desea cotizar?"
+    - DATOS: "Perfecto. Para validar disponibilidad y enviarle una cotización exacta, por favor indíqueme: 1) Nombre, 2) Ciudad, 3) Marca y modelo de la máquina."
+    - CIERRE: "¡Listo, [Nombre]! ✅ Ya registré su solicitud. En breve un asesor humano de ICC le escribirá con disponibilidad y cotización."
 
-    [EXTRACCIÓN DE INFORMACIÓN]
-    Siempre que detectes datos del cliente, genera este JSON al final (invisible para el usuario):
-    [DATA]
+    INFORMACIÓN DE CONTEXTO ACTUAL:
+    WEB/EMPRESA: ${websiteData}
+    REGLAS TÉCNICAS: ${techRules.join("\n")}
+    INVENTARIO (Solo referencia, no confirmar stock sin validar): ${JSON.stringify(stock)}
+
+    INSTRUCCIÓN DE SISTEMA - EXTRACCIÓN DE DATOS:
+    Si el cliente proporciona datos nuevos (Nombre, Ciudad, Repuesto, etc.), SIEMPRE genere al final de su respuesta un bloque JSON oculto con este formato exacto:
+    
+    \`\`\`json
     {
       "es_lead": true,
       "nombre": "Nombre detectado o null",
-      "interes": "Repuesto detectado o null",
       "ciudad": "Ciudad detectada o null",
-      "correo": "Correo detectado o null",
-      "etiqueta": "Cotización"
+      "interes": "Repuesto/Maquina detectada o null",
+      "correo": "Correo o null",
+      "etiqueta": "Cotización" (o "PRIORIDAD" si es urgente)
     }
-    [DATA]
+    \`\`\`
     `;
 
     try {
         const resAI = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: promptLorena + `\n\n--- HISTORIAL CHAT ---\n${JSON.stringify(chatPrevio)}\n\n--- MENSAJE ACTUAL ---\nUSUARIO: ${message}` }] }] });
+            { contents: [{ parts: [{ text: promptValentina + `\n\n--- HISTORIAL DE CHAT ---\n${JSON.stringify(chatPrevio)}\n\n--- MENSAJE DEL USUARIO ---\n${message}` }] }] });
 
         let fullText = resAI.data.candidates[0].content.parts[0].text;
-        let textoVisible = fullText;
         
-        // Extracción y Lógica de Base de Datos
-        const regexData = /\[DATA\]\s*(\{[\s\S]*?\})\s*\[DATA\]/i;
-        const match = fullText.match(regexData);
+        // 5. PROCESAMIENTO Y LIMPIEZA DE RESPUESTA
+        // Buscamos el bloque JSON (ya sea con ```json o sin él)
+        const regexJSON = /```json([\s\S]*?)```|{([\s\S]*?)}$/i;
+        const match = fullText.match(regexJSON);
+        let textoVisible = fullText;
 
-        if (match && match[1]) {
-            textoVisible = fullText.replace(/\[DATA\][\s\S]*?\[DATA\]/gi, "").trim(); 
+        if (match) {
+            // Eliminar el JSON del mensaje que ve el usuario
+            textoVisible = fullText.replace(match[0], "").trim();
+            
+            // Procesar el JSON internamente
             try {
-                const info = JSON.parse(match[1]);
+                const jsonStr = match[1] || match[2] || match[0];
+                const cleanJsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
+                const info = JSON.parse(cleanJsonStr);
+                
                 if(info.es_lead) {
-                    // === LÓGICA DE NEGOCIO: REGLA DE 24 HORAS ===
-                    let nombreFinal = info.nombre;
-                    
-                    // Buscamos SOLO el último lead de este número
-                    const leadExistente = await db.get("SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [sessionId]);
-                    const meta = await db.get("SELECT contactName FROM metadata WHERE phone = ?", [sessionId]);
-                    
-                    if (!nombreFinal || nombreFinal.toLowerCase() === "null") {
-                        nombreFinal = leadExistente?.nombre || meta?.contactName || "Cliente WhatsApp";
-                    }
-
-                    // Calculamos tiempo
-                    let esMismaConversacion = false;
-                    if (leadExistente) {
-                        // Intentamos parsear la fecha (formato locale string puede variar, pero intentamos comparar)
-                        // Para mayor seguridad en update usamos el ID, y asumimos continuidad si es reciente.
-                        // Calculo aproximado basado en ID o si la fecha es parseable:
-                        const fechaLead = new Date(leadExistente.fecha); // Esto depende del locale del servidor
-                        const ahora = new Date();
-                        
-                        if (!isNaN(fechaLead.getTime())) {
-                             const horasDif = (ahora - fechaLead) / (1000 * 60 * 60);
-                             if (horasDif < 24) esMismaConversacion = true;
-                        } else {
-                            // Fallback si la fecha no es parseable: asumimos nueva venta por seguridad
-                            esMismaConversacion = false; 
-                        }
-                    }
-
-                    // Preparamos datos (rellenando huecos con lo viejo si es update)
-                    const datos = {
-                        nombre: nombreFinal,
-                        interes: info.interes && info.interes !== "null" ? info.interes : (esMismaConversacion ? leadExistente.interes : "General"),
-                        ciudad: info.ciudad && info.ciudad !== "null" ? info.ciudad : (esMismaConversacion ? leadExistente.ciudad : "No indicada"),
-                        correo: info.correo && info.correo !== "null" ? info.correo : (esMismaConversacion ? leadExistente.correo : "No indicado"),
-                        etiqueta: info.etiqueta || "Lead"
-                    };
-
-                    if (esMismaConversacion) {
-                        // ACTUALIZAR (UPDATE)
-                        await db.run(
-                            `UPDATE leads SET nombre=?, interes=?, etiqueta=?, ciudad=?, correo=?, fecha=? WHERE id = ?`,
-                            [datos.nombre, datos.interes, datos.etiqueta, datos.ciudad, datos.correo, new Date().toLocaleString(), leadExistente.id]
-                        );
-                        console.log(`🔄 LEAD ACTUALIZADO (Misma sesión <24h): ${datos.nombre}`);
-                    } else {
-                        // CREAR NUEVO (INSERT)
-                        await db.run(
-                            `INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?)`, 
-                            [sessionId, datos.nombre, datos.interes, datos.etiqueta, new Date().toLocaleString(), datos.ciudad, datos.correo]
-                        );
-                        console.log(`✅ NUEVO LEAD CREADO: ${datos.nombre}`);
-                    }
+                    await gestionarLead(sessionId, info);
                 }
-            } catch(e) { console.error("⚠️ Error procesando JSON de Lorena:", e.message); }
+            } catch(e) { 
+                console.error("Error procesando JSON de Valentina:", e.message); 
+            }
         }
 
+        // Limpieza de seguridad adicional
+        textoVisible = textoVisible.replace(/\[DATA\][\s\S]*?\[DATA\]/gi, "").trim();
+
+        // Guardar respuesta del bot
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', textoVisible, new Date().toISOString()]);
         return textoVisible;
+
     } catch (err) { 
-        console.error("Error API IA:", err);
-        return "Dame un segundo, estoy verificando la señal. ¿Me repites eso?"; 
+        console.error("Error API Gemini:", err);
+        return "Disculpe, estamos experimentando una breve intermitencia. ¿Podría repetirme su último mensaje?"; 
+    }
+}
+
+async function gestionarLead(phone, info) {
+    let nombreFinal = info.nombre;
+    
+    // Intentar recuperar nombre si viene nulo
+    const leadExistente = await db.get("SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
+    const meta = await db.get("SELECT contactName FROM metadata WHERE phone = ?", [phone]);
+    
+    if (!nombreFinal || nombreFinal === "null" || nombreFinal === "Nombre detectado") {
+        nombreFinal = leadExistente?.nombre || meta?.contactName || "Cliente WhatsApp";
+    }
+
+    // Regla de 24 horas para no duplicar leads en la misma conversación
+    let esMismaConversacion = false;
+    if (leadExistente) {
+        const fechaLead = new Date(leadExistente.fecha);
+        const ahora = new Date();
+        // Si la fecha es válida y pasó menos de 24 horas
+        if (!isNaN(fechaLead.getTime()) && (ahora - fechaLead)/(1000*60*60) < 24) {
+            esMismaConversacion = true;
+        }
+    }
+
+    const datos = {
+        nombre: nombreFinal,
+        interes: info.interes && info.interes !== "null" ? info.interes : (esMismaConversacion ? leadExistente.interes : "General"),
+        ciudad: info.ciudad && info.ciudad !== "null" ? info.ciudad : (esMismaConversacion ? leadExistente.ciudad : "No indicada"),
+        correo: info.correo && info.correo !== "null" ? info.correo : (esMismaConversacion ? leadExistente.correo : "No indicado"),
+        etiqueta: info.etiqueta || "Lead"
+    };
+
+    if (esMismaConversacion) {
+        // ACTUALIZAR LEAD EXISTENTE
+        await db.run(
+            `UPDATE leads SET nombre=?, interes=?, etiqueta=?, ciudad=?, correo=?, fecha=? WHERE id = ?`,
+            [datos.nombre, datos.interes, datos.etiqueta, datos.ciudad, datos.correo, new Date().toLocaleString(), leadExistente.id]
+        );
+        console.log(`🔄 LEAD ACTUALIZADO: ${datos.nombre}`);
+    } else {
+        // CREAR NUEVO LEAD
+        await db.run(
+            `INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
+            [phone, datos.nombre, datos.interes, datos.etiqueta, new Date().toLocaleString(), datos.ciudad, datos.correo]
+        );
+        console.log(`✅ NUEVO LEAD CREADO: ${datos.nombre}`);
     }
 }
 
 // ============================================================
-// 5. API ENDPOINTS (RUTAS)
+// 5. API ENDPOINTS (RUTAS DEL SISTEMA)
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
@@ -309,6 +364,7 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
+// APIs de Datos
 app.get('/api/data/:type', proteger, async (req, res) => {
     const t = req.params.type;
     try {
@@ -341,6 +397,7 @@ app.post('/api/leads/delete', proteger, async (req, res) => {
 });
 
 app.post('/api/save-prompt-web', proteger, async (req, res) => {
+    // Aunque Valentina tiene su prompt fijo, guardamos esto por si quieres añadir datos extra
     if (req.body.prompt !== undefined) await setCfg('prompt', req.body.prompt);
     if (req.body.website_data !== undefined) await setCfg('website_data', req.body.website_data);
     res.json({ success: true });
@@ -381,12 +438,11 @@ app.post('/api/chat/action', proteger, async (req, res) => {
     res.json({ success: true });
 });
 
+// Endpoint de Sandbox para pruebas manuales
 app.post('/api/test-ai', proteger, async (req, res) => {
     try {
         const prompt = await getCfg('prompt', "");
-        const web = await getCfg('website_data', "");
-        const rules = await getCfg('tech_rules', []);
-        const fullPrompt = `PERSONALIDAD: ${prompt}\nREGLAS: ${rules.join("\n")}\nWEB: ${web}\nUSER: "${req.body.message}"`;
+        const fullPrompt = `ERES VALENTINA (Modo Test). USER: "${req.body.message}"`;
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
             { contents: [{ parts: [{ text: fullPrompt }] }] });
         res.json({ response: r.data.candidates[0].content.parts[0].text, logic_log: fullPrompt });
@@ -420,7 +476,7 @@ app.post('/api/chat/send', proteger, async (req, res) => {
     if(await enviarWhatsApp(req.body.phone, req.body.message)) {
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [req.body.phone, 'manual', req.body.message, new Date().toISOString()]);
         res.json({ success: true });
-    } else res.status(500).json({ error: "Error" });
+    } else res.status(500).json({ error: "Error enviando" });
 });
 
 app.post('/api/chat/toggle-bot', proteger, async (req, res) => {
@@ -428,6 +484,7 @@ app.post('/api/chat/toggle-bot', proteger, async (req, res) => {
     res.json({ success: true });
 });
 
+// Endpoints de Inventario
 app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res) => {
     try {
         const n = parse(req.file.buffer.toString('utf-8'), { columns: true });
@@ -449,23 +506,47 @@ app.post('/api/knowledge/delete', proteger, async (req, res) => {
     res.json({ success: true });
 });
 
+// WEBHOOK DE META (Manejo de Mensajes y Fotos)
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
 app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
     try {
         const value = req.body.entry?.[0]?.changes?.[0]?.value;
         const msg = value?.messages?.[0];
+        
+        // Guardar nombre del contacto si viene de WhatsApp
         if (value?.contacts?.[0]) {
             const cName = value.contacts[0].profile.name;
             const phone = value.contacts[0].wa_id;
             await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=contactName WHERE addedManual=0", [phone, cName]);
         }
+
         if(msg) {
-            let txt = msg.text?.body || (msg.image ? "📷 Foto" : (msg.audio ? "🎤 Audio" : "Archivo"));
-            let r = await procesarConLorena(txt, msg.from);
-            if(r) await enviarWhatsApp(msg.from, r);
+            let userMsg = "";
+            let mediaDesc = "";
+
+            // Manejo de Tipos de Mensaje
+            if (msg.type === "text") {
+                userMsg = msg.text.body;
+            } else if (msg.type === "image") {
+                // TRUCO: Guardamos el ID de la foto en el texto con formato especial
+                userMsg = `[MEDIA:IMAGE:${msg.image.id}]`; 
+                mediaDesc = "📷 FOTO RECIBIDA";
+            } else if (msg.type === "document") {
+                userMsg = `[MEDIA:DOC:${msg.document.id}]`;
+                mediaDesc = "📄 DOCUMENTO RECIBIDO";
+            } else if (msg.type === "audio") {
+                userMsg = `[MEDIA:AUDIO:${msg.audio.id}]`;
+                mediaDesc = "🎤 AUDIO RECIBIDO";
+            }
+
+            // Enviamos a Valentina (si es foto, le damos contexto en texto plano)
+            const inputIA = mediaDesc ? `(El usuario envió: ${mediaDesc})` : userMsg;
+            const respuesta = await procesarConValentina(inputIA, msg.from, userMsg); // userMsg se guarda en BD
+            
+            if(respuesta) await enviarWhatsApp(msg.from, respuesta);
         }
-    } catch(e) {}
+    } catch(e) { console.error("Webhook Error:", e); }
 });
 
 app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
@@ -473,4 +554,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🚀 LORENA 7.9 SQL - BASE DE DATOS AUTOREPARABLE ACTIVADA"));
+app.listen(process.env.PORT || 10000, () => console.log("🚀 VALENTINA v10.0 SQL - SISTEMA COMPLETO ONLINE"));
