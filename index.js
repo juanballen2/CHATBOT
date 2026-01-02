@@ -1,6 +1,6 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v15.0 (TURBO SQL + FULL FEATURES)
+ * SERVER BACKEND - VALENTINA v15.1 (STABLE FIX + SPEED)
  * Importadora Casa Colombia (ICC)
  * ============================================================
  */
@@ -18,7 +18,6 @@ const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 
 // --- CONFIGURACIÓN DE CARGA (MULTER) ---
-// Mantenemos límite alto para videos y CSVs grandes
 const upload = multer({ 
     storage: multer.memoryStorage(),
     limits: { fileSize: 100 * 1024 * 1024 } // 100MB
@@ -59,7 +58,7 @@ let db;
         driver: sqlite3.Database
     });
 
-    // 1. Tablas Base (No tocamos estructura existente para no romper nada)
+    // 1. Tablas Base
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
         CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT); 
@@ -71,23 +70,22 @@ let db;
         CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
     `);
     
-    // 2. Migraciones de Seguridad (Verifica si faltan columnas nuevas)
+    // 2. Migraciones de Seguridad (NUEVAS COLUMNAS)
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
     try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {} // Para el logo corporativo
     
     const leadCols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
     for (const c of leadCols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
 
-    // 3. OPTIMIZACIÓN: ÍNDICES (Esto es lo que da velocidad real)
-    // Crea índices para que las búsquedas por teléfono y fecha sean instantáneas
+    // 3. OPTIMIZACIÓN: ÍNDICES (CRÍTICO PARA VELOCIDAD)
     try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_history_phone ON history(phone)`); } catch(e){}
     try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_history_time ON history(time)`); } catch(e){}
 
     await refreshKnowledge();
-    console.log("🚀 BACKEND v15.0 ONLINE (FULL CHECK)");
+    console.log("🚀 BACKEND v15.1 ONLINE (FULL & FAST)");
 })();
 
-// Caché en memoria para el inventario (Velocidad IA)
+// Caché en memoria para el inventario
 let globalKnowledge = [];
 async function refreshKnowledge() {
     try {
@@ -125,7 +123,6 @@ async function uploadToMeta(buffer, mimeType, filename) {
         let finalName = filename;
         let type = 'document';
 
-        // Lógica crucial para compatibilidad de audios (OGG)
         if (mimeType.includes('audio') || mimeType.includes('webm') || mimeType.includes('ogg')) {
             type = 'audio';
             finalMime = 'audio/ogg'; 
@@ -202,21 +199,17 @@ function buscarEnCatalogo(query) {
 }
 
 async function procesarConValentina(message, sessionId, mediaDesc = "") {
-    // 1. Guardar mensaje de usuario
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
     
-    // 2. Verificar estado del bot
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    // 3. Preparar contexto
     const websiteData = await getCfg('website_data', "");
     const bizProfile = await getCfg('biz_profile', {});
     const techRules = await getCfg('tech_rules', []);
     const stock = buscarEnCatalogo(message);
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
 
-    // 4. Prompt Engineering
     const prompt = `
     Eres Valentina, IA de ${bizProfile.name || 'Importadora Casa Colombia (ICC)'}.
     
@@ -229,7 +222,7 @@ async function procesarConValentina(message, sessionId, mediaDesc = "") {
     NO cierres ventas, solo perfila.
     
     [TONO]
-    Formal, "usted", corto y conciso. Una sola pregunta a la vez.
+    Formal, "usted", corto y conciso.
 
     [INVENTARIO REF]: ${JSON.stringify(stock)}
     [REGLAS TÉCNICAS]: ${techRules.join(". ")}
@@ -247,7 +240,6 @@ async function procesarConValentina(message, sessionId, mediaDesc = "") {
 
         let fullText = resAI.data.candidates[0].content.parts[0].text;
         
-        // Extraer JSON si existe
         const match = fullText.match(/```json([\s\S]*?)```|{([\s\S]*?)}$/i);
         let textoVisible = fullText;
 
@@ -286,8 +278,8 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-// --- [OPTIMIZACIÓN] LISTA DE CHATS RÁPIDA (GROUP BY) ---
-// Esta ruta reemplaza la carga pesada. Obtiene el último mensaje de cada chat en una sola consulta.
+// --- [NUEVA RUTA] LISTA DE CHATS OPTIMIZADA (GROUP BY) ---
+// Reemplaza la lógica anterior lenta por una consulta SQL única.
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
         const query = `
@@ -308,7 +300,7 @@ app.get('/api/chats-full', proteger, async (req, res) => {
             ORDER BY h.id DESC
             LIMIT 50
         `;
-        // LIMIT 50 es crucial para la velocidad inicial. El usuario puede buscar otros chats con "+ Nuevo".
+        // LIMIT 50: Clave para que cargue instantáneo.
         
         const rows = await db.all(query);
         
@@ -316,7 +308,7 @@ app.get('/api/chats-full', proteger, async (req, res) => {
             id: r.id,
             name: r.contactName || r.id,
             lastMessage: { text: r.lastText, time: r.timestamp },
-            botActive: r.botActive !== 0, // Si es NULL, asumimos activo (1)
+            botActive: r.botActive !== 0,
             pinned: r.pinned === 1,
             labels: JSON.parse(r.labels || "[]"),
             photoUrl: r.photoUrl || null,
@@ -330,8 +322,8 @@ app.get('/api/chats-full', proteger, async (req, res) => {
     }
 });
 
-// --- [OPTIMIZACIÓN] HISTORIAL DE UN SOLO CHAT ---
-// Carga todos los mensajes solo cuando el usuario hace clic en un chat específico.
+// --- [NUEVA RUTA] HISTORIAL DE UN SOLO CHAT ---
+// Esta es la ruta que falta en tu código y es la que da la velocidad al abrir un chat.
 app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     try {
         const rows = await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]);
@@ -339,27 +331,33 @@ app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     } catch(e) { res.status(500).json([]); }
 });
 
-// --- DATOS GENERALES ---
+// --- DATA ---
 app.get('/api/data/:type', proteger, async (req, res) => {
     const t = req.params.type;
     try {
         if (t === 'leads') return res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
         if (t === 'config') return res.json({ 
-            // Separación solicitada: Web Data para IA, Biz Profile para Identidad
             website_data: await getCfg('website_data', ""), 
             tech_rules: await getCfg('tech_rules', []),
             biz_profile: await getCfg('biz_profile', {}),
-            logo_url: await getCfg('logo_url', null) // Nuevo campo para el logo
+            logo_url: await getCfg('logo_url', null) // Nuevo campo
         });
         if (t === 'tags') return res.json(await db.all("SELECT * FROM global_tags"));
         if (t === 'shortcuts') return res.json(await db.all("SELECT * FROM shortcuts"));
         if (t === 'knowledge') return res.json(await db.all("SELECT * FROM inventory"));
         
+        // Mantenemos esto por compatibilidad
+        if (t === 'history') {
+             const rows = await db.all("SELECT * FROM history ORDER BY id ASC");
+             const grouped = rows.reduce((acc, curr) => { (acc[curr.phone] = acc[curr.phone] || []).push(curr); return acc; }, {});
+             return res.json(grouped);
+        }
+
         res.json([]);
     } catch(e) { res.json([]); }
 });
 
-// --- CONFIGURACIÓN: LOGO ---
+// --- [NUEVA RUTA] CONFIGURACIÓN: LOGO ---
 app.post('/api/config/logo', proteger, upload.single('file'), async (req, res) => {
     if(!req.file) return res.status(400).send("No file");
     const b64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
@@ -369,9 +367,7 @@ app.post('/api/config/logo', proteger, upload.single('file'), async (req, res) =
 
 // --- CONFIGURACIÓN: PERFIL Y WEB DATA ---
 app.post('/api/config/biz/save', proteger, async (req, res) => { 
-    // Guardamos identidad
     await setCfg('biz_profile', { name: req.body.name, hours: req.body.hours });
-    // Guardamos datos de IA (si vienen en el request)
     if(req.body.website_data !== undefined) await setCfg('website_data', req.body.website_data);
     res.json({success:true}); 
 });
@@ -430,7 +426,6 @@ app.post('/api/chat/action', proteger, async (req, res) => {
 });
 
 app.post('/api/chat/toggle-bot', proteger, async (req, res) => {
-    console.log(`🤖 Toggle Bot: ${req.body.phone} -> ${req.body.active}`);
     await db.run("INSERT OR REPLACE INTO bot_status (phone, active) VALUES (?, ?)", [req.body.phone, req.body.active ? 1 : 0]);
     res.json({ success: true });
 });
@@ -479,7 +474,6 @@ app.post('/webhook', async (req, res) => {
         const val = req.body.entry?.[0]?.changes?.[0]?.value;
         const msg = val?.messages?.[0];
         
-        // Guardar nombre contacto si Meta lo envía
         if (val?.contacts?.[0]) {
             await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=contactName WHERE addedManual=0", [val.contacts[0].wa_id, val.contacts[0].profile.name]);
         }
@@ -518,4 +512,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 VALENTINA v15.0 READY (FULL FEATURES)"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 VALENTINA v15.1 READY (FULL + FAST)"));
