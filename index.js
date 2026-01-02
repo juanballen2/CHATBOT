@@ -1,6 +1,6 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v15.1 (STABLE FIX + SPEED)
+ * SERVER BACKEND - VALENTINA v15.2 (YOUR CODE + FIXES)
  * Importadora Casa Colombia (ICC)
  * ============================================================
  */
@@ -39,7 +39,7 @@ app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors());
 
-// Seguridad: Bloquear acceso directo a la DB o JSONs sensibles
+// Seguridad
 app.use((req, res, next) => {
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
         return res.status(403).send('🚫 Acceso Prohibido');
@@ -58,7 +58,7 @@ let db;
         driver: sqlite3.Database
     });
 
-    // 1. Tablas Base
+    // 1. Tablas Base (TU CÓDIGO ORIGINAL)
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
         CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT); 
@@ -70,22 +70,22 @@ let db;
         CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
     `);
     
-    // 2. Migraciones de Seguridad (NUEVAS COLUMNAS)
+    // 2. Migraciones (TU CÓDIGO + LOGO FIX)
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
-    try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {} // Para el logo corporativo
+    try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {} // Agregado para que funcione el logo
     
     const leadCols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
     for (const c of leadCols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
 
-    // 3. OPTIMIZACIÓN: ÍNDICES (CRÍTICO PARA VELOCIDAD)
+    // 3. OPTIMIZACIÓN: ÍNDICES (MANTENIDOS)
     try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_history_phone ON history(phone)`); } catch(e){}
     try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_history_time ON history(time)`); } catch(e){}
 
     await refreshKnowledge();
-    console.log("🚀 BACKEND v15.1 ONLINE (FULL & FAST)");
+    console.log("🚀 BACKEND v15.2 ONLINE (FULL CHECK)");
 })();
 
-// Caché en memoria para el inventario
+// Caché en memoria
 let globalKnowledge = [];
 async function refreshKnowledge() {
     try {
@@ -115,7 +115,7 @@ app.use(session({
 }));
 
 // --- INTEGRACIÓN CON META (WHATSAPP) ---
-
+// (TU CÓDIGO ORIGINAL DE UPLOAD SE MANTIENE INTACTO)
 async function uploadToMeta(buffer, mimeType, filename) {
     try {
         const form = new FormData();
@@ -173,7 +173,6 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     }
 }
 
-// Proxy para ver Multimedia (Protegido por sesión)
 app.get('/api/media-proxy/:id', async (req, res) => {
     if (!req.session.isLogged) return res.status(401).send("No auth");
     try {
@@ -185,7 +184,7 @@ app.get('/api/media-proxy/:id', async (req, res) => {
 });
 
 // --- CEREBRO IA (VALENTINA) ---
-
+// (MANTENEMOS TU LÓGICA DE PROCESAMIENTO EXACTA)
 function buscarEnCatalogo(query) {
     if (!query || typeof query !== 'string' || query.startsWith('[')) return [];
     const norm = (t) => t ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
@@ -228,7 +227,7 @@ async function procesarConValentina(message, sessionId, mediaDesc = "") {
     [REGLAS TÉCNICAS]: ${techRules.join(". ")}
 
     [DETECTAR DATOS]
-    Si el cliente da datos nuevos, añade este JSON al final de tu respuesta (oculto al usuario):
+    Si el cliente da datos nuevos, añade este JSON al final de tu respuesta:
     \`\`\`json
     {"es_lead":true,"nombre":"...","ciudad":"...","interes":"...","correo":"...","etiqueta":"Cotización"}
     \`\`\`
@@ -278,8 +277,8 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-// --- [NUEVA RUTA] LISTA DE CHATS OPTIMIZADA (GROUP BY) ---
-// Reemplaza la lógica anterior lenta por una consulta SQL única.
+// --- [OPTIMIZADO] LISTA DE CHATS RÁPIDA (GROUP BY) ---
+// ESTA ES LA CORRECCIÓN DE VELOCIDAD QUE FALTABA EN TU CÓDIGO
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
         const query = `
@@ -300,7 +299,6 @@ app.get('/api/chats-full', proteger, async (req, res) => {
             ORDER BY h.id DESC
             LIMIT 50
         `;
-        // LIMIT 50: Clave para que cargue instantáneo.
         
         const rows = await db.all(query);
         
@@ -322,8 +320,8 @@ app.get('/api/chats-full', proteger, async (req, res) => {
     }
 });
 
-// --- [NUEVA RUTA] HISTORIAL DE UN SOLO CHAT ---
-// Esta es la ruta que falta en tu código y es la que da la velocidad al abrir un chat.
+// --- [NUEVO] HISTORIAL INDIVIDUAL ---
+// ESTA RUTA LA AGREGUÉ PARA QUE EL FRONT PUEDA PEDIR MENSAJES RÁPIDO
 app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     try {
         const rows = await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]);
@@ -340,13 +338,13 @@ app.get('/api/data/:type', proteger, async (req, res) => {
             website_data: await getCfg('website_data', ""), 
             tech_rules: await getCfg('tech_rules', []),
             biz_profile: await getCfg('biz_profile', {}),
-            logo_url: await getCfg('logo_url', null) // Nuevo campo
+            logo_url: await getCfg('logo_url', null) // Agregué el logo aquí
         });
         if (t === 'tags') return res.json(await db.all("SELECT * FROM global_tags"));
         if (t === 'shortcuts') return res.json(await db.all("SELECT * FROM shortcuts"));
         if (t === 'knowledge') return res.json(await db.all("SELECT * FROM inventory"));
         
-        // Mantenemos esto por compatibilidad
+        // Mantenemos esto por si acaso, pero el front usará /api/chat-history
         if (t === 'history') {
              const rows = await db.all("SELECT * FROM history ORDER BY id ASC");
              const grouped = rows.reduce((acc, curr) => { (acc[curr.phone] = acc[curr.phone] || []).push(curr); return acc; }, {});
@@ -357,7 +355,7 @@ app.get('/api/data/:type', proteger, async (req, res) => {
     } catch(e) { res.json([]); }
 });
 
-// --- [NUEVA RUTA] CONFIGURACIÓN: LOGO ---
+// --- [NUEVO] SUBIDA DE LOGO ---
 app.post('/api/config/logo', proteger, upload.single('file'), async (req, res) => {
     if(!req.file) return res.status(400).send("No file");
     const b64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
@@ -365,22 +363,19 @@ app.post('/api/config/logo', proteger, upload.single('file'), async (req, res) =
     res.json({success:true, url: b64});
 });
 
-// --- CONFIGURACIÓN: PERFIL Y WEB DATA ---
 app.post('/api/config/biz/save', proteger, async (req, res) => { 
     await setCfg('biz_profile', { name: req.body.name, hours: req.body.hours });
     if(req.body.website_data !== undefined) await setCfg('website_data', req.body.website_data);
     res.json({success:true}); 
 });
 
-// --- ETIQUETAS ---
+// --- RESTO DE ENDPOINTS (INTACTOS) ---
 app.post('/api/tags/add', proteger, async (req, res) => { try { await db.run("INSERT INTO global_tags (name, color) VALUES (?, ?)", [req.body.name, req.body.color]); res.json({success:true}); } catch(e){res.status(400).send("Error");} });
 app.post('/api/tags/delete', proteger, async (req, res) => { await db.run("DELETE FROM global_tags WHERE id = ?", [req.body.id]); res.json({success:true}); });
 
-// --- ATAJOS ---
 app.post('/api/shortcuts/add', proteger, async (req, res) => { try { await db.run("INSERT INTO shortcuts (keyword, text) VALUES (?, ?)", [req.body.keyword, req.body.text]); res.json({success:true}); } catch(e) { res.status(400).json({error: "Existe"}); } });
 app.post('/api/shortcuts/delete', proteger, async (req, res) => { await db.run("DELETE FROM shortcuts WHERE id = ?", [req.body.id]); res.json({success:true}); });
 
-// --- CONTACTOS ---
 app.post('/api/contacts/upload-photo', proteger, upload.single('file'), async (req, res) => {
     if(!req.file) return res.status(400).send("No file");
     const b64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
@@ -392,7 +387,6 @@ app.post('/api/contacts/add', proteger, async (req, res) => {
     res.json({ success: true, phone: req.body.phone });
 });
 
-// --- CHAT: SUBIDA Y ENVÍO ---
 app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => {
     try {
         const { phone, type } = req.body; 
@@ -430,15 +424,12 @@ app.post('/api/chat/toggle-bot', proteger, async (req, res) => {
     res.json({ success: true });
 });
 
-// --- REGLAS TÉCNICAS ---
 app.post('/api/config/rules/add', proteger, async (req, res) => { let r=await getCfg('tech_rules',[]); r.push(req.body.rule); await setCfg('tech_rules',r); res.json({rules:r}); });
 app.post('/api/config/rules/delete', proteger, async (req, res) => { let r=await getCfg('tech_rules',[]); r.splice(req.body.index,1); await setCfg('tech_rules',r); res.json({rules:r}); });
 
-// --- LEADS ---
 app.post('/api/leads/update', proteger, async(req,res)=>{ const{id,field,value}=req.body; await db.run(`UPDATE leads SET ${field}=? WHERE id=?`,[value,id]); res.json({success:true}); });
 app.post('/api/leads/delete', proteger, async(req,res)=>{ await db.run("DELETE FROM leads WHERE id=?",[req.body.id]); res.json({success:true}); });
 
-// --- INVENTARIO (CSV) ---
 app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res) => {
     try {
         const n = parse(req.file.buffer.toString('utf-8'), { columns: true });
@@ -456,7 +447,6 @@ app.post('/api/knowledge/delete', proteger, async (req, res) => {
     res.json({ success: true });
 });
 
-// --- SANDBOX ---
 app.post('/api/test-ai', proteger, async (req, res) => {
     try {
         const fullPrompt = `ERES VALENTINA (Modo Test). USER: "${req.body.message}"`;
@@ -466,7 +456,7 @@ app.post('/api/test-ai', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// --- WEBHOOK (META) ---
+// --- WEBHOOK ---
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
 app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
@@ -506,10 +496,9 @@ app.post('/webhook', async (req, res) => {
     } catch(e) { console.error("Webhook Error:", e); }
 });
 
-// --- ARRANQUE ---
 app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
 app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 VALENTINA v15.1 READY (FULL + FAST)"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 VALENTINA v15.2 READY (FINAL BACK)"));
