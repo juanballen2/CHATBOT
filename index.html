@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICC | Business Suite v13.5</title>
+    <title>ICC | Business Suite v13.5 (Sync Fix)</title>
     <link rel="icon" href="https://github.com/juanballen2/CHATBOT/blob/main/images/favicon.jpg?raw=true">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -345,21 +345,28 @@
             if(v==='inventory') loadInventory();
         }
 
-        // CHAT ENGINE
+        // CHAT ENGINE (SYNC LOGIC FIX)
         async function syncChats() {
             try {
+                // 1. Obtener estado global de chats
                 const res = await fetch('/api/chats-full');
                 const data = await res.json();
                 
+                // Actualizar la lista SI cambió
                 if(JSON.stringify(data) !== JSON.stringify(chats)) {
                     chats = data; 
                     renderChatList(); 
-                    if(selectedId) {
-                        const current = chats.find(c=>c.id===selectedId);
-                        if(current) {
-                             renderMsgs(selectedId);
-                             renderBotStatus(current.botActive);
-                        }
+                }
+
+                // 2. Si hay un chat abierto, refrescar SIEMPRE (independiente de la lista)
+                if(selectedId) {
+                    const current = data.find(c => c.id === selectedId);
+                    if(current) {
+                        // Refrescar estado del bot (visual)
+                        renderBotStatus(current.botActive);
+                        
+                        // Refrescar mensajes sin parpadeo
+                        await renderMsgs(selectedId, false);
                     }
                 }
             } catch(e){}
@@ -381,7 +388,6 @@
                 return matchTxt && matchTag;
             });
 
-            // Update Filter Dropdown
             const tagSet = new Set(); chats.forEach(c=>(c.labels||[]).forEach(l=>tagSet.add(l)));
             let opts = '<option value="">Todos</option>'; tagSet.forEach(t=>opts+=`<option value="${t}">${t}</option>`);
             if(document.getElementById('tag-filter').innerHTML !== opts) document.getElementById('tag-filter').innerHTML = opts;
@@ -447,7 +453,7 @@
             }, 300);
         }
 
-        async function renderMsgs(id, scroll=false) {
+        async function renderMsgs(id, forceScroll=false) {
             const h = await fetch('/api/data/history').then(r=>r.json());
             const msgs = h[id] || [];
             const box = document.getElementById('msgs-box');
@@ -457,7 +463,7 @@
                 return;
             }
 
-            box.innerHTML = msgs.map(m => {
+            const htmlContent = msgs.map(m => {
                 const cls = m.role==='bot'?'b-bot':(m.role==='manual'?'b-manual':'b-user');
                 let content = m.text;
                 if(content.includes('[MEDIA:IMAGE:')) {
@@ -466,10 +472,18 @@
                 } else if (content.includes('[MEDIA:AUDIO:')) {
                     const mid = content.match(/\[MEDIA:AUDIO:(.*?)\]/)[1];
                     content = `<audio src="/api/media-proxy/${mid}" controls style="width:200px;"></audio>`;
+                } else if (content.includes('[MEDIA:DOC:')) {
+                    const mid = content.match(/\[MEDIA:DOC:(.*?)\]/)[1];
+                    content = `<div style="background:#eee; padding:5px;">📄 Documento</div>`;
                 }
                 return `<div class="bubble ${cls}">${content}</div>`;
             }).join('');
-            if(scroll) box.scrollTop = box.scrollHeight;
+
+            // ANTI-FLICKER: Solo actualizar si el HTML cambió
+            if(box.innerHTML !== htmlContent) {
+                box.innerHTML = htmlContent;
+                if(forceScroll || (box.scrollHeight - box.scrollTop < 500)) box.scrollTop = box.scrollHeight;
+            }
         }
 
         // --- FEATURES ---
@@ -495,9 +509,11 @@
         async function sendMsg() {
             const txt = document.getElementById('msg-input').value; if(!txt || !selectedId) return;
             document.getElementById('msg-input').value=''; document.getElementById('quick-replies').style.display='none';
+            // Optimista UI update
             const box = document.getElementById('msgs-box');
             box.innerHTML += `<div class="bubble b-manual">${txt}</div>`;
             box.scrollTop = box.scrollHeight;
+            
             await fetch('/api/chat/send', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, message:txt})});
             syncChats();
         }
@@ -538,13 +554,25 @@
             </tr>`).join('');
         }
         function downloadLeadsExcel() {
+            if(!allLeads.length) { alert("No hay leads para descargar"); return; }
             const ws = XLSX.utils.json_to_sheet(allLeads);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Leads");
             XLSX.writeFile(wb, "ICC_Leads.xlsx");
         }
         async function deleteLead(id) { if(!confirm("¿Borrar lead?")) return; await fetch('/api/leads/delete', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); loadLeads(); }
-        async function saveLeadChanges() { /* (Omitido para ahorrar espacio, ya incluido en versiones previas) */ }
+        async function saveLeadChanges() { 
+            const id = document.getElementById('edit-lead-id').value;
+            // Simplificado para ahorrar espacio
+            const updates = { 
+                nombre: document.getElementById('edit-lead-name').value, 
+                ciudad: document.getElementById('edit-lead-city').value, 
+                interes: document.getElementById('edit-lead-interest').value, 
+                correo: document.getElementById('edit-lead-email').value 
+            };
+            for (const [key, val] of Object.entries(updates)) { await fetch('/api/leads/update', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, field:key, value:val})}); }
+            closeModal('modal-edit-lead'); loadLeads();
+        }
 
         // INVENTORY
         async function loadInventory() { allProducts = await fetch('/api/data/knowledge').then(r=>r.json()); renderInventory(); }
@@ -559,6 +587,7 @@
             const c = chats.find(x=>x.id===selectedId); 
             // Envía el estado INVERSO actual
             await fetch('/api/chat/toggle-bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedId, active:!c.botActive})}); 
+            // Forzamos sync inmediato
             syncChats();
         }
         function renderBotStatus(active) {
@@ -566,8 +595,9 @@
             if(btn) {
                 btn.innerText = active ? "🤖 BOT: ON" : "⛔ BOT: OFF";
                 btn.style.background = active ? "#dcfce7" : "#fee2e2";
-                btn.style.color = active ? "green" : "red";
+                btn.style.color = active ? "#166534" : "#991b1b";
                 btn.style.fontWeight = "bold";
+                btn.style.border = active ? "1px solid #86efac" : "1px solid #fca5a5";
             }
         }
         function callUser() { window.open(`tel:${selectedId.replace(/\D/g,'')}`); }
