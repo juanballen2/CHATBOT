@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICC | Business Suite v12.1</title>
+    <title>ICC | Business Suite v13.0</title>
     <link rel="icon" href="https://github.com/juanballen2/CHATBOT/blob/main/images/favicon.jpg?raw=true">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -608,15 +608,17 @@
             if(!input.files[0] || !selectedId) return;
             const fd = new FormData(); fd.append('file', input.files[0]); fd.append('phone', selectedId);
             await fetch('/api/contacts/upload-photo', {method:'POST', body:fd});
-            syncChats();
+            syncChats(); // Forzar refresco para ver la foto nueva
         }
 
-        function renderGlobalTags() { document.getElementById('global-tags-list').innerHTML = globalTags.map(t => `<div style="padding:5px; border-bottom:1px solid #eee; display:flex; justify-content:space-between;"><span style="color:${t.color}; font-weight:bold;">${t.name}</span> <i class="fas fa-trash" style="cursor:pointer;" onclick="deleteTag(${t.id})"></i></div>`).join(''); }
+        function renderGlobalTags() { document.getElementById('global-tags-list').innerHTML = globalTags.map(t => `<div style="padding:5px; border-bottom:1px solid #eee; display:flex; justify-content:space-between;"><span style="color:${t.color}; font-weight:bold;">${t.name}</span> <i class="fas fa-trash" style="cursor:pointer; color:red;" onclick="deleteTag(${t.id})"></i></div>`).join(''); }
         async function addGlobalTag() { const n = document.getElementById('new-tag-name').value; const c = document.getElementById('new-tag-color').value; await fetch('/api/tags/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:n, color:c})}); loadGlobalData(); }
-        async function deleteTag(id) { await fetch('/api/tags/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadGlobalData(); }
-        function renderShortcuts() { document.getElementById('shortcuts-list').innerHTML = shortcuts.map(s => `<div style="padding:5px; border-bottom:1px solid #eee; display:flex; justify-content:space-between;"><span><b>/${s.keyword}</b>: ${s.text.substring(0,20)}...</span> <i class="fas fa-trash" onclick="deleteShortcut(${s.id})"></i></div>`).join(''); }
+        async function deleteTag(id) { if(!confirm("¿Eliminar etiqueta?")) return; await fetch('/api/tags/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadGlobalData(); }
+        
+        function renderShortcuts() { document.getElementById('shortcuts-list').innerHTML = shortcuts.map(s => `<div style="padding:5px; border-bottom:1px solid #eee; display:flex; justify-content:space-between;"><span><b>/${s.keyword}</b>: ${s.text.substring(0,20)}...</span> <i class="fas fa-trash" style="cursor:pointer; color:red;" onclick="deleteShortcut(${s.id})"></i></div>`).join(''); }
         async function addShortcut() { const k = document.getElementById('new-sc-key').value; const t = document.getElementById('new-sc-text').value; await fetch('/api/shortcuts/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({keyword:k, text:t})}); loadGlobalData(); }
-        async function deleteShortcut(id) { await fetch('/api/shortcuts/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadGlobalData(); }
+        async function deleteShortcut(id) { if(!confirm("¿Eliminar atajo?")) return; await fetch('/api/shortcuts/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadGlobalData(); }
+        
         function renderRules(rules) { document.getElementById('rules-list').innerHTML = rules.map((r, i) => `<div style="background:white; padding:10px; border:1px solid #eee; border-radius:8px; display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;"><span>${r}</span><i class="fas fa-times" style="color:red; cursor:pointer;" onclick="deleteRule(${i})"></i></div>`).join(''); }
         async function addRule() { const r = document.getElementById('rule-input').value; if(!r) return; const res = await fetch('/api/config/rules/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({rule:r})}).then(r=>r.json()); renderRules(res.rules); document.getElementById('rule-input').value = ''; }
         async function deleteRule(i) { const res = await fetch('/api/config/rules/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}).then(r=>r.json()); renderRules(res.rules); }
@@ -631,11 +633,19 @@
 
         async function toggleRecord() {
             if (!isRecording) {
-                const s = await navigator.mediaDevices.getUserMedia({ audio: true }); mediaRecorder = new MediaRecorder(s); audioChunks = [];
+                // FIX: Usamos el estándar (Chrome graba webm/opus por defecto). 
+                // El Backend v13.0 forzará el tipo 'audio/ogg' para que WhatsApp lo acepte.
+                const s = await navigator.mediaDevices.getUserMedia({ audio: true }); 
+                mediaRecorder = new MediaRecorder(s); 
+                audioChunks = [];
                 mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
                 mediaRecorder.onstop = async () => {
-                    const blob = new Blob(audioChunks, { type: 'audio/ogg; codecs=opus' }); 
-                    const fd = new FormData(); fd.append('file', blob, 'audio.ogg'); fd.append('phone', selectedId); fd.append('type', 'audio');
+                    const blob = new Blob(audioChunks, { type: 'audio/webm' }); 
+                    const fd = new FormData(); 
+                    // Nombramos el archivo .ogg, el backend hará el resto.
+                    fd.append('file', blob, 'audio.ogg'); 
+                    fd.append('phone', selectedId); 
+                    fd.append('type', 'audio');
                     await fetch('/api/chat/upload-send', { method: 'POST', body: fd });
                     document.getElementById('btn-mic').classList.remove('recording'); syncChats();
                 };
