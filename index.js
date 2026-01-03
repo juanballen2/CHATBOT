@@ -1,8 +1,8 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v16.4 (ANTI-FREEZE FIX)
+ * SERVER BACKEND - VALENTINA v16.5 (NO QUOTES & FULL DATA)
  * Cliente: Importadora Casa Colombia (ICC)
- * Estado: FIXED - Saludo Humano + Salvavidas de Silencio
+ * Estado: FIXED - Sin Comillas, Captura de Correo/Ciudad
  * ============================================================
  */
 
@@ -84,7 +84,7 @@ let db;
     try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_metadata_archived ON metadata(archived)`); } catch(e){}
 
     await refreshKnowledge();
-    console.log("🚀 BACKEND v16.4 ONLINE (ANTI-FREEZE ACTIVE)");
+    console.log("🚀 BACKEND v16.5 ONLINE (NO QUOTES MODE)");
 })();
 
 // Caché de Conocimiento
@@ -177,7 +177,7 @@ function buscarEnCatalogo(query) {
     }).filter(i => i.score > 0).sort((a,b) => b.score - a.score).slice(0, 5);
 }
 
-// === [CORRECCIÓN v16.4: SALVAVIDAS ANTI-SILENCIO] ===
+// === [CORRECCIÓN v16.5: SIN COMILLAS + DATOS COMPLETOS] ===
 async function procesarConValentina(message, sessionId, mediaDesc = "", contactName = "Cliente") {
     // 1. Guardar mensaje del usuario
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
@@ -186,35 +186,36 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    const websiteData = await getCfg('website_data', "");
     const bizProfile = await getCfg('biz_profile', {});
     const stock = buscarEnCatalogo(message); 
-    const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 10", [sessionId])).reverse();
+    const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
 
-    // === PROMPT MEJORADO: Estructura Obligatoria ===
+    // === PROMPT CORREGIDO: SIN COMILLAS Y DATOS COMPLETOS ===
     const prompt = `
-    ROL: Eres Valentina, asesora comercial amable de ${bizProfile.name || 'Importadora Casa Colombia'}.
+    ROL: Eres Valentina, asesora comercial de ${bizProfile.name || 'Importadora Casa Colombia'}.
     
-    MODOS DE ATENCIÓN:
-    1. **Saludo:** Si dicen "Hola" -> Saluda y pregunta interés.
-    2. **Negocio:** Si piden producto -> Pide Nombre y Teléfono.
+    OBJETIVO:
+    Recopilar 4 DATOS OBLIGATORIOS para pasar el lead a un humano.
+    NO des precios ni inventario real hasta tener los 4 datos.
     
-    INSTRUCCIÓN CRÍTICA (NO FALLES EN ESTO):
-    Debes generar DOS partes en este orden:
-    1. **TU RESPUESTA HABLADA:** Escribe primero lo que le dirás al cliente. (Amable, corto).
-    2. **EL JSON:** Al final, en un bloque de código.
-
-    EJEMPLO DE RESPUESTA CORRECTA:
-    "Claro que sí, con gusto valido esa parte 🚜. Para continuar, ¿me regalas tu nombre y celular?"
-    \`\`\`json {"es_lead":false, "etiqueta":"Pendiente"} \`\`\`
-
-    DATOS PRIORITARIOS A PEDIR:
+    DATOS REQUERIDOS (EL MURO AMABLE):
     1. Nombre
     2. Celular
-    3. Interés
-    (La ciudad es opcional por ahora).
+    3. Correo Electrónico
+    4. Ciudad
 
-    INVENTARIO OCULTO: ${JSON.stringify(stock)}
+    INSTRUCCIONES DE COMPORTAMIENTO:
+    1. **SIN COMILLAS:** Nunca encierres tu respuesta verbal entre comillas (" "). Escribe el texto limpio.
+    2. **MEMORIA:** Si el cliente YA dijo qué repuesto quiere (ej: "Shaman X3000"), NO preguntes "¿qué necesitas?". Di: "Entendido, para cotizar repuestos de Shaman X3000, necesito...".
+    3. **ESTRATEGIA:**
+       - Si dice "Hola": Saluda y pregunta interés.
+       - Si pide repuesto: Pide los datos faltantes. Ve pidiendo de a 1 o 2 datos para no agobiar.
+
+    EJEMPLO DE FORMATO CORRECTO (Respuesta + JSON):
+    Hola Juan 🌻. Para enviarte la cotización formal a tu zona, ¿me confirmas tu correo y ciudad?
+    \`\`\`json {"es_lead":false, "etiqueta":"Pendiente", "interes":"Shaman X3000"} \`\`\`
+
+    INVENTARIO (REFERENCIA): ${JSON.stringify(stock)}
     CHAT PREVIO: ${JSON.stringify(chatPrevio)}
     USUARIO: ${message}
     `;
@@ -225,29 +226,33 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
         
         let txt = r.data.candidates[0].content.parts[0].text;
         
-        // Extracción Inteligente
+        // --- LIMPIEZA DE COMILLAS Y EXTRACCIÓN ---
         const match = txt.match(/```json([\s\S]*?)```|{([\s\S]*?)}$/i);
         let visible = txt;
         
         if (match) {
-            visible = txt.replace(match[0], "").trim(); // Quitamos el JSON para dejar solo el texto
+            visible = txt.replace(match[0], "").trim(); // Quitar JSON
             try {
                 const jsonStr = (match[1]||match[2]||match[0]).replace(/```json/g,"").replace(/```/g,"").trim();
                 const info = JSON.parse(jsonStr);
-                if(info.nombre || info.celular || info.interes) await gestionarLead(sessionId, info, contactName);
+                // Guardamos cualquier dato parcial que llegue
+                if(info.nombre || info.celular || info.interes || info.correo || info.ciudad) {
+                    await gestionarLead(sessionId, info, contactName);
+                }
             } catch(e) {}
         }
         
-        // === SALVAVIDAS ANTI-SILENCIO ===
-        // Si la IA mandó solo JSON y "visible" quedó vacío, ponemos un texto por defecto.
-        if (!visible || visible.length < 5) {
-            visible = "¡Entendido! 🛠️ Estoy validando tu solicitud en sistema. Para contactarte con la respuesta exacta, por favor confírmame tu Nombre y Número de Celular.";
+        // FILTRO FINAL ANTI-COMILLAS (Regex para quitar " al inicio y final)
+        visible = visible.replace(/^["']+|["']+$/g, '').trim();
+
+        // SALVAVIDAS ANTI-SILENCIO
+        if (!visible || visible.length < 2) {
+            visible = "¡Entendido! 🛠️ Estoy validando en sistema. Para continuar, por favor confírmame tu Correo y Ciudad.";
         }
         
-        // Guardar y Retornar
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', visible, new Date().toISOString()]);
         return visible;
-    } catch (e) { return "Estoy validando tu solicitud. Dame un momento... 🚜"; }
+    } catch (e) { return "Dame un momento, estoy verificando la información... 🚜"; }
 }
 
 async function gestionarLead(phone, info, fallbackName) {
@@ -466,4 +471,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v16.4 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v16.5 READY"));
