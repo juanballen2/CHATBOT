@@ -1,7 +1,8 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v15.7 (TURBO + GESTIÓN TOTAL)
- * Importadora Casa Colombia (ICC)
+ * SERVER BACKEND - VALENTINA v16.0 (PRODUCCIÓN FINAL)
+ * Cliente: Importadora Casa Colombia (ICC)
+ * Mejoras: IA Humanizada, Gestión de Archivos, Excel Limpio
  * ============================================================
  */
 
@@ -32,14 +33,14 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v16"; 
 
 // --- MIDDLEWARES ---
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors());
 
-// Seguridad
+// Seguridad de Archivos
 app.use((req, res, next) => {
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
         return res.status(403).send('🚫 Acceso Prohibido');
@@ -58,7 +59,7 @@ let db;
         driver: sqlite3.Database
     });
 
-    // 1. Tablas Base (Con soporte para pinned/archived desde el inicio)
+    // 1. Tablas Base (Estructura v16.0)
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
         CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT); 
@@ -70,23 +71,24 @@ let db;
         CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
     `);
     
-    // 2. Migraciones de Seguridad (Para no perder datos previos)
+    // 2. Migraciones Automáticas (Seguridad ante actualizaciones)
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
-    try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {} // CORRECCIÓN: Faltaba esta
+    try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
     try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {}
     
     const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
     for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
 
-    // 3. Índices de Velocidad
+    // 3. Índices de Velocidad (Turbo Mode)
     try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_history_phone ON history(phone)`); } catch(e){}
     try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_history_time ON history(time)`); } catch(e){}
+    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_metadata_archived ON metadata(archived)`); } catch(e){} // Nuevo índice para Falencia #3
 
     await refreshKnowledge();
-    console.log("🚀 BACKEND v15.7 ONLINE (FULL MANAGEMENT)");
+    console.log("🚀 BACKEND v16.0 ONLINE (PRODUCCIÓN - ICC)");
 })();
 
-// Caché
+// Caché de Conocimiento
 let globalKnowledge = [];
 async function refreshKnowledge() {
     try {
@@ -113,11 +115,12 @@ app.use(session({
     cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } 
 }));
 
-// --- META API ---
+// --- META API UTILS ---
 async function uploadToMeta(buffer, mimeType, filename) {
     try {
         const form = new FormData();
         let finalMime = mimeType, finalName = filename, type = 'document';
+        // Conversión forzada a OGG para notas de voz universales
         if (mimeType.includes('audio') || mimeType.includes('webm') || mimeType.includes('ogg')) {
             type = 'audio'; finalMime = 'audio/ogg'; finalName = 'audio.ogg'; 
         } else if (mimeType.includes('image')) { type = 'image'; }
@@ -154,6 +157,7 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     } catch (e) { return false; }
 }
 
+// Proxy de Medios (Solución parcial Falencia #1: Ver fotos de clientes si las enviaron)
 app.get('/api/media-proxy/:id', async (req, res) => {
     if (!req.session.isLogged) return res.status(401).send("No auth");
     try {
@@ -164,7 +168,7 @@ app.get('/api/media-proxy/:id', async (req, res) => {
     } catch (e) { res.status(500).send("Error Media"); }
 });
 
-// --- CEREBRO IA ---
+// --- CEREBRO IA (MEJORADO PARA FALENCIA #6) ---
 function buscarEnCatalogo(query) {
     if (!query || typeof query !== 'string' || query.startsWith('[')) return [];
     const norm = (t) => t ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
@@ -176,10 +180,11 @@ function buscarEnCatalogo(query) {
     }).filter(i => i.score > 0).sort((a,b) => b.score - a.score).slice(0, 5);
 }
 
-async function procesarConValentina(message, sessionId, mediaDesc = "") {
+async function procesarConValentina(message, sessionId, mediaDesc = "", contactName = "Cliente") {
+    // Registro mensaje usuario
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
     
-    // Auto-Desarchivar si el cliente escribe
+    // Auto-Desarchivar: Si el cliente escribe, el chat revive (Falencia #3)
     await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 0) ON CONFLICT(phone) DO UPDATE SET archived=0", [sessionId]);
 
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
@@ -191,36 +196,96 @@ async function procesarConValentina(message, sessionId, mediaDesc = "") {
     const stock = buscarEnCatalogo(message);
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
 
+    // --- PROMPT V16.0: HUMANIZADO Y ESTRATÉGICO ---
     const prompt = `
-    Eres Valentina, IA de ${bizProfile.name || 'Importadora Casa Colombia (ICC)'}.
-    [DATOS]: Horario: ${bizProfile.hours}. Info Web: ${websiteData}.
-    [OBJETIVO]: Perfila (Nombre, Ciudad, Interés).
-    [INVENTARIO]: ${JSON.stringify(stock)}
-    [REGLAS]: ${techRules.join(". ")}
-    [DETECTAR DATOS]: JSON al final: \`\`\`json {"es_lead":true,"nombre":"...","ciudad":"...","interes":"...","correo":"...","etiqueta":"Cotización"} \`\`\``;
+    ROL: Eres Valentina, asesora comercial experta de ${bizProfile.name || 'Importadora Casa Colombia (ICC)'}.
+    
+    TONO Y PERSONALIDAD:
+    - Eres profesional, eficiente pero cercana. NO suenes robótica.
+    - Usa emojis moderadamente (👋, 🛠️, ✅) para dar calidez.
+    - Tu objetivo es AYUDAR y VENDER, generando confianza.
+    - Si no sabes algo, ofrece conectar con un humano, no inventes.
+
+    CONTEXTO DE NEGOCIO:
+    - Horario: ${bizProfile.hours}. 
+    - Info Web: ${websiteData}.
+    - Inventario Detectado: ${JSON.stringify(stock)}
+    
+    INSTRUCCIONES DE PERFILADO (CRÍTICO):
+    1. Si no tienes el nombre del cliente en el chat, ÚSALO del campo 'ContactName' provisto (${contactName}). Saluda por el nombre si es posible.
+    2. Debes clasificar al cliente en una de estas etiquetas JSON:
+       - "Pendiente": Escribió pero no ha dado datos claros.
+       - "Lead": Ya tenemos Nombre, Ciudad e Interés.
+       - "No Stock": Pide algo relacionado a maquinaria pesada que NO tenemos en el inventario provisto.
+       - "Equivocado": Pide pizza, ropa, o algo nada que ver con maquinaria.
+    
+    FORMATO DE RESPUESTA:
+    Responde al usuario naturalmente. AL FINAL, en un bloque SEPARADO, pon el JSON de control si detectas datos nuevos o cambio de estado.
+    
+    Estructura JSON:
+    \`\`\`json {"es_lead":true, "nombre":"...", "ciudad":"...", "interes":"...", "correo":"...", "etiqueta":"Lead|Pendiente|No Stock|Equivocado"} \`\`\`
+    (Usa "null" si no tienes el dato aún).
+    
+    CHAT PREVIO:
+    ${JSON.stringify(chatPrevio)}
+    
+    USUARIO (${contactName}): ${message}
+    `;
 
     try {
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: prompt + `\nCHAT:\n${JSON.stringify(chatPrevio)}\nUSER:${message}` }] }] });
+            { contents: [{ parts: [{ text: prompt }] }] });
+        
         let txt = r.data.candidates[0].content.parts[0].text;
+        
+        // Extracción de JSON (Inteligencia Oculta)
         const match = txt.match(/```json([\s\S]*?)```|{([\s\S]*?)}$/i);
         let visible = txt;
+        
         if (match) {
-            visible = txt.replace(match[0], "").trim();
+            visible = txt.replace(match[0], "").trim(); // Quitamos el JSON para el usuario
             try {
-                const info = JSON.parse((match[1]||match[2]||match[0]).replace(/```json/g,"").replace(/```/g,"").trim());
-                if(info.es_lead) await gestionarLead(sessionId, info);
-            } catch(e) {}
+                const jsonStr = (match[1]||match[2]||match[0]).replace(/```json/g,"").replace(/```/g,"").trim();
+                const info = JSON.parse(jsonStr);
+                
+                // Actualizar Lead solo si hay datos relevantes
+                if(info.es_lead || info.etiqueta === "No Stock" || info.etiqueta === "Equivocado") {
+                    await gestionarLead(sessionId, info, contactName);
+                }
+            } catch(e) { console.error("Error parsing JSON bot:", e); }
         }
+        
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', visible, new Date().toISOString()]);
         return visible;
-    } catch (e) { return "Disculpa, estoy validando la información."; }
+    } catch (e) { 
+        console.error("Error Gemini:", e);
+        return "Disculpa, estoy consultando el sistema. ¿Me podrías repetir?"; 
+    }
 }
 
-async function gestionarLead(phone, info) {
-    let nombre = info.nombre !== "null" ? info.nombre : "Cliente";
+async function gestionarLead(phone, info, fallbackName) {
+    // Si el bot no captó el nombre, usamos el del perfil de WhatsApp
+    let nombreFinal = (info.nombre && info.nombre !== "null") ? info.nombre : fallbackName;
+    
+    // Insertar o Actualizar Lead
+    // NOTA: Usamos INSERT simple para historial, pero podríamos hacer UPDATE si prefieres solo uno por cliente.
+    // Aquí guardamos histórico de leads.
     await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
-        [phone, nombre, info.interes, info.etiqueta, new Date().toLocaleString(), info.ciudad, info.correo]);
+        [phone, nombreFinal, info.interes, info.etiqueta, new Date().toLocaleString(), info.ciudad, info.correo]);
+    
+    // También actualizamos la etiqueta en metadatos para que se vea en el chat
+    if(info.etiqueta) {
+        let currentLabels = [];
+        try {
+            const row = await db.get("SELECT labels FROM metadata WHERE phone = ?", [phone]);
+            if(row) currentLabels = JSON.parse(row.labels || "[]");
+        } catch(e){}
+        
+        if(!currentLabels.includes(info.etiqueta)) {
+            currentLabels.push(info.etiqueta);
+            await db.run("UPDATE metadata SET labels = ? WHERE phone = ?", [JSON.stringify(currentLabels), phone]);
+        }
+    }
 }
 
 // ============================================================
@@ -236,9 +301,13 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-// --- LISTA DE CHATS OPTIMIZADA (Con soporte para Pinned/Archived) ---
+// --- LISTA DE CHATS (FALENCIA #3: FILTRO ARCHIVADOS) ---
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
+        // Parametro ?view=archived para ver los archivados
+        const view = req.query.view || 'active'; 
+        const whereClause = view === 'archived' ? 'm.archived = 1' : '(m.archived = 0 OR m.archived IS NULL)';
+
         const query = `
             SELECT 
                 h.phone as id, 
@@ -249,13 +318,14 @@ app.get('/api/chats-full', proteger, async (req, res) => {
                 m.photoUrl, 
                 m.labels, 
                 m.pinned,
-                m.archived, -- CORRECCIÓN: Seleccionamos archived
+                m.archived,
                 b.active as botActive
             FROM history h
             LEFT JOIN metadata m ON h.phone = m.phone
             LEFT JOIN bot_status b ON h.phone = b.phone
+            WHERE ${whereClause}
             GROUP BY h.phone
-            ORDER BY h.id DESC
+            ORDER BY m.pinned DESC, h.id DESC
             LIMIT 50
         `;
         const rows = await db.all(query);
@@ -267,14 +337,13 @@ app.get('/api/chats-full', proteger, async (req, res) => {
             pinned: r.pinned === 1,
             archived: r.archived === 1,
             labels: JSON.parse(r.labels || "[]"),
-            photoUrl: r.photoUrl || null,
+            photoUrl: r.photoUrl || null, // Se enviará al front para mostrar
             timestamp: r.timestamp
         }));
         res.json(list);
-    } catch(e) { res.status(500).json([]); }
+    } catch(e) { console.error(e); res.status(500).json([]); }
 });
 
-// --- HISTORIAL RÁPIDO ---
 app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     try {
         const rows = await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]);
@@ -282,34 +351,54 @@ app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     } catch(e) { res.status(500).json([]); }
 });
 
-// --- ACCIONES DE CHAT (PIN, ARCHIVE, DELETE) ---
-// Aquí agregamos la lógica que faltaba
+// --- ACCIONES DE CHAT (SOPORTE CLICK DERECHO - FALENCIA #2 y #5) ---
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
     
-    if(action === 'set_labels') {
-        await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [phone, JSON.stringify(value)]);
+    try {
+        if(action === 'set_labels') {
+            // Permite quitar etiquetas enviando array vacio o modificado
+            await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [phone, JSON.stringify(value)]);
+        }
+        else if(action === 'toggle_pin') {
+            await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET pinned=excluded.pinned", [phone, value ? 1 : 0]);
+        }
+        else if(action === 'toggle_archive') {
+            await db.run("INSERT INTO metadata (phone, archived) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET archived=excluded.archived", [phone, value ? 1 : 0]);
+        }
+        else if(action === 'delete') {
+            // Borrado completo
+            await db.run("DELETE FROM history WHERE phone=?",[phone]);
+            await db.run("DELETE FROM metadata WHERE phone=?",[phone]);
+            await db.run("DELETE FROM bot_status WHERE phone=?",[phone]);
+            await db.run("DELETE FROM leads WHERE phone=?",[phone]);
+        }
+        res.json({ success: true });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
     }
-    else if(action === 'toggle_pin') { // NUEVO
-        await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET pinned=excluded.pinned", [phone, value ? 1 : 0]);
-    }
-    else if(action === 'toggle_archive') { // NUEVO
-        await db.run("INSERT INTO metadata (phone, archived) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET archived=excluded.archived", [phone, value ? 1 : 0]);
-    }
-    else if(action === 'delete') { // NUEVO: Borrado duro
-        await db.run("DELETE FROM history WHERE phone=?",[phone]);
-        await db.run("DELETE FROM metadata WHERE phone=?",[phone]);
-        await db.run("DELETE FROM bot_status WHERE phone=?",[phone]);
-        await db.run("DELETE FROM leads WHERE phone=?",[phone]);
-    }
-    res.json({ success: true });
 });
 
 // --- DATOS Y CONFIG ---
 app.get('/api/data/:type', proteger, async (req, res) => {
     const t = req.params.type;
     try {
-        if (t === 'leads') return res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
+        if (t === 'leads') {
+            // FALENCIA #4: SQL limpio para Excel
+            // Seleccionamos solo columnas necesarias y renombramos para que el Excel salga bonito
+            const leads = await db.all(`
+                SELECT 
+                    nombre as Nombre, 
+                    phone as Telefono, 
+                    ciudad as Ciudad, 
+                    interes as Interes, 
+                    etiqueta as Estado, 
+                    correo as Correo,
+                    fecha as Fecha
+                FROM leads ORDER BY id DESC
+            `);
+            return res.json(leads);
+        }
         if (t === 'config') return res.json({ 
             website_data: await getCfg('website_data', ""), 
             tech_rules: await getCfg('tech_rules', []),
@@ -363,6 +452,8 @@ app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, r
             await enviarWhatsApp(phone, { id: mediaId }, type);
             let tag = `[MEDIA:${type.toUpperCase()}:${mediaId}]`;
             await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'manual', tag, new Date().toISOString()]);
+            // Desarchivar al enviar manualmente
+            await db.run("UPDATE metadata SET archived = 0 WHERE phone = ?", [phone]);
             res.json({success: true});
         } else { res.status(500).json({error: "Error Meta"}); }
     } catch(e) { res.status(500).json({error: e.message}); }
@@ -371,6 +462,8 @@ app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, r
 app.post('/api/chat/send', proteger, async (req, res) => {
     if(await enviarWhatsApp(req.body.phone, req.body.message)) {
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [req.body.phone, 'manual', req.body.message, new Date().toISOString()]);
+        // Desarchivar al enviar manualmente
+        await db.run("UPDATE metadata SET archived = 0 WHERE phone = ?", [req.body.phone]);
         res.json({ success: true });
     } else res.status(500).json({ error: "Error enviando" });
 });
@@ -407,13 +500,15 @@ app.post('/api/knowledge/delete', proteger, async (req, res) => {
 
 app.post('/api/test-ai', proteger, async (req, res) => {
     try {
+        // Test con datos dummy
+        const prompt = `TEST MODE: ${req.body.message}. Responde como Valentina ICC.`;
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: `TEST MODE: ${req.body.message}` }] }] });
+            { contents: [{ parts: [{ text: prompt }] }] });
         res.json({ response: r.data.candidates[0].content.parts[0].text });
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// --- WEBHOOK ---
+// --- WEBHOOK (CEREBRO DE ENTRADA) ---
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
 app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
@@ -421,8 +516,12 @@ app.post('/webhook', async (req, res) => {
         const val = req.body.entry?.[0]?.changes?.[0]?.value;
         const msg = val?.messages?.[0];
         
+        // FALENCIA #1: Captura de Nombre desde el Perfil de Meta
+        let contactName = "Cliente";
         if (val?.contacts?.[0]) {
-            await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=contactName WHERE addedManual=0", [val.contacts[0].wa_id, val.contacts[0].profile.name]);
+            contactName = val.contacts[0].profile.name;
+            // Guardamos el nombre real de WhatsApp en metadatos si no ha sido editado manualmente
+            await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName WHERE addedManual=0", [val.contacts[0].wa_id, contactName]);
         }
 
         if(msg) {
@@ -446,7 +545,8 @@ app.post('/webhook', async (req, res) => {
             }
 
             const inputIA = mediaDesc ? `(El usuario envió: ${mediaDesc})` : userMsg;
-            const respuesta = await procesarConValentina(inputIA, msg.from, userMsg); 
+            // Pasamos contactName a la IA para que lo use si el cliente no se presenta
+            const respuesta = await procesarConValentina(inputIA, msg.from, userMsg, contactName); 
             
             if(respuesta) await enviarWhatsApp(msg.from, respuesta);
         }
@@ -459,4 +559,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 VALENTINA v15.7 READY (FINAL)"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 VALENTINA v16.0 READY (PRODUCCIÓN)"));
