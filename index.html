@@ -319,10 +319,28 @@
         <div class="modal">
             <h3>Editar Lead</h3>
             <input id="edit-lead-id" type="hidden">
-            <label>Nombre:</label><input id="edit-lead-name" class="form-control">
-            <label>Ciudad:</label><input id="edit-lead-city" class="form-control">
-            <label>Interés:</label><input id="edit-lead-interest" class="form-control">
-            <label>Correo:</label><input id="edit-lead-email" class="form-control">
+            
+            <label>Nombre:</label>
+            <input id="edit-lead-name" class="form-control">
+            
+            <label>Ciudad:</label>
+            <input id="edit-lead-city" class="form-control">
+            
+            <label>Interés:</label>
+            <input id="edit-lead-interest" class="form-control">
+            
+            <label>Correo:</label>
+            <input id="edit-lead-email" class="form-control">
+
+            <label>Etiqueta (Estado):</label>
+            <select id="edit-lead-tag" class="form-control">
+                <option value="Pendiente">Pendiente</option>
+                <option value="Lead">Lead</option>
+                <option value="Cotización">Cotización</option>
+                <option value="No Stock">No Stock</option>
+                <option value="Equivocado">Equivocado</option>
+                <option value="Vendido">Vendido</option>
+            </select>
             <div style="text-align:right; margin-top:10px;">
                 <button class="btn-outline" style="padding:8px;" onclick="closeModal('modal-edit-lead')">Cancelar</button>
                 <button class="btn" onclick="saveLeadChanges()">Guardar</button>
@@ -553,16 +571,46 @@
             document.getElementById('leads-body').innerHTML = allLeads.map(l => `<tr><td>${l.fecha.split(',')[0]}</td><td><a href="#" style="color:var(--primary); font-weight:bold; text-decoration:none;" onclick="openEditLead(${l.id})">${l.nombre}</a></td><td>${l.ciudad}</td><td>${l.interes}</td><td><span class="tag-pill" style="background:#F97316">${l.etiqueta}</span></td><td><button class="btn" style="background:red; padding:4px 8px;" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button></td></tr>`).join('');
         }
         
-        // --- FUNCIÓN AGREGADA PARA EDITAR LEADS ---
+        // --- FUNCIÓN CORREGIDA: CARGA LA ETIQUETA EN EL MODAL ---
         function openEditLead(id) {
             const l = allLeads.find(x => x.id === id);
             if (!l) return;
+            
             document.getElementById('edit-lead-id').value = id;
             document.getElementById('edit-lead-name').value = l.nombre || "";
             document.getElementById('edit-lead-city').value = l.ciudad || "";
             document.getElementById('edit-lead-interest').value = l.interes || "";
             document.getElementById('edit-lead-email').value = l.correo || "";
+            
+            // Aquí cargamos la etiqueta actual en el selector
+            document.getElementById('edit-lead-tag').value = l.etiqueta || "Pendiente";
+            
             document.getElementById('modal-edit-lead').style.display = 'flex';
+        }
+
+        // --- FUNCIÓN CORREGIDA: GUARDA LA ETIQUETA EN LA DB ---
+        async function saveLeadChanges() {
+            const id = document.getElementById('edit-lead-id').value;
+            
+            const updates = { 
+                nombre: document.getElementById('edit-lead-name').value, 
+                ciudad: document.getElementById('edit-lead-city').value, 
+                interes: document.getElementById('edit-lead-interest').value, 
+                correo: document.getElementById('edit-lead-email').value,
+                etiqueta: document.getElementById('edit-lead-tag').value // Nuevo dato a guardar
+            }; 
+            
+            // Enviamos cada cambio al servidor
+            for (const [key, val] of Object.entries(updates)) { 
+                await fetch('/api/leads/update', {
+                    method:'POST', 
+                    headers:{'Content-Type':'application/json'}, 
+                    body:JSON.stringify({id, field:key, value:val})
+                }); 
+            } 
+            
+            closeModal('modal-edit-lead'); 
+            loadLeads(); // Recarga la tabla para ver el cambio
         }
 
         async function uploadLogo() {
@@ -604,7 +652,7 @@
         async function runTest() { const m = document.getElementById('sand-in').value; if(!m) return; document.getElementById('sand-log').innerHTML += `> ${m}<br>`; document.getElementById('sand-in').value=''; const r = await fetch('/api/test-ai', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:m})}).then(x=>x.json()); document.getElementById('sand-log').innerHTML += `IA: ${r.response}<br>`; }
         async function uploadPhoto(input) { if(!input.files[0] || !selectedId) return; const fd = new FormData(); fd.append('file', input.files[0]); fd.append('phone', selectedId); await fetch('/api/contacts/upload-photo', {method:'POST', body:fd}); syncLoop(true); }
         async function deleteLead(id) { if(confirm("¿Borrar lead?")) { await fetch('/api/leads/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadLeads(); loadDash(); } }
-        async function saveLeadChanges() { const id = document.getElementById('edit-lead-id').value; const updates = { nombre: document.getElementById('edit-lead-name').value, ciudad: document.getElementById('edit-lead-city').value, interes: document.getElementById('edit-lead-interest').value, correo: document.getElementById('edit-lead-email').value }; for (const [key, val] of Object.entries(updates)) { await fetch('/api/leads/update', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, field:key, value:val})}); } closeModal('modal-edit-lead'); loadLeads(); }
+        
         function callUser() { if(selectedId) window.open(`tel:${selectedId}`); }
 
         window.onload = init;
