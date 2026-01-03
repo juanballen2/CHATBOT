@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICC | Business Suite v15.7 (Final)</title>
+    <title>ICC | Valentina Suite v16.0 (Producción)</title>
     <link rel="icon" href="https://github.com/juanballen2/CHATBOT/blob/main/images/favicon.jpg?raw=true">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -14,17 +14,16 @@
             --primary: #F97316;
             --primary-dark: #C2410C;
             --dark: #111827;
-            --dark-light: #1F2937;
             --bg: #F3F4F6;
             --surface: #FFFFFF;
             --border: #E5E7EB;
-            --bubble-in: #FFFFFF;
             --bubble-bot: #DCFCE7;
             --bubble-human: #E0F2FE;
         }
 
-        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; user-select: none; }
         body { margin: 0; font-family: 'Inter', sans-serif; background: var(--bg); color: #1F2937; height: 100vh; display: flex; overflow: hidden; }
+        input, textarea { user-select: text; }
 
         /* --- SIDEBAR --- */
         .sidebar { width: 70px; background: var(--dark); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 50; flex-shrink: 0; box-shadow: 4px 0 10px rgba(0,0,0,0.1); }
@@ -42,17 +41,17 @@
         .chat-layout { display: flex; height: 100%; width: 100%; }
         .chat-list-panel { width: 350px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; z-index: 2; }
         .cl-header { padding: 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; height: 60px; }
-        .search-row { padding: 10px; border-bottom: 1px solid var(--border); display: flex; gap: 5px; }
-        .search-input { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); }
+        .search-row { padding: 10px; border-bottom: 1px solid var(--border); display: flex; gap: 5px; background: #f9fafb; }
+        .search-input { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: white; font-size: 13px;}
         .cl-items { flex: 1; overflow-y: auto; }
         
         .chat-item { padding: 15px; display: flex; gap: 12px; cursor: pointer; border-bottom: 1px solid #f9f9f9; transition: 0.1s; position: relative; }
         .chat-item:hover { background: #F9FAFB; }
         .chat-item.active { background: #FFF7ED; border-right: 3px solid var(--primary); }
-        .avatar { width: 45px; height: 45px; border-radius: 50%; background: #E5E7EB; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background-size: cover; background-position: center; color: #666; font-size: 18px; }
+        .avatar { width: 45px; height: 45px; border-radius: 50%; background: #E5E7EB; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background-size: cover; background-position: center; color: #666; font-size: 18px; border: 1px solid #eee; }
         
-        /* Icono de Fijado en la lista */
         .pin-indicator { position: absolute; top: 10px; right: 10px; font-size: 10px; color: var(--primary); }
+        .archived-indicator { font-size: 10px; background: #999; color: white; padding: 2px 6px; border-radius: 4px; margin-left: 5px; }
 
         /* --- CHAT AREA --- */
         .chat-area { flex: 1; display: flex; flex-direction: column; background: #E5E5E5; position: relative; min-width: 0; z-index: 1; }
@@ -63,7 +62,7 @@
         .ca-header { height: 60px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 15px; z-index: 10; }
         .messages-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; z-index: 5; scroll-behavior: smooth; }
         
-        .bubble { max-width: 80%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.4; position: relative; box-shadow: 0 1px 1px rgba(0,0,0,0.1); word-wrap: break-word; }
+        .bubble { max-width: 80%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.4; position: relative; box-shadow: 0 1px 1px rgba(0,0,0,0.1); word-wrap: break-word; user-select: text; }
         .b-user { align-self: flex-start; background: white; border-top-left-radius: 0; }
         .b-bot { align-self: flex-end; background: #DCFCE7; border-top-right-radius: 0; }
         .b-manual { align-self: flex-end; background: #E0F2FE; border-top-right-radius: 0; }
@@ -82,7 +81,6 @@
         .profile-panel.open { width: 320px; }
         .pp-header { padding: 30px 20px; background: #F9FAFB; text-align: center; border-bottom: 1px solid var(--border); position: relative; }
         .pp-avatar-lg { width: 100px; height: 100px; background: #E5E7EB; border-radius: 50%; margin: 0 auto 10px; overflow: hidden; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 40px; color: #999; background-size: cover; background-position: center; border: 3px solid white; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        .pp-avatar-lg:hover:after { content:'Cambiar Foto'; position:absolute; bottom:0; left:0; width:100%; text-align:center; background:rgba(0,0,0,0.6); color:white; font-size:10px; padding:4px; }
         .pp-body { padding: 20px; flex: 1; overflow-y: auto; }
 
         /* --- UI HELPERS --- */
@@ -97,7 +95,17 @@
         td { padding: 12px; border-bottom: 1px solid #eee; }
         .tag-pill { font-size: 10px; padding: 3px 10px; border-radius: 12px; color: white; margin-left: 5px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
 
-        /* --- MODALES & POPUPS --- */
+        /* --- CONTEXT MENU (CLICK DERECHO) --- */
+        #context-menu {
+            display: none; position: absolute; z-index: 1000; background: white;
+            border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            width: 180px; overflow: hidden;
+        }
+        .cm-item { padding: 10px 15px; cursor: pointer; font-size: 13px; color: #333; display: flex; align-items: center; gap: 10px; }
+        .cm-item:hover { background: #f5f5f5; color: var(--primary); }
+        .cm-item.delete:hover { background: #fee2e2; color: red; }
+
+        /* --- MODALES --- */
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: none; align-items: center; justify-content: center; }
         .modal { background: white; width: 90%; max-width: 500px; border-radius: 12px; padding: 25px; box-shadow: 0 15px 40px rgba(0,0,0,0.2); }
         #quick-replies { position: absolute; bottom: 65px; left: 60px; width: 320px; background: white; border-radius: 8px; box-shadow: 0 5px 25px rgba(0,0,0,0.15); display: none; overflow: hidden; z-index: 100; border: 1px solid var(--border); }
@@ -116,7 +124,15 @@
         }
     </style>
 </head>
-<body>
+<body onclick="hideContextMenu()">
+
+    <div id="context-menu">
+        <div class="cm-item" onclick="cmAction('pin')"><i class="fas fa-thumbtack"></i> Fijar/Desfijar</div>
+        <div class="cm-item" onclick="cmAction('archive')"><i class="fas fa-archive"></i> Archivar/Desarchivar</div>
+        <div class="cm-item" onclick="cmAction('labels')"><i class="fas fa-tags"></i> Etiquetas</div>
+        <div style="height:1px; background:#eee; margin:2px 0;"></div>
+        <div class="cm-item delete" onclick="cmAction('delete')"><i class="fas fa-trash"></i> Eliminar</div>
+    </div>
 
     <div class="sidebar">
         <div class="logo-area" id="app-logo-sidebar" onclick="nav('config')" title="Configuración de Logo">
@@ -151,7 +167,13 @@
                 <div class="chat-list-panel">
                     <div class="cl-header">
                         <span style="font-weight:700;">Mensajería</span>
-                        <button class="btn" style="font-size:11px;" onclick="addContactPrompt()">+ Nuevo</button>
+                        <div style="display:flex; gap:5px;">
+                            <select id="view-selector" class="form-control" style="width:auto; padding:4px; font-size:11px; margin:0;" onchange="syncLoop(true)">
+                                <option value="active">Activos</option>
+                                <option value="archived">Archivados</option>
+                            </select>
+                            <button class="btn" style="font-size:11px; padding:4px 8px;" onclick="addContactPrompt()">+ Nuevo</button>
+                        </div>
                     </div>
                     <div class="search-row">
                         <input id="search" class="search-input" placeholder="Buscar cliente..." oninput="renderChatList()">
@@ -165,7 +187,7 @@
                     <div id="chat-placeholder" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:20; background:#F9FAFB;">
                         <i class="fas fa-comments" style="font-size:50px; color:#ddd; margin-bottom:20px;"></i>
                         <h3>Selecciona un chat</h3>
-                        <p>Haz clic en un contacto para ver el historial.</p>
+                        <p>Haz clic derecho para ver más opciones (Archivar, Fijar).</p>
                     </div>
 
                     <div id="chat-interface" style="display:none; flex-direction:column; height:100%; z-index:21;">
@@ -176,9 +198,8 @@
                                 <div><div id="active-name" style="font-weight:600;">Chat</div><div id="active-phone" style="font-size:11px; color:#666;">...</div></div>
                             </div>
                             <div style="display:flex; gap:5px;">
-                                <button class="btn-icon" onclick="togglePin()" title="Fijar"><i class="fas fa-thumbtack"></i></button>
-                                <button class="btn-icon" onclick="toggleArchive()" title="Archivar"><i class="fas fa-archive"></i></button>
-                                <button class="btn-icon" onclick="deleteCurrentChat()" style="color:red;" title="Eliminar"><i class="fas fa-trash"></i></button>
+                                <button class="btn-icon" onclick="cmAction('pin')" title="Fijar"><i class="fas fa-thumbtack"></i></button>
+                                <button class="btn-icon" onclick="cmAction('archive')" title="Archivar"><i class="fas fa-archive"></i></button>
                                 <div style="width:1px; background:#ddd; margin:0 5px;"></div>
                                 <button class="btn-icon" onclick="event.stopPropagation(); callUser()" title="Llamar"><i class="fas fa-phone"></i></button>
                                 <button class="btn" style="padding:5px 10px; font-size:11px;" onclick="event.stopPropagation(); openTagSelector()">+ Etiqueta</button>
@@ -217,7 +238,7 @@
         <div id="view-leads" class="view page-container">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <h1>Leads Generados</h1>
-                <button class="btn" onclick="downloadLeadsExcel()"><i class="fas fa-file-excel"></i> Exportar Excel</button>
+                <button class="btn" onclick="downloadLeadsExcel()"><i class="fas fa-file-excel"></i> Exportar Excel (Limpio)</button>
             </div>
             <div class="card" style="padding:0; overflow:hidden;">
                 <table><thead><tr><th>Fecha</th><th>Nombre</th><th>Ciudad</th><th>Interés</th><th>Etiqueta</th><th>Acción</th></tr></thead><tbody id="leads-body"></tbody></table>
@@ -250,7 +271,6 @@
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
                 <div class="card">
                     <h3>Identidad Visual</h3>
-                    <label>Logo de Empresa:</label>
                     <div style="display:flex; align-items:center; gap:15px; margin:10px 0;">
                         <div style="width:80px; height:80px; border:1px dashed #ccc; border-radius:10px; overflow:hidden; display:flex; align-items:center; justify-content:center;">
                             <img id="preview-logo" src="" style="width:100%; height:100%; object-fit:contain; display:none;">
@@ -281,7 +301,6 @@
                         <button class="btn" onclick="addShortcut()">+</button>
                     </div>
                     <div id="shortcuts-list" style="max-height:150px; overflow-y:auto;"></div>
-
                     <label style="margin-top:20px; display:block;">Reglas Técnicas:</label>
                     <div style="display:flex; gap:5px;"><input id="rule-input" class="form-control" style="margin:0;"><button class="btn" onclick="addRule()">+</button></div>
                     <div id="rules-list" style="margin-top:10px;"></div>
@@ -321,12 +340,13 @@
     <script>
         let chats=[], selectedId=null, globalTags=[], shortcuts=[], allLeads=[], allProducts=[];
         let mediaRecorder, audioChunks=[], isRecording=false;
+        let contextMenuChatId = null;
 
         // INICIALIZACIÓN
         async function init() {
             await loadGlobalData();
             nav('dashboard');
-            setInterval(syncLoop, 2000); 
+            setInterval(() => syncLoop(), 2000); 
             if(window.innerWidth <= 768) document.getElementById('btn-back').style.display='block';
         }
 
@@ -361,7 +381,9 @@
 
         async function syncLoop(force = false) {
             try {
-                const res = await fetch('/api/chats-full');
+                // Obtenemos la vista actual (Activos o Archivados)
+                const view = document.getElementById('view-selector').value;
+                const res = await fetch(`/api/chats-full?view=${view}`);
                 const data = await res.json();
                 
                 // Ordenar: Pinned > Fecha
@@ -373,8 +395,13 @@
                 }
                 if(selectedId) {
                     const current = chats.find(c => c.id === selectedId);
-                    if(current) renderBotStatus(current.botActive);
-                    // Endpoint RÁPIDO
+                    if(current) {
+                        renderBotStatus(current.botActive);
+                        // Aseguramos que la foto se actualice si cambió
+                        const bgUrl = current.photoUrl ? `url('${current.photoUrl}')` : '';
+                        document.getElementById('header-avatar').style.backgroundImage = bgUrl;
+                    }
+                    // Mensajes
                     const msgs = await fetch(`/api/chat-history/${selectedId}`).then(r=>r.json());
                     renderMsgs(msgs);
                 }
@@ -387,7 +414,6 @@
             const list = document.getElementById('chat-list-box');
             
             const filtered = chats.filter(c => {
-                if(c.archived) return false; // Ocultar archivados
                 const matchTxt = (c.name||c.id).toLowerCase().includes(q);
                 const matchTag = f ? (c.labels||[]).includes(f) : true;
                 return matchTxt && matchTag;
@@ -400,7 +426,7 @@
             document.getElementById('tag-filter').value = f;
 
             list.innerHTML = filtered.map(c => `
-                <div class="chat-item ${c.id===selectedId?'active':''}" onclick="selChat('${c.id}')">
+                <div class="chat-item ${c.id===selectedId?'active':''}" onclick="selChat('${c.id}')" oncontextmenu="showContextMenu(event, '${c.id}')">
                     <div class="avatar" style="${c.photoUrl?`background-image:url('${c.photoUrl}')`:''}">${!c.photoUrl?'<i class="fas fa-user"></i>':''}</div>
                     <div style="flex:1; overflow:hidden;">
                         <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
@@ -409,13 +435,14 @@
                         </div>
                         <div style="font-size:12px; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.lastMessage.text}</div>
                     </div>
-                    ${c.pinned ? '<i class="fas fa-thumbtack" style="color:var(--primary); font-size:12px;"></i>' : ''}
+                    ${c.pinned ? '<i class="fas fa-thumbtack pin-indicator"></i>' : ''}
                 </div>`).join('');
         }
 
         function selChat(id) {
             selectedId = id;
             const c = chats.find(x=>x.id===id);
+            if(!c) return;
             document.getElementById('chat-placeholder').style.display = 'none';
             document.getElementById('chat-interface').style.display = 'flex';
             document.getElementById('active-name').innerText = c.name;
@@ -435,10 +462,11 @@
 
         function renderMsgs(msgs) {
             const box = document.getElementById('msgs-box');
-            if(!msgs || msgs.length === 0) { box.innerHTML = '<div style="text-align:center; padding:30px;"><p style="color:#666;">Chat nuevo.</p><button class="btn" onclick="sendTemplate()">Enviar Plantilla</button></div>'; return; }
+            if(!msgs || msgs.length === 0) { box.innerHTML = '<div style="text-align:center; padding:30px;"><p style="color:#666;">Chat nuevo.</p></div>'; return; }
             const html = msgs.map(m => {
                 const cls = m.role==='bot'?'b-bot':(m.role==='manual'?'b-manual':'b-user');
                 let txt = m.text;
+                // Renderizado de media usando el proxy backend
                 if(txt.includes('[MEDIA:IMAGE:')) {
                     const id = txt.match(/IMAGE:(.*?)\]/)[1];
                     txt = `<img src="/api/media-proxy/${id}" style="max-width:250px; border-radius:10px; cursor:pointer;" onclick="window.open(this.src)">`;
@@ -447,7 +475,7 @@
                     txt = `<audio src="/api/media-proxy/${id}" controls style="width:250px;"></audio>`;
                 } else if(txt.includes('[MEDIA:DOC:')) {
                      const id = txt.match(/DOC:(.*?)\]/)[1];
-                     txt = `<div style="background:#eee; padding:10px; border-radius:5px;"><i class="fas fa-file"></i> Documento Adjunto</div>`;
+                     txt = `<div style="background:#eee; padding:10px; border-radius:5px;"><i class="fas fa-file"></i> Documento Adjunto (PDF)</div>`;
                 }
                 return `<div class="bubble ${cls}">${txt}</div>`;
             }).join('');
@@ -466,53 +494,58 @@
             syncLoop(true);
         }
 
-        // --- GESTIÓN DE CHATS (PIN, ARCHIVE, DELETE) ---
-        async function togglePin() {
-            const c = chats.find(x=>x.id===selectedId);
-            await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, action:'toggle_pin', value:!c.pinned})});
+        // --- GESTIÓN MENU CONTEXTUAL & ACCIONES ---
+        function showContextMenu(e, id) {
+            e.preventDefault();
+            contextMenuChatId = id;
+            const menu = document.getElementById('context-menu');
+            menu.style.display = 'block';
+            menu.style.left = e.pageX + 'px';
+            menu.style.top = e.pageY + 'px';
+        }
+        function hideContextMenu() { document.getElementById('context-menu').style.display = 'none'; }
+        
+        async function cmAction(action) {
+            const id = contextMenuChatId || selectedId; // Soporta click derecho o botones de header
+            if(!id) return;
+            const c = chats.find(x=>x.id===id);
+            
+            if(action === 'pin') {
+                await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'toggle_pin', value:!c.pinned})});
+            } else if(action === 'archive') {
+                 // Si está en 'archived' view y lo desarchivo, o viceversa, desaparecerá de la lista
+                await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'toggle_archive', value:!c.archived})});
+                if(selectedId === id) closeChat(); 
+            } else if(action === 'delete') {
+                if(confirm("⚠ ¿ELIMINAR DEFINITIVAMENTE?\nSe perderá todo el historial.")) {
+                    await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'delete'})});
+                    if(selectedId === id) closeChat();
+                }
+            } else if(action === 'labels') {
+                selectedId = id; openTagSelector();
+            }
             syncLoop(true);
         }
-        async function toggleArchive() {
-            const c = chats.find(x=>x.id===selectedId);
-            if(confirm("¿Archivar chat?")) {
-                await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, action:'toggle_archive', value:!c.archived})});
-                closeChat(); syncLoop(true);
-            }
-        }
-        async function deleteCurrentChat() {
-            if(!confirm("¿ELIMINAR CHAT?")) return;
-            await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, action:'delete'})});
-            closeChat(); syncLoop(true);
-        }
 
-        // --- EXCEL & LEADS ---
-        function downloadLeadsExcel() {
-            if(!allLeads.length) return alert("No hay leads");
-            const ws = XLSX.utils.json_to_sheet(allLeads);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Leads");
-            XLSX.writeFile(wb, "ICC_Leads.xlsx");
+        // --- EXCEL & LEADS (MEJORADO) ---
+        async function downloadLeadsExcel() {
+            try {
+                // Obtenemos los datos limpios directamente del backend v16
+                const leadsClean = await fetch('/api/data/leads').then(r=>r.json());
+                if(!leadsClean.length) return alert("No hay leads para exportar");
+                
+                const ws = XLSX.utils.json_to_sheet(leadsClean);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Leads_ICC");
+                XLSX.writeFile(wb, `ICC_Leads_${new Date().toISOString().slice(0,10)}.xlsx`);
+            } catch(e) { alert("Error al exportar"); }
         }
+        
         async function loadLeads() {
+            // Reutilizamos el endpoint para mostrar en tabla
             allLeads = await fetch('/api/data/leads').then(r=>r.json());
-            document.getElementById('leads-body').innerHTML = allLeads.map(l => `<tr><td>${l.fecha.split(',')[0]}</td><td><a href="#" style="color:var(--primary); font-weight:bold; text-decoration:none;" onclick="openEditLead(${l.id})">${l.nombre}</a></td><td>${l.ciudad}</td><td>${l.interes}</td><td><span class="tag-pill" style="background:#F97316">${l.etiqueta}</span></td><td><button class="btn" style="background:red; padding:4px 8px;" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button></td></tr>`).join('');
+            document.getElementById('leads-body').innerHTML = allLeads.map(l => `<tr><td>${l.Fecha.split(',')[0]}</td><td><a href="#" style="color:var(--primary); font-weight:bold; text-decoration:none;">${l.Nombre}</a></td><td>${l.Ciudad}</td><td>${l.Interes}</td><td><span class="tag-pill" style="background:#F97316">${l.Estado}</span></td><td><button class="btn" style="background:red; padding:4px 8px;" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button></td></tr>`).join('');
         }
-        function openEditLead(id) {
-            const l = allLeads.find(x=>x.id===id);
-            document.getElementById('edit-lead-id').value = id;
-            document.getElementById('edit-lead-name').value = l.nombre;
-            document.getElementById('edit-lead-city').value = l.ciudad;
-            document.getElementById('edit-lead-interest').value = l.interes;
-            document.getElementById('edit-lead-email').value = l.correo;
-            document.getElementById('modal-edit-lead').style.display = 'flex';
-        }
-        async function saveLeadChanges() {
-            const id = document.getElementById('edit-lead-id').value;
-            const updates = { nombre: document.getElementById('edit-lead-name').value, ciudad: document.getElementById('edit-lead-city').value, interes: document.getElementById('edit-lead-interest').value, correo: document.getElementById('edit-lead-email').value };
-            for (const [key, val] of Object.entries(updates)) { await fetch('/api/leads/update', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, field:key, value:val})}); }
-            closeModal('modal-edit-lead'); loadLeads();
-        }
-        async function deleteLead(id) { if(confirm("¿Borrar lead?")) { await fetch('/api/leads/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadLeads(); } }
 
         // --- OTROS ---
         async function uploadLogo() {
@@ -549,10 +582,11 @@
         async function loadInventory() { allProducts = await fetch('/api/data/knowledge').then(r=>r.json()); document.getElementById('inv-body').innerHTML = allProducts.map((p,i) => `<tr><td>${p.searchable}</td><td style="text-align:center;"><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="deleteProduct(${i})"></i></td></tr>`).join(''); }
         async function deleteProduct(i) { if(confirm("¿Borrar?")) { await fetch('/api/knowledge/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); } }
         async function uploadCSV() { const f = document.getElementById('csv-file').files[0]; if(!f) return; const fd = new FormData(); fd.append('file', f); await fetch('/api/knowledge/csv', {method:'POST', body:fd}); loadInventory(); alert("OK"); }
-        async function loadDash() { const [l,c,s] = await Promise.all([ fetch('/api/data/leads').then(r=>r.json()), fetch('/api/chats-full').then(r=>r.json()), fetch('/api/data/knowledge').then(r=>r.json()) ]); document.getElementById('kpi-leads').innerText = l.length; document.getElementById('kpi-chats').innerText = c.length; document.getElementById('kpi-stock').innerText = s.length; document.getElementById('dash-leads-body').innerHTML = (l||[]).slice(0,5).map(x => `<tr><td>${x.nombre}</td><td>${x.ciudad}</td><td>${x.interes}</td><td>${x.fecha.split(',')[0]}</td></tr>`).join(''); }
-        function addContactPrompt() { const p = prompt("Teléfono:"); if(p) fetch('/api/contacts/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:p,name:p})}).then(()=>syncLoop(true)); }
+        async function loadDash() { const [l,c,s] = await Promise.all([ fetch('/api/data/leads').then(r=>r.json()), fetch('/api/chats-full').then(r=>r.json()), fetch('/api/data/knowledge').then(r=>r.json()) ]); document.getElementById('kpi-leads').innerText = l.length; document.getElementById('kpi-chats').innerText = c.length; document.getElementById('kpi-stock').innerText = s.length; document.getElementById('dash-leads-body').innerHTML = (l||[]).slice(0,5).map(x => `<tr><td>${x.Nombre}</td><td>${x.Ciudad}</td><td>${x.Interes}</td><td>${x.Fecha.split(',')[0]}</td></tr>`).join(''); }
+        function addContactPrompt() { const p = prompt("Teléfono (con código país):"); if(p) fetch('/api/contacts/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:p,name:p})}).then(()=>syncLoop(true)); }
         async function runTest() { const m = document.getElementById('sand-in').value; if(!m) return; document.getElementById('sand-log').innerHTML += `> ${m}<br>`; document.getElementById('sand-in').value=''; const r = await fetch('/api/test-ai', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:m})}).then(x=>x.json()); document.getElementById('sand-log').innerHTML += `IA: ${r.response}<br>`; }
         async function uploadPhoto(input) { if(!input.files[0] || !selectedId) return; const fd = new FormData(); fd.append('file', input.files[0]); fd.append('phone', selectedId); await fetch('/api/contacts/upload-photo', {method:'POST', body:fd}); syncLoop(true); }
+        function callUser() { if(selectedId) window.open(`tel:${selectedId}`); }
 
         window.onload = init;
     </script>
