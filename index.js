@@ -1,8 +1,8 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v16.5 (NO QUOTES & FULL DATA)
+ * SERVER BACKEND - VALENTINA v16.6 (DYNAMIC PERSONALITY)
  * Cliente: Importadora Casa Colombia (ICC)
- * Estado: FIXED - Sin Comillas, Captura de Correo/Ciudad
+ * Estado: FIXED - Personalidad editable desde Frontend
  * ============================================================
  */
 
@@ -34,6 +34,29 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = "icc-valentina-secret-final-v16"; 
+
+// --- PROMPT POR DEFECTO (Se carga si no hay nada en BD) ---
+const DEFAULT_PROMPT_TEXT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.
+
+OBJETIVO:
+Recopilar 4 DATOS OBLIGATORIOS para pasar el lead a un humano.
+NO des precios ni inventario real hasta tener los 4 datos.
+
+DATOS REQUERIDOS (EL MURO AMABLE):
+1. Nombre
+2. Celular
+3. Correo Electrónico
+4. Ciudad
+
+INSTRUCCIONES DE COMPORTAMIENTO:
+1. **SIN COMILLAS:** Nunca encierres tu respuesta verbal entre comillas (" "). Escribe el texto limpio.
+2. **MEMORIA:** Si el cliente YA dijo qué repuesto quiere, NO preguntes "¿qué necesitas?". Di: "Entendido, para cotizar eso necesito...".
+3. **ESTRATEGIA:**
+   - Si dice "Hola": Saluda y pregunta interés.
+   - Si pide repuesto: Pide los datos faltantes de forma amable.
+
+EJEMPLO DE RESPUESTA IDEAL:
+Hola Juan 🌻. Para enviarte la cotización formal a tu zona, ¿me confirmas tu correo y ciudad?`;
 
 // --- MIDDLEWARES ---
 app.use(express.json({ limit: '100mb' }));
@@ -71,20 +94,21 @@ let db;
         CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
     `);
     
-    // 2. Migraciones (Silent)
+    // 2. Migraciones
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
     try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {}
     const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
     for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
 
-    // 3. Índices
-    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_history_phone ON history(phone)`); } catch(e){}
-    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_history_time ON history(time)`); } catch(e){}
-    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_metadata_archived ON metadata(archived)`); } catch(e){}
+    // 3. Inicializar Prompt si no existe
+    const currentPrompt = await getCfg('bot_prompt', null);
+    if (!currentPrompt) {
+        await setCfg('bot_prompt', DEFAULT_PROMPT_TEXT);
+    }
 
     await refreshKnowledge();
-    console.log("🚀 BACKEND v16.5 ONLINE (NO QUOTES MODE)");
+    console.log("🚀 BACKEND v16.6 ONLINE (DYNAMIC PROMPT ACTIVE)");
 })();
 
 // Caché de Conocimiento
@@ -165,7 +189,7 @@ app.get('/api/media-proxy/:id', async (req, res) => {
     } catch (e) { res.status(500).send("Error Media"); }
 });
 
-// --- CEREBRO IA (VALENTINA) ---
+// --- CEREBRO IA (VALENTINA DYNAMIC) ---
 function buscarEnCatalogo(query) {
     if (!query || typeof query !== 'string' || query.startsWith('[')) return [];
     const norm = (t) => t ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
@@ -177,7 +201,7 @@ function buscarEnCatalogo(query) {
     }).filter(i => i.score > 0).sort((a,b) => b.score - a.score).slice(0, 5);
 }
 
-// === [CORRECCIÓN v16.5: SIN COMILLAS + DATOS COMPLETOS] ===
+// === [PROCESAMIENTO CON PROMPT DINÁMICO] ===
 async function procesarConValentina(message, sessionId, mediaDesc = "", contactName = "Cliente") {
     // 1. Guardar mensaje del usuario
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
@@ -189,40 +213,28 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
     const bizProfile = await getCfg('biz_profile', {});
     const stock = buscarEnCatalogo(message); 
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
-
-    // === PROMPT CORREGIDO: SIN COMILLAS Y DATOS COMPLETOS ===
-    const prompt = `
-    ROL: Eres Valentina, asesora comercial de ${bizProfile.name || 'Importadora Casa Colombia'}.
     
-    OBJETIVO:
-    Recopilar 4 DATOS OBLIGATORIOS para pasar el lead a un humano.
-    NO des precios ni inventario real hasta tener los 4 datos.
-    
-    DATOS REQUERIDOS (EL MURO AMABLE):
-    1. Nombre
-    2. Celular
-    3. Correo Electrónico
-    4. Ciudad
+    // AQUI OBTENEMOS LA PERSONALIDAD DE LA BD
+    const userDefinedPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT_TEXT);
 
-    INSTRUCCIONES DE COMPORTAMIENTO:
-    1. **SIN COMILLAS:** Nunca encierres tu respuesta verbal entre comillas (" "). Escribe el texto limpio.
-    2. **MEMORIA:** Si el cliente YA dijo qué repuesto quiere (ej: "Shaman X3000"), NO preguntes "¿qué necesitas?". Di: "Entendido, para cotizar repuestos de Shaman X3000, necesito...".
-    3. **ESTRATEGIA:**
-       - Si dice "Hola": Saluda y pregunta interés.
-       - Si pide repuesto: Pide los datos faltantes. Ve pidiendo de a 1 o 2 datos para no agobiar.
+    // CONSTRUIMOS EL PROMPT FINAL (Usuario + Reglas Técnicas Obligatorias)
+    const finalPrompt = `
+    ${userDefinedPrompt}
 
-    EJEMPLO DE FORMATO CORRECTO (Respuesta + JSON):
-    Hola Juan 🌻. Para enviarte la cotización formal a tu zona, ¿me confirmas tu correo y ciudad?
-    \`\`\`json {"es_lead":false, "etiqueta":"Pendiente", "interes":"Shaman X3000"} \`\`\`
-
-    INVENTARIO (REFERENCIA): ${JSON.stringify(stock)}
+    // --- REGLAS DE SISTEMA (NO MODIFICABLES) ---
+    NOMBRE DEL CLIENTE ACTUAL: ${contactName}
+    INVENTARIO REAL: ${JSON.stringify(stock)}
     CHAT PREVIO: ${JSON.stringify(chatPrevio)}
-    USUARIO: ${message}
+    MENSAJE DEL USUARIO: ${message}
+
+    FORMATO DE SALIDA OBLIGATORIO (JSON):
+    Al final de tu respuesta verbal, incluye SIEMPRE este bloque JSON:
+    \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
     `;
 
     try {
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: prompt }] }] });
+            { contents: [{ parts: [{ text: finalPrompt }] }] });
         
         let txt = r.data.candidates[0].content.parts[0].text;
         
@@ -242,7 +254,7 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
             } catch(e) {}
         }
         
-        // FILTRO FINAL ANTI-COMILLAS (Regex para quitar " al inicio y final)
+        // FILTRO FINAL ANTI-COMILLAS
         visible = visible.replace(/^["']+|["']+$/g, '').trim();
 
         // SALVAVIDAS ANTI-SILENCIO
@@ -257,7 +269,6 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
 
 async function gestionarLead(phone, info, fallbackName) {
     let nombreFinal = (info.nombre && info.nombre !== "null") ? info.nombre : fallbackName;
-    // Solo insertamos si realmente hay un interés o datos nuevos para evitar spam de filas vacías
     if (info.interes || info.correo || info.ciudad) {
         await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
             [phone, nombreFinal, info.interes || "Consultando", info.etiqueta || "Pendiente", new Date().toLocaleString(), info.ciudad, info.correo]);
@@ -286,6 +297,17 @@ app.post('/auth', (req, res) => {
         req.session.isLogged = true;
         req.session.save(() => res.json({ success: true }));
     } else res.status(401).json({ success: false });
+});
+
+// NUEVOS ENDPOINTS PARA GESTIONAR EL PROMPT DESDE EL FRONT
+app.get('/api/config/prompt', proteger, async (req, res) => {
+    const prompt = await getCfg('bot_prompt', DEFAULT_PROMPT_TEXT);
+    res.json({ prompt });
+});
+
+app.post('/api/config/prompt', proteger, async (req, res) => {
+    await setCfg('bot_prompt', req.body.prompt);
+    res.json({ success: true });
 });
 
 app.get('/api/chats-full', proteger, async (req, res) => {
@@ -471,4 +493,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v16.5 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v16.6 READY"));
