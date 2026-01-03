@@ -1,594 +1,452 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICC | Valentina Suite v16.0 (Producción)</title>
-    <link rel="icon" href="https://github.com/juanballen2/CHATBOT/blob/main/images/favicon.jpg?raw=true">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+/*
+ * ============================================================
+ * SERVER BACKEND - VALENTINA v16.1 (FIXED & ROBUST)
+ * Cliente: Importadora Casa Colombia (ICC)
+ * Correcciones: JSON Keys estándar, Estabilidad de Datos
+ * ============================================================
+ */
+
+const express = require('express');
+const session = require('express-session');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
+const { parse } = require('csv-parse/sync');
+const axios = require('axios');
+const cors = require('cors');
+const FormData = require('form-data');
+const sqlite3 = require('sqlite3');
+const { open } = require('sqlite');
+
+// --- CONFIGURACIÓN DE CARGA ---
+const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 100 * 1024 * 1024 } // 100MB
+});
+
+const app = express();
+app.set('trust proxy', 1);
+
+// --- VARIABLES DE ENTORNO ---
+const API_KEY = process.env.GEMINI_API_KEY; 
+const META_TOKEN = process.env.META_TOKEN;
+const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
+const ADMIN_USER = process.env.ADMIN_USER || "admin";
+const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
+const SESSION_SECRET = "icc-valentina-secret-final-v16"; 
+
+// --- MIDDLEWARES ---
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
+app.use(cors());
+
+// Seguridad de Archivos
+app.use((req, res, next) => {
+    if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
+        return res.status(403).send('🚫 Acceso Prohibido');
+    }
+    next();
+});
+
+// --- BASE DE DATOS ---
+let db;
+(async () => {
+    const DATA_DIR = path.resolve(__dirname, 'data');
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+    db = await open({
+        filename: path.join(DATA_DIR, 'database.db'),
+        driver: sqlite3.Database
+    });
+
+    // 1. Tablas Base
+    await db.exec(`
+        CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
+        CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT); 
+        CREATE TABLE IF NOT EXISTS metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0, photoUrl TEXT, archived INTEGER DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS bot_status (phone TEXT PRIMARY KEY, active INTEGER DEFAULT 1);
+        CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, searchable TEXT UNIQUE, raw_data TEXT);
+        CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
+        CREATE TABLE IF NOT EXISTS shortcuts (id INTEGER PRIMARY KEY AUTOINCREMENT, keyword TEXT UNIQUE, text TEXT);
+        CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
+    `);
     
-    <style>
-        :root {
-            --primary: #F97316;
-            --primary-dark: #C2410C;
-            --dark: #111827;
-            --bg: #F3F4F6;
-            --surface: #FFFFFF;
-            --border: #E5E7EB;
-            --bubble-bot: #DCFCE7;
-            --bubble-human: #E0F2FE;
+    // 2. Migraciones
+    try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
+    try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
+    try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {}
+    const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
+    for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
+
+    // 3. Índices
+    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_history_phone ON history(phone)`); } catch(e){}
+    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_history_time ON history(time)`); } catch(e){}
+    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_metadata_archived ON metadata(archived)`); } catch(e){}
+
+    await refreshKnowledge();
+    console.log("🚀 BACKEND v16.1 ONLINE (FIXED)");
+})();
+
+// Caché de Conocimiento
+let globalKnowledge = [];
+async function refreshKnowledge() {
+    try {
+        const rows = await db.all("SELECT * FROM inventory");
+        globalKnowledge = rows.map(r => ({ searchable: r.searchable, data: JSON.parse(r.raw_data) }));
+    } catch(e) { globalKnowledge = []; }
+}
+
+async function getCfg(key, fallback) {
+    try {
+        const res = await db.get("SELECT value FROM config WHERE key = ?", [key]);
+        return res ? JSON.parse(res.value) : fallback;
+    } catch(e) { return fallback; }
+}
+async function setCfg(key, value) {
+    await db.run("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", [key, JSON.stringify(value)]);
+}
+
+app.use(session({
+    name: 'icc_session',
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } 
+}));
+
+// --- META API UTILS ---
+async function uploadToMeta(buffer, mimeType, filename) {
+    try {
+        const form = new FormData();
+        let finalMime = mimeType, finalName = filename, type = 'document';
+        if (mimeType.includes('audio') || mimeType.includes('webm') || mimeType.includes('ogg')) {
+            type = 'audio'; finalMime = 'audio/ogg'; finalName = 'audio.ogg'; 
+        } else if (mimeType.includes('image')) { type = 'image'; }
+        else if (mimeType.includes('video')) { type = 'video'; }
+
+        form.append('file', buffer, { filename: finalName, contentType: finalMime });
+        form.append('type', type);
+        form.append('messaging_product', 'whatsapp');
+        
+        const response = await axios.post(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/media`, form, {
+            headers: { 'Authorization': `Bearer ${META_TOKEN}`, ...form.getHeaders() }
+        });
+        return response.data.id;
+    } catch (error) { return null; }
+}
+
+async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
+    try {
+        let payload = { messaging_product: "whatsapp", to: destinatario, type: tipo };
+        if (tipo === "text") { payload.text = { body: contenido }; } 
+        else if (contenido.id) { 
+            if(tipo === 'image') payload.image = { id: contenido.id };
+            if(tipo === 'document') payload.document = { id: contenido.id, filename: "Archivo.pdf" };
+            if(tipo === 'audio') payload.audio = { id: contenido.id };
+            if(tipo === 'video') payload.video = { id: contenido.id }; 
+        } else {
+            if(tipo === 'image') payload.image = { link: contenido };
+            if(tipo === 'document') payload.document = { link: contenido };
         }
+        await axios.post(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`, payload, { 
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
+        });
+        return true;
+    } catch (e) { return false; }
+}
 
-        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; user-select: none; }
-        body { margin: 0; font-family: 'Inter', sans-serif; background: var(--bg); color: #1F2937; height: 100vh; display: flex; overflow: hidden; }
-        input, textarea { user-select: text; }
+app.get('/api/media-proxy/:id', async (req, res) => {
+    if (!req.session.isLogged) return res.status(401).send("No auth");
+    try {
+        const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
+        const media = await axios.get(urlRes.data.url, { headers: { 'Authorization': `Bearer ${META_TOKEN}` }, responseType: 'stream' });
+        if (urlRes.data.mime_type) res.setHeader('Content-Type', urlRes.data.mime_type);
+        media.data.pipe(res);
+    } catch (e) { res.status(500).send("Error Media"); }
+});
 
-        /* --- SIDEBAR --- */
-        .sidebar { width: 70px; background: var(--dark); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 50; flex-shrink: 0; box-shadow: 4px 0 10px rgba(0,0,0,0.1); }
-        .logo-area { width: 50px; height: 50px; background: white; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 30px; overflow: hidden; padding: 2px; cursor: pointer; }
-        .nav-item { width: 44px; height: 44px; border-radius: 10px; color: #9CA3AF; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; cursor: pointer; transition: 0.2s; }
-        .nav-item:hover, .nav-item.active { background: var(--primary); color: white; }
+// --- CEREBRO IA (VALENTINA) ---
+function buscarEnCatalogo(query) {
+    if (!query || typeof query !== 'string' || query.startsWith('[')) return [];
+    const norm = (t) => t ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
+    const q = norm(query).split(" ");
+    return globalKnowledge.map(item => {
+        let score = 0; const itemText = norm(item.searchable || ""); 
+        q.forEach(w => { if (itemText.includes(w)) score++; });
+        return { ...item, score };
+    }).filter(i => i.score > 0).sort((a,b) => b.score - a.score).slice(0, 5);
+}
+
+async function procesarConValentina(message, sessionId, mediaDesc = "", contactName = "Cliente") {
+    await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
+    await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 0) ON CONFLICT(phone) DO UPDATE SET archived=0", [sessionId]);
+
+    const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
+    if (status && status.active === 0) return null;
+
+    const websiteData = await getCfg('website_data', "");
+    const bizProfile = await getCfg('biz_profile', {});
+    const techRules = await getCfg('tech_rules', []);
+    const stock = buscarEnCatalogo(message);
+    const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
+
+    const prompt = `
+    ROL: Eres Valentina, asesora comercial experta de ${bizProfile.name || 'Importadora Casa Colombia (ICC)'}.
+    OBJETIVO: Vender maquinaria y repuestos. Ser cordial, usar emojis y perfilar al cliente.
+    CONTEXTO: ${websiteData}. Horario: ${bizProfile.hours}.
+    INVENTARIO: ${JSON.stringify(stock)}
+    
+    INSTRUCCIONES DE PERFILADO:
+    1. Si no hay nombre en chat, usa: ${contactName}.
+    2. CLASIFICA EL LEAD AL FINAL EN JSON:
+       - "Pendiente": Falta info.
+       - "Lead": Tenemos Nombre, Ciudad, Interés.
+       - "No Stock": Producto no disponible.
+       - "Equivocado": No es nuestro rubro.
+    
+    FORMATO JSON OBLIGATORIO AL FINAL:
+    \`\`\`json {"es_lead":true, "nombre":"...", "ciudad":"...", "interes":"...", "correo":"...", "etiqueta":"Lead|Pendiente|No Stock|Equivocado"} \`\`\`
+    
+    CHAT PREVIO: ${JSON.stringify(chatPrevio)}
+    USUARIO: ${message}
+    `;
+
+    try {
+        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+            { contents: [{ parts: [{ text: prompt }] }] });
         
-        /* --- MAIN LAYOUT --- */
-        .main-content { flex: 1; display: flex; position: relative; overflow: hidden; width: 100%; }
-        .view { display: none; width: 100%; height: 100%; flex-direction: column; animation: fadeIn 0.3s; }
-        .view.active { display: flex; }
-        @keyframes fadeIn { from{opacity:0;}to{opacity:1;} }
-
-        /* --- CHAT LIST --- */
-        .chat-layout { display: flex; height: 100%; width: 100%; }
-        .chat-list-panel { width: 350px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; z-index: 2; }
-        .cl-header { padding: 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; height: 60px; }
-        .search-row { padding: 10px; border-bottom: 1px solid var(--border); display: flex; gap: 5px; background: #f9fafb; }
-        .search-input { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: white; font-size: 13px;}
-        .cl-items { flex: 1; overflow-y: auto; }
+        let txt = r.data.candidates[0].content.parts[0].text;
+        const match = txt.match(/```json([\s\S]*?)```|{([\s\S]*?)}$/i);
+        let visible = txt;
         
-        .chat-item { padding: 15px; display: flex; gap: 12px; cursor: pointer; border-bottom: 1px solid #f9f9f9; transition: 0.1s; position: relative; }
-        .chat-item:hover { background: #F9FAFB; }
-        .chat-item.active { background: #FFF7ED; border-right: 3px solid var(--primary); }
-        .avatar { width: 45px; height: 45px; border-radius: 50%; background: #E5E7EB; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background-size: cover; background-position: center; color: #666; font-size: 18px; border: 1px solid #eee; }
-        
-        .pin-indicator { position: absolute; top: 10px; right: 10px; font-size: 10px; color: var(--primary); }
-        .archived-indicator { font-size: 10px; background: #999; color: white; padding: 2px 6px; border-radius: 4px; margin-left: 5px; }
-
-        /* --- CHAT AREA --- */
-        .chat-area { flex: 1; display: flex; flex-direction: column; background: #E5E5E5; position: relative; min-width: 0; z-index: 1; }
-        .chat-bg { position: absolute; inset: 0; opacity: 0.4; pointer-events: none; background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
-        #chat-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #F0F2F5; z-index: 20; color: #666; text-align: center; }
-        #chat-interface { display: none; flex-direction: column; height: 100%; width: 100%; z-index: 21; }
-        
-        .ca-header { height: 60px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 15px; z-index: 10; }
-        .messages-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; z-index: 5; scroll-behavior: smooth; }
-        
-        .bubble { max-width: 80%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.4; position: relative; box-shadow: 0 1px 1px rgba(0,0,0,0.1); word-wrap: break-word; user-select: text; }
-        .b-user { align-self: flex-start; background: white; border-top-left-radius: 0; }
-        .b-bot { align-self: flex-end; background: #DCFCE7; border-top-right-radius: 0; }
-        .b-manual { align-self: flex-end; background: #E0F2FE; border-top-right-radius: 0; }
-        
-        .input-area { background: var(--surface); padding: 10px; display: flex; gap: 10px; align-items: center; z-index: 10; border-top: 1px solid var(--border); }
-        .msg-field { flex: 1; padding: 10px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg); height: 40px; font-family: inherit; }
-        .btn-icon { width: 36px; height: 36px; border-radius: 6px; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #666; transition: 0.2s; }
-        .btn-icon:hover { background: #f0f0f0; color: var(--primary); }
-        .btn-send { background: var(--primary); color: white; border-radius: 50%; width: 40px; height: 40px; }
-        
-        .recording { animation: pulse 1s infinite; color: red; background: #fee2e2; }
-        @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(255,0,0,0.4);}70%{box-shadow:0 0 0 10px rgba(255,0,0,0);}100%{box-shadow:0 0 0 0 rgba(255,0,0,0);} }
-
-        /* --- PROFILE PANEL --- */
-        .profile-panel { width: 0; background: white; border-left: 1px solid var(--border); transition: 0.3s; overflow: hidden; display: flex; flex-direction: column; z-index: 30; }
-        .profile-panel.open { width: 320px; }
-        .pp-header { padding: 30px 20px; background: #F9FAFB; text-align: center; border-bottom: 1px solid var(--border); position: relative; }
-        .pp-avatar-lg { width: 100px; height: 100px; background: #E5E7EB; border-radius: 50%; margin: 0 auto 10px; overflow: hidden; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 40px; color: #999; background-size: cover; background-position: center; border: 3px solid white; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        .pp-body { padding: 20px; flex: 1; overflow-y: auto; }
-
-        /* --- UI HELPERS --- */
-        .page-container { padding: 30px; overflow-y: auto; flex: 1; max-width: 1400px; margin: 0 auto; width: 100%; }
-        .card { background: white; padding: 20px; border-radius: 12px; border: 1px solid #eee; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-        .btn { padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; border: none; cursor: pointer; color: white; background: var(--primary); transition: 0.2s; }
-        .btn:hover { opacity: 0.9; }
-        .btn-outline { background: white; border: 1px solid var(--border); color: #333; }
-        .form-control { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; font-family: inherit; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th { text-align: left; padding: 12px; background: #f9f9f9; border-bottom: 2px solid #eee; }
-        td { padding: 12px; border-bottom: 1px solid #eee; }
-        .tag-pill { font-size: 10px; padding: 3px 10px; border-radius: 12px; color: white; margin-left: 5px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
-
-        /* --- CONTEXT MENU (CLICK DERECHO) --- */
-        #context-menu {
-            display: none; position: absolute; z-index: 1000; background: white;
-            border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            width: 180px; overflow: hidden;
-        }
-        .cm-item { padding: 10px 15px; cursor: pointer; font-size: 13px; color: #333; display: flex; align-items: center; gap: 10px; }
-        .cm-item:hover { background: #f5f5f5; color: var(--primary); }
-        .cm-item.delete:hover { background: #fee2e2; color: red; }
-
-        /* --- MODALES --- */
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: none; align-items: center; justify-content: center; }
-        .modal { background: white; width: 90%; max-width: 500px; border-radius: 12px; padding: 25px; box-shadow: 0 15px 40px rgba(0,0,0,0.2); }
-        #quick-replies { position: absolute; bottom: 65px; left: 60px; width: 320px; background: white; border-radius: 8px; box-shadow: 0 5px 25px rgba(0,0,0,0.15); display: none; overflow: hidden; z-index: 100; border: 1px solid var(--border); }
-        .qr-item { padding: 12px 15px; border-bottom: 1px solid #f0f0f0; cursor: pointer; font-size: 13px; }
-        .qr-item:hover { background: #f9f9f9; color: var(--primary); }
-
-        @media (max-width: 768px) {
-            body { flex-direction: column; }
-            .sidebar { width: 100%; height: 60px; flex-direction: row; padding: 0; justify-content: space-around; order: 2; }
-            .logo-area { display: none; }
-            .main-content { height: calc(100vh - 60px); order: 1; }
-            .chat-list-panel { width: 100%; }
-            .chat-area { position: fixed; top: 0; left: 0; width: 100%; height: 100%; transform: translateX(100%); z-index: 100; transition: transform 0.3s; }
-            .chat-area.show { transform: translateX(0); }
-            .profile-panel.open { position: fixed; right:0; top:0; width: 90%; height: 100%; z-index: 110; box-shadow: -5px 0 20px rgba(0,0,0,0.2); }
-        }
-    </style>
-</head>
-<body onclick="hideContextMenu()">
-
-    <div id="context-menu">
-        <div class="cm-item" onclick="cmAction('pin')"><i class="fas fa-thumbtack"></i> Fijar/Desfijar</div>
-        <div class="cm-item" onclick="cmAction('archive')"><i class="fas fa-archive"></i> Archivar/Desarchivar</div>
-        <div class="cm-item" onclick="cmAction('labels')"><i class="fas fa-tags"></i> Etiquetas</div>
-        <div style="height:1px; background:#eee; margin:2px 0;"></div>
-        <div class="cm-item delete" onclick="cmAction('delete')"><i class="fas fa-trash"></i> Eliminar</div>
-    </div>
-
-    <div class="sidebar">
-        <div class="logo-area" id="app-logo-sidebar" onclick="nav('config')" title="Configuración de Logo">
-            <img id="sidebar-logo-img" src="https://github.com/juanballen2/CHATBOT/blob/main/images/ICC.png?raw=true" style="width:100%; height:100%; object-fit:contain;">
-        </div>
-        <div class="nav-item active" onclick="nav('dashboard')" id="nav-dashboard"><i class="fas fa-chart-pie"></i></div>
-        <div class="nav-item" onclick="nav('chat')" id="nav-chat"><i class="fas fa-comment-dots"></i></div>
-        <div class="nav-item" onclick="nav('leads')" id="nav-leads"><i class="fas fa-users"></i></div>
-        <div class="nav-item" onclick="nav('inventory')" id="nav-inventory"><i class="fas fa-box-open"></i></div>
-        <div class="nav-item" onclick="nav('config')" id="nav-config"><i class="fas fa-building"></i></div>
-        <div class="nav-item" onclick="nav('sandbox')" id="nav-sandbox"><i class="fas fa-code"></i></div>
-        <div style="flex:1"></div>
-        <div class="nav-item" onclick="location.href='/logout'" style="color:red;"><i class="fas fa-power-off"></i></div>
-    </div>
-
-    <div class="main-content">
-        <div id="view-dashboard" class="view active page-container">
-            <h1>Panel de Control</h1>
-            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:20px; margin-bottom:25px;">
-                <div class="card"><h3>Total Leads</h3><h1 id="kpi-leads">0</h1></div>
-                <div class="card"><h3>Chats Activos</h3><h1 id="kpi-chats">0</h1></div>
-                <div class="card"><h3>Catálogo Stock</h3><h1 id="kpi-stock">0</h1></div>
-            </div>
-            <div class="card">
-                <h3>Leads Recientes</h3>
-                <table id="dash-leads-table"><thead><tr><th>Nombre</th><th>Ciudad</th><th>Interés</th><th>Fecha</th></tr></thead><tbody id="dash-leads-body"></tbody></table>
-            </div>
-        </div>
-
-        <div id="view-chat" class="view">
-            <div class="chat-layout">
-                <div class="chat-list-panel">
-                    <div class="cl-header">
-                        <span style="font-weight:700;">Mensajería</span>
-                        <div style="display:flex; gap:5px;">
-                            <select id="view-selector" class="form-control" style="width:auto; padding:4px; font-size:11px; margin:0;" onchange="syncLoop(true)">
-                                <option value="active">Activos</option>
-                                <option value="archived">Archivados</option>
-                            </select>
-                            <button class="btn" style="font-size:11px; padding:4px 8px;" onclick="addContactPrompt()">+ Nuevo</button>
-                        </div>
-                    </div>
-                    <div class="search-row">
-                        <input id="search" class="search-input" placeholder="Buscar cliente..." oninput="renderChatList()">
-                        <select id="tag-filter" class="form-control" style="width:auto; margin:0; padding:4px;" onchange="renderChatList()"><option value="">Todos</option></select>
-                    </div>
-                    <div class="cl-items" id="chat-list-box"><div style="padding:20px; text-align:center; color:#999;">Cargando...</div></div>
-                </div>
-                
-                <div class="chat-area">
-                    <div class="chat-bg"></div>
-                    <div id="chat-placeholder" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:20; background:#F9FAFB;">
-                        <i class="fas fa-comments" style="font-size:50px; color:#ddd; margin-bottom:20px;"></i>
-                        <h3>Selecciona un chat</h3>
-                        <p>Haz clic derecho para ver más opciones (Archivar, Fijar).</p>
-                    </div>
-
-                    <div id="chat-interface" style="display:none; flex-direction:column; height:100%; z-index:21;">
-                        <div class="ca-header">
-                            <div style="display:flex; align-items:center; gap:12px; cursor:pointer;" onclick="toggleProfile()">
-                                <div id="btn-back" style="display:none;" onclick="event.stopPropagation(); closeChat()"><i class="fas fa-arrow-left"></i></div>
-                                <div class="avatar" id="header-avatar"></div>
-                                <div><div id="active-name" style="font-weight:600;">Chat</div><div id="active-phone" style="font-size:11px; color:#666;">...</div></div>
-                            </div>
-                            <div style="display:flex; gap:5px;">
-                                <button class="btn-icon" onclick="cmAction('pin')" title="Fijar"><i class="fas fa-thumbtack"></i></button>
-                                <button class="btn-icon" onclick="cmAction('archive')" title="Archivar"><i class="fas fa-archive"></i></button>
-                                <div style="width:1px; background:#ddd; margin:0 5px;"></div>
-                                <button class="btn-icon" onclick="event.stopPropagation(); callUser()" title="Llamar"><i class="fas fa-phone"></i></button>
-                                <button class="btn" style="padding:5px 10px; font-size:11px;" onclick="event.stopPropagation(); openTagSelector()">+ Etiqueta</button>
-                            </div>
-                        </div>
-                        <div class="messages-box" id="msgs-box"></div>
-                        <div id="quick-replies"></div>
-                        <div class="input-area">
-                            <button class="btn-icon" onclick="document.getElementById('file-input').click()"><i class="fas fa-paperclip"></i></button>
-                            <input type="file" id="file-input" hidden onchange="handleFileUpload(this)">
-                            <input id="msg-input" class="msg-field" placeholder="Escribe..." onkeyup="checkQuickReply(this)" onkeypress="if(event.key==='Enter') sendMsg()">
-                            <button class="btn-icon" id="btn-mic" onclick="toggleRecord()"><i class="fas fa-microphone"></i></button>
-                            <button class="btn-icon btn-send" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="profile-panel" id="profile-panel">
-                    <div class="pp-header">
-                        <div style="position:absolute; left:20px; top:20px; cursor:pointer;" onclick="toggleProfile()"><i class="fas fa-times"></i></div>
-                        <div class="pp-avatar-lg" id="prof-avatar" onclick="document.getElementById('photo-input').click()"></div>
-                        <input type="file" id="photo-input" hidden accept="image/*" onchange="uploadPhoto(this)">
-                        <h3 id="prof-name">...</h3>
-                        <div id="prof-phone">...</div>
-                        <div style="margin-top:15px;"><button id="prof-bot-btn" class="btn" style="width:100%;" onclick="toggleBot()">BOT STATUS</button></div>
-                    </div>
-                    <div class="pp-body">
-                        <h4>Etiquetas</h4><div id="prof-tags"></div>
-                        <h4 style="margin-top:20px;">Datos CRM</h4>
-                        <div style="font-size:13px;"><p><b>Ciudad:</b> <span id="prof-city">-</span></p><p><b>Interés:</b> <span id="prof-interest">-</span></p></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="view-leads" class="view page-container">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h1>Leads Generados</h1>
-                <button class="btn" onclick="downloadLeadsExcel()"><i class="fas fa-file-excel"></i> Exportar Excel (Limpio)</button>
-            </div>
-            <div class="card" style="padding:0; overflow:hidden;">
-                <table><thead><tr><th>Fecha</th><th>Nombre</th><th>Ciudad</th><th>Interés</th><th>Etiqueta</th><th>Acción</th></tr></thead><tbody id="leads-body"></tbody></table>
-            </div>
-        </div>
-
-        <div id="view-inventory" class="view page-container">
-            <h1>Base de Conocimiento IA</h1>
-            <div style="display:grid; grid-template-columns: 1.2fr 0.8fr; gap:20px;">
-                <div class="card">
-                    <h3>Catálogo de Repuestos (CSV)</h3>
-                    <input type="file" id="csv-file" style="margin-bottom:10px; width:100%;">
-                    <button class="btn" onclick="uploadCSV()">Actualizar Inventario</button>
-                    <hr style="margin:20px 0;">
-                    <div style="max-height:400px; overflow-y:auto;">
-                        <table><thead><tr><th>Descripción</th><th>Acción</th></tr></thead><tbody id="inv-body"></tbody></table>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3>Contexto de Negocio</h3>
-                    <p style="font-size:12px; color:#666;">Políticas, envíos y preguntas frecuentes.</p>
-                    <textarea id="biz-web" class="form-control" style="height:350px; font-size:13px;"></textarea>
-                    <button class="btn" onclick="saveBizConfig()">Guardar Contexto</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="view-config" class="view page-container">
-            <h1>Configuración Corporativa</h1>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
-                <div class="card">
-                    <h3>Identidad Visual</h3>
-                    <div style="display:flex; align-items:center; gap:15px; margin:10px 0;">
-                        <div style="width:80px; height:80px; border:1px dashed #ccc; border-radius:10px; overflow:hidden; display:flex; align-items:center; justify-content:center;">
-                            <img id="preview-logo" src="" style="width:100%; height:100%; object-fit:contain; display:none;">
-                            <span id="preview-text" style="font-size:10px; color:#999;">Sin Logo</span>
-                        </div>
-                        <button class="btn" style="background:#666;" onclick="document.getElementById('logo-upload').click()">Subir Logo</button>
-                        <input type="file" id="logo-upload" hidden accept="image/*" onchange="uploadLogo()">
-                    </div>
-                    <label>Nombre Comercial:</label><input id="biz-name" class="form-control">
-                    <label>Horario:</label><input id="biz-hours" class="form-control">
-                    <button class="btn" onclick="saveBizConfig()">Guardar Identidad</button>
-                </div>
-
-                <div class="card">
-                    <h3>Etiquetas y Automatización</h3>
-                    <label>Etiqueta Global:</label>
-                    <div style="display:flex; gap:5px; margin-bottom:15px;">
-                        <input id="new-tag-name" class="form-control" placeholder="Nombre" style="margin:0;">
-                        <input type="color" id="new-tag-color" style="height:40px; border:none; width:50px;">
-                        <button class="btn" onclick="addGlobalTag()">+</button>
-                    </div>
-                    <div id="global-tags-list" style="margin-bottom:20px; display:flex; flex-wrap:wrap; gap:5px;"></div>
-                    
-                    <label>Respuestas Rápidas (Shortcuts):</label>
-                    <div style="display:flex; gap:5px; margin-bottom:10px;">
-                        <input id="new-sc-key" class="form-control" placeholder="Clave" style="width:80px; margin:0;">
-                        <input id="new-sc-text" class="form-control" placeholder="Texto..." style="margin:0;">
-                        <button class="btn" onclick="addShortcut()">+</button>
-                    </div>
-                    <div id="shortcuts-list" style="max-height:150px; overflow-y:auto;"></div>
-                    <label style="margin-top:20px; display:block;">Reglas Técnicas:</label>
-                    <div style="display:flex; gap:5px;"><input id="rule-input" class="form-control" style="margin:0;"><button class="btn" onclick="addRule()">+</button></div>
-                    <div id="rules-list" style="margin-top:10px;"></div>
-                </div>
-            </div>
-        </div>
-        
-        <div id="view-sandbox" class="view page-container">
-            <h1>Laboratorio IA</h1>
-            <div style="background:#1E1E1E; color:#0f0; padding:20px; border-radius:10px; height:400px; overflow-y:auto; font-family:monospace;" id="sand-log">System Ready...<br></div>
-            <input id="sand-in" class="form-control" style="margin-top:10px; background:#000; color:#0f0; border:1px solid #333;" onkeypress="if(event.key==='Enter') runTest()" placeholder="Prueba un mensaje aquí...">
-        </div>
-    </div>
-
-    <div id="modal-edit-lead" class="modal-overlay">
-        <div class="modal">
-            <h3>Editar Lead</h3>
-            <input id="edit-lead-id" type="hidden">
-            <label>Nombre:</label><input id="edit-lead-name" class="form-control">
-            <label>Ciudad:</label><input id="edit-lead-city" class="form-control">
-            <label>Interés:</label><input id="edit-lead-interest" class="form-control">
-            <label>Correo:</label><input id="edit-lead-email" class="form-control">
-            <div style="text-align:right; margin-top:10px;">
-                <button class="btn-outline" style="padding:8px;" onclick="closeModal('modal-edit-lead')">Cancelar</button>
-                <button class="btn" onclick="saveLeadChanges()">Guardar</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="modal-tag-selector" class="modal-overlay" onclick="closeModal('modal-tag-selector')">
-        <div class="modal" onclick="event.stopPropagation()">
-            <h3>Asignar Etiquetas</h3>
-            <div id="tag-selector-list" style="display:flex; flex-direction:column; gap:10px;"></div>
-        </div>
-    </div>
-
-    <script>
-        let chats=[], selectedId=null, globalTags=[], shortcuts=[], allLeads=[], allProducts=[];
-        let mediaRecorder, audioChunks=[], isRecording=false;
-        let contextMenuChatId = null;
-
-        // INICIALIZACIÓN
-        async function init() {
-            await loadGlobalData();
-            nav('dashboard');
-            setInterval(() => syncLoop(), 2000); 
-            if(window.innerWidth <= 768) document.getElementById('btn-back').style.display='block';
-        }
-
-        async function loadGlobalData() {
-            const data = await fetch('/api/data/config').then(r=>r.json());
-            document.getElementById('biz-name').value = data.biz_profile?.name||'';
-            document.getElementById('biz-hours').value = data.biz_profile?.hours||'';
-            document.getElementById('biz-web').value = data.website_data||'';
-            if(data.logo_url) {
-                document.getElementById('preview-logo').src = data.logo_url;
-                document.getElementById('preview-logo').style.display = 'block';
-                document.getElementById('sidebar-logo-img').src = data.logo_url;
-            }
-            renderRules(data.tech_rules||[]);
-            globalTags = await fetch('/api/data/tags').then(r=>r.json());
-            renderGlobalTags();
-            shortcuts = await fetch('/api/data/shortcuts').then(r=>r.json());
-            renderShortcuts();
-        }
-
-        function nav(v) {
-            document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
-            document.getElementById('view-'+v).classList.add('active');
-            document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
-            document.getElementById('nav-'+v).classList.add('active');
-            
-            if(v==='chat') syncLoop(true); 
-            if(v==='leads') loadLeads();
-            if(v==='inventory') loadInventory();
-            if(v==='dashboard') loadDash();
-        }
-
-        async function syncLoop(force = false) {
+        if (match) {
+            visible = txt.replace(match[0], "").trim();
             try {
-                // Obtenemos la vista actual (Activos o Archivados)
-                const view = document.getElementById('view-selector').value;
-                const res = await fetch(`/api/chats-full?view=${view}`);
-                const data = await res.json();
-                
-                // Ordenar: Pinned > Fecha
-                data.sort((a,b) => (b.pinned - a.pinned) || (new Date(b.timestamp) - new Date(a.timestamp)));
-
-                if(force || JSON.stringify(data) !== JSON.stringify(chats)) {
-                    chats = data;
-                    renderChatList();
+                const jsonStr = (match[1]||match[2]||match[0]).replace(/```json/g,"").replace(/```/g,"").trim();
+                const info = JSON.parse(jsonStr);
+                if(info.es_lead || info.etiqueta === "No Stock" || info.etiqueta === "Equivocado") {
+                    await gestionarLead(sessionId, info, contactName);
                 }
-                if(selectedId) {
-                    const current = chats.find(c => c.id === selectedId);
-                    if(current) {
-                        renderBotStatus(current.botActive);
-                        // Aseguramos que la foto se actualice si cambió
-                        const bgUrl = current.photoUrl ? `url('${current.photoUrl}')` : '';
-                        document.getElementById('header-avatar').style.backgroundImage = bgUrl;
-                    }
-                    // Mensajes
-                    const msgs = await fetch(`/api/chat-history/${selectedId}`).then(r=>r.json());
-                    renderMsgs(msgs);
-                }
-            } catch(e){}
-        }
-
-        function renderChatList() {
-            const q = document.getElementById('search').value.toLowerCase();
-            const f = document.getElementById('tag-filter').value;
-            const list = document.getElementById('chat-list-box');
-            
-            const filtered = chats.filter(c => {
-                const matchTxt = (c.name||c.id).toLowerCase().includes(q);
-                const matchTag = f ? (c.labels||[]).includes(f) : true;
-                return matchTxt && matchTag;
-            });
-
-            // Update filters
-            const tagSet = new Set(); chats.forEach(c=>(c.labels||[]).forEach(l=>tagSet.add(l)));
-            let opts = '<option value="">Todos</option>'; tagSet.forEach(t=>opts+=`<option value="${t}">${t}</option>`);
-            if(document.getElementById('tag-filter').innerHTML !== opts) document.getElementById('tag-filter').innerHTML = opts;
-            document.getElementById('tag-filter').value = f;
-
-            list.innerHTML = filtered.map(c => `
-                <div class="chat-item ${c.id===selectedId?'active':''}" onclick="selChat('${c.id}')" oncontextmenu="showContextMenu(event, '${c.id}')">
-                    <div class="avatar" style="${c.photoUrl?`background-image:url('${c.photoUrl}')`:''}">${!c.photoUrl?'<i class="fas fa-user"></i>':''}</div>
-                    <div style="flex:1; overflow:hidden;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                            <span style="font-weight:600; font-size:14px;">${c.name}</span>
-                            <span style="font-size:11px; color:#999;">${new Date(c.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
-                        </div>
-                        <div style="font-size:12px; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.lastMessage.text}</div>
-                    </div>
-                    ${c.pinned ? '<i class="fas fa-thumbtack pin-indicator"></i>' : ''}
-                </div>`).join('');
-        }
-
-        function selChat(id) {
-            selectedId = id;
-            const c = chats.find(x=>x.id===id);
-            if(!c) return;
-            document.getElementById('chat-placeholder').style.display = 'none';
-            document.getElementById('chat-interface').style.display = 'flex';
-            document.getElementById('active-name').innerText = c.name;
-            document.getElementById('active-phone').innerText = id;
-            document.getElementById('header-avatar').style.backgroundImage = c.photoUrl ? `url('${c.photoUrl}')` : '';
-            document.getElementById('prof-avatar').style.backgroundImage = c.photoUrl ? `url('${c.photoUrl}')` : '';
-            document.getElementById('prof-name').innerText = c.name;
-            document.getElementById('prof-phone').innerText = id;
-            renderBotStatus(c.botActive);
-            renderChatTags(c.labels||[]);
-            document.getElementById('msgs-box').innerHTML = '<div style="text-align:center; padding:20px; color:#999;">Cargando...</div>';
-            syncLoop(true);
-            if(window.innerWidth <= 768) document.querySelector('.chat-area').classList.add('show');
-        }
-
-        function closeChat() { document.querySelector('.chat-area').classList.remove('show'); selectedId=null; setTimeout(()=>{ document.getElementById('chat-placeholder').style.display='flex'; document.getElementById('chat-interface').style.display='none'; },300); }
-
-        function renderMsgs(msgs) {
-            const box = document.getElementById('msgs-box');
-            if(!msgs || msgs.length === 0) { box.innerHTML = '<div style="text-align:center; padding:30px;"><p style="color:#666;">Chat nuevo.</p></div>'; return; }
-            const html = msgs.map(m => {
-                const cls = m.role==='bot'?'b-bot':(m.role==='manual'?'b-manual':'b-user');
-                let txt = m.text;
-                // Renderizado de media usando el proxy backend
-                if(txt.includes('[MEDIA:IMAGE:')) {
-                    const id = txt.match(/IMAGE:(.*?)\]/)[1];
-                    txt = `<img src="/api/media-proxy/${id}" style="max-width:250px; border-radius:10px; cursor:pointer;" onclick="window.open(this.src)">`;
-                } else if(txt.includes('[MEDIA:AUDIO:')) {
-                    const id = txt.match(/AUDIO:(.*?)\]/)[1];
-                    txt = `<audio src="/api/media-proxy/${id}" controls style="width:250px;"></audio>`;
-                } else if(txt.includes('[MEDIA:DOC:')) {
-                     const id = txt.match(/DOC:(.*?)\]/)[1];
-                     txt = `<div style="background:#eee; padding:10px; border-radius:5px;"><i class="fas fa-file"></i> Documento Adjunto (PDF)</div>`;
-                }
-                return `<div class="bubble ${cls}">${txt}</div>`;
-            }).join('');
-            if(box.innerHTML !== html) { box.innerHTML = html; box.scrollTop = box.scrollHeight; }
-        }
-
-        async function sendMsg() {
-            const m = document.getElementById('msg-input').value; if(!m || !selectedId) return;
-            document.getElementById('msg-input').value = '';
-            document.getElementById('quick-replies').style.display = 'none';
-            // Optimista
-            const box = document.getElementById('msgs-box');
-            box.innerHTML += `<div class="bubble b-manual">${m}</div>`;
-            box.scrollTop = box.scrollHeight;
-            await fetch('/api/chat/send', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, message:m})});
-            syncLoop(true);
-        }
-
-        // --- GESTIÓN MENU CONTEXTUAL & ACCIONES ---
-        function showContextMenu(e, id) {
-            e.preventDefault();
-            contextMenuChatId = id;
-            const menu = document.getElementById('context-menu');
-            menu.style.display = 'block';
-            menu.style.left = e.pageX + 'px';
-            menu.style.top = e.pageY + 'px';
-        }
-        function hideContextMenu() { document.getElementById('context-menu').style.display = 'none'; }
-        
-        async function cmAction(action) {
-            const id = contextMenuChatId || selectedId; // Soporta click derecho o botones de header
-            if(!id) return;
-            const c = chats.find(x=>x.id===id);
-            
-            if(action === 'pin') {
-                await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'toggle_pin', value:!c.pinned})});
-            } else if(action === 'archive') {
-                 // Si está en 'archived' view y lo desarchivo, o viceversa, desaparecerá de la lista
-                await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'toggle_archive', value:!c.archived})});
-                if(selectedId === id) closeChat(); 
-            } else if(action === 'delete') {
-                if(confirm("⚠ ¿ELIMINAR DEFINITIVAMENTE?\nSe perderá todo el historial.")) {
-                    await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'delete'})});
-                    if(selectedId === id) closeChat();
-                }
-            } else if(action === 'labels') {
-                selectedId = id; openTagSelector();
-            }
-            syncLoop(true);
-        }
-
-        // --- EXCEL & LEADS (MEJORADO) ---
-        async function downloadLeadsExcel() {
-            try {
-                // Obtenemos los datos limpios directamente del backend v16
-                const leadsClean = await fetch('/api/data/leads').then(r=>r.json());
-                if(!leadsClean.length) return alert("No hay leads para exportar");
-                
-                const ws = XLSX.utils.json_to_sheet(leadsClean);
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Leads_ICC");
-                XLSX.writeFile(wb, `ICC_Leads_${new Date().toISOString().slice(0,10)}.xlsx`);
-            } catch(e) { alert("Error al exportar"); }
+            } catch(e) {}
         }
         
-        async function loadLeads() {
-            // Reutilizamos el endpoint para mostrar en tabla
-            allLeads = await fetch('/api/data/leads').then(r=>r.json());
-            document.getElementById('leads-body').innerHTML = allLeads.map(l => `<tr><td>${l.Fecha.split(',')[0]}</td><td><a href="#" style="color:var(--primary); font-weight:bold; text-decoration:none;">${l.Nombre}</a></td><td>${l.Ciudad}</td><td>${l.Interes}</td><td><span class="tag-pill" style="background:#F97316">${l.Estado}</span></td><td><button class="btn" style="background:red; padding:4px 8px;" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button></td></tr>`).join('');
-        }
+        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', visible, new Date().toISOString()]);
+        return visible;
+    } catch (e) { return "Disculpa, estoy consultando el sistema."; }
+}
 
-        // --- OTROS ---
-        async function uploadLogo() {
-            const f = document.getElementById('logo-upload').files[0]; if(!f) return;
-            const fd = new FormData(); fd.append('file', f);
-            const res = await fetch('/api/config/logo', {method:'POST', body:fd}).then(r=>r.json());
-            if(res.success) loadGlobalData();
+async function gestionarLead(phone, info, fallbackName) {
+    let nombreFinal = (info.nombre && info.nombre !== "null") ? info.nombre : fallbackName;
+    await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
+        [phone, nombreFinal, info.interes, info.etiqueta, new Date().toLocaleString(), info.ciudad, info.correo]);
+    
+    if(info.etiqueta) {
+        let currentLabels = [];
+        try {
+            const row = await db.get("SELECT labels FROM metadata WHERE phone = ?", [phone]);
+            if(row) currentLabels = JSON.parse(row.labels || "[]");
+        } catch(e){}
+        if(!currentLabels.includes(info.etiqueta)) {
+            currentLabels.push(info.etiqueta);
+            await db.run("UPDATE metadata SET labels = ? WHERE phone = ?", [JSON.stringify(currentLabels), phone]);
         }
-        async function saveBizConfig() {
-            const data = { name: document.getElementById('biz-name').value, hours: document.getElementById('biz-hours').value, website_data: document.getElementById('biz-web').value };
-            await fetch('/api/config/biz/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
-            alert("Guardado");
-        }
-        async function handleFileUpload(inp) { if(!inp.files[0]) return; const f=inp.files[0]; const type=f.type.includes('image')?'image':(f.type.includes('audio')?'audio':(f.type.includes('video')?'video':'document')); const fd=new FormData(); fd.append('file',f); fd.append('phone',selectedId); fd.append('type',type); await fetch('/api/chat/upload-send', {method:'POST', body:fd}); inp.value=''; syncLoop(true); }
-        async function toggleRecord() { if (!isRecording) { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); mediaRecorder = new MediaRecorder(s); audioChunks = []; mediaRecorder.ondataavailable = e => audioChunks.push(e.data); mediaRecorder.onstop = async () => { const blob = new Blob(audioChunks, { type: 'audio/webm' }); const fd = new FormData(); fd.append('file', blob, 'audio.ogg'); fd.append('phone', selectedId); fd.append('type', 'audio'); await fetch('/api/chat/upload-send', { method: 'POST', body: fd }); document.getElementById('btn-mic').classList.remove('recording'); syncLoop(true); }; mediaRecorder.start(); isRecording = true; document.getElementById('btn-mic').classList.add('recording'); } else { mediaRecorder.stop(); isRecording = false; } }
-        function checkQuickReply(input) { const val = input.value; const popup = document.getElementById('quick-replies'); if(val.startsWith('/')) { const key = val.substring(1).toLowerCase(); const matches = shortcuts.filter(s => s.keyword.toLowerCase().includes(key)); if(matches.length) { popup.innerHTML = matches.map(s => `<div class="qr-item" onclick="useQuickReply('${s.text}')"><b>/${s.keyword}</b>: ${s.text}</div>`).join(''); popup.style.display = 'block'; } else popup.style.display = 'none'; } else popup.style.display = 'none'; }
-        function useQuickReply(text) { document.getElementById('msg-input').value = text; document.getElementById('quick-replies').style.display = 'none'; document.getElementById('msg-input').focus(); }
-        function toggleProfile() { document.getElementById('profile-panel').classList.toggle('open'); }
-        async function toggleBot() { const c = chats.find(x=>x.id===selectedId); await fetch('/api/chat/toggle-bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedId, active:!c.botActive})}); syncLoop(true); }
-        function renderBotStatus(active) { const btn = document.getElementById('prof-bot-btn'); btn.innerText = active?"🤖 BOT: ACTIVO":"⛔ BOT: PAUSADO"; btn.style.background = active?"#dcfce7":"#fee2e2"; btn.style.color = active?"#166534":"#991b1b"; }
-        function renderChatTags(tags) { document.getElementById('prof-tags').innerHTML = tags.map(t=>`<span class="tag-pill" style="background:#999">${t}</span>`).join(''); }
-        function openTagSelector() { const list = document.getElementById('tag-selector-list'); const c = chats.find(x=>x.id===selectedId); const cur = c.labels || []; list.innerHTML = globalTags.map(t => `<div style="display:flex; justify-content:space-between; padding:8px; cursor:pointer; border-bottom:1px solid #eee;" onclick="toggleChatTag('${t.name}')"><span><span class="tag-pill" style="background:${t.color}">${t.name}</span></span> ${cur.includes(t.name)?'<i class="fas fa-check" style="color:green;"></i>':''}</div>`).join(''); document.getElementById('modal-tag-selector').style.display = 'flex'; }
-        async function toggleChatTag(n) { const c = chats.find(x=>x.id===selectedId); let tags = c.labels || []; if(tags.includes(n)) tags = tags.filter(x=>x!==n); else tags.push(n); await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, action:'set_labels', value:tags})}); openTagSelector(); syncLoop(true); }
-        function renderGlobalTags() { document.getElementById('global-tags-list').innerHTML = globalTags.map(t => `<span class="tag-pill" style="background:${t.color}; padding:5px 10px;">${t.name} <i class="fas fa-times" onclick="deleteTag(${t.id})" style="cursor:pointer; margin-left:5px;"></i></span>`).join(''); }
-        async function addGlobalTag() { const n = document.getElementById('new-tag-name').value; const c = document.getElementById('new-tag-color').value; await fetch('/api/tags/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:n, color:c})}); loadGlobalData(); }
-        async function deleteTag(id) { if(!confirm("¿Eliminar etiqueta?")) return; await fetch('/api/tags/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadGlobalData(); }
-        function renderShortcuts() { document.getElementById('shortcuts-list').innerHTML = shortcuts.map(s => `<div style="padding:5px; border-bottom:1px solid #eee; display:flex; justify-content:space-between;"><span><b>/${s.keyword}</b>: ${s.text}</span> <i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="deleteShortcut(${s.id})"></i></div>`).join(''); }
-        async function addShortcut() { const k = document.getElementById('new-sc-key').value; const t = document.getElementById('new-sc-text').value; await fetch('/api/shortcuts/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({keyword:k, text:t})}); loadGlobalData(); }
-        async function deleteShortcut(id) { if(!confirm("¿Borrar?")) return; await fetch('/api/shortcuts/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadGlobalData(); }
-        function renderRules(rules) { document.getElementById('rules-list').innerHTML = rules.map((r,i) => `<div style="font-size:13px; margin-bottom:5px;">• ${r} <i class="fas fa-times" onclick="deleteRule(${i})" style="color:red; cursor:pointer; margin-left:10px;"></i></div>`).join(''); }
-        async function addRule() { const r = document.getElementById('rule-input').value; await fetch('/api/config/rules/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({rule:r})}); document.getElementById('rule-input').value=''; loadGlobalData(); }
-        async function deleteRule(i) { await fetch('/api/config/rules/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadGlobalData(); }
-        function closeModal(id) { document.getElementById(id).style.display='none'; }
-        async function loadInventory() { allProducts = await fetch('/api/data/knowledge').then(r=>r.json()); document.getElementById('inv-body').innerHTML = allProducts.map((p,i) => `<tr><td>${p.searchable}</td><td style="text-align:center;"><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="deleteProduct(${i})"></i></td></tr>`).join(''); }
-        async function deleteProduct(i) { if(confirm("¿Borrar?")) { await fetch('/api/knowledge/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); } }
-        async function uploadCSV() { const f = document.getElementById('csv-file').files[0]; if(!f) return; const fd = new FormData(); fd.append('file', f); await fetch('/api/knowledge/csv', {method:'POST', body:fd}); loadInventory(); alert("OK"); }
-        async function loadDash() { const [l,c,s] = await Promise.all([ fetch('/api/data/leads').then(r=>r.json()), fetch('/api/chats-full').then(r=>r.json()), fetch('/api/data/knowledge').then(r=>r.json()) ]); document.getElementById('kpi-leads').innerText = l.length; document.getElementById('kpi-chats').innerText = c.length; document.getElementById('kpi-stock').innerText = s.length; document.getElementById('dash-leads-body').innerHTML = (l||[]).slice(0,5).map(x => `<tr><td>${x.Nombre}</td><td>${x.Ciudad}</td><td>${x.Interes}</td><td>${x.Fecha.split(',')[0]}</td></tr>`).join(''); }
-        function addContactPrompt() { const p = prompt("Teléfono (con código país):"); if(p) fetch('/api/contacts/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:p,name:p})}).then(()=>syncLoop(true)); }
-        async function runTest() { const m = document.getElementById('sand-in').value; if(!m) return; document.getElementById('sand-log').innerHTML += `> ${m}<br>`; document.getElementById('sand-in').value=''; const r = await fetch('/api/test-ai', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:m})}).then(x=>x.json()); document.getElementById('sand-log').innerHTML += `IA: ${r.response}<br>`; }
-        async function uploadPhoto(input) { if(!input.files[0] || !selectedId) return; const fd = new FormData(); fd.append('file', input.files[0]); fd.append('phone', selectedId); await fetch('/api/contacts/upload-photo', {method:'POST', body:fd}); syncLoop(true); }
-        function callUser() { if(selectedId) window.open(`tel:${selectedId}`); }
+    }
+}
 
-        window.onload = init;
-    </script>
-</body>
-</html>
+// ============================================================
+// API ENDPOINTS
+// ============================================================
+const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No auth");
+
+app.post('/auth', (req, res) => {
+    if (req.body.user === ADMIN_USER && req.body.pass === ADMIN_PASS) {
+        req.session.isLogged = true;
+        req.session.save(() => res.json({ success: true }));
+    } else res.status(401).json({ success: false });
+});
+
+app.get('/api/chats-full', proteger, async (req, res) => {
+    try {
+        const view = req.query.view || 'active'; 
+        const whereClause = view === 'archived' ? 'm.archived = 1' : '(m.archived = 0 OR m.archived IS NULL)';
+        const query = `
+            SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp,
+                m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, b.active as botActive
+            FROM history h
+            LEFT JOIN metadata m ON h.phone = m.phone
+            LEFT JOIN bot_status b ON h.phone = b.phone
+            WHERE ${whereClause}
+            GROUP BY h.phone
+            ORDER BY m.pinned DESC, h.id DESC
+            LIMIT 50
+        `;
+        const rows = await db.all(query);
+        const list = rows.map(r => ({
+            id: r.id, name: r.contactName || r.id, lastMessage: { text: r.lastText, time: r.timestamp },
+            botActive: r.botActive !== 0, pinned: r.pinned === 1, archived: r.archived === 1,
+            labels: JSON.parse(r.labels || "[]"), photoUrl: r.photoUrl || null, timestamp: r.timestamp
+        }));
+        res.json(list);
+    } catch(e) { res.status(500).json([]); }
+});
+
+app.get('/api/chat-history/:phone', proteger, async (req, res) => {
+    try {
+        const rows = await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]);
+        res.json(rows);
+    } catch(e) { res.status(500).json([]); }
+});
+
+app.post('/api/chat/action', proteger, async (req, res) => {
+    const { phone, action, value } = req.body;
+    try {
+        if(action === 'set_labels') {
+            await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [phone, JSON.stringify(value)]);
+        }
+        else if(action === 'toggle_pin') {
+            await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET pinned=excluded.pinned", [phone, value ? 1 : 0]);
+        }
+        else if(action === 'toggle_archive') {
+            await db.run("INSERT INTO metadata (phone, archived) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET archived=excluded.archived", [phone, value ? 1 : 0]);
+        }
+        else if(action === 'delete') {
+            await db.run("DELETE FROM history WHERE phone=?",[phone]);
+            await db.run("DELETE FROM metadata WHERE phone=?",[phone]);
+            await db.run("DELETE FROM bot_status WHERE phone=?",[phone]);
+            await db.run("DELETE FROM leads WHERE phone=?",[phone]);
+        }
+        res.json({ success: true });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/data/:type', proteger, async (req, res) => {
+    const t = req.params.type;
+    try {
+        // CORRECCIÓN CRÍTICA: Devolvemos RAW Data (minúsculas) para no romper el frontend
+        if (t === 'leads') return res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
+        if (t === 'config') return res.json({ 
+            website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []),
+            biz_profile: await getCfg('biz_profile', {}), logo_url: await getCfg('logo_url', null)
+        });
+        if (t === 'tags') return res.json(await db.all("SELECT * FROM global_tags"));
+        if (t === 'shortcuts') return res.json(await db.all("SELECT * FROM shortcuts"));
+        if (t === 'knowledge') return res.json(await db.all("SELECT * FROM inventory"));
+        res.json([]);
+    } catch(e) { res.json([]); }
+});
+
+app.post('/api/config/logo', proteger, upload.single('file'), async (req, res) => {
+    if(!req.file) return res.status(400).send("No file");
+    const b64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    await setCfg('logo_url', b64);
+    res.json({success:true, url: b64});
+});
+app.post('/api/config/biz/save', proteger, async (req, res) => { 
+    await setCfg('biz_profile', { name: req.body.name, hours: req.body.hours });
+    if(req.body.website_data !== undefined) await setCfg('website_data', req.body.website_data);
+    res.json({success:true}); 
+});
+
+app.post('/api/tags/add', proteger, async (req, res) => { await db.run("INSERT INTO global_tags (name, color) VALUES (?, ?)", [req.body.name, req.body.color]); res.json({success:true}); });
+app.post('/api/tags/delete', proteger, async (req, res) => { await db.run("DELETE FROM global_tags WHERE id = ?", [req.body.id]); res.json({success:true}); });
+app.post('/api/shortcuts/add', proteger, async (req, res) => { await db.run("INSERT INTO shortcuts (keyword, text) VALUES (?, ?)", [req.body.keyword, req.body.text]); res.json({success:true}); });
+app.post('/api/shortcuts/delete', proteger, async (req, res) => { await db.run("DELETE FROM shortcuts WHERE id = ?", [req.body.id]); res.json({success:true}); });
+
+app.post('/api/contacts/upload-photo', proteger, upload.single('file'), async (req, res) => {
+    if(!req.file) return res.status(400).send("No file");
+    const b64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    await db.run("INSERT INTO metadata (phone, photoUrl) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET photoUrl=excluded.photoUrl", [req.body.phone, b64]);
+    res.json({success:true});
+});
+app.post('/api/contacts/add', proteger, async (req, res) => {
+    await db.run("INSERT INTO metadata (phone, contactName, addedManual) VALUES (?, ?, 1) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName, addedManual=1", [req.body.phone, req.body.name]);
+    res.json({ success: true, phone: req.body.phone });
+});
+
+app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => {
+    try {
+        const { phone, type } = req.body; 
+        if(!req.file) return res.status(400).json({error: "No file"});
+        const mediaId = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname);
+        if(mediaId) {
+            await enviarWhatsApp(phone, { id: mediaId }, type);
+            await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'manual', `[MEDIA:${type.toUpperCase()}:${mediaId}]`, new Date().toISOString()]);
+            await db.run("UPDATE metadata SET archived = 0 WHERE phone = ?", [phone]);
+            res.json({success: true});
+        } else { res.status(500).json({error: "Error Meta"}); }
+    } catch(e) { res.status(500).json({error: e.message}); }
+});
+
+app.post('/api/chat/send', proteger, async (req, res) => {
+    if(await enviarWhatsApp(req.body.phone, req.body.message)) {
+        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [req.body.phone, 'manual', req.body.message, new Date().toISOString()]);
+        await db.run("UPDATE metadata SET archived = 0 WHERE phone = ?", [req.body.phone]);
+        res.json({ success: true });
+    } else res.status(500).json({ error: "Error enviando" });
+});
+
+app.post('/api/chat/toggle-bot', proteger, async (req, res) => {
+    await db.run("INSERT OR REPLACE INTO bot_status (phone, active) VALUES (?, ?)", [req.body.phone, req.body.active ? 1 : 0]);
+    res.json({ success: true });
+});
+
+app.post('/api/config/rules/add', proteger, async (req, res) => { let r=await getCfg('tech_rules',[]); r.push(req.body.rule); await setCfg('tech_rules',r); res.json({rules:r}); });
+app.post('/api/config/rules/delete', proteger, async (req, res) => { let r=await getCfg('tech_rules',[]); r.splice(req.body.index,1); await setCfg('tech_rules',r); res.json({rules:r}); });
+app.post('/api/leads/update', proteger, async(req,res)=>{ const{id,field,value}=req.body; await db.run(`UPDATE leads SET ${field}=? WHERE id=?`,[value,id]); res.json({success:true}); });
+app.post('/api/leads/delete', proteger, async(req,res)=>{ await db.run("DELETE FROM leads WHERE id=?",[req.body.id]); res.json({success:true}); });
+
+app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res) => {
+    try {
+        const n = parse(req.file.buffer.toString('utf-8'), { columns: true });
+        for (const row of n) {
+            const searchable = Object.values(row).join(" ");
+            await db.run("INSERT OR IGNORE INTO inventory (searchable, raw_data) VALUES (?, ?)", [searchable, JSON.stringify(row)]);
+        }
+        await refreshKnowledge();
+        res.json({ success: true });
+    } catch(e) { res.status(500).json({ error: "CSV Error" }); }
+});
+app.post('/api/knowledge/delete', proteger, async (req, res) => {
+    const items = await db.all("SELECT id FROM inventory");
+    if (items[req.body.index]) { await db.run("DELETE FROM inventory WHERE id = ?", [items[req.body.index].id]); await refreshKnowledge(); }
+    res.json({ success: true });
+});
+
+app.post('/api/test-ai', proteger, async (req, res) => {
+    try {
+        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+            { contents: [{ parts: [{ text: `TEST: ${req.body.message}` }] }] });
+        res.json({ response: r.data.candidates[0].content.parts[0].text });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
+app.post('/webhook', async (req, res) => {
+    res.sendStatus(200);
+    try {
+        const val = req.body.entry?.[0]?.changes?.[0]?.value;
+        const msg = val?.messages?.[0];
+        let contactName = "Cliente";
+        if (val?.contacts?.[0]) {
+            contactName = val.contacts[0].profile.name;
+            await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName WHERE addedManual=0", [val.contacts[0].wa_id, contactName]);
+        }
+        if(msg) {
+            let userMsg = "", mediaDesc = "";
+            if (msg.type === "text") userMsg = msg.text.body;
+            else if (msg.type === "image") { userMsg = `[MEDIA:IMAGE:${msg.image.id}]`; mediaDesc = "📷 FOTO"; }
+            else if (msg.type === "audio") { userMsg = `[MEDIA:AUDIO:${msg.audio.id}]`; mediaDesc = "🎤 AUDIO"; }
+            else if (msg.type === "document") { userMsg = `[MEDIA:DOC:${msg.document.id}]`; mediaDesc = "📄 DOC"; }
+
+            const respuesta = await procesarConValentina(mediaDesc || userMsg, msg.from, userMsg, contactName); 
+            if(respuesta) await enviarWhatsApp(msg.from, respuesta);
+        }
+    } catch(e) { console.error("Error Webhook", e); }
+});
+
+app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
+app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.sendFile(path.join(__dirname, 'login.html')));
+app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
+app.use(express.static(__dirname, { index: false }));
+
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v16.1 READY"));
