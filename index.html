@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICC | Valentina Suite v16.1 (Fixed)</title>
+    <title>ICC | Valentina Suite v16.6 (Full)</title>
     <link rel="icon" href="https://github.com/juanballen2/CHATBOT/blob/main/images/favicon.jpg?raw=true">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -269,6 +269,15 @@
         <div id="view-config" class="view page-container">
             <h1>Configuración Corporativa</h1>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                <div class="card" style="grid-column: span 2; border-left: 4px solid var(--primary); background:#fff7ed;">
+                    <h3>🧠 Personalidad de Valentina</h3>
+                    <p style="font-size:12px; color:#666; margin-bottom:10px;">Define cómo se comporta la IA. Escribe las instrucciones en texto natural.</p>
+                    <textarea id="bot-prompt" class="form-control" style="height:200px; font-family:monospace; font-size:12px; white-space:pre-wrap;"></textarea>
+                    <div style="text-align:right;">
+                        <button class="btn" onclick="savePrompt()">💾 Guardar Personalidad</button>
+                    </div>
+                </div>
+
                 <div class="card">
                     <h3>Identidad Visual</h3>
                     <div style="display:flex; align-items:center; gap:15px; margin:10px 0;">
@@ -383,6 +392,18 @@
             renderGlobalTags();
             shortcuts = await fetch('/api/data/shortcuts').then(r=>r.json());
             renderShortcuts();
+
+            // CARGAR PERSONALIDAD DEL BOT
+            try {
+                const promptData = await fetch('/api/config/prompt').then(r=>r.json());
+                document.getElementById('bot-prompt').value = promptData.prompt || "";
+            } catch(e) { console.error("Error loading prompt", e); }
+        }
+
+        async function savePrompt() {
+            const p = document.getElementById('bot-prompt').value;
+            await fetch('/api/config/prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt: p})});
+            alert("✅ Personalidad de Valentina actualizada correctamente.");
         }
 
         function nav(v) {
@@ -515,11 +536,10 @@
         }
         function hideContextMenu() { 
             document.getElementById('context-menu').style.display = 'none'; 
-            setTimeout(() => { contextMenuChatId = null; }, 200); // Pequeño delay para permitir que cmAction lea la variable si fue click
+            setTimeout(() => { contextMenuChatId = null; }, 200); 
         }
         
         async function cmAction(action) {
-            // Inteligencia: Si clickeo en el header (selectedId activo) o click derecho (contextMenuChatId)
             const id = contextMenuChatId || selectedId; 
             if(!id) return;
             
@@ -535,19 +555,17 @@
                     if(selectedId === id) closeChat();
                 }
             } else if(action === 'labels') {
-                if(contextMenuChatId) { selectedId = contextMenuChatId; } // Si fue click derecho, seleccionamos el chat
+                if(contextMenuChatId) { selectedId = contextMenuChatId; } 
                 openTagSelector();
             }
             syncLoop(true);
         }
 
-        // --- EXCEL & LEADS (FIXED) ---
         async function downloadLeadsExcel() {
             try {
                 const leadsRaw = await fetch('/api/data/leads').then(r=>r.json());
                 if(!leadsRaw.length) return alert("No hay leads para exportar");
                 
-                // Mapeo aquí para tener Excel limpio sin romper la DB
                 const dataExport = leadsRaw.map(l => ({
                     Fecha: l.fecha,
                     Nombre: l.nombre,
@@ -566,41 +584,31 @@
         }
         
         async function loadLeads() {
-            // Usa minúsculas (raw data)
             allLeads = await fetch('/api/data/leads').then(r=>r.json());
             document.getElementById('leads-body').innerHTML = allLeads.map(l => `<tr><td>${l.fecha.split(',')[0]}</td><td><a href="#" style="color:var(--primary); font-weight:bold; text-decoration:none;" onclick="openEditLead(${l.id})">${l.nombre}</a></td><td>${l.ciudad}</td><td>${l.interes}</td><td><span class="tag-pill" style="background:#F97316">${l.etiqueta}</span></td><td><button class="btn" style="background:red; padding:4px 8px;" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button></td></tr>`).join('');
         }
         
-        // --- FUNCIÓN CORREGIDA: CARGA LA ETIQUETA EN EL MODAL ---
         function openEditLead(id) {
             const l = allLeads.find(x => x.id === id);
             if (!l) return;
-            
             document.getElementById('edit-lead-id').value = id;
             document.getElementById('edit-lead-name').value = l.nombre || "";
             document.getElementById('edit-lead-city').value = l.ciudad || "";
             document.getElementById('edit-lead-interest').value = l.interes || "";
             document.getElementById('edit-lead-email').value = l.correo || "";
-            
-            // Aquí cargamos la etiqueta actual en el selector
             document.getElementById('edit-lead-tag').value = l.etiqueta || "Pendiente";
-            
             document.getElementById('modal-edit-lead').style.display = 'flex';
         }
 
-        // --- FUNCIÓN CORREGIDA: GUARDA LA ETIQUETA EN LA DB ---
         async function saveLeadChanges() {
             const id = document.getElementById('edit-lead-id').value;
-            
             const updates = { 
                 nombre: document.getElementById('edit-lead-name').value, 
                 ciudad: document.getElementById('edit-lead-city').value, 
                 interes: document.getElementById('edit-lead-interest').value, 
                 correo: document.getElementById('edit-lead-email').value,
-                etiqueta: document.getElementById('edit-lead-tag').value // Nuevo dato a guardar
+                etiqueta: document.getElementById('edit-lead-tag').value 
             }; 
-            
-            // Enviamos cada cambio al servidor
             for (const [key, val] of Object.entries(updates)) { 
                 await fetch('/api/leads/update', {
                     method:'POST', 
@@ -608,9 +616,8 @@
                     body:JSON.stringify({id, field:key, value:val})
                 }); 
             } 
-            
             closeModal('modal-edit-lead'); 
-            loadLeads(); // Recarga la tabla para ver el cambio
+            loadLeads(); 
         }
 
         async function uploadLogo() {
