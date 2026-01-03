@@ -1,8 +1,8 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v16.6 (DYNAMIC PERSONALITY)
+ * SERVER BACKEND - VALENTINA v16.7 (FULL UNCOMPRESSED)
  * Cliente: Importadora Casa Colombia (ICC)
- * Estado: FIXED - Personalidad editable desde Frontend
+ * Estado: FIXED - Anti-Duplicados + Cerebro Dinámico + Código Completo
  * ============================================================
  */
 
@@ -35,28 +35,14 @@ const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = "icc-valentina-secret-final-v16"; 
 
-// --- PROMPT POR DEFECTO (Se carga si no hay nada en BD) ---
-const DEFAULT_PROMPT_TEXT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.
-
-OBJETIVO:
-Recopilar 4 DATOS OBLIGATORIOS para pasar el lead a un humano.
-NO des precios ni inventario real hasta tener los 4 datos.
-
-DATOS REQUERIDOS (EL MURO AMABLE):
-1. Nombre
-2. Celular
-3. Correo Electrónico
-4. Ciudad
-
-INSTRUCCIONES DE COMPORTAMIENTO:
-1. **SIN COMILLAS:** Nunca encierres tu respuesta verbal entre comillas (" "). Escribe el texto limpio.
-2. **MEMORIA:** Si el cliente YA dijo qué repuesto quiere, NO preguntes "¿qué necesitas?". Di: "Entendido, para cotizar eso necesito...".
-3. **ESTRATEGIA:**
-   - Si dice "Hola": Saluda y pregunta interés.
-   - Si pide repuesto: Pide los datos faltantes de forma amable.
-
-EJEMPLO DE RESPUESTA IDEAL:
-Hola Juan 🌻. Para enviarte la cotización formal a tu zona, ¿me confirmas tu correo y ciudad?`;
+// --- PERSONALIDAD POR DEFECTO (Respaldo) ---
+const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.
+OBJETIVO: Recopilar Nombre, Celular, Correo y Ciudad.
+REGLAS:
+1. No uses comillas en tu respuesta hablada.
+2. Si el cliente saluda, saluda y pregunta interés.
+3. Si pide repuesto, pide los datos faltantes amablemente.
+4. No des precios sin tener los datos.`;
 
 // --- MIDDLEWARES ---
 app.use(express.json({ limit: '100mb' }));
@@ -94,21 +80,26 @@ let db;
         CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
     `);
     
-    // 2. Migraciones
+    // 2. Migraciones (Silent)
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
     try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {}
     const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
     for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
 
-    // 3. Inicializar Prompt si no existe
-    const currentPrompt = await getCfg('bot_prompt', null);
-    if (!currentPrompt) {
-        await setCfg('bot_prompt', DEFAULT_PROMPT_TEXT);
+    // 3. Índices
+    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_history_phone ON history(phone)`); } catch(e){}
+    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_history_time ON history(time)`); } catch(e){}
+    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_metadata_archived ON metadata(archived)`); } catch(e){}
+
+    // 4. Inicializar Prompt si no existe
+    const currentPrompt = await getCfg('bot_prompt');
+    if(!currentPrompt) {
+        await setCfg('bot_prompt', DEFAULT_PROMPT);
     }
 
     await refreshKnowledge();
-    console.log("🚀 BACKEND v16.6 ONLINE (DYNAMIC PROMPT ACTIVE)");
+    console.log("🚀 BACKEND v16.7 ONLINE (FULL UNCOMPRESSED)");
 })();
 
 // Caché de Conocimiento
@@ -120,7 +111,7 @@ async function refreshKnowledge() {
     } catch(e) { globalKnowledge = []; }
 }
 
-async function getCfg(key, fallback) {
+async function getCfg(key, fallback=null) {
     try {
         const res = await db.get("SELECT value FROM config WHERE key = ?", [key]);
         return res ? JSON.parse(res.value) : fallback;
@@ -189,7 +180,7 @@ app.get('/api/media-proxy/:id', async (req, res) => {
     } catch (e) { res.status(500).send("Error Media"); }
 });
 
-// --- CEREBRO IA (VALENTINA DYNAMIC) ---
+// --- CEREBRO IA (VALENTINA) ---
 function buscarEnCatalogo(query) {
     if (!query || typeof query !== 'string' || query.startsWith('[')) return [];
     const norm = (t) => t ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
@@ -201,9 +192,7 @@ function buscarEnCatalogo(query) {
     }).filter(i => i.score > 0).sort((a,b) => b.score - a.score).slice(0, 5);
 }
 
-// === [PROCESAMIENTO CON PROMPT DINÁMICO] ===
 async function procesarConValentina(message, sessionId, mediaDesc = "", contactName = "Cliente") {
-    // 1. Guardar mensaje del usuario
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 0) ON CONFLICT(phone) DO UPDATE SET archived=0", [sessionId]);
 
@@ -214,21 +203,19 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
     const stock = buscarEnCatalogo(message); 
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
     
-    // AQUI OBTENEMOS LA PERSONALIDAD DE LA BD
-    const userDefinedPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT_TEXT);
+    // OBTENEMOS PERSONALIDAD DE LA BD
+    const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
 
-    // CONSTRUIMOS EL PROMPT FINAL (Usuario + Reglas Técnicas Obligatorias)
     const finalPrompt = `
-    ${userDefinedPrompt}
+    ${dynamicPrompt}
 
     // --- REGLAS DE SISTEMA (NO MODIFICABLES) ---
-    NOMBRE DEL CLIENTE ACTUAL: ${contactName}
+    CLIENTE ACTUAL: ${contactName}
     INVENTARIO REAL: ${JSON.stringify(stock)}
     CHAT PREVIO: ${JSON.stringify(chatPrevio)}
-    MENSAJE DEL USUARIO: ${message}
+    MENSAJE USUARIO: ${message}
 
-    FORMATO DE SALIDA OBLIGATORIO (JSON):
-    Al final de tu respuesta verbal, incluye SIEMPRE este bloque JSON:
+    FORMATO JSON OBLIGATORIO AL FINAL DE LA RESPUESTA:
     \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
     `;
 
@@ -238,28 +225,26 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
         
         let txt = r.data.candidates[0].content.parts[0].text;
         
-        // --- LIMPIEZA DE COMILLAS Y EXTRACCIÓN ---
+        // Extracción JSON
         const match = txt.match(/```json([\s\S]*?)```|{([\s\S]*?)}$/i);
         let visible = txt;
         
         if (match) {
-            visible = txt.replace(match[0], "").trim(); // Quitar JSON
+            visible = txt.replace(match[0], "").trim();
             try {
                 const jsonStr = (match[1]||match[2]||match[0]).replace(/```json/g,"").replace(/```/g,"").trim();
                 const info = JSON.parse(jsonStr);
-                // Guardamos cualquier dato parcial que llegue
+                // Si trae datos relevantes, gestionamos el lead
                 if(info.nombre || info.celular || info.interes || info.correo || info.ciudad) {
                     await gestionarLead(sessionId, info, contactName);
                 }
             } catch(e) {}
         }
         
-        // FILTRO FINAL ANTI-COMILLAS
+        // Limpieza de comillas y salvavidas
         visible = visible.replace(/^["']+|["']+$/g, '').trim();
-
-        // SALVAVIDAS ANTI-SILENCIO
         if (!visible || visible.length < 2) {
-            visible = "¡Entendido! 🛠️ Estoy validando en sistema. Para continuar, por favor confírmame tu Correo y Ciudad.";
+            visible = "¡Entendido! 🛠️ Estoy validando tu solicitud. Por favor confírmame tus datos para continuar.";
         }
         
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', visible, new Date().toISOString()]);
@@ -267,28 +252,47 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
     } catch (e) { return "Dame un momento, estoy verificando la información... 🚜"; }
 }
 
+// === [CORRECCIÓN: LOGICA ANTI-DUPLICADOS] ===
 async function gestionarLead(phone, info, fallbackName) {
     let nombreFinal = (info.nombre && info.nombre !== "null") ? info.nombre : fallbackName;
-    if (info.interes || info.correo || info.ciudad) {
-        await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
-            [phone, nombreFinal, info.interes || "Consultando", info.etiqueta || "Pendiente", new Date().toLocaleString(), info.ciudad, info.correo]);
+    
+    // 1. Verificar si ya existe el lead
+    const existe = await db.get("SELECT id, interes, ciudad, correo, etiqueta FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
+
+    if (existe) {
+        // 2. ACTUALIZAR (Merge inteligente)
+        const nuevoInteres = info.interes || existe.interes;
+        const nuevaCiudad = info.ciudad || existe.ciudad;
+        const nuevoCorreo = info.correo || existe.correo;
+        // Solo cambiamos etiqueta si la nueva NO es "Pendiente" (para no borrar un estado avanzado)
+        const nuevaEtiqueta = (info.etiqueta && info.etiqueta !== "Pendiente") ? info.etiqueta : existe.etiqueta;
+
+        await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=? WHERE id=?`, 
+            [nombreFinal, nuevoInteres, nuevaEtiqueta, new Date().toLocaleString(), nuevaCiudad, nuevoCorreo, existe.id]);
+    } else {
+        // 3. CREAR (Solo si no existe)
+        // Solo creamos si hay datos mínimos valiosos para evitar basura
+        if (info.interes || info.correo || info.ciudad || info.es_lead) {
+            await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
+                [phone, nombreFinal, info.interes || "Consultando", info.etiqueta || "Pendiente", new Date().toLocaleString(), info.ciudad, info.correo]);
+        }
     }
     
+    // Actualizar metadatos del chat (etiquetas visuales)
     if(info.etiqueta) {
-        let currentLabels = [];
         try {
             const row = await db.get("SELECT labels FROM metadata WHERE phone = ?", [phone]);
-            if(row) currentLabels = JSON.parse(row.labels || "[]");
+            let currentLabels = JSON.parse(row?.labels || "[]");
+            if(!currentLabels.includes(info.etiqueta) && info.etiqueta !== "Pendiente") {
+                currentLabels.push(info.etiqueta);
+                await db.run("UPDATE metadata SET labels = ? WHERE phone = ?", [JSON.stringify(currentLabels), phone]);
+            }
         } catch(e){}
-        if(!currentLabels.includes(info.etiqueta) && info.etiqueta !== "Pendiente") {
-            currentLabels.push(info.etiqueta);
-            await db.run("UPDATE metadata SET labels = ? WHERE phone = ?", [JSON.stringify(currentLabels), phone]);
-        }
     }
 }
 
 // ============================================================
-// API ENDPOINTS
+// API ENDPOINTS (TODOS COMPLETOS)
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No auth");
 
@@ -299,9 +303,9 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-// NUEVOS ENDPOINTS PARA GESTIONAR EL PROMPT DESDE EL FRONT
+// --- ENDPOINTS DE PERSONALIDAD (NUEVO) ---
 app.get('/api/config/prompt', proteger, async (req, res) => {
-    const prompt = await getCfg('bot_prompt', DEFAULT_PROMPT_TEXT);
+    const prompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
     res.json({ prompt });
 });
 
@@ -310,6 +314,7 @@ app.post('/api/config/prompt', proteger, async (req, res) => {
     res.json({ success: true });
 });
 
+// --- ENDPOINTS DE CHAT ---
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
         const view = req.query.view || 'active'; 
@@ -493,4 +498,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v16.6 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v16.7 READY"));
