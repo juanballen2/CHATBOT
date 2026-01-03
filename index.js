@@ -1,8 +1,8 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v16.1 (FIXED & ROBUST)
+ * SERVER BACKEND - VALENTINA v16.2 (LEAD CAPTURE MODE)
  * Cliente: Importadora Casa Colombia (ICC)
- * Correcciones: JSON Keys estándar, Estabilidad de Datos
+ * Estado: FIXED - Prioridad Recolección de Datos
  * ============================================================
  */
 
@@ -71,7 +71,7 @@ let db;
         CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
     `);
     
-    // 2. Migraciones
+    // 2. Migraciones (Silent)
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
     try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {}
@@ -84,7 +84,7 @@ let db;
     try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_metadata_archived ON metadata(archived)`); } catch(e){}
 
     await refreshKnowledge();
-    console.log("🚀 BACKEND v16.1 ONLINE (FIXED)");
+    console.log("🚀 BACKEND v16.2 ONLINE (LEAD MODE ACTIVE)");
 })();
 
 // Caché de Conocimiento
@@ -177,6 +177,7 @@ function buscarEnCatalogo(query) {
     }).filter(i => i.score > 0).sort((a,b) => b.score - a.score).slice(0, 5);
 }
 
+// === [CORRECCIÓN PRINCIPAL AQUÍ] ===
 async function procesarConValentina(message, sessionId, mediaDesc = "", contactName = "Cliente") {
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 0) ON CONFLICT(phone) DO UPDATE SET archived=0", [sessionId]);
@@ -186,26 +187,40 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
 
     const websiteData = await getCfg('website_data', "");
     const bizProfile = await getCfg('biz_profile', {});
-    const techRules = await getCfg('tech_rules', []);
     const stock = buscarEnCatalogo(message);
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
 
+    // PROMPT ESTRICTO DE RECOLECCIÓN DE DATOS
     const prompt = `
-    ROL: Eres Valentina, asesora comercial experta de ${bizProfile.name || 'Importadora Casa Colombia (ICC)'}.
-    OBJETIVO: Vender maquinaria y repuestos. Ser cordial, usar emojis y perfilar al cliente.
-    CONTEXTO: ${websiteData}. Horario: ${bizProfile.hours}.
-    INVENTARIO: ${JSON.stringify(stock)}
+    ROL: Eres Valentina, asistente virtual de ${bizProfile.name || 'Importadora Casa Colombia (ICC)'}.
     
-    INSTRUCCIONES DE PERFILADO:
-    1. Si no hay nombre en chat, usa: ${contactName}.
-    2. CLASIFICA EL LEAD AL FINAL EN JSON:
-       - "Pendiente": Falta info.
-       - "Lead": Tenemos Nombre, Ciudad, Interés.
-       - "No Stock": Producto no disponible.
-       - "Equivocado": No es nuestro rubro.
+    OBJETIVO PRIORITARIO:
+    Tu meta NO es dar precios inmediatos, sino REGISTRAR LOS DATOS del cliente para que un Ejecutivo Comercial gestione la venta.
+    
+    DATOS NECESARIOS (El "Muro"):
+    Antes de dar cualquier Link, Precio o SKU, debes asegurarte de tener:
+    1. Nombre
+    2. Correo
+    3. Ciudad
+    4. Teléfono/Celular (Si no lo ha dado explícitamente en el texto, pídelo para confirmar).
+    
+    REGLAS DE ORO (STRICT):
+    1. **BLOQUEO DE INFO:** Si el cliente pregunta "¿Tienen X?", NO respondas "Sí" de inmediato ni des el link. 
+       - Respuesta Correcta: "Estoy validando disponibilidad en sistema 🛠️. Para que un asesor te envíe la cotización formal, por favor confírmame tu [Dato Faltante]".
+    2. **NO USAR "RECOLECTAR":** Usa palabras como "registrar", "validar" o "confirmar datos para la orden".
+    3. **TONO:** Breve (max 2 líneas), profesional y directo. Max 1 emoji.
+    4. **SI YA TIENES LOS DATOS:** Solo entonces puedes confirmar: "Gracias [Nombre]. Sí tenemos disponibilidad (SKU...). Aquí tienes el enlace: [LINK]".
+    
+    INVENTARIO (Solo para tu referencia interna, NO LO ENTREGUES SIN DATOS): 
+    ${JSON.stringify(stock)}
+    
+    INSTRUCCIONES DE JSON:
+    Analiza la conversación. Si tienes datos nuevos, rellénalos.
+    - "es_lead": true (Solo si tienes AL MENOS Nombre, Interés y Ciudad/Correo).
+    - "etiqueta": "Pendiente" (Si falta info), "Lead" (Si está completo), "No Stock" (Si verificaste y no hay).
     
     FORMATO JSON OBLIGATORIO AL FINAL:
-    \`\`\`json {"es_lead":true, "nombre":"...", "ciudad":"...", "interes":"...", "correo":"...", "etiqueta":"Lead|Pendiente|No Stock|Equivocado"} \`\`\`
+    \`\`\`json {"es_lead": boolean, "nombre":"...", "ciudad":"...", "interes":"...", "correo":"...", "etiqueta":"..."} \`\`\`
     
     CHAT PREVIO: ${JSON.stringify(chatPrevio)}
     USUARIO: ${message}
@@ -224,7 +239,8 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
             try {
                 const jsonStr = (match[1]||match[2]||match[0]).replace(/```json/g,"").replace(/```/g,"").trim();
                 const info = JSON.parse(jsonStr);
-                if(info.es_lead || info.etiqueta === "No Stock" || info.etiqueta === "Equivocado") {
+                // Solo guardamos si hay algo relevante
+                if(info.es_lead || info.nombre || info.correo || info.ciudad) {
                     await gestionarLead(sessionId, info, contactName);
                 }
             } catch(e) {}
@@ -232,13 +248,16 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
         
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', visible, new Date().toISOString()]);
         return visible;
-    } catch (e) { return "Disculpa, estoy consultando el sistema."; }
+    } catch (e) { return "Estoy validando la información, dame un momento por favor. 🛠️"; }
 }
 
 async function gestionarLead(phone, info, fallbackName) {
     let nombreFinal = (info.nombre && info.nombre !== "null") ? info.nombre : fallbackName;
-    await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
-        [phone, nombreFinal, info.interes, info.etiqueta, new Date().toLocaleString(), info.ciudad, info.correo]);
+    // Solo insertamos si realmente hay un interés o datos nuevos para evitar spam de filas vacías
+    if (info.interes || info.correo || info.ciudad) {
+        await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
+            [phone, nombreFinal, info.interes || "Consultando", info.etiqueta || "Pendiente", new Date().toLocaleString(), info.ciudad, info.correo]);
+    }
     
     if(info.etiqueta) {
         let currentLabels = [];
@@ -246,7 +265,7 @@ async function gestionarLead(phone, info, fallbackName) {
             const row = await db.get("SELECT labels FROM metadata WHERE phone = ?", [phone]);
             if(row) currentLabels = JSON.parse(row.labels || "[]");
         } catch(e){}
-        if(!currentLabels.includes(info.etiqueta)) {
+        if(!currentLabels.includes(info.etiqueta) && info.etiqueta !== "Pendiente") {
             currentLabels.push(info.etiqueta);
             await db.run("UPDATE metadata SET labels = ? WHERE phone = ?", [JSON.stringify(currentLabels), phone]);
         }
@@ -322,7 +341,6 @@ app.post('/api/chat/action', proteger, async (req, res) => {
 app.get('/api/data/:type', proteger, async (req, res) => {
     const t = req.params.type;
     try {
-        // CORRECCIÓN CRÍTICA: Devolvemos RAW Data (minúsculas) para no romper el frontend
         if (t === 'leads') return res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
         if (t === 'config') return res.json({ 
             website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []),
@@ -449,4 +467,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v16.1 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v16.2 READY"));
