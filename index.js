@@ -1,8 +1,8 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v16.0 (PRODUCCIÓN FINAL)
+ * SERVER BACKEND - VALENTINA v16.1 (FIXED & ROBUST)
  * Cliente: Importadora Casa Colombia (ICC)
- * Mejoras: IA Humanizada, Gestión de Archivos, Excel Limpio
+ * Correcciones: JSON Keys estándar, Estabilidad de Datos
  * ============================================================
  */
 
@@ -59,7 +59,7 @@ let db;
         driver: sqlite3.Database
     });
 
-    // 1. Tablas Base (Estructura v16.0)
+    // 1. Tablas Base
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
         CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT); 
@@ -71,21 +71,20 @@ let db;
         CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
     `);
     
-    // 2. Migraciones Automáticas (Seguridad ante actualizaciones)
+    // 2. Migraciones
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
     try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {}
-    
     const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
     for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
 
-    // 3. Índices de Velocidad (Turbo Mode)
+    // 3. Índices
     try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_history_phone ON history(phone)`); } catch(e){}
     try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_history_time ON history(time)`); } catch(e){}
-    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_metadata_archived ON metadata(archived)`); } catch(e){} // Nuevo índice para Falencia #3
+    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_metadata_archived ON metadata(archived)`); } catch(e){}
 
     await refreshKnowledge();
-    console.log("🚀 BACKEND v16.0 ONLINE (PRODUCCIÓN - ICC)");
+    console.log("🚀 BACKEND v16.1 ONLINE (FIXED)");
 })();
 
 // Caché de Conocimiento
@@ -120,7 +119,6 @@ async function uploadToMeta(buffer, mimeType, filename) {
     try {
         const form = new FormData();
         let finalMime = mimeType, finalName = filename, type = 'document';
-        // Conversión forzada a OGG para notas de voz universales
         if (mimeType.includes('audio') || mimeType.includes('webm') || mimeType.includes('ogg')) {
             type = 'audio'; finalMime = 'audio/ogg'; finalName = 'audio.ogg'; 
         } else if (mimeType.includes('image')) { type = 'image'; }
@@ -157,7 +155,6 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     } catch (e) { return false; }
 }
 
-// Proxy de Medios (Solución parcial Falencia #1: Ver fotos de clientes si las enviaron)
 app.get('/api/media-proxy/:id', async (req, res) => {
     if (!req.session.isLogged) return res.status(401).send("No auth");
     try {
@@ -168,7 +165,7 @@ app.get('/api/media-proxy/:id', async (req, res) => {
     } catch (e) { res.status(500).send("Error Media"); }
 });
 
-// --- CEREBRO IA (MEJORADO PARA FALENCIA #6) ---
+// --- CEREBRO IA (VALENTINA) ---
 function buscarEnCatalogo(query) {
     if (!query || typeof query !== 'string' || query.startsWith('[')) return [];
     const norm = (t) => t ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
@@ -181,10 +178,7 @@ function buscarEnCatalogo(query) {
 }
 
 async function procesarConValentina(message, sessionId, mediaDesc = "", contactName = "Cliente") {
-    // Registro mensaje usuario
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
-    
-    // Auto-Desarchivar: Si el cliente escribe, el chat revive (Falencia #3)
     await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 0) ON CONFLICT(phone) DO UPDATE SET archived=0", [sessionId]);
 
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
@@ -196,40 +190,25 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
     const stock = buscarEnCatalogo(message);
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
 
-    // --- PROMPT V16.0: HUMANIZADO Y ESTRATÉGICO ---
     const prompt = `
     ROL: Eres Valentina, asesora comercial experta de ${bizProfile.name || 'Importadora Casa Colombia (ICC)'}.
+    OBJETIVO: Vender maquinaria y repuestos. Ser cordial, usar emojis y perfilar al cliente.
+    CONTEXTO: ${websiteData}. Horario: ${bizProfile.hours}.
+    INVENTARIO: ${JSON.stringify(stock)}
     
-    TONO Y PERSONALIDAD:
-    - Eres profesional, eficiente pero cercana. NO suenes robótica.
-    - Usa emojis moderadamente (👋, 🛠️, ✅) para dar calidez.
-    - Tu objetivo es AYUDAR y VENDER, generando confianza.
-    - Si no sabes algo, ofrece conectar con un humano, no inventes.
-
-    CONTEXTO DE NEGOCIO:
-    - Horario: ${bizProfile.hours}. 
-    - Info Web: ${websiteData}.
-    - Inventario Detectado: ${JSON.stringify(stock)}
+    INSTRUCCIONES DE PERFILADO:
+    1. Si no hay nombre en chat, usa: ${contactName}.
+    2. CLASIFICA EL LEAD AL FINAL EN JSON:
+       - "Pendiente": Falta info.
+       - "Lead": Tenemos Nombre, Ciudad, Interés.
+       - "No Stock": Producto no disponible.
+       - "Equivocado": No es nuestro rubro.
     
-    INSTRUCCIONES DE PERFILADO (CRÍTICO):
-    1. Si no tienes el nombre del cliente en el chat, ÚSALO del campo 'ContactName' provisto (${contactName}). Saluda por el nombre si es posible.
-    2. Debes clasificar al cliente en una de estas etiquetas JSON:
-       - "Pendiente": Escribió pero no ha dado datos claros.
-       - "Lead": Ya tenemos Nombre, Ciudad e Interés.
-       - "No Stock": Pide algo relacionado a maquinaria pesada que NO tenemos en el inventario provisto.
-       - "Equivocado": Pide pizza, ropa, o algo nada que ver con maquinaria.
-    
-    FORMATO DE RESPUESTA:
-    Responde al usuario naturalmente. AL FINAL, en un bloque SEPARADO, pon el JSON de control si detectas datos nuevos o cambio de estado.
-    
-    Estructura JSON:
+    FORMATO JSON OBLIGATORIO AL FINAL:
     \`\`\`json {"es_lead":true, "nombre":"...", "ciudad":"...", "interes":"...", "correo":"...", "etiqueta":"Lead|Pendiente|No Stock|Equivocado"} \`\`\`
-    (Usa "null" si no tienes el dato aún).
     
-    CHAT PREVIO:
-    ${JSON.stringify(chatPrevio)}
-    
-    USUARIO (${contactName}): ${message}
+    CHAT PREVIO: ${JSON.stringify(chatPrevio)}
+    USUARIO: ${message}
     `;
 
     try {
@@ -237,50 +216,36 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
             { contents: [{ parts: [{ text: prompt }] }] });
         
         let txt = r.data.candidates[0].content.parts[0].text;
-        
-        // Extracción de JSON (Inteligencia Oculta)
         const match = txt.match(/```json([\s\S]*?)```|{([\s\S]*?)}$/i);
         let visible = txt;
         
         if (match) {
-            visible = txt.replace(match[0], "").trim(); // Quitamos el JSON para el usuario
+            visible = txt.replace(match[0], "").trim();
             try {
                 const jsonStr = (match[1]||match[2]||match[0]).replace(/```json/g,"").replace(/```/g,"").trim();
                 const info = JSON.parse(jsonStr);
-                
-                // Actualizar Lead solo si hay datos relevantes
                 if(info.es_lead || info.etiqueta === "No Stock" || info.etiqueta === "Equivocado") {
                     await gestionarLead(sessionId, info, contactName);
                 }
-            } catch(e) { console.error("Error parsing JSON bot:", e); }
+            } catch(e) {}
         }
         
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', visible, new Date().toISOString()]);
         return visible;
-    } catch (e) { 
-        console.error("Error Gemini:", e);
-        return "Disculpa, estoy consultando el sistema. ¿Me podrías repetir?"; 
-    }
+    } catch (e) { return "Disculpa, estoy consultando el sistema."; }
 }
 
 async function gestionarLead(phone, info, fallbackName) {
-    // Si el bot no captó el nombre, usamos el del perfil de WhatsApp
     let nombreFinal = (info.nombre && info.nombre !== "null") ? info.nombre : fallbackName;
-    
-    // Insertar o Actualizar Lead
-    // NOTA: Usamos INSERT simple para historial, pero podríamos hacer UPDATE si prefieres solo uno por cliente.
-    // Aquí guardamos histórico de leads.
     await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
         [phone, nombreFinal, info.interes, info.etiqueta, new Date().toLocaleString(), info.ciudad, info.correo]);
     
-    // También actualizamos la etiqueta en metadatos para que se vea en el chat
     if(info.etiqueta) {
         let currentLabels = [];
         try {
             const row = await db.get("SELECT labels FROM metadata WHERE phone = ?", [phone]);
             if(row) currentLabels = JSON.parse(row.labels || "[]");
         } catch(e){}
-        
         if(!currentLabels.includes(info.etiqueta)) {
             currentLabels.push(info.etiqueta);
             await db.run("UPDATE metadata SET labels = ? WHERE phone = ?", [JSON.stringify(currentLabels), phone]);
@@ -289,9 +254,8 @@ async function gestionarLead(phone, info, fallbackName) {
 }
 
 // ============================================================
-// 6. API ENDPOINTS (RUTAS)
+// API ENDPOINTS
 // ============================================================
-
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No auth");
 
 app.post('/auth', (req, res) => {
@@ -301,25 +265,13 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-// --- LISTA DE CHATS (FALENCIA #3: FILTRO ARCHIVADOS) ---
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
-        // Parametro ?view=archived para ver los archivados
         const view = req.query.view || 'active'; 
         const whereClause = view === 'archived' ? 'm.archived = 1' : '(m.archived = 0 OR m.archived IS NULL)';
-
         const query = `
-            SELECT 
-                h.phone as id, 
-                MAX(h.id) as max_id,
-                h.text as lastText, 
-                h.time as timestamp,
-                m.contactName, 
-                m.photoUrl, 
-                m.labels, 
-                m.pinned,
-                m.archived,
-                b.active as botActive
+            SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp,
+                m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, b.active as botActive
             FROM history h
             LEFT JOIN metadata m ON h.phone = m.phone
             LEFT JOIN bot_status b ON h.phone = b.phone
@@ -330,18 +282,12 @@ app.get('/api/chats-full', proteger, async (req, res) => {
         `;
         const rows = await db.all(query);
         const list = rows.map(r => ({
-            id: r.id,
-            name: r.contactName || r.id,
-            lastMessage: { text: r.lastText, time: r.timestamp },
-            botActive: r.botActive !== 0,
-            pinned: r.pinned === 1,
-            archived: r.archived === 1,
-            labels: JSON.parse(r.labels || "[]"),
-            photoUrl: r.photoUrl || null, // Se enviará al front para mostrar
-            timestamp: r.timestamp
+            id: r.id, name: r.contactName || r.id, lastMessage: { text: r.lastText, time: r.timestamp },
+            botActive: r.botActive !== 0, pinned: r.pinned === 1, archived: r.archived === 1,
+            labels: JSON.parse(r.labels || "[]"), photoUrl: r.photoUrl || null, timestamp: r.timestamp
         }));
         res.json(list);
-    } catch(e) { console.error(e); res.status(500).json([]); }
+    } catch(e) { res.status(500).json([]); }
 });
 
 app.get('/api/chat-history/:phone', proteger, async (req, res) => {
@@ -351,13 +297,10 @@ app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     } catch(e) { res.status(500).json([]); }
 });
 
-// --- ACCIONES DE CHAT (SOPORTE CLICK DERECHO - FALENCIA #2 y #5) ---
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
-    
     try {
         if(action === 'set_labels') {
-            // Permite quitar etiquetas enviando array vacio o modificado
             await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [phone, JSON.stringify(value)]);
         }
         else if(action === 'toggle_pin') {
@@ -367,43 +310,23 @@ app.post('/api/chat/action', proteger, async (req, res) => {
             await db.run("INSERT INTO metadata (phone, archived) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET archived=excluded.archived", [phone, value ? 1 : 0]);
         }
         else if(action === 'delete') {
-            // Borrado completo
             await db.run("DELETE FROM history WHERE phone=?",[phone]);
             await db.run("DELETE FROM metadata WHERE phone=?",[phone]);
             await db.run("DELETE FROM bot_status WHERE phone=?",[phone]);
             await db.run("DELETE FROM leads WHERE phone=?",[phone]);
         }
         res.json({ success: true });
-    } catch(e) {
-        res.status(500).json({ error: e.message });
-    }
+    } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// --- DATOS Y CONFIG ---
 app.get('/api/data/:type', proteger, async (req, res) => {
     const t = req.params.type;
     try {
-        if (t === 'leads') {
-            // FALENCIA #4: SQL limpio para Excel
-            // Seleccionamos solo columnas necesarias y renombramos para que el Excel salga bonito
-            const leads = await db.all(`
-                SELECT 
-                    nombre as Nombre, 
-                    phone as Telefono, 
-                    ciudad as Ciudad, 
-                    interes as Interes, 
-                    etiqueta as Estado, 
-                    correo as Correo,
-                    fecha as Fecha
-                FROM leads ORDER BY id DESC
-            `);
-            return res.json(leads);
-        }
+        // CORRECCIÓN CRÍTICA: Devolvemos RAW Data (minúsculas) para no romper el frontend
+        if (t === 'leads') return res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
         if (t === 'config') return res.json({ 
-            website_data: await getCfg('website_data', ""), 
-            tech_rules: await getCfg('tech_rules', []),
-            biz_profile: await getCfg('biz_profile', {}),
-            logo_url: await getCfg('logo_url', null)
+            website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []),
+            biz_profile: await getCfg('biz_profile', {}), logo_url: await getCfg('logo_url', null)
         });
         if (t === 'tags') return res.json(await db.all("SELECT * FROM global_tags"));
         if (t === 'shortcuts') return res.json(await db.all("SELECT * FROM shortcuts"));
@@ -424,11 +347,9 @@ app.post('/api/config/biz/save', proteger, async (req, res) => {
     res.json({success:true}); 
 });
 
-// --- TAGS, SHORTCUTS, CONTACTS ---
-app.post('/api/tags/add', proteger, async (req, res) => { try { await db.run("INSERT INTO global_tags (name, color) VALUES (?, ?)", [req.body.name, req.body.color]); res.json({success:true}); } catch(e){res.status(400).send("Error");} });
+app.post('/api/tags/add', proteger, async (req, res) => { await db.run("INSERT INTO global_tags (name, color) VALUES (?, ?)", [req.body.name, req.body.color]); res.json({success:true}); });
 app.post('/api/tags/delete', proteger, async (req, res) => { await db.run("DELETE FROM global_tags WHERE id = ?", [req.body.id]); res.json({success:true}); });
-
-app.post('/api/shortcuts/add', proteger, async (req, res) => { try { await db.run("INSERT INTO shortcuts (keyword, text) VALUES (?, ?)", [req.body.keyword, req.body.text]); res.json({success:true}); } catch(e) { res.status(400).json({error: "Existe"}); } });
+app.post('/api/shortcuts/add', proteger, async (req, res) => { await db.run("INSERT INTO shortcuts (keyword, text) VALUES (?, ?)", [req.body.keyword, req.body.text]); res.json({success:true}); });
 app.post('/api/shortcuts/delete', proteger, async (req, res) => { await db.run("DELETE FROM shortcuts WHERE id = ?", [req.body.id]); res.json({success:true}); });
 
 app.post('/api/contacts/upload-photo', proteger, upload.single('file'), async (req, res) => {
@@ -442,7 +363,6 @@ app.post('/api/contacts/add', proteger, async (req, res) => {
     res.json({ success: true, phone: req.body.phone });
 });
 
-// --- CHAT UPLOADS & SEND ---
 app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => {
     try {
         const { phone, type } = req.body; 
@@ -450,9 +370,7 @@ app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, r
         const mediaId = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname);
         if(mediaId) {
             await enviarWhatsApp(phone, { id: mediaId }, type);
-            let tag = `[MEDIA:${type.toUpperCase()}:${mediaId}]`;
-            await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'manual', tag, new Date().toISOString()]);
-            // Desarchivar al enviar manualmente
+            await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'manual', `[MEDIA:${type.toUpperCase()}:${mediaId}]`, new Date().toISOString()]);
             await db.run("UPDATE metadata SET archived = 0 WHERE phone = ?", [phone]);
             res.json({success: true});
         } else { res.status(500).json({error: "Error Meta"}); }
@@ -462,7 +380,6 @@ app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, r
 app.post('/api/chat/send', proteger, async (req, res) => {
     if(await enviarWhatsApp(req.body.phone, req.body.message)) {
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [req.body.phone, 'manual', req.body.message, new Date().toISOString()]);
-        // Desarchivar al enviar manualmente
         await db.run("UPDATE metadata SET archived = 0 WHERE phone = ?", [req.body.phone]);
         res.json({ success: true });
     } else res.status(500).json({ error: "Error enviando" });
@@ -473,14 +390,11 @@ app.post('/api/chat/toggle-bot', proteger, async (req, res) => {
     res.json({ success: true });
 });
 
-// --- RULES & LEADS ---
 app.post('/api/config/rules/add', proteger, async (req, res) => { let r=await getCfg('tech_rules',[]); r.push(req.body.rule); await setCfg('tech_rules',r); res.json({rules:r}); });
 app.post('/api/config/rules/delete', proteger, async (req, res) => { let r=await getCfg('tech_rules',[]); r.splice(req.body.index,1); await setCfg('tech_rules',r); res.json({rules:r}); });
-
 app.post('/api/leads/update', proteger, async(req,res)=>{ const{id,field,value}=req.body; await db.run(`UPDATE leads SET ${field}=? WHERE id=?`,[value,id]); res.json({success:true}); });
 app.post('/api/leads/delete', proteger, async(req,res)=>{ await db.run("DELETE FROM leads WHERE id=?",[req.body.id]); res.json({success:true}); });
 
-// --- KNOWLEDGE ---
 app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res) => {
     try {
         const n = parse(req.file.buffer.toString('utf-8'), { columns: true });
@@ -500,63 +414,39 @@ app.post('/api/knowledge/delete', proteger, async (req, res) => {
 
 app.post('/api/test-ai', proteger, async (req, res) => {
     try {
-        // Test con datos dummy
-        const prompt = `TEST MODE: ${req.body.message}. Responde como Valentina ICC.`;
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: prompt }] }] });
+            { contents: [{ parts: [{ text: `TEST: ${req.body.message}` }] }] });
         res.json({ response: r.data.candidates[0].content.parts[0].text });
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// --- WEBHOOK (CEREBRO DE ENTRADA) ---
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
 app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
     try {
         const val = req.body.entry?.[0]?.changes?.[0]?.value;
         const msg = val?.messages?.[0];
-        
-        // FALENCIA #1: Captura de Nombre desde el Perfil de Meta
         let contactName = "Cliente";
         if (val?.contacts?.[0]) {
             contactName = val.contacts[0].profile.name;
-            // Guardamos el nombre real de WhatsApp en metadatos si no ha sido editado manualmente
             await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName WHERE addedManual=0", [val.contacts[0].wa_id, contactName]);
         }
-
         if(msg) {
-            let userMsg = "";
-            let mediaDesc = "";
+            let userMsg = "", mediaDesc = "";
+            if (msg.type === "text") userMsg = msg.text.body;
+            else if (msg.type === "image") { userMsg = `[MEDIA:IMAGE:${msg.image.id}]`; mediaDesc = "📷 FOTO"; }
+            else if (msg.type === "audio") { userMsg = `[MEDIA:AUDIO:${msg.audio.id}]`; mediaDesc = "🎤 AUDIO"; }
+            else if (msg.type === "document") { userMsg = `[MEDIA:DOC:${msg.document.id}]`; mediaDesc = "📄 DOC"; }
 
-            if (msg.type === "text") {
-                userMsg = msg.text.body;
-            } else if (msg.type === "image") {
-                userMsg = `[MEDIA:IMAGE:${msg.image.id}]`; 
-                mediaDesc = "📷 FOTO RECIBIDA";
-            } else if (msg.type === "video") { 
-                userMsg = `[MEDIA:VIDEO:${msg.video.id}]`; 
-                mediaDesc = "🎥 VIDEO RECIBIDO";
-            } else if (msg.type === "document") {
-                userMsg = `[MEDIA:DOC:${msg.document.id}]`;
-                mediaDesc = "📄 DOCUMENTO RECIBIDO";
-            } else if (msg.type === "audio") {
-                userMsg = `[MEDIA:AUDIO:${msg.audio.id}]`;
-                mediaDesc = "🎤 AUDIO RECIBIDO";
-            }
-
-            const inputIA = mediaDesc ? `(El usuario envió: ${mediaDesc})` : userMsg;
-            // Pasamos contactName a la IA para que lo use si el cliente no se presenta
-            const respuesta = await procesarConValentina(inputIA, msg.from, userMsg, contactName); 
-            
+            const respuesta = await procesarConValentina(mediaDesc || userMsg, msg.from, userMsg, contactName); 
             if(respuesta) await enviarWhatsApp(msg.from, respuesta);
         }
-    } catch(e) { console.error("Webhook Error:", e); }
+    } catch(e) { console.error("Error Webhook", e); }
 });
 
-// --- ARRANQUE ---
 app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
 app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 VALENTINA v16.0 READY (PRODUCCIÓN)"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v16.1 READY"));
