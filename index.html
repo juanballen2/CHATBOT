@@ -550,7 +550,19 @@
         async function loadLeads() {
             // Usa minúsculas (raw data)
             allLeads = await fetch('/api/data/leads').then(r=>r.json());
-            document.getElementById('leads-body').innerHTML = allLeads.map(l => `<tr><td>${l.fecha.split(',')[0]}</td><td><a href="#" style="color:var(--primary); font-weight:bold; text-decoration:none;">${l.nombre}</a></td><td>${l.ciudad}</td><td>${l.interes}</td><td><span class="tag-pill" style="background:#F97316">${l.etiqueta}</span></td><td><button class="btn" style="background:red; padding:4px 8px;" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button></td></tr>`).join('');
+            document.getElementById('leads-body').innerHTML = allLeads.map(l => `<tr><td>${l.fecha.split(',')[0]}</td><td><a href="#" style="color:var(--primary); font-weight:bold; text-decoration:none;" onclick="openEditLead(${l.id})">${l.nombre}</a></td><td>${l.ciudad}</td><td>${l.interes}</td><td><span class="tag-pill" style="background:#F97316">${l.etiqueta}</span></td><td><button class="btn" style="background:red; padding:4px 8px;" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button></td></tr>`).join('');
+        }
+        
+        // --- FUNCIÓN AGREGADA PARA EDITAR LEADS ---
+        function openEditLead(id) {
+            const l = allLeads.find(x => x.id === id);
+            if (!l) return;
+            document.getElementById('edit-lead-id').value = id;
+            document.getElementById('edit-lead-name').value = l.nombre || "";
+            document.getElementById('edit-lead-city').value = l.ciudad || "";
+            document.getElementById('edit-lead-interest').value = l.interes || "";
+            document.getElementById('edit-lead-email').value = l.correo || "";
+            document.getElementById('modal-edit-lead').style.display = 'flex';
         }
 
         async function uploadLogo() {
