@@ -1,8 +1,8 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v16.2 (LEAD CAPTURE MODE)
+ * SERVER BACKEND - VALENTINA v16.3 (HUMANIZED)
  * Cliente: Importadora Casa Colombia (ICC)
- * Estado: FIXED - Prioridad Recolección de Datos
+ * Estado: FIXED - Saludo Humano + Captura Inteligente
  * ============================================================
  */
 
@@ -84,7 +84,7 @@ let db;
     try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_metadata_archived ON metadata(archived)`); } catch(e){}
 
     await refreshKnowledge();
-    console.log("🚀 BACKEND v16.2 ONLINE (LEAD MODE ACTIVE)");
+    console.log("🚀 BACKEND v16.3 ONLINE (HUMAN MODE ACTIVE)");
 })();
 
 // Caché de Conocimiento
@@ -177,8 +177,9 @@ function buscarEnCatalogo(query) {
     }).filter(i => i.score > 0).sort((a,b) => b.score - a.score).slice(0, 5);
 }
 
-// === [CORRECCIÓN PRINCIPAL AQUÍ] ===
+// === [CORRECCIÓN APLICADA: Lógica Humana vs. Captura] ===
 async function procesarConValentina(message, sessionId, mediaDesc = "", contactName = "Cliente") {
+    // 1. Guardar mensaje del usuario
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 0) ON CONFLICT(phone) DO UPDATE SET archived=0", [sessionId]);
 
@@ -187,40 +188,41 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
 
     const websiteData = await getCfg('website_data', "");
     const bizProfile = await getCfg('biz_profile', {});
-    const stock = buscarEnCatalogo(message);
-    const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
+    // Buscamos inventario pero NO se lo damos a la IA para que no lo suelte antes de tiempo
+    const stock = buscarEnCatalogo(message); 
+    const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 10", [sessionId])).reverse();
 
-    // PROMPT ESTRICTO DE RECOLECCIÓN DE DATOS
+    // === NUEVO PROMPT CON LÓGICA DE 2 ESTADOS ===
     const prompt = `
-    ROL: Eres Valentina, asistente virtual de ${bizProfile.name || 'Importadora Casa Colombia (ICC)'}.
+    ROL: Eres Valentina, asesora comercial amable y profesional de ${bizProfile.name || 'Importadora Casa Colombia'}.
     
-    OBJETIVO PRIORITARIO:
-    Tu meta NO es dar precios inmediatos, sino REGISTRAR LOS DATOS del cliente para que un Ejecutivo Comercial gestione la venta.
+    TUS DOS ESTADOS MENTALES (CRÍTICO):
     
-    DATOS NECESARIOS (El "Muro"):
-    Antes de dar cualquier Link, Precio o SKU, debes asegurarte de tener:
+    1. **ESTADO "SALUDO" (Cordialidad):**
+       - Si el usuario dice "Hola", "Buenos días", "Buenas tardes" y NO pide nada específico aún:
+       - RESPUESTA: "¡Hola! 🌻 Bienvenid@ a Importadora Casa Colombia. Soy Valentina. ¿En qué maquinaria o repuesto te puedo colaborar hoy?"
+       - **NO** pidas datos de contacto todavía. Primero saluda.
+
+    2. **ESTADO "NEGOCIO" (Captura de Datos):**
+       - Si el usuario YA mencionó qué necesita (ej: "Busco repuesto X", "Precio de Y", "Tienen Z?"), entonces SÍ actívate.
+       - Diles amablemente: "Claro que sí. Para que un asesor te contacte con la información exacta, necesito registrar tu solicitud. ¿Cuál es tu Nombre y Teléfono?"
+    
+    PRIORIDAD DE DATOS (Cuando estés en Estado Negocio):
     1. Nombre
-    2. Correo
-    3. Ciudad
-    4. Teléfono/Celular (Si no lo ha dado explícitamente en el texto, pídelo para confirmar).
+    2. Teléfono (Celular)
+    3. Interés (Qué producto quiere)
     
-    REGLAS DE ORO (STRICT):
-    1. **BLOQUEO DE INFO:** Si el cliente pregunta "¿Tienen X?", NO respondas "Sí" de inmediato ni des el link. 
-       - Respuesta Correcta: "Estoy validando disponibilidad en sistema 🛠️. Para que un asesor te envíe la cotización formal, por favor confírmame tu [Dato Faltante]".
-    2. **NO USAR "RECOLECTAR":** Usa palabras como "registrar", "validar" o "confirmar datos para la orden".
-    3. **TONO:** Breve (max 2 líneas), profesional y directo. Max 1 emoji.
-    4. **SI YA TIENES LOS DATOS:** Solo entonces puedes confirmar: "Gracias [Nombre]. Sí tenemos disponibilidad (SKU...). Aquí tienes el enlace: [LINK]".
-    
-    INVENTARIO (Solo para tu referencia interna, NO LO ENTREGUES SIN DATOS): 
+    REGLAS DE ORO:
+    - **Tono Humano:** No suenes como un robot. Usa frases naturales.
+    - **Bloqueo de Precios:** Si preguntan precio/stock, di: "Déjame validar en sistema... 🛠️ Mientras carga, confírmame tu nombre y celular para apartar la consulta."
+    - **Emojis:** Usa 1 o 2 emojis amigables (🌻, 🚜, 🤝).
+
+    INVENTARIO OCULTO (Solo úsalo para saber que SÍ existe, pero no des detalles sin datos): 
     ${JSON.stringify(stock)}
-    
-    INSTRUCCIONES DE JSON:
-    Analiza la conversación. Si tienes datos nuevos, rellénalos.
-    - "es_lead": true (Solo si tienes AL MENOS Nombre, Interés y Ciudad/Correo).
-    - "etiqueta": "Pendiente" (Si falta info), "Lead" (Si está completo), "No Stock" (Si verificaste y no hay).
-    
-    FORMATO JSON OBLIGATORIO AL FINAL:
-    \`\`\`json {"es_lead": boolean, "nombre":"...", "ciudad":"...", "interes":"...", "correo":"...", "etiqueta":"..."} \`\`\`
+
+    FORMATO JSON FINAL (OBLIGATORIO):
+    Analiza si ya tienes los datos. Si faltan, etiqueta como "Pendiente".
+    \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
     
     CHAT PREVIO: ${JSON.stringify(chatPrevio)}
     USUARIO: ${message}
@@ -231,24 +233,28 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
             { contents: [{ parts: [{ text: prompt }] }] });
         
         let txt = r.data.candidates[0].content.parts[0].text;
+        
+        // Extracción del JSON limpio
         const match = txt.match(/```json([\s\S]*?)```|{([\s\S]*?)}$/i);
         let visible = txt;
         
         if (match) {
-            visible = txt.replace(match[0], "").trim();
+            visible = txt.replace(match[0], "").trim(); // Quitamos el JSON del texto visible
             try {
                 const jsonStr = (match[1]||match[2]||match[0]).replace(/```json/g,"").replace(/```/g,"").trim();
                 const info = JSON.parse(jsonStr);
-                // Solo guardamos si hay algo relevante
-                if(info.es_lead || info.nombre || info.correo || info.ciudad) {
+                
+                // Guardamos Lead si hay datos relevantes
+                if(info.nombre || info.celular || info.interes) {
                     await gestionarLead(sessionId, info, contactName);
                 }
-            } catch(e) {}
+            } catch(e) { console.error("Error parseando JSON IA", e); }
         }
         
+        // Guardar respuesta del bot
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', visible, new Date().toISOString()]);
         return visible;
-    } catch (e) { return "Estoy validando la información, dame un momento por favor. 🛠️"; }
+    } catch (e) { return "Hola! Soy Valentina. ¿En qué te puedo ayudar?"; }
 }
 
 async function gestionarLead(phone, info, fallbackName) {
@@ -467,4 +473,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v16.2 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v16.3 READY"));
