@@ -1,8 +1,8 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v16.7 (FULL UNCOMPRESSED)
+ * SERVER BACKEND - VALENTINA v17.0 (FULL UNCOMPRESSED)
  * Cliente: Importadora Casa Colombia (ICC)
- * Estado: FIXED - Anti-Duplicados + Cerebro Dinámico + Código Completo
+ * Novedades: Contador de Mensajes + Inyección de Contexto + Anti-Duplicados
  * ============================================================
  */
 
@@ -33,16 +33,12 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v16"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v17"; 
 
 // --- PERSONALIDAD POR DEFECTO (Respaldo) ---
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.
 OBJETIVO: Recopilar Nombre, Celular, Correo y Ciudad.
-REGLAS:
-1. No uses comillas en tu respuesta hablada.
-2. Si el cliente saluda, saluda y pregunta interés.
-3. Si pide repuesto, pide los datos faltantes amablemente.
-4. No des precios sin tener los datos.`;
+REGLAS: No uses comillas. Si saludan, saluda. Si piden repuesto, pide datos. No des precios sin tener los datos.`;
 
 // --- MIDDLEWARES ---
 app.use(express.json({ limit: '100mb' }));
@@ -72,7 +68,7 @@ let db;
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
         CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT); 
-        CREATE TABLE IF NOT EXISTS metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0, photoUrl TEXT, archived INTEGER DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0, photoUrl TEXT, archived INTEGER DEFAULT 0, unreadCount INTEGER DEFAULT 0);
         CREATE TABLE IF NOT EXISTS bot_status (phone TEXT PRIMARY KEY, active INTEGER DEFAULT 1);
         CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, searchable TEXT UNIQUE, raw_data TEXT);
         CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
@@ -80,26 +76,23 @@ let db;
         CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
     `);
     
-    // 2. Migraciones (Silent)
+    // 2. Migraciones (Silent) para compatibilidad
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
+    try { await db.exec(`ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0`); } catch(e) {} // NUEVO v17.0
     try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {}
+    
     const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
     for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
 
-    // 3. Índices
-    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_history_phone ON history(phone)`); } catch(e){}
-    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_history_time ON history(time)`); } catch(e){}
-    try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_metadata_archived ON metadata(archived)`); } catch(e){}
-
-    // 4. Inicializar Prompt si no existe
+    // 3. Inicializar Prompt si no existe
     const currentPrompt = await getCfg('bot_prompt');
     if(!currentPrompt) {
         await setCfg('bot_prompt', DEFAULT_PROMPT);
     }
 
     await refreshKnowledge();
-    console.log("🚀 BACKEND v16.7 ONLINE (FULL UNCOMPRESSED)");
+    console.log("🚀 BACKEND v17.0 ONLINE (NOTIFICATIONS + CONTEXT)");
 })();
 
 // Caché de Conocimiento
@@ -192,28 +185,40 @@ function buscarEnCatalogo(query) {
     }).filter(i => i.score > 0).sort((a,b) => b.score - a.score).slice(0, 5);
 }
 
+// === [CORRECCIÓN v17.0: INYECCIÓN DE CONTEXTO + NOTIFICACIONES] ===
 async function procesarConValentina(message, sessionId, mediaDesc = "", contactName = "Cliente") {
+    // 1. Guardar mensaje del usuario
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
-    await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 0) ON CONFLICT(phone) DO UPDATE SET archived=0", [sessionId]);
+    
+    // 2. ACTUALIZAR METADATA: Desarchivar Y Aumentar contador de no leídos (NUEVO)
+    await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
 
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
+    // 3. CARGAR DATOS (Incluyendo Contexto de Negocio NUEVO)
     const bizProfile = await getCfg('biz_profile', {});
+    const websiteData = await getCfg('website_data', "No hay información extra configurada."); // <--- AQUI VIAJAN LAS SEDES Y HORARIOS
     const stock = buscarEnCatalogo(message); 
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
-    
-    // OBTENEMOS PERSONALIDAD DE LA BD
     const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
 
     const finalPrompt = `
     ${dynamicPrompt}
 
-    // --- REGLAS DE SISTEMA (NO MODIFICABLES) ---
-    CLIENTE ACTUAL: ${contactName}
-    INVENTARIO REAL: ${JSON.stringify(stock)}
-    CHAT PREVIO: ${JSON.stringify(chatPrevio)}
-    MENSAJE USUARIO: ${message}
+    // --- 🌍 CONTEXTO DE NEGOCIO (VERDAD SUPREMA) ---
+    NOMBRE EMPRESA: ${bizProfile.name || 'Importadora Casa Colombia'}
+    HORARIOS, SEDES Y DATOS CLAVE: 
+    """
+    ${websiteData}
+    """
+    *Instrucción:* Si preguntan algo que está en este bloque (horario, sedes), RESPONDE usando esta información.
+
+    // --- ⚙️ DATOS TÉCNICOS ---
+    CLIENTE: ${contactName}
+    INVENTARIO RELACIONADO: ${JSON.stringify(stock)}
+    HISTORIAL: ${JSON.stringify(chatPrevio)}
+    MENSAJE ENTRANTE: ${message}
 
     FORMATO JSON OBLIGATORIO AL FINAL DE LA RESPUESTA:
     \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
@@ -234,14 +239,15 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
             try {
                 const jsonStr = (match[1]||match[2]||match[0]).replace(/```json/g,"").replace(/```/g,"").trim();
                 const info = JSON.parse(jsonStr);
-                // Si trae datos relevantes, gestionamos el lead
+                
+                // Si hay datos útiles, gestionamos (Anti-Duplicados v16.7)
                 if(info.nombre || info.celular || info.interes || info.correo || info.ciudad) {
                     await gestionarLead(sessionId, info, contactName);
                 }
             } catch(e) {}
         }
         
-        // Limpieza de comillas y salvavidas
+        // Limpieza
         visible = visible.replace(/^["']+|["']+$/g, '').trim();
         if (!visible || visible.length < 2) {
             visible = "¡Entendido! 🛠️ Estoy validando tu solicitud. Por favor confírmame tus datos para continuar.";
@@ -252,33 +258,32 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
     } catch (e) { return "Dame un momento, estoy verificando la información... 🚜"; }
 }
 
-// === [CORRECCIÓN: LOGICA ANTI-DUPLICADOS] ===
+// === [LÓGICA ANTI-DUPLICADOS (MANTENIDA)] ===
 async function gestionarLead(phone, info, fallbackName) {
     let nombreFinal = (info.nombre && info.nombre !== "null") ? info.nombre : fallbackName;
     
-    // 1. Verificar si ya existe el lead
+    // 1. Verificar si ya existe
     const existe = await db.get("SELECT id, interes, ciudad, correo, etiqueta FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
 
     if (existe) {
-        // 2. ACTUALIZAR (Merge inteligente)
+        // 2. ACTUALIZAR
         const nuevoInteres = info.interes || existe.interes;
         const nuevaCiudad = info.ciudad || existe.ciudad;
         const nuevoCorreo = info.correo || existe.correo;
-        // Solo cambiamos etiqueta si la nueva NO es "Pendiente" (para no borrar un estado avanzado)
         const nuevaEtiqueta = (info.etiqueta && info.etiqueta !== "Pendiente") ? info.etiqueta : existe.etiqueta;
 
         await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=? WHERE id=?`, 
             [nombreFinal, nuevoInteres, nuevaEtiqueta, new Date().toLocaleString(), nuevaCiudad, nuevoCorreo, existe.id]);
+            
     } else {
-        // 3. CREAR (Solo si no existe)
-        // Solo creamos si hay datos mínimos valiosos para evitar basura
+        // 3. CREAR
         if (info.interes || info.correo || info.ciudad || info.es_lead) {
             await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
                 [phone, nombreFinal, info.interes || "Consultando", info.etiqueta || "Pendiente", new Date().toLocaleString(), info.ciudad, info.correo]);
         }
     }
     
-    // Actualizar metadatos del chat (etiquetas visuales)
+    // Etiquetas visuales
     if(info.etiqueta) {
         try {
             const row = await db.get("SELECT labels FROM metadata WHERE phone = ?", [phone]);
@@ -303,7 +308,7 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-// --- ENDPOINTS DE PERSONALIDAD (NUEVO) ---
+// ENDPOINTS DE PERSONALIDAD
 app.get('/api/config/prompt', proteger, async (req, res) => {
     const prompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
     res.json({ prompt });
@@ -314,14 +319,14 @@ app.post('/api/config/prompt', proteger, async (req, res) => {
     res.json({ success: true });
 });
 
-// --- ENDPOINTS DE CHAT ---
+// --- ENDPOINT CHATS (MODIFICADO v17.0: DEVUELVE UNREAD COUNT) ---
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
         const view = req.query.view || 'active'; 
         const whereClause = view === 'archived' ? 'm.archived = 1' : '(m.archived = 0 OR m.archived IS NULL)';
         const query = `
             SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp,
-                m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, b.active as botActive
+                m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, b.active as botActive
             FROM history h
             LEFT JOIN metadata m ON h.phone = m.phone
             LEFT JOIN bot_status b ON h.phone = b.phone
@@ -331,20 +336,20 @@ app.get('/api/chats-full', proteger, async (req, res) => {
             LIMIT 50
         `;
         const rows = await db.all(query);
-        const list = rows.map(r => ({
+        res.json(rows.map(r => ({
             id: r.id, name: r.contactName || r.id, lastMessage: { text: r.lastText, time: r.timestamp },
             botActive: r.botActive !== 0, pinned: r.pinned === 1, archived: r.archived === 1,
+            unreadCount: r.unreadCount || 0, // <--- DATO NUEVO PARA EL FRONT
             labels: JSON.parse(r.labels || "[]"), photoUrl: r.photoUrl || null, timestamp: r.timestamp
-        }));
-        res.json(list);
+        })));
     } catch(e) { res.status(500).json([]); }
 });
 
+// --- ENDPOINT HISTORIAL (MODIFICADO v17.0: RESETEA EL CONTADOR) ---
 app.get('/api/chat-history/:phone', proteger, async (req, res) => {
-    try {
-        const rows = await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]);
-        res.json(rows);
-    } catch(e) { res.status(500).json([]); }
+    // Al pedir el historial, significa que el humano abrió el chat -> Resetear a 0
+    await db.run("UPDATE metadata SET unreadCount = 0 WHERE phone = ?", [req.params.phone]);
+    res.json(await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]));
 });
 
 app.post('/api/chat/action', proteger, async (req, res) => {
@@ -498,4 +503,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v16.7 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v17.0 READY"));
