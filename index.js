@@ -1,11 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v18.7 (FAST RECEPTION)
+ * SERVER BACKEND - VALENTINA v18.9 (HUMAN VIEWABLE)
  * Cliente: Importadora Casa Colombia (ICC)
- * Estado: 
- * - Visión AI: DESACTIVADA (Por velocidad y estabilidad).
- * - Lógica Media: Recibe archivo -> Pide datos -> Pasa Lead.
- * - Anti-Bloqueos: Máxima velocidad de respuesta.
+ * Lógica:
+ * - El Admin (Tú) PUEDE VER las fotos/pdf en el panel.
+ * - La IA (Valentina) solo sabe que llegó un archivo y pide datos.
+ * - Velocidad máxima, sin errores 429.
  * ============================================================
  */
 
@@ -36,7 +36,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v18-7"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v18-9"; 
 
 // --- PERSONALIDAD BASE ---
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
@@ -65,7 +65,6 @@ let db;
         driver: sqlite3.Database
     });
 
-    // 1. Tablas Base
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
         CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT); 
@@ -77,7 +76,6 @@ let db;
         CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
     `);
     
-    // 2. Migraciones
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0`); } catch(e) {}
@@ -86,15 +84,13 @@ let db;
     const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
     for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
 
-    // 3. Inicializar Prompt
     const currentPrompt = await getCfg('bot_prompt');
     if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
 
     await refreshKnowledge();
-    console.log("🚀 SERVER v18.7 ONLINE (FAST RESPONSE MODE)");
+    console.log("🚀 SERVER v18.9 ONLINE (HUMAN VIEWABLE)");
 })();
 
-// Caché de Conocimiento
 let globalKnowledge = [];
 async function refreshKnowledge() {
     try {
@@ -184,85 +180,97 @@ function buscarEnCatalogo(query) {
     }).filter(i => i.score > 0).sort((a,b) => b.score - a.score).slice(0, 5);
 }
 
-// === [CORRECCIÓN v18.7: LÓGICA DE RECEPCIÓN ÁGIL] ===
-async function procesarConValentina(message, sessionId, mediaDesc = "", contactName = "Cliente") {
-    // 1. Guardar mensaje
-    await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// === [LÓGICA HÍBRIDA v18.9] ===
+async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName = "Cliente", isFile = false) {
+    // 1. Guardar mensaje EN BASE DE DATOS (Lo que TÚ ves)
+    // Aquí guardamos el ID real de la foto para que el frontend la pinte
+    await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', dbMessage, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
 
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    // 2. Contexto
+    // --- 🚀 MODO RECEPCIONISTA (ARCHIVOS) ---
+    // Si es un archivo, NO molestamos a Gemini. Respondemos directo.
+    if (isFile) {
+        const respuestaAutomatica = `¡Hola ${contactName}! 👋 He recibido tu archivo/foto correctamente.\n\nPara que uno de nuestros asesores pueda revisarlo en detalle, por favor confírmame:\n1. Tu nombre completo.\n2. La ciudad desde donde nos escribes.`;
+        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', respuestaAutomatica, new Date().toISOString()]);
+        return respuestaAutomatica;
+    }
+
+    // --- 🤖 MODO ASESOR (TEXTO) ---
+    // Solo si es texto, llamamos a Gemini.
     const bizProfile = await getCfg('biz_profile', {});
     const websiteData = await getCfg('website_data', "No hay información extra."); 
-    const stock = buscarEnCatalogo(message); 
+    const stock = buscarEnCatalogo(aiMessage); 
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
     const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
 
-    // 3. Prompt (INSTRUCCIÓN "RECEPCIONISTA")
     const finalPrompt = `
     ${dynamicPrompt}
 
-    // --- 📁 GESTIÓN DE ARCHIVOS (CRÍTICO) ---
-    Si el mensaje del usuario dice "[ARCHIVO: FOTO]", "[ARCHIVO: PDF]" o "[ARCHIVO: AUDIO]":
-    1. **NO** intentes describir el archivo (no puedes verlo).
-    2. **CONFIRMA** la recepción amablemente.
-    3. **PIDE DATOS:** Solicita Nombre, Ciudad y Correo para pasar el archivo a un asesor humano.
-    Ejemplo: "¡Listo! Recibí el archivo. Para que un asesor lo revise en detalle, por favor regálame tu nombre y ciudad."
-
-    // --- 🚨 REGLAS GENERALES ---
-    1. **NO MANDES LINKS:** Si preguntan horarios o sedes, USA ESTA INFO:
+    // --- REGLAS ---
+    1. **NO PENSAMIENTOS:** No escribas "Analizando...", "Respuesta:". SOLO el mensaje final.
+    2. **NEGOCIO:** Si preguntan horarios o sedes, USA ESTA INFO:
     """
     ${websiteData}
     (Horarios: ${bizProfile.hours || 'Lunes a Viernes 8am-6pm'})
     """
-    2. **CERO PENSAMIENTOS:** No escribas "Analizando...", solo la respuesta final.
     3. **CERO COMILLAS.**
 
-    // --- ⚙️ DATOS ---
+    // --- DATOS ---
     CLIENTE: ${contactName}
-    INVENTARIO REL: ${JSON.stringify(stock)}
+    INVENTARIO: ${JSON.stringify(stock)}
     HISTORIAL: ${JSON.stringify(chatPrevio)}
-    MENSAJE NUEVO: ${message}
+    MENSAJE: ${aiMessage}
 
-    FORMATO JSON FINAL (Oculto):
+    FORMATO JSON FINAL:
     \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
     `;
 
-    try {
-        // USAMOS GEMINI 2.0 FLASH (Sin imágenes, solo texto rápido)
-        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: finalPrompt }] }] });
-        
-        let txt = r.data.candidates[0].content.parts[0].text;
-        
-        // Extracción JSON
-        const match = txt.match(/```json([\s\S]*?)```|{([\s\S]*?)}$/i);
-        let visible = txt;
-        
-        if (match) {
-            visible = txt.replace(match[0], "").trim();
-            try {
-                const info = JSON.parse((match[1]||match[2]||match[0]).replace(/```json/g,"").replace(/```/g,"").trim());
-                if(info.nombre || info.celular || info.interes || info.correo || info.ciudad) {
-                    await gestionarLead(sessionId, info, contactName);
-                }
-            } catch(e) {}
-        }
-        
-        // Limpieza de texto
-        visible = visible.replace(/(\*.*Analizando.*\*|Analizando:|Respuesta:|Pensamiento:|Contexto:|Nota:)([\s\S]*?)(\n|$)/gi, "").trim();
-        visible = visible.replace(/^["']+|["']+$/g, '').trim();
-        
-        if (!visible || visible.length < 2) visible = "¡Hola! 👋 Claro que sí, ¿en qué te puedo ayudar?";
+    // Reintentos para texto
+    let intentos = 0;
+    let exito = false;
+    let txt = "";
 
-        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', visible, new Date().toISOString()]);
-        return visible;
-    } catch (e) { 
-        console.error("Gemini Error:", e.message);
-        return "Dame un momento... 🚜"; 
+    while (intentos < 3 && !exito) {
+        try {
+            const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${API_KEY}`,
+                { contents: [{ parts: [{ text: finalPrompt }] }] });
+            
+            txt = r.data.candidates[0].content.parts[0].text;
+            exito = true;
+        } catch (e) {
+            console.error(`Gemini Retry ${intentos+1}:`, e.response?.status);
+            await sleep(3000); 
+            intentos++;
+        }
     }
+
+    if (!exito) return "Dame un momento, estoy verificando la información... 🚜";
+
+    const match = txt.match(/```json([\s\S]*?)```|{([\s\S]*?)}$/i);
+    let visible = txt;
+    
+    if (match) {
+        visible = txt.replace(match[0], "").trim();
+        try {
+            const info = JSON.parse((match[1]||match[2]||match[0]).replace(/```json/g,"").replace(/```/g,"").trim());
+            if(info.nombre || info.celular || info.interes || info.correo || info.ciudad) {
+                await gestionarLead(sessionId, info, contactName);
+            }
+        } catch(e) {}
+    }
+    
+    visible = visible.replace(/(\*.*Analizando.*\*|Analizando:|Respuesta:|Pensamiento:|Contexto:)([\s\S]*?)(\n|$)/gi, "").trim();
+    visible = visible.replace(/^["']+|["']+$/g, '').trim();
+    
+    if (!visible || visible.length < 2) visible = "¡Hola! ¿En qué te puedo ayudar hoy?";
+
+    await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', visible, new Date().toISOString()]);
+    return visible;
 }
 
 async function gestionarLead(phone, info, fallbackName) {
@@ -310,7 +318,6 @@ app.post('/auth', (req, res) => {
 app.get('/api/config/prompt', proteger, async (req, res) => { res.json({ prompt: await getCfg('bot_prompt', DEFAULT_PROMPT) }); });
 app.post('/api/config/prompt', proteger, async (req, res) => { await setCfg('bot_prompt', req.body.prompt); res.json({ success: true }); });
 
-// CHATS + UNREAD COUNT
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
         const view = req.query.view || 'active'; 
@@ -460,7 +467,7 @@ app.post('/api/knowledge/delete', proteger, async (req, res) => {
 
 app.post('/api/test-ai', proteger, async (req, res) => {
     try {
-        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${API_KEY}`,
             { contents: [{ parts: [{ text: `TEST: ${req.body.message}` }] }] });
         res.json({ response: r.data.candidates[0].content.parts[0].text });
     } catch(e) { res.status(500).json({ error: e.message }); }
@@ -479,23 +486,36 @@ app.post('/webhook', async (req, res) => {
             await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName WHERE addedManual=0", [val.contacts[0].wa_id, contactName]);
         }
         if(msg) {
-            let userMsg = "", mediaDesc = "";
+            let userMsg = "", mediaDesc = "", isFile = false;
+            let dbMessage = ""; // LO QUE SE GUARDA EN LA DB (Visible para ti)
+            let aiMessage = ""; // LO QUE SE LE MANDA A LA IA (Texto limpio)
             
-            // --- DETECCIÓN DE ARCHIVOS (MODO RECEPCIONISTA) ---
+            // --- DETECCIÓN DE TIPOS ---
             if (msg.type === "text") {
-                userMsg = msg.text.body;
-            } else if (msg.type === "image") { 
-                userMsg = `[ARCHIVO: FOTO]`; mediaDesc = "📷 FOTO"; 
-            } else if (msg.type === "audio") { 
-                userMsg = `[ARCHIVO: AUDIO]`; mediaDesc = "🎤 AUDIO"; 
-            } else if (msg.type === "document") { 
-                userMsg = `[ARCHIVO: PDF]`; mediaDesc = "📄 DOC"; 
-            } else if (msg.type === "video") {
-                userMsg = `[ARCHIVO: VIDEO]`; mediaDesc = "🎥 VIDEO";
+                dbMessage = msg.text.body;
+                aiMessage = msg.text.body;
+            } else {
+                isFile = true;
+                if (msg.type === "image") { 
+                    dbMessage = `[MEDIA:IMAGE:${msg.image.id}]`; // TÚ VES ESTO (Y EL FRONTEND PINTA LA FOTO)
+                    aiMessage = `[ARCHIVO RECIBIDO: FOTO]`;      // LA IA VE ESTO
+                }
+                else if (msg.type === "audio") { 
+                    dbMessage = `[MEDIA:AUDIO:${msg.audio.id}]`; 
+                    aiMessage = `[ARCHIVO RECIBIDO: AUDIO]`;
+                }
+                else if (msg.type === "document") { 
+                    dbMessage = `[MEDIA:DOC:${msg.document.id}]`; 
+                    aiMessage = `[ARCHIVO RECIBIDO: PDF]`;
+                }
+                else if (msg.type === "video") { 
+                    dbMessage = `[MEDIA:VIDEO:${msg.video.id}]`; 
+                    aiMessage = `[ARCHIVO RECIBIDO: VIDEO]`;
+                }
             }
 
-            // Enviamos el texto "userMsg" (que ya dice que es un archivo) a la IA
-            const respuesta = await procesarConValentina(mediaDesc || userMsg, msg.from, userMsg, contactName); 
+            // Enviamos los dos mensajes (DB y AI) a la función principal
+            const respuesta = await procesarConValentina(dbMessage, aiMessage, msg.from, contactName, isFile); 
             if(respuesta) await enviarWhatsApp(msg.from, respuesta);
         }
     } catch(e) { console.error("Error Webhook", e); }
@@ -506,4 +526,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v18.7 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v18.9 READY"));
