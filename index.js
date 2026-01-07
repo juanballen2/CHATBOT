@@ -1,9 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v18.4 (GEMINI 2.0 FIX)
+ * SERVER BACKEND - VALENTINA v18.7 (FAST RECEPTION)
  * Cliente: Importadora Casa Colombia (ICC)
- * Modelo: GEMINI 2.0 FLASH (Estricto)
- * Estado: CORREGIDO (Sin pensamientos, sin silencios)
+ * Estado: 
+ * - Visión AI: DESACTIVADA (Por velocidad y estabilidad).
+ * - Lógica Media: Recibe archivo -> Pide datos -> Pasa Lead.
+ * - Anti-Bloqueos: Máxima velocidad de respuesta.
  * ============================================================
  */
 
@@ -34,7 +36,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v18-4"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v18-7"; 
 
 // --- PERSONALIDAD BASE ---
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
@@ -81,12 +83,15 @@ let db;
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0`); } catch(e) {}
     try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {}
     
+    const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
+    for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
+
     // 3. Inicializar Prompt
     const currentPrompt = await getCfg('bot_prompt');
     if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
 
     await refreshKnowledge();
-    console.log("🚀 SERVER v18.4 ONLINE (GEMINI 2.0 + VISION FIX)");
+    console.log("🚀 SERVER v18.7 ONLINE (FAST RESPONSE MODE)");
 })();
 
 // Caché de Conocimiento
@@ -137,18 +142,6 @@ async function uploadToMeta(buffer, mimeType, filename) {
     } catch (error) { return null; }
 }
 
-// --- VISIÓN: DESCARGA SEGURA (TRY/CATCH) ---
-async function downloadMetaMedia(id) {
-    try {
-        const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
-        const mediaRes = await axios.get(urlRes.data.url, { headers: { 'Authorization': `Bearer ${META_TOKEN}` }, responseType: 'arraybuffer' });
-        return Buffer.from(mediaRes.data).toString('base64');
-    } catch (e) { 
-        console.error("Error descargando imagen:", e.message);
-        return null; // Si falla, retorna null para que el bot siga funcionando solo con texto
-    }
-}
-
 async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     try {
         let payload = { messaging_product: "whatsapp", to: destinatario, type: tipo };
@@ -191,8 +184,8 @@ function buscarEnCatalogo(query) {
     }).filter(i => i.score > 0).sort((a,b) => b.score - a.score).slice(0, 5);
 }
 
-// === [CORRECCIÓN: GEMINI 2.0 + FILTRO DE PENSAMIENTOS] ===
-async function procesarConValentina(message, sessionId, mediaDesc = "", contactName = "Cliente", imageBase64 = null) {
+// === [CORRECCIÓN v18.7: LÓGICA DE RECEPCIÓN ÁGIL] ===
+async function procesarConValentina(message, sessionId, mediaDesc = "", contactName = "Cliente") {
     // 1. Guardar mensaje
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
@@ -207,41 +200,40 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
     const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
 
-    // 3. Prompt (Instrucción de NO PENSAR)
+    // 3. Prompt (INSTRUCCIÓN "RECEPCIONISTA")
     const finalPrompt = `
     ${dynamicPrompt}
 
-    // --- 🚨 REGLAS OBLIGATORIAS (SISTEMA) ---
-    1. **NO GENERES PENSAMIENTOS VISIBLES:** No escribas "Analizando...", "Respuesta:", "Pensamiento:", "Contexto:". Entregame SOLO la respuesta final para el cliente.
-    2. **REGLA DE NEGOCIO:** Si preguntan Horarios, Sedes o Envíos, USA ESTA INFO y NO mandes links:
+    // --- 📁 GESTIÓN DE ARCHIVOS (CRÍTICO) ---
+    Si el mensaje del usuario dice "[ARCHIVO: FOTO]", "[ARCHIVO: PDF]" o "[ARCHIVO: AUDIO]":
+    1. **NO** intentes describir el archivo (no puedes verlo).
+    2. **CONFIRMA** la recepción amablemente.
+    3. **PIDE DATOS:** Solicita Nombre, Ciudad y Correo para pasar el archivo a un asesor humano.
+    Ejemplo: "¡Listo! Recibí el archivo. Para que un asesor lo revise en detalle, por favor regálame tu nombre y ciudad."
+
+    // --- 🚨 REGLAS GENERALES ---
+    1. **NO MANDES LINKS:** Si preguntan horarios o sedes, USA ESTA INFO:
     """
     ${websiteData}
     (Horarios: ${bizProfile.hours || 'Lunes a Viernes 8am-6pm'})
     """
-    3. **NO USES COMILLAS:** Entrega el texto limpio.
+    2. **CERO PENSAMIENTOS:** No escribas "Analizando...", solo la respuesta final.
+    3. **CERO COMILLAS.**
 
     // --- ⚙️ DATOS ---
     CLIENTE: ${contactName}
     INVENTARIO REL: ${JSON.stringify(stock)}
     HISTORIAL: ${JSON.stringify(chatPrevio)}
     MENSAJE NUEVO: ${message}
-    ${imageBase64 ? "[[SISTEMA: El usuario envió una FOTO. Analízala para identificar el repuesto.]]" : ""}
 
-    FORMATO JSON OBLIGATORIO AL FINAL (Invisible):
+    FORMATO JSON FINAL (Oculto):
     \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
     `;
 
-    // 4. Payload Gemini 2.0 Flash
-    const geminiParts = [];
-    if (imageBase64) {
-        geminiParts.push({ inline_data: { mime_type: "image/jpeg", data: imageBase64 } });
-    }
-    geminiParts.push({ text: finalPrompt });
-
     try {
-        // SOLICITUD A GEMINI 2.0 FLASH
+        // USAMOS GEMINI 2.0 FLASH (Sin imágenes, solo texto rápido)
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: geminiParts }] });
+            { contents: [{ parts: [{ text: finalPrompt }] }] });
         
         let txt = r.data.candidates[0].content.parts[0].text;
         
@@ -259,14 +251,8 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
             } catch(e) {}
         }
         
-        // --- CIRUGÍA: LIMPIEZA DE "ANALIZANDO" ---
-        // Si el modelo insiste en poner "Respuesta:", cortamos todo lo anterior.
-        if (visible.includes("Respuesta:")) {
-            visible = visible.split("Respuesta:")[1];
-        }
-        // Expresión regular para borrar patrones comunes de pensamiento
-        visible = visible.replace(/(\*.*Analizando la conversación.*\*|Analizando:|Pensamiento:|Contexto:)([\s\S]*?)(\n|$)/gi, "").trim();
-        // Borrar comillas iniciales y finales
+        // Limpieza de texto
+        visible = visible.replace(/(\*.*Analizando.*\*|Analizando:|Respuesta:|Pensamiento:|Contexto:|Nota:)([\s\S]*?)(\n|$)/gi, "").trim();
         visible = visible.replace(/^["']+|["']+$/g, '').trim();
         
         if (!visible || visible.length < 2) visible = "¡Hola! 👋 Claro que sí, ¿en qué te puedo ayudar?";
@@ -274,8 +260,8 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', visible, new Date().toISOString()]);
         return visible;
     } catch (e) { 
-        console.error("Error Gemini:", e.response?.data || e.message);
-        return "Dame un momento, estoy verificando... 🚜"; 
+        console.error("Gemini Error:", e.message);
+        return "Dame un momento... 🚜"; 
     }
 }
 
@@ -324,6 +310,7 @@ app.post('/auth', (req, res) => {
 app.get('/api/config/prompt', proteger, async (req, res) => { res.json({ prompt: await getCfg('bot_prompt', DEFAULT_PROMPT) }); });
 app.post('/api/config/prompt', proteger, async (req, res) => { await setCfg('bot_prompt', req.body.prompt); res.json({ success: true }); });
 
+// CHATS + UNREAD COUNT
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
         const view = req.query.view || 'active'; 
@@ -493,20 +480,22 @@ app.post('/webhook', async (req, res) => {
         }
         if(msg) {
             let userMsg = "", mediaDesc = "";
-            let imageBase64 = null; // Variable para foto
-
-            if (msg.type === "text") userMsg = msg.text.body;
-            else if (msg.type === "image") { 
-                userMsg = `[MEDIA:IMAGE:${msg.image.id}]`; 
-                mediaDesc = "📷 FOTO"; 
-                // --- VISIÓN ON: INTENTAR DESCARGA ---
-                imageBase64 = await downloadMetaMedia(msg.image.id);
+            
+            // --- DETECCIÓN DE ARCHIVOS (MODO RECEPCIONISTA) ---
+            if (msg.type === "text") {
+                userMsg = msg.text.body;
+            } else if (msg.type === "image") { 
+                userMsg = `[ARCHIVO: FOTO]`; mediaDesc = "📷 FOTO"; 
+            } else if (msg.type === "audio") { 
+                userMsg = `[ARCHIVO: AUDIO]`; mediaDesc = "🎤 AUDIO"; 
+            } else if (msg.type === "document") { 
+                userMsg = `[ARCHIVO: PDF]`; mediaDesc = "📄 DOC"; 
+            } else if (msg.type === "video") {
+                userMsg = `[ARCHIVO: VIDEO]`; mediaDesc = "🎥 VIDEO";
             }
-            else if (msg.type === "audio") { userMsg = `[MEDIA:AUDIO:${msg.audio.id}]`; mediaDesc = "🎤 AUDIO"; }
-            else if (msg.type === "document") { userMsg = `[MEDIA:DOC:${msg.document.id}]`; mediaDesc = "📄 DOC"; }
 
-            // PASAMOS imageBase64 A VALENTINA
-            const respuesta = await procesarConValentina(mediaDesc || userMsg, msg.from, userMsg, contactName, imageBase64); 
+            // Enviamos el texto "userMsg" (que ya dice que es un archivo) a la IA
+            const respuesta = await procesarConValentina(mediaDesc || userMsg, msg.from, userMsg, contactName); 
             if(respuesta) await enviarWhatsApp(msg.from, respuesta);
         }
     } catch(e) { console.error("Error Webhook", e); }
@@ -517,4 +506,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v18.4 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v18.7 READY"));
