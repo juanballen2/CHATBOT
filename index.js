@@ -1,12 +1,9 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v18.1 (HUMANIZED + VISION)
+ * SERVER BACKEND - VALENTINA v18.4 (GEMINI 2.0 FIX)
  * Cliente: Importadora Casa Colombia (ICC)
- * Correcciones: 
- * - Elimina "Analizando..." y comillas.
- * - Fuerza lectura de horarios/sedes (No manda a la web).
- * - Interpreta FOTOS (Vision AI).
- * - Mantiene TODAS las funciones anteriores (Leads, CSV, Excel, etc).
+ * Modelo: GEMINI 2.0 FLASH (Estricto)
+ * Estado: CORREGIDO (Sin pensamientos, sin silencios)
  * ============================================================
  */
 
@@ -37,7 +34,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v18"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v18-4"; 
 
 // --- PERSONALIDAD BASE ---
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
@@ -78,21 +75,18 @@ let db;
         CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
     `);
     
-    // 2. Migraciones (Aseguran que no se borren datos)
+    // 2. Migraciones
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0`); } catch(e) {}
     try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {}
     
-    const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
-    for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
-
     // 3. Inicializar Prompt
     const currentPrompt = await getCfg('bot_prompt');
     if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
 
     await refreshKnowledge();
-    console.log("🚀 SERVER v18.1 ONLINE (BEHAVIOR FIXED + VISION)");
+    console.log("🚀 SERVER v18.4 ONLINE (GEMINI 2.0 + VISION FIX)");
 })();
 
 // Caché de Conocimiento
@@ -143,13 +137,16 @@ async function uploadToMeta(buffer, mimeType, filename) {
     } catch (error) { return null; }
 }
 
-// --- NUEVA FUNCIÓN: DESCARGAR IMAGEN PARA LA IA ---
+// --- VISIÓN: DESCARGA SEGURA (TRY/CATCH) ---
 async function downloadMetaMedia(id) {
     try {
         const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
         const mediaRes = await axios.get(urlRes.data.url, { headers: { 'Authorization': `Bearer ${META_TOKEN}` }, responseType: 'arraybuffer' });
         return Buffer.from(mediaRes.data).toString('base64');
-    } catch (e) { return null; }
+    } catch (e) { 
+        console.error("Error descargando imagen:", e.message);
+        return null; // Si falla, retorna null para que el bot siga funcionando solo con texto
+    }
 }
 
 async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
@@ -182,7 +179,7 @@ app.get('/api/media-proxy/:id', async (req, res) => {
     } catch (e) { res.status(500).send("Error Media"); }
 });
 
-// --- CEREBRO IA (VALENTINA) ---
+// --- CEREBRO IA ---
 function buscarEnCatalogo(query) {
     if (!query || typeof query !== 'string' || query.startsWith('[')) return [];
     const norm = (t) => t ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
@@ -194,50 +191,47 @@ function buscarEnCatalogo(query) {
     }).filter(i => i.score > 0).sort((a,b) => b.score - a.score).slice(0, 5);
 }
 
-// === [CORRECCIÓN CRÍTICA: PROMPT ANTI-ROBOT Y VISION] ===
+// === [CORRECCIÓN: GEMINI 2.0 + FILTRO DE PENSAMIENTOS] ===
 async function procesarConValentina(message, sessionId, mediaDesc = "", contactName = "Cliente", imageBase64 = null) {
-    // 1. Guardar mensaje y notificar
+    // 1. Guardar mensaje
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
 
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    // 2. Cargar Contexto
+    // 2. Contexto
     const bizProfile = await getCfg('biz_profile', {});
     const websiteData = await getCfg('website_data', "No hay información extra."); 
     const stock = buscarEnCatalogo(message); 
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
     const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
 
-    // 3. CONSTRUCCIÓN DEL PROMPT BLINDADO
+    // 3. Prompt (Instrucción de NO PENSAR)
     const finalPrompt = `
     ${dynamicPrompt}
 
-    // --- 🚨 DIRECTRICES DE COMPORTAMIENTO (CRÍTICO) ---
-    1. **ACTÚA COMO HUMANO:** Eres Valentina, no un asistente virtual. Habla fluido, sin tecnicismos raros.
-    2. **CERO PENSAMIENTOS INTERNOS:** ESTÁ PROHIBIDO escribir cosas como "Analizando conversación:", "Respuesta:", "Pensamiento:". Solo entrega la respuesta final.
-    3. **NO USES COMILLAS:** No encierres tu respuesta en comillas (" ").
-    4. **INFORMACIÓN DE NEGOCIO:** Si preguntan horarios, sedes o envíos, USA LA INFORMACIÓN DE ABAJO DIRECTAMENTE. ¡NO MANDES A LA WEB!
-    
-    INFORMACIÓN REAL:
+    // --- 🚨 REGLAS OBLIGATORIAS (SISTEMA) ---
+    1. **NO GENERES PENSAMIENTOS VISIBLES:** No escribas "Analizando...", "Respuesta:", "Pensamiento:", "Contexto:". Entregame SOLO la respuesta final para el cliente.
+    2. **REGLA DE NEGOCIO:** Si preguntan Horarios, Sedes o Envíos, USA ESTA INFO y NO mandes links:
     """
     ${websiteData}
     (Horarios: ${bizProfile.hours || 'Lunes a Viernes 8am-6pm'})
     """
+    3. **NO USES COMILLAS:** Entrega el texto limpio.
 
-    // --- ⚙️ DATOS DE SESIÓN ---
+    // --- ⚙️ DATOS ---
     CLIENTE: ${contactName}
     INVENTARIO REL: ${JSON.stringify(stock)}
     HISTORIAL: ${JSON.stringify(chatPrevio)}
     MENSAJE NUEVO: ${message}
-    ${imageBase64 ? "[[SISTEMA: El usuario envió una FOTO. Analízala para identificar el repuesto o la máquina.]]" : ""}
+    ${imageBase64 ? "[[SISTEMA: El usuario envió una FOTO. Analízala para identificar el repuesto.]]" : ""}
 
-    FORMATO JSON OBLIGATORIO AL FINAL (Oculto):
+    FORMATO JSON OBLIGATORIO AL FINAL (Invisible):
     \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
     `;
 
-    // 4. PREPARAR CARGA (Texto + Imagen si existe)
+    // 4. Payload Gemini 2.0 Flash
     const geminiParts = [];
     if (imageBase64) {
         geminiParts.push({ inline_data: { mime_type: "image/jpeg", data: imageBase64 } });
@@ -245,6 +239,7 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
     geminiParts.push({ text: finalPrompt });
 
     try {
+        // SOLICITUD A GEMINI 2.0 FLASH
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
             { contents: [{ parts: geminiParts }] });
         
@@ -264,17 +259,24 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
             } catch(e) {}
         }
         
-        // --- LIMPIEZA DE ERRORES HUMANOS DE LA IA ---
-        // Elimina "Analizando...", "Respuesta:", etc.
-        visible = visible.replace(/(Analizando la conversación|Respuesta:|Contexto:|Nota:|Pensamiento:)([\s\S]*?)(\n|$)/gi, "").trim();
-        // Elimina comillas al inicio y final
+        // --- CIRUGÍA: LIMPIEZA DE "ANALIZANDO" ---
+        // Si el modelo insiste en poner "Respuesta:", cortamos todo lo anterior.
+        if (visible.includes("Respuesta:")) {
+            visible = visible.split("Respuesta:")[1];
+        }
+        // Expresión regular para borrar patrones comunes de pensamiento
+        visible = visible.replace(/(\*.*Analizando la conversación.*\*|Analizando:|Pensamiento:|Contexto:)([\s\S]*?)(\n|$)/gi, "").trim();
+        // Borrar comillas iniciales y finales
         visible = visible.replace(/^["']+|["']+$/g, '').trim();
         
-        if (!visible || visible.length < 2) visible = "Claro que sí, ¿en qué más te puedo ayudar?";
+        if (!visible || visible.length < 2) visible = "¡Hola! 👋 Claro que sí, ¿en qué te puedo ayudar?";
 
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', visible, new Date().toISOString()]);
         return visible;
-    } catch (e) { return "Dame un momento, estoy revisando... 🚜"; }
+    } catch (e) { 
+        console.error("Error Gemini:", e.response?.data || e.message);
+        return "Dame un momento, estoy verificando... 🚜"; 
+    }
 }
 
 async function gestionarLead(phone, info, fallbackName) {
@@ -308,7 +310,7 @@ async function gestionarLead(phone, info, fallbackName) {
 }
 
 // ============================================================
-// API ENDPOINTS (TODOS COMPLETOS Y FUNCIONALES)
+// API ENDPOINTS
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No auth");
 
@@ -322,7 +324,6 @@ app.post('/auth', (req, res) => {
 app.get('/api/config/prompt', proteger, async (req, res) => { res.json({ prompt: await getCfg('bot_prompt', DEFAULT_PROMPT) }); });
 app.post('/api/config/prompt', proteger, async (req, res) => { await setCfg('bot_prompt', req.body.prompt); res.json({ success: true }); });
 
-// CHATS + UNREAD COUNT
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
         const view = req.query.view || 'active'; 
@@ -498,7 +499,7 @@ app.post('/webhook', async (req, res) => {
             else if (msg.type === "image") { 
                 userMsg = `[MEDIA:IMAGE:${msg.image.id}]`; 
                 mediaDesc = "📷 FOTO"; 
-                // ACTIVAR VISIÓN: DESCARGAMOS LA FOTO
+                // --- VISIÓN ON: INTENTAR DESCARGA ---
                 imageBase64 = await downloadMetaMedia(msg.image.id);
             }
             else if (msg.type === "audio") { userMsg = `[MEDIA:AUDIO:${msg.audio.id}]`; mediaDesc = "🎤 AUDIO"; }
@@ -516,4 +517,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v18.1 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v18.4 READY"));
