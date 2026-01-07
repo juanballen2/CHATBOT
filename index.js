@@ -1,8 +1,12 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v17.2 (FINAL ROBUST)
+ * SERVER BACKEND - VALENTINA v18.1 (HUMANIZED + VISION)
  * Cliente: Importadora Casa Colombia (ICC)
- * Incluye: Anti-Duplicados + Notificaciones + Contexto Forzado + Todas las APIs
+ * Correcciones: 
+ * - Elimina "Analizando..." y comillas.
+ * - Fuerza lectura de horarios/sedes (No manda a la web).
+ * - Interpreta FOTOS (Vision AI).
+ * - Mantiene TODAS las funciones anteriores (Leads, CSV, Excel, etc).
  * ============================================================
  */
 
@@ -33,7 +37,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v17"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v18"; 
 
 // --- PERSONALIDAD BASE ---
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
@@ -74,18 +78,21 @@ let db;
         CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
     `);
     
-    // 2. Migraciones (Aseguran compatibilidad sin borrar datos)
+    // 2. Migraciones (Aseguran que no se borren datos)
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0`); } catch(e) {}
     try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {}
     
+    const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
+    for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
+
     // 3. Inicializar Prompt
     const currentPrompt = await getCfg('bot_prompt');
     if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
 
     await refreshKnowledge();
-    console.log("🚀 SERVER v17.2 ONLINE (ALL SYSTEMS GO)");
+    console.log("🚀 SERVER v18.1 ONLINE (BEHAVIOR FIXED + VISION)");
 })();
 
 // Caché de Conocimiento
@@ -136,6 +143,15 @@ async function uploadToMeta(buffer, mimeType, filename) {
     } catch (error) { return null; }
 }
 
+// --- NUEVA FUNCIÓN: DESCARGAR IMAGEN PARA LA IA ---
+async function downloadMetaMedia(id) {
+    try {
+        const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
+        const mediaRes = await axios.get(urlRes.data.url, { headers: { 'Authorization': `Bearer ${META_TOKEN}` }, responseType: 'arraybuffer' });
+        return Buffer.from(mediaRes.data).toString('base64');
+    } catch (e) { return null; }
+}
+
 async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     try {
         let payload = { messaging_product: "whatsapp", to: destinatario, type: tipo };
@@ -178,9 +194,9 @@ function buscarEnCatalogo(query) {
     }).filter(i => i.score > 0).sort((a,b) => b.score - a.score).slice(0, 5);
 }
 
-// === [CORRECCIÓN PRINCIPAL: CONTEXTO FORZADO + NOTIFICACIONES] ===
-async function procesarConValentina(message, sessionId, mediaDesc = "", contactName = "Cliente") {
-    // 1. Guardar mensaje y actualizar notificaciones (Unread +1)
+// === [CORRECCIÓN CRÍTICA: PROMPT ANTI-ROBOT Y VISION] ===
+async function procesarConValentina(message, sessionId, mediaDesc = "", contactName = "Cliente", imageBase64 = null) {
+    // 1. Guardar mensaje y notificar
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', mediaDesc || message, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
 
@@ -189,19 +205,22 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
 
     // 2. Cargar Contexto
     const bizProfile = await getCfg('biz_profile', {});
-    const websiteData = await getCfg('website_data', "No hay información extra."); // <--- AQUI ESTAN TUS HORARIOS/SEDES
+    const websiteData = await getCfg('website_data', "No hay información extra."); 
     const stock = buscarEnCatalogo(message); 
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
     const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
 
-    // 3. CONSTRUCCIÓN DEL PROMPT CON "REGLA SUPREMA"
+    // 3. CONSTRUCCIÓN DEL PROMPT BLINDADO
     const finalPrompt = `
     ${dynamicPrompt}
 
-    // --- 🚨 REGLA SUPREMA DE INFORMACIÓN (OBLIGATORIA) ---
-    Tienes prohibido decir "busca en la página web".
-    Si el cliente pregunta Horarios, Sedes, Ubicación o Envíos, USA LA SIGUIENTE INFORMACIÓN EXACTA y respóndele directamente:
+    // --- 🚨 DIRECTRICES DE COMPORTAMIENTO (CRÍTICO) ---
+    1. **ACTÚA COMO HUMANO:** Eres Valentina, no un asistente virtual. Habla fluido, sin tecnicismos raros.
+    2. **CERO PENSAMIENTOS INTERNOS:** ESTÁ PROHIBIDO escribir cosas como "Analizando conversación:", "Respuesta:", "Pensamiento:". Solo entrega la respuesta final.
+    3. **NO USES COMILLAS:** No encierres tu respuesta en comillas (" ").
+    4. **INFORMACIÓN DE NEGOCIO:** Si preguntan horarios, sedes o envíos, USA LA INFORMACIÓN DE ABAJO DIRECTAMENTE. ¡NO MANDES A LA WEB!
     
+    INFORMACIÓN REAL:
     """
     ${websiteData}
     (Horarios: ${bizProfile.hours || 'Lunes a Viernes 8am-6pm'})
@@ -209,17 +228,25 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
 
     // --- ⚙️ DATOS DE SESIÓN ---
     CLIENTE: ${contactName}
-    INVENTARIO RELACIONADO: ${JSON.stringify(stock)}
+    INVENTARIO REL: ${JSON.stringify(stock)}
     HISTORIAL: ${JSON.stringify(chatPrevio)}
     MENSAJE NUEVO: ${message}
+    ${imageBase64 ? "[[SISTEMA: El usuario envió una FOTO. Analízala para identificar el repuesto o la máquina.]]" : ""}
 
-    FORMATO JSON OBLIGATORIO AL FINAL:
+    FORMATO JSON OBLIGATORIO AL FINAL (Oculto):
     \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
     `;
 
+    // 4. PREPARAR CARGA (Texto + Imagen si existe)
+    const geminiParts = [];
+    if (imageBase64) {
+        geminiParts.push({ inline_data: { mime_type: "image/jpeg", data: imageBase64 } });
+    }
+    geminiParts.push({ text: finalPrompt });
+
     try {
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: [{ text: finalPrompt }] }] });
+            { contents: [{ parts: geminiParts }] });
         
         let txt = r.data.candidates[0].content.parts[0].text;
         
@@ -237,23 +264,24 @@ async function procesarConValentina(message, sessionId, mediaDesc = "", contactN
             } catch(e) {}
         }
         
+        // --- LIMPIEZA DE ERRORES HUMANOS DE LA IA ---
+        // Elimina "Analizando...", "Respuesta:", etc.
+        visible = visible.replace(/(Analizando la conversación|Respuesta:|Contexto:|Nota:|Pensamiento:)([\s\S]*?)(\n|$)/gi, "").trim();
+        // Elimina comillas al inicio y final
         visible = visible.replace(/^["']+|["']+$/g, '').trim();
-        if (!visible || visible.length < 2) visible = "Entendido, estoy validando. Por favor confírmame tus datos.";
+        
+        if (!visible || visible.length < 2) visible = "Claro que sí, ¿en qué más te puedo ayudar?";
 
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', visible, new Date().toISOString()]);
         return visible;
-    } catch (e) { return "Dame un momento... 🚜"; }
+    } catch (e) { return "Dame un momento, estoy revisando... 🚜"; }
 }
 
-// === [LÓGICA ANTI-DUPLICADOS] ===
 async function gestionarLead(phone, info, fallbackName) {
     let nombreFinal = (info.nombre && info.nombre !== "null") ? info.nombre : fallbackName;
-    
-    // Verificar si ya existe
     const existe = await db.get("SELECT id, interes, ciudad, correo, etiqueta FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
 
     if (existe) {
-        // ACTUALIZAR (UPSERT)
         const nuevoInteres = info.interes || existe.interes;
         const nuevaCiudad = info.ciudad || existe.ciudad;
         const nuevoCorreo = info.correo || existe.correo;
@@ -261,7 +289,6 @@ async function gestionarLead(phone, info, fallbackName) {
         await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=? WHERE id=?`, 
             [nombreFinal, nuevoInteres, nuevaEtiqueta, new Date().toLocaleString(), nuevaCiudad, nuevoCorreo, existe.id]);
     } else {
-        // INSERTAR (SOLO NUEVOS)
         if (info.interes || info.correo || info.ciudad || info.es_lead) {
             await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
                 [phone, nombreFinal, info.interes || "Consultando", info.etiqueta || "Pendiente", new Date().toLocaleString(), info.ciudad, info.correo]);
@@ -281,7 +308,7 @@ async function gestionarLead(phone, info, fallbackName) {
 }
 
 // ============================================================
-// API ENDPOINTS (TODOS EXPANDIDOS)
+// API ENDPOINTS (TODOS COMPLETOS Y FUNCIONALES)
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No auth");
 
@@ -292,18 +319,10 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-// ENDPOINTS DE CONFIGURACIÓN
-app.get('/api/config/prompt', proteger, async (req, res) => { 
-    const prompt = await getCfg('bot_prompt', DEFAULT_PROMPT); 
-    res.json({ prompt }); 
-});
+app.get('/api/config/prompt', proteger, async (req, res) => { res.json({ prompt: await getCfg('bot_prompt', DEFAULT_PROMPT) }); });
+app.post('/api/config/prompt', proteger, async (req, res) => { await setCfg('bot_prompt', req.body.prompt); res.json({ success: true }); });
 
-app.post('/api/config/prompt', proteger, async (req, res) => { 
-    await setCfg('bot_prompt', req.body.prompt); 
-    res.json({ success: true }); 
-});
-
-// ENDPOINT DE CHATS CON CONTADOR DE NO LEÍDOS
+// CHATS + UNREAD COUNT
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
         const view = req.query.view || 'active'; 
@@ -329,13 +348,11 @@ app.get('/api/chats-full', proteger, async (req, res) => {
     } catch(e) { res.status(500).json([]); }
 });
 
-// ENDPOINT DE HISTORIAL (RESETEA CONTADOR)
 app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     await db.run("UPDATE metadata SET unreadCount = 0 WHERE phone = ?", [req.params.phone]);
     res.json(await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]));
 });
 
-// ACCIONES DE CHAT
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
     try {
@@ -358,7 +375,6 @@ app.post('/api/chat/action', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ENDPOINTS DE DATOS Y CONFIGURACIÓN
 app.get('/api/data/:type', proteger, async (req, res) => {
     const t = req.params.type;
     try {
@@ -387,25 +403,11 @@ app.post('/api/config/biz/save', proteger, async (req, res) => {
     res.json({success:true}); 
 });
 
-// GESTIÓN DE ETIQUETAS Y SHORTCUTS
-app.post('/api/tags/add', proteger, async (req, res) => { 
-    await db.run("INSERT INTO global_tags (name, color) VALUES (?, ?)", [req.body.name, req.body.color]); 
-    res.json({success:true}); 
-});
-app.post('/api/tags/delete', proteger, async (req, res) => { 
-    await db.run("DELETE FROM global_tags WHERE id = ?", [req.body.id]); 
-    res.json({success:true}); 
-});
-app.post('/api/shortcuts/add', proteger, async (req, res) => { 
-    await db.run("INSERT INTO shortcuts (keyword, text) VALUES (?, ?)", [req.body.keyword, req.body.text]); 
-    res.json({success:true}); 
-});
-app.post('/api/shortcuts/delete', proteger, async (req, res) => { 
-    await db.run("DELETE FROM shortcuts WHERE id = ?", [req.body.id]); 
-    res.json({success:true}); 
-});
+app.post('/api/tags/add', proteger, async (req, res) => { await db.run("INSERT INTO global_tags (name, color) VALUES (?, ?)", [req.body.name, req.body.color]); res.json({success:true}); });
+app.post('/api/tags/delete', proteger, async (req, res) => { await db.run("DELETE FROM global_tags WHERE id = ?", [req.body.id]); res.json({success:true}); });
+app.post('/api/shortcuts/add', proteger, async (req, res) => { await db.run("INSERT INTO shortcuts (keyword, text) VALUES (?, ?)", [req.body.keyword, req.body.text]); res.json({success:true}); });
+app.post('/api/shortcuts/delete', proteger, async (req, res) => { await db.run("DELETE FROM shortcuts WHERE id = ?", [req.body.id]); res.json({success:true}); });
 
-// GESTIÓN DE CONTACTOS Y ENVÍOS
 app.post('/api/contacts/upload-photo', proteger, upload.single('file'), async (req, res) => {
     if(!req.file) return res.status(400).send("No file");
     const b64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
@@ -445,29 +447,10 @@ app.post('/api/chat/toggle-bot', proteger, async (req, res) => {
     res.json({ success: true });
 });
 
-// GESTIÓN DE REGLAS, LEADS E INVENTARIO
-app.post('/api/config/rules/add', proteger, async (req, res) => { 
-    let r=await getCfg('tech_rules',[]); 
-    r.push(req.body.rule); 
-    await setCfg('tech_rules',r); 
-    res.json({rules:r}); 
-});
-app.post('/api/config/rules/delete', proteger, async (req, res) => { 
-    let r=await getCfg('tech_rules',[]); 
-    r.splice(req.body.index,1); 
-    await setCfg('tech_rules',r); 
-    res.json({rules:r}); 
-});
-
-app.post('/api/leads/update', proteger, async(req,res)=>{ 
-    const{id,field,value}=req.body; 
-    await db.run(`UPDATE leads SET ${field}=? WHERE id=?`,[value,id]); 
-    res.json({success:true}); 
-});
-app.post('/api/leads/delete', proteger, async(req,res)=>{ 
-    await db.run("DELETE FROM leads WHERE id=?",[req.body.id]); 
-    res.json({success:true}); 
-});
+app.post('/api/config/rules/add', proteger, async (req, res) => { let r=await getCfg('tech_rules',[]); r.push(req.body.rule); await setCfg('tech_rules',r); res.json({rules:r}); });
+app.post('/api/config/rules/delete', proteger, async (req, res) => { let r=await getCfg('tech_rules',[]); r.splice(req.body.index,1); await setCfg('tech_rules',r); res.json({rules:r}); });
+app.post('/api/leads/update', proteger, async(req,res)=>{ const{id,field,value}=req.body; await db.run(`UPDATE leads SET ${field}=? WHERE id=?`,[value,id]); res.json({success:true}); });
+app.post('/api/leads/delete', proteger, async(req,res)=>{ await db.run("DELETE FROM leads WHERE id=?",[req.body.id]); res.json({success:true}); });
 
 app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res) => {
     try {
@@ -509,12 +492,20 @@ app.post('/webhook', async (req, res) => {
         }
         if(msg) {
             let userMsg = "", mediaDesc = "";
+            let imageBase64 = null; // Variable para foto
+
             if (msg.type === "text") userMsg = msg.text.body;
-            else if (msg.type === "image") { userMsg = `[MEDIA:IMAGE:${msg.image.id}]`; mediaDesc = "📷 FOTO"; }
+            else if (msg.type === "image") { 
+                userMsg = `[MEDIA:IMAGE:${msg.image.id}]`; 
+                mediaDesc = "📷 FOTO"; 
+                // ACTIVAR VISIÓN: DESCARGAMOS LA FOTO
+                imageBase64 = await downloadMetaMedia(msg.image.id);
+            }
             else if (msg.type === "audio") { userMsg = `[MEDIA:AUDIO:${msg.audio.id}]`; mediaDesc = "🎤 AUDIO"; }
             else if (msg.type === "document") { userMsg = `[MEDIA:DOC:${msg.document.id}]`; mediaDesc = "📄 DOC"; }
 
-            const respuesta = await procesarConValentina(mediaDesc || userMsg, msg.from, userMsg, contactName); 
+            // PASAMOS imageBase64 A VALENTINA
+            const respuesta = await procesarConValentina(mediaDesc || userMsg, msg.from, userMsg, contactName, imageBase64); 
             if(respuesta) await enviarWhatsApp(msg.from, respuesta);
         }
     } catch(e) { console.error("Error Webhook", e); }
@@ -525,4 +516,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v17.2 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v18.1 READY"));
