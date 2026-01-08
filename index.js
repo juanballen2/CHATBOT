@@ -1,11 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v18.9 (HUMAN VIEWABLE)
+ * SERVER BACKEND - VALENTINA v19.0 (HYBRID MODE)
  * Cliente: Importadora Casa Colombia (ICC)
  * Lógica:
- * - El Admin (Tú) PUEDE VER las fotos/pdf en el panel.
- * - La IA (Valentina) solo sabe que llegó un archivo y pide datos.
- * - Velocidad máxima, sin errores 429.
+ * 1. Archivos -> Respuesta Automática (Sin IA). 
+ * 2. Texto -> Respuesta IA (Gemini 2.0).
+ * 3. Admin -> Ve todo en el panel.
  * ============================================================
  */
 
@@ -36,7 +36,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v18-9"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v19"; 
 
 // --- PERSONALIDAD BASE ---
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
@@ -65,6 +65,7 @@ let db;
         driver: sqlite3.Database
     });
 
+    // 1. Tablas Base
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
         CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT); 
@@ -76,6 +77,7 @@ let db;
         CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
     `);
     
+    // 2. Migraciones
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0`); } catch(e) {}
@@ -84,13 +86,15 @@ let db;
     const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
     for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
 
+    // 3. Inicializar Prompt
     const currentPrompt = await getCfg('bot_prompt');
     if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
 
     await refreshKnowledge();
-    console.log("🚀 SERVER v18.9 ONLINE (HUMAN VIEWABLE)");
+    console.log("🚀 SERVER v19.0 ONLINE (HYBRID MODE)");
 })();
 
+// Caché de Conocimiento
 let globalKnowledge = [];
 async function refreshKnowledge() {
     try {
@@ -182,10 +186,10 @@ function buscarEnCatalogo(query) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// === [LÓGICA HÍBRIDA v18.9] ===
+// === [LÓGICA HÍBRIDA v19.0: ARCHIVOS AUTO / TEXTO IA] ===
 async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName = "Cliente", isFile = false) {
-    // 1. Guardar mensaje EN BASE DE DATOS (Lo que TÚ ves)
-    // Aquí guardamos el ID real de la foto para que el frontend la pinte
+    
+    // 1. Guardar mensaje EN BASE DE DATOS (Lo que TÚ ves, incluyendo ID de fotos)
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', dbMessage, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
 
@@ -193,17 +197,17 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     if (status && status.active === 0) return null;
 
     // --- 🚀 MODO RECEPCIONISTA (ARCHIVOS) ---
-    // Si es un archivo, NO molestamos a Gemini. Respondemos directo.
+    // Si llega un archivo, respondemos rápido sin IA para evitar errores.
     if (isFile) {
-        const respuestaAutomatica = `¡Hola ${contactName}! 👋 He recibido tu archivo/foto correctamente.\n\nPara que uno de nuestros asesores pueda revisarlo en detalle, por favor confírmame:\n1. Tu nombre completo.\n2. La ciudad desde donde nos escribes.`;
+        const respuestaAutomatica = `¡Recibido! 📁\n\nHe guardado tu archivo. Para que uno de nuestros asesores lo revise más rápido, por favor confírmame:\n1. Tu nombre completo.\n2. La ciudad desde donde nos escribes.`;
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', respuestaAutomatica, new Date().toISOString()]);
         return respuestaAutomatica;
     }
 
     // --- 🤖 MODO ASESOR (TEXTO) ---
-    // Solo si es texto, llamamos a Gemini.
+    // Solo si es texto, activamos a Gemini.
     const bizProfile = await getCfg('biz_profile', {});
-    const websiteData = await getCfg('website_data', "No hay información extra."); 
+    const websiteData = await getCfg('website_data', "Consultar Web."); 
     const stock = buscarEnCatalogo(aiMessage); 
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
     const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
@@ -213,7 +217,7 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
 
     // --- REGLAS ---
     1. **NO PENSAMIENTOS:** No escribas "Analizando...", "Respuesta:". SOLO el mensaje final.
-    2. **NEGOCIO:** Si preguntan horarios o sedes, USA ESTA INFO:
+    2. **NEGOCIO:** Si preguntan horarios o sedes, USA ESTA INFO (No mandes links):
     """
     ${websiteData}
     (Horarios: ${bizProfile.hours || 'Lunes a Viernes 8am-6pm'})
@@ -264,6 +268,7 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         } catch(e) {}
     }
     
+    // Limpieza agresiva de pensamientos
     visible = visible.replace(/(\*.*Analizando.*\*|Analizando:|Respuesta:|Pensamiento:|Contexto:)([\s\S]*?)(\n|$)/gi, "").trim();
     visible = visible.replace(/^["']+|["']+$/g, '').trim();
     
@@ -487,18 +492,18 @@ app.post('/webhook', async (req, res) => {
         }
         if(msg) {
             let userMsg = "", mediaDesc = "", isFile = false;
-            let dbMessage = ""; // LO QUE SE GUARDA EN LA DB (Visible para ti)
-            let aiMessage = ""; // LO QUE SE LE MANDA A LA IA (Texto limpio)
-            
-            // --- DETECCIÓN DE TIPOS ---
+            let dbMessage = ""; // Para tu panel
+            let aiMessage = ""; // Para el prompt
+
+            // --- DETECCIÓN DE TIPOS (LÓGICA HÍBRIDA) ---
             if (msg.type === "text") {
                 dbMessage = msg.text.body;
                 aiMessage = msg.text.body;
             } else {
                 isFile = true;
                 if (msg.type === "image") { 
-                    dbMessage = `[MEDIA:IMAGE:${msg.image.id}]`; // TÚ VES ESTO (Y EL FRONTEND PINTA LA FOTO)
-                    aiMessage = `[ARCHIVO RECIBIDO: FOTO]`;      // LA IA VE ESTO
+                    dbMessage = `[MEDIA:IMAGE:${msg.image.id}]`; // TÚ VES LA FOTO
+                    aiMessage = `[ARCHIVO RECIBIDO: FOTO]`;      // IA VE TEXTO
                 }
                 else if (msg.type === "audio") { 
                     dbMessage = `[MEDIA:AUDIO:${msg.audio.id}]`; 
@@ -514,7 +519,7 @@ app.post('/webhook', async (req, res) => {
                 }
             }
 
-            // Enviamos los dos mensajes (DB y AI) a la función principal
+            // Enviamos los dos mensajes
             const respuesta = await procesarConValentina(dbMessage, aiMessage, msg.from, contactName, isFile); 
             if(respuesta) await enviarWhatsApp(msg.from, respuesta);
         }
@@ -526,4 +531,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v18.9 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.0 READY"));
