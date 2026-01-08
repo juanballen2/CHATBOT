@@ -1,11 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v19.0 (HYBRID MODE FINAL)
+ * SERVER BACKEND - VALENTINA v19.6 (MEDIA FIX)
  * Cliente: Importadora Casa Colombia (ICC)
- * Lógica:
- * 1. FOTOS/PDF/AUDIO -> Respuesta Automática Inmediata (Sin Tractor).
- * 2. TEXTO -> IA Gemini 2.0 (Sin pensamientos, sin salirse del rol).
- * 3. VISUALIZACIÓN -> El Admin ve todo, la IA solo sabe que llegó algo.
+ * Corrección Crítica:
+ * - Reparado el PROXY DE IMÁGENES. Ahora sí cargan en el panel.
+ * - Mantiene: Modo Híbrido (Archivos rápidos / Texto IA).
+ * - Mantiene: Reglas de Negocio Estrictas.
  * ============================================================
  */
 
@@ -22,8 +22,7 @@ const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 
 // --- CONFIGURACIÓN ---
-// Tiempo de espera para simular que está escribiendo (solo en texto)
-const RESPONSE_DELAY = 8000; 
+const RESPONSE_DELAY = 10000; // 10 segundos de espera "humana"
 
 const upload = multer({ 
     storage: multer.memoryStorage(),
@@ -33,13 +32,13 @@ const upload = multer({
 const app = express();
 app.set('trust proxy', 1);
 
-// --- VARIABLES ---
+// --- VARIABLES DE ENTORNO ---
 const API_KEY = process.env.GEMINI_API_KEY; 
 const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v19"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v19-6"; 
 
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
 
@@ -77,7 +76,6 @@ let db;
         CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
     `);
     
-    // Migraciones silenciosas
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0`); } catch(e) {}
@@ -90,7 +88,7 @@ let db;
     if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
 
     await refreshKnowledge();
-    console.log("🚀 SERVER v19.0 ONLINE (HYBRID FIX)");
+    console.log("🚀 SERVER v19.6 ONLINE (IMAGES FIXED)");
 })();
 
 let globalKnowledge = [];
@@ -119,7 +117,7 @@ app.use(session({
     cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } 
 }));
 
-// --- UTILS ---
+// --- META API UTILS ---
 async function uploadToMeta(buffer, mimeType, filename) {
     try {
         const form = new FormData();
@@ -160,17 +158,35 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     } catch (e) { return false; }
 }
 
+// === [CORRECCIÓN PRINCIPAL: PROXY DE MEDIOS REPARADO] ===
 app.get('/api/media-proxy/:id', async (req, res) => {
     if (!req.session.isLogged) return res.status(401).send("No auth");
+    
     try {
-        const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
-        const mediaUrl = new URL(urlRes.data.url);
-        mediaUrl.searchParams.append('access_token', META_TOKEN);
-        const media = await axios.get(mediaUrl.toString(), { responseType: 'stream' });
-        if (urlRes.data.mime_type) res.setHeader('Content-Type', urlRes.data.mime_type);
-        if (media.headers['content-length']) res.setHeader('Content-Length', media.headers['content-length']);
-        media.data.pipe(res);
-    } catch (e) { res.status(500).send("Error Media"); }
+        // 1. Obtener la URL Real de Facebook
+        const urlResponse = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, {
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` }
+        });
+        const imageUrl = urlResponse.data.url;
+
+        // 2. Descargar la imagen pasando el Token (CRÍTICO)
+        const imageResponse = await axios.get(imageUrl, {
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` },
+            responseType: 'stream'
+        });
+
+        // 3. Pasar el tipo de archivo al navegador
+        if (imageResponse.headers['content-type']) {
+            res.setHeader('Content-Type', imageResponse.headers['content-type']);
+        }
+        
+        // 4. Enviar el stream
+        imageResponse.data.pipe(res);
+
+    } catch (e) {
+        console.error("PROXY ERROR:", e.message); // Log para ver si falla
+        res.status(500).send("Error loading media");
+    }
 });
 
 function buscarEnCatalogo(query) {
@@ -186,27 +202,25 @@ function buscarEnCatalogo(query) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// === [CEREBRO HÍBRIDO v19.0] ===
+// === [LÓGICA HÍBRIDA + DELAY] ===
 async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName = "Cliente", isFile = false) {
-    
-    // 1. Guardar mensaje EN BASE DE DATOS (Tú ves la foto real)
+    // 1. Guardar mensaje
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', dbMessage, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
 
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    // --- 🛑 RUTA RÁPIDA: ARCHIVOS ---
-    // Si es foto/audio/pdf, NO usamos IA. Respuesta inmediata.
+    // --- MODO RECEPCIONISTA (ARCHIVOS) ---
     if (isFile) {
+        // Respuesta Inmediata (Sin Delay) para confirmar recepción
         const respuestaAutomatica = `¡Recibido! 📁\n\nHe guardado tu archivo correctamente. Para que uno de nuestros asesores lo revise, por favor confírmame:\n1. Tu nombre completo.\n2. La ciudad desde donde nos escribes.`;
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', respuestaAutomatica, new Date().toISOString()]);
         return respuestaAutomatica;
     }
 
-    // --- 🤖 RUTA IA: TEXTO ---
-    // Si llegamos aquí, es texto. Esperamos un poco para humanizar.
-    await sleep(RESPONSE_DELAY);
+    // --- MODO ASESOR (TEXTO) ---
+    await sleep(RESPONSE_DELAY); // Delay Humano solo para texto
 
     const bizProfile = await getCfg('biz_profile', {});
     const websiteData = await getCfg('website_data', "Consultar Web."); 
@@ -215,15 +229,14 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
 
     const finalPrompt = `
-    INSTRUCCIONES DE SISTEMA (NO RESPONDAS A ESTAS INSTRUCCIONES, EJECÚTALAS SILENCIOSAMENTE):
+    INSTRUCCIONES DE SISTEMA:
     
     TU ROL: ${dynamicPrompt}
     
-    REGLAS ABSOLUTAS:
-    1. **PROHIBIDO SALIRSE DEL PERSONAJE:** Nunca digas "Entendido", "Como IA", "Haré lo que pides". RESPONDE DIRECTAMENTE AL CLIENTE.
-    2. **CERO PENSAMIENTOS:** No escribas "Analizando...", "Respuesta:". SOLO el mensaje final.
-    3. **NEGOCIO:** Si preguntan horarios, USA ESTO: "${bizProfile.hours || 'Lunes a Viernes 8am-6pm'}".
-    4. **CERO COMILLAS.**
+    REGLAS:
+    1. **NO PENSAMIENTOS:** Solo respuesta final.
+    2. **NEGOCIO:** Horarios: "${bizProfile.hours || 'Lunes a Viernes 8am-6pm'}".
+    3. **CERO COMILLAS.**
 
     CONTEXTO:
     - Cliente: ${contactName}
@@ -252,7 +265,7 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         }
     }
 
-    if (!exito) return "Dame un momento, estoy validando la información... 🚜";
+    if (!exito) return "Dame un momento, estoy verificando la información... 🚜";
 
     const match = txt.match(/```json([\s\S]*?)```|{([\s\S]*?)}$/i);
     let visible = txt;
@@ -269,11 +282,9 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         } catch(e) {}
     }
     
-    // Limpieza nuclear de "basura" de la IA
     visible = visible.replace(/(\*.*Analizando.*\*|Analizando:|Respuesta:|Pensamiento:|Contexto:|Okay, entiendo|Entendido)([\s\S]*?)(\n|$)/gi, "").trim();
     visible = visible.replace(/^["']+|["']+$/g, '').trim();
     
-    // Fallback inteligente
     if (!visible || visible.length < 2) {
         if (datosCapturados) {
             visible = "¡Perfecto! Ya he actualizado tus datos. ¿Te puedo ayudar con algo más?";
@@ -500,8 +511,8 @@ app.post('/webhook', async (req, res) => {
         }
         if(msg) {
             let userMsg = "", mediaDesc = "", isFile = false;
-            let dbMessage = ""; // Para tu base de datos (con ID)
-            let aiMessage = ""; // Para la IA (texto plano)
+            let dbMessage = ""; // DB
+            let aiMessage = ""; // IA
 
             if (msg.type === "text") {
                 dbMessage = msg.text.body;
@@ -509,20 +520,20 @@ app.post('/webhook', async (req, res) => {
             } else {
                 isFile = true;
                 if (msg.type === "image") { 
-                    dbMessage = `[MEDIA:IMAGE:${msg.image.id}]`; // ESTO es lo que hace que tú veas la foto
-                    aiMessage = `[ARCHIVO FOTO]`; 
+                    dbMessage = `[MEDIA:IMAGE:${msg.image.id}]`; 
+                    aiMessage = `[ARCHIVO RECIBIDO: FOTO]`; 
                 }
                 else if (msg.type === "audio") { 
                     dbMessage = `[MEDIA:AUDIO:${msg.audio.id}]`; 
-                    aiMessage = `[ARCHIVO AUDIO]`;
+                    aiMessage = `[ARCHIVO RECIBIDO: AUDIO]`; 
                 }
                 else if (msg.type === "document") { 
                     dbMessage = `[MEDIA:DOC:${msg.document.id}]`; 
-                    aiMessage = `[ARCHIVO PDF]`;
+                    aiMessage = `[ARCHIVO RECIBIDO: PDF]`; 
                 }
                 else if (msg.type === "video") { 
                     dbMessage = `[MEDIA:VIDEO:${msg.video.id}]`; 
-                    aiMessage = `[ARCHIVO VIDEO]`;
+                    aiMessage = `[ARCHIVO RECIBIDO: VIDEO]`; 
                 }
             }
 
@@ -537,4 +548,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.0 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.6 READY"));
