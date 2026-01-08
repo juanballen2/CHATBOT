@@ -1,11 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v19.0 (HYBRID MODE)
+ * SERVER BACKEND - VALENTINA v19.2 (SMART FALLBACK)
  * Cliente: Importadora Casa Colombia (ICC)
- * Lógica:
- * 1. Archivos -> Respuesta Automática (Sin IA). 
- * 2. Texto -> Respuesta IA (Gemini 2.0).
- * 3. Admin -> Ve todo en el panel.
+ * Corrección Específica:
+ * - Evita que el bot diga "Hola" cuando ya está en media conversación.
+ * - Si la IA solo extrae datos (JSON) y calla, el sistema responde por ella.
+ * - Mantiene visión híbrida y estabilidad.
  * ============================================================
  */
 
@@ -36,7 +36,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v19"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v19-2"; 
 
 // --- PERSONALIDAD BASE ---
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
@@ -65,7 +65,6 @@ let db;
         driver: sqlite3.Database
     });
 
-    // 1. Tablas Base
     await db.exec(`
         CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
         CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT); 
@@ -77,7 +76,6 @@ let db;
         CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
     `);
     
-    // 2. Migraciones
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0`); } catch(e) {}
@@ -86,15 +84,13 @@ let db;
     const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
     for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
 
-    // 3. Inicializar Prompt
     const currentPrompt = await getCfg('bot_prompt');
     if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
 
     await refreshKnowledge();
-    console.log("🚀 SERVER v19.0 ONLINE (HYBRID MODE)");
+    console.log("🚀 SERVER v19.2 ONLINE (SMART FALLBACK)");
 })();
 
-// Caché de Conocimiento
 let globalKnowledge = [];
 async function refreshKnowledge() {
     try {
@@ -166,8 +162,11 @@ app.get('/api/media-proxy/:id', async (req, res) => {
     if (!req.session.isLogged) return res.status(401).send("No auth");
     try {
         const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
-        const media = await axios.get(urlRes.data.url, { headers: { 'Authorization': `Bearer ${META_TOKEN}` }, responseType: 'stream' });
+        const mediaUrl = new URL(urlRes.data.url);
+        mediaUrl.searchParams.append('access_token', META_TOKEN);
+        const media = await axios.get(mediaUrl.toString(), { responseType: 'stream' });
         if (urlRes.data.mime_type) res.setHeader('Content-Type', urlRes.data.mime_type);
+        if (media.headers['content-length']) res.setHeader('Content-Length', media.headers['content-length']);
         media.data.pipe(res);
     } catch (e) { res.status(500).send("Error Media"); }
 });
@@ -186,26 +185,20 @@ function buscarEnCatalogo(query) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// === [LÓGICA HÍBRIDA v19.0: ARCHIVOS AUTO / TEXTO IA] ===
+// === [LÓGICA HÍBRIDA + SMART FALLBACK] ===
 async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName = "Cliente", isFile = false) {
-    
-    // 1. Guardar mensaje EN BASE DE DATOS (Lo que TÚ ves, incluyendo ID de fotos)
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', dbMessage, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
 
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    // --- 🚀 MODO RECEPCIONISTA (ARCHIVOS) ---
-    // Si llega un archivo, respondemos rápido sin IA para evitar errores.
     if (isFile) {
-        const respuestaAutomatica = `¡Recibido! 📁\n\nHe guardado tu archivo. Para que uno de nuestros asesores lo revise más rápido, por favor confírmame:\n1. Tu nombre completo.\n2. La ciudad desde donde nos escribes.`;
+        const respuestaAutomatica = `¡Recibido! 📁\n\nHe guardado tu archivo correctamente. Para que uno de nuestros asesores lo revise, por favor confírmame:\n1. Tu nombre completo.\n2. La ciudad desde donde nos escribes.`;
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', respuestaAutomatica, new Date().toISOString()]);
         return respuestaAutomatica;
     }
 
-    // --- 🤖 MODO ASESOR (TEXTO) ---
-    // Solo si es texto, activamos a Gemini.
     const bizProfile = await getCfg('biz_profile', {});
     const websiteData = await getCfg('website_data', "Consultar Web."); 
     const stock = buscarEnCatalogo(aiMessage); 
@@ -215,26 +208,26 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     const finalPrompt = `
     ${dynamicPrompt}
 
-    // --- REGLAS ---
-    1. **NO PENSAMIENTOS:** No escribas "Analizando...", "Respuesta:". SOLO el mensaje final.
-    2. **NEGOCIO:** Si preguntan horarios o sedes, USA ESTA INFO (No mandes links):
+    // --- 🚨 REGLAS SUPREMAS ---
+    1. **SALIDA:** Escribe SOLO la respuesta para el cliente. NADA de "Analizando...".
+    2. **DATOS:** Si el cliente da un dato (Nombre, Ciudad, Correo), CONFIRMA que lo recibiste. Ejemplo: "Gracias Juan, ¿en qué ciudad estás?".
+    3. **NEGOCIO:** Horarios/Sedes:
     """
     ${websiteData}
     (Horarios: ${bizProfile.hours || 'Lunes a Viernes 8am-6pm'})
     """
-    3. **CERO COMILLAS.**
+    4. **CERO COMILLAS.**
 
-    // --- DATOS ---
+    // --- CONTEXTO ---
     CLIENTE: ${contactName}
     INVENTARIO: ${JSON.stringify(stock)}
     HISTORIAL: ${JSON.stringify(chatPrevio)}
-    MENSAJE: ${aiMessage}
+    MENSAJE NUEVO: ${aiMessage}
 
-    FORMATO JSON FINAL:
+    FORMATO JSON OBLIGATORIO AL FINAL:
     \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
     `;
 
-    // Reintentos para texto
     let intentos = 0;
     let exito = false;
     let txt = "";
@@ -243,7 +236,6 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         try {
             const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${API_KEY}`,
                 { contents: [{ parts: [{ text: finalPrompt }] }] });
-            
             txt = r.data.candidates[0].content.parts[0].text;
             exito = true;
         } catch (e) {
@@ -253,10 +245,11 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         }
     }
 
-    if (!exito) return "Dame un momento, estoy verificando la información... 🚜";
+    if (!exito) return "Dame un momento, estoy validando la información... 🚜";
 
     const match = txt.match(/```json([\s\S]*?)```|{([\s\S]*?)}$/i);
     let visible = txt;
+    let datosCapturados = false; // Bandera para saber si atrapamos datos
     
     if (match) {
         visible = txt.replace(match[0], "").trim();
@@ -264,15 +257,25 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
             const info = JSON.parse((match[1]||match[2]||match[0]).replace(/```json/g,"").replace(/```/g,"").trim());
             if(info.nombre || info.celular || info.interes || info.correo || info.ciudad) {
                 await gestionarLead(sessionId, info, contactName);
+                datosCapturados = true; // ¡Tenemos datos!
             }
         } catch(e) {}
     }
     
-    // Limpieza agresiva de pensamientos
+    // Limpieza agresiva
     visible = visible.replace(/(\*.*Analizando.*\*|Analizando:|Respuesta:|Pensamiento:|Contexto:)([\s\S]*?)(\n|$)/gi, "").trim();
     visible = visible.replace(/^["']+|["']+$/g, '').trim();
     
-    if (!visible || visible.length < 2) visible = "¡Hola! ¿En qué te puedo ayudar hoy?";
+    // --- SMART FALLBACK (LA CORRECCIÓN) ---
+    // Si la IA no dijo nada (vacío) pero SÍ capturó datos, respondemos coherente.
+    // Si no capturó nada y está vacío, recién ahí saludamos.
+    if (!visible || visible.length < 2) {
+        if (datosCapturados) {
+            visible = "¡Perfecto! Ya he actualizado tus datos en el sistema. ¿Hay algo más en lo que pueda ayudarte?";
+        } else {
+            visible = "¡Hola! 👋 Claro que sí, ¿en qué te puedo ayudar?";
+        }
+    }
 
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', visible, new Date().toISOString()]);
     return visible;
@@ -492,18 +495,17 @@ app.post('/webhook', async (req, res) => {
         }
         if(msg) {
             let userMsg = "", mediaDesc = "", isFile = false;
-            let dbMessage = ""; // Para tu panel
-            let aiMessage = ""; // Para el prompt
+            let dbMessage = ""; // Para DB
+            let aiMessage = ""; // Para IA
 
-            // --- DETECCIÓN DE TIPOS (LÓGICA HÍBRIDA) ---
             if (msg.type === "text") {
                 dbMessage = msg.text.body;
                 aiMessage = msg.text.body;
             } else {
                 isFile = true;
                 if (msg.type === "image") { 
-                    dbMessage = `[MEDIA:IMAGE:${msg.image.id}]`; // TÚ VES LA FOTO
-                    aiMessage = `[ARCHIVO RECIBIDO: FOTO]`;      // IA VE TEXTO
+                    dbMessage = `[MEDIA:IMAGE:${msg.image.id}]`; 
+                    aiMessage = `[ARCHIVO RECIBIDO: FOTO]`; 
                 }
                 else if (msg.type === "audio") { 
                     dbMessage = `[MEDIA:AUDIO:${msg.audio.id}]`; 
@@ -519,7 +521,6 @@ app.post('/webhook', async (req, res) => {
                 }
             }
 
-            // Enviamos los dos mensajes
             const respuesta = await procesarConValentina(dbMessage, aiMessage, msg.from, contactName, isFile); 
             if(respuesta) await enviarWhatsApp(msg.from, respuesta);
         }
@@ -531,4 +532,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.0 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.2 READY"));
