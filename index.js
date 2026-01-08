@@ -1,11 +1,10 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v19.2 (SMART FALLBACK)
+ * SERVER BACKEND - VALENTINA v19.3 (HUMAN DELAY)
  * Cliente: Importadora Casa Colombia (ICC)
- * Corrección Específica:
- * - Evita que el bot diga "Hola" cuando ya está en media conversación.
- * - Si la IA solo extrae datos (JSON) y calla, el sistema responde por ella.
- * - Mantiene visión híbrida y estabilidad.
+ * Novedad:
+ * - RETRASO ESTRATÉGICO: Espera antes de responder para dar tiempo al usuario.
+ * - Mantiene: Fallback Inteligente, Visión Híbrida y Anti-Duplicados.
  * ============================================================
  */
 
@@ -21,10 +20,13 @@ const FormData = require('form-data');
 const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 
-// --- CONFIGURACIÓN DE CARGA ---
+// --- CONFIGURACIÓN ---
+const RESPONSE_DELAY = 15000; // ⏳ TIEMPO DE ESPERA EN MILISEGUNDOS (15 seg)
+// Puedes cambiar a 20000 si prefieres 20 segundos.
+
 const upload = multer({ 
     storage: multer.memoryStorage(),
-    limits: { fileSize: 100 * 1024 * 1024 } // 100MB
+    limits: { fileSize: 100 * 1024 * 1024 } 
 });
 
 const app = express();
@@ -36,9 +38,8 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v19-2"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v19-3"; 
 
-// --- PERSONALIDAD BASE ---
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
 
 // --- MIDDLEWARES ---
@@ -46,7 +47,6 @@ app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors());
 
-// Seguridad de Archivos
 app.use((req, res, next) => {
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
         return res.status(403).send('🚫 Acceso Prohibido');
@@ -88,7 +88,7 @@ let db;
     if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
 
     await refreshKnowledge();
-    console.log("🚀 SERVER v19.2 ONLINE (SMART FALLBACK)");
+    console.log(`🚀 SERVER v19.3 ONLINE (DELAY: ${RESPONSE_DELAY}ms)`);
 })();
 
 let globalKnowledge = [];
@@ -117,7 +117,7 @@ app.use(session({
     cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } 
 }));
 
-// --- META API UTILS ---
+// --- UTILS ---
 async function uploadToMeta(buffer, mimeType, filename) {
     try {
         const form = new FormData();
@@ -171,7 +171,6 @@ app.get('/api/media-proxy/:id', async (req, res) => {
     } catch (e) { res.status(500).send("Error Media"); }
 });
 
-// --- CEREBRO IA ---
 function buscarEnCatalogo(query) {
     if (!query || typeof query !== 'string' || query.startsWith('[')) return [];
     const norm = (t) => t ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
@@ -185,20 +184,27 @@ function buscarEnCatalogo(query) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// === [LÓGICA HÍBRIDA + SMART FALLBACK] ===
+// === [LÓGICA CON RETRASO HUMANO] ===
 async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName = "Cliente", isFile = false) {
+    // 1. Guardar mensaje inmediatamente
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', dbMessage, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
 
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
+    // --- ⏳ ESPERA HUMANA (El truco) ---
+    // El bot espera aquí antes de hacer nada más.
+    await sleep(RESPONSE_DELAY);
+
+    // --- MODO RECEPCIONISTA (ARCHIVOS) ---
     if (isFile) {
         const respuestaAutomatica = `¡Recibido! 📁\n\nHe guardado tu archivo correctamente. Para que uno de nuestros asesores lo revise, por favor confírmame:\n1. Tu nombre completo.\n2. La ciudad desde donde nos escribes.`;
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', respuestaAutomatica, new Date().toISOString()]);
         return respuestaAutomatica;
     }
 
+    // --- MODO ASESOR (TEXTO) ---
     const bizProfile = await getCfg('biz_profile', {});
     const websiteData = await getCfg('website_data', "Consultar Web."); 
     const stock = buscarEnCatalogo(aiMessage); 
@@ -208,9 +214,9 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     const finalPrompt = `
     ${dynamicPrompt}
 
-    // --- 🚨 REGLAS SUPREMAS ---
-    1. **SALIDA:** Escribe SOLO la respuesta para el cliente. NADA de "Analizando...".
-    2. **DATOS:** Si el cliente da un dato (Nombre, Ciudad, Correo), CONFIRMA que lo recibiste. Ejemplo: "Gracias Juan, ¿en qué ciudad estás?".
+    // --- REGLAS SUPREMAS ---
+    1. **NO PENSAMIENTOS:** Entrega SOLO la respuesta final. Nada de "Analizando...".
+    2. **DATOS:** Si el cliente da un dato, CONFIRMA (ej: "Gracias Juan").
     3. **NEGOCIO:** Horarios/Sedes:
     """
     ${websiteData}
@@ -224,7 +230,7 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     HISTORIAL: ${JSON.stringify(chatPrevio)}
     MENSAJE NUEVO: ${aiMessage}
 
-    FORMATO JSON OBLIGATORIO AL FINAL:
+    FORMATO JSON FINAL:
     \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
     `;
 
@@ -245,11 +251,11 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         }
     }
 
-    if (!exito) return "Dame un momento, estoy validando la información... 🚜";
+    if (!exito) return "Dame un momento, estoy verificando la información... 🚜";
 
     const match = txt.match(/```json([\s\S]*?)```|{([\s\S]*?)}$/i);
     let visible = txt;
-    let datosCapturados = false; // Bandera para saber si atrapamos datos
+    let datosCapturados = false;
     
     if (match) {
         visible = txt.replace(match[0], "").trim();
@@ -257,18 +263,15 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
             const info = JSON.parse((match[1]||match[2]||match[0]).replace(/```json/g,"").replace(/```/g,"").trim());
             if(info.nombre || info.celular || info.interes || info.correo || info.ciudad) {
                 await gestionarLead(sessionId, info, contactName);
-                datosCapturados = true; // ¡Tenemos datos!
+                datosCapturados = true;
             }
         } catch(e) {}
     }
     
-    // Limpieza agresiva
     visible = visible.replace(/(\*.*Analizando.*\*|Analizando:|Respuesta:|Pensamiento:|Contexto:)([\s\S]*?)(\n|$)/gi, "").trim();
     visible = visible.replace(/^["']+|["']+$/g, '').trim();
     
-    // --- SMART FALLBACK (LA CORRECCIÓN) ---
-    // Si la IA no dijo nada (vacío) pero SÍ capturó datos, respondemos coherente.
-    // Si no capturó nada y está vacío, recién ahí saludamos.
+    // --- SMART FALLBACK ---
     if (!visible || visible.length < 2) {
         if (datosCapturados) {
             visible = "¡Perfecto! Ya he actualizado tus datos en el sistema. ¿Hay algo más en lo que pueda ayudarte?";
@@ -495,8 +498,8 @@ app.post('/webhook', async (req, res) => {
         }
         if(msg) {
             let userMsg = "", mediaDesc = "", isFile = false;
-            let dbMessage = ""; // Para DB
-            let aiMessage = ""; // Para IA
+            let dbMessage = ""; // DB
+            let aiMessage = ""; // IA
 
             if (msg.type === "text") {
                 dbMessage = msg.text.body;
@@ -509,15 +512,15 @@ app.post('/webhook', async (req, res) => {
                 }
                 else if (msg.type === "audio") { 
                     dbMessage = `[MEDIA:AUDIO:${msg.audio.id}]`; 
-                    aiMessage = `[ARCHIVO RECIBIDO: AUDIO]`;
+                    aiMessage = `[ARCHIVO RECIBIDO: AUDIO]`; 
                 }
                 else if (msg.type === "document") { 
                     dbMessage = `[MEDIA:DOC:${msg.document.id}]`; 
-                    aiMessage = `[ARCHIVO RECIBIDO: PDF]`;
+                    aiMessage = `[ARCHIVO RECIBIDO: PDF]`; 
                 }
                 else if (msg.type === "video") { 
                     dbMessage = `[MEDIA:VIDEO:${msg.video.id}]`; 
-                    aiMessage = `[ARCHIVO RECIBIDO: VIDEO]`;
+                    aiMessage = `[ARCHIVO RECIBIDO: VIDEO]`; 
                 }
             }
 
@@ -532,4 +535,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.2 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.3 READY"));
