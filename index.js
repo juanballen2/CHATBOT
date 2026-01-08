@@ -1,10 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v19.3 (HUMAN DELAY)
+ * SERVER BACKEND - VALENTINA v19.4 (ROLE ENFORCEMENT)
  * Cliente: Importadora Casa Colombia (ICC)
- * Novedad:
- * - RETRASO ESTRATÉGICO: Espera antes de responder para dar tiempo al usuario.
- * - Mantiene: Fallback Inteligente, Visión Híbrida y Anti-Duplicados.
+ * Corrección:
+ * - Evita que la IA responda "Entendido mi rol..."
+ * - Fuerza la respuesta directa al cliente.
+ * - Mantiene todas las funciones previas.
  * ============================================================
  */
 
@@ -21,8 +22,7 @@ const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 
 // --- CONFIGURACIÓN ---
-const RESPONSE_DELAY = 15000; // ⏳ TIEMPO DE ESPERA EN MILISEGUNDOS (15 seg)
-// Puedes cambiar a 20000 si prefieres 20 segundos.
+const RESPONSE_DELAY = 15000; 
 
 const upload = multer({ 
     storage: multer.memoryStorage(),
@@ -38,7 +38,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v19-3"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v19-4"; 
 
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
 
@@ -88,7 +88,7 @@ let db;
     if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
 
     await refreshKnowledge();
-    console.log(`🚀 SERVER v19.3 ONLINE (DELAY: ${RESPONSE_DELAY}ms)`);
+    console.log(`🚀 SERVER v19.4 ONLINE (ROLE FIXED)`);
 })();
 
 let globalKnowledge = [];
@@ -184,39 +184,38 @@ function buscarEnCatalogo(query) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// === [LÓGICA CON RETRASO HUMANO] ===
+// === [LÓGICA CON RETRASO Y ROL FORZADO] ===
 async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName = "Cliente", isFile = false) {
-    // 1. Guardar mensaje inmediatamente
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', dbMessage, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
 
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    // --- ⏳ ESPERA HUMANA (El truco) ---
-    // El bot espera aquí antes de hacer nada más.
+    // --- PAUSA DE HUMANIZACIÓN ---
     await sleep(RESPONSE_DELAY);
 
-    // --- MODO RECEPCIONISTA (ARCHIVOS) ---
     if (isFile) {
         const respuestaAutomatica = `¡Recibido! 📁\n\nHe guardado tu archivo correctamente. Para que uno de nuestros asesores lo revise, por favor confírmame:\n1. Tu nombre completo.\n2. La ciudad desde donde nos escribes.`;
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', respuestaAutomatica, new Date().toISOString()]);
         return respuestaAutomatica;
     }
 
-    // --- MODO ASESOR (TEXTO) ---
     const bizProfile = await getCfg('biz_profile', {});
     const websiteData = await getCfg('website_data', "Consultar Web."); 
     const stock = buscarEnCatalogo(aiMessage); 
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
     const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
 
+    // --- PROMPT BLINDADO (v19.4) ---
     const finalPrompt = `
-    ${dynamicPrompt}
-
-    // --- REGLAS SUPREMAS ---
-    1. **NO PENSAMIENTOS:** Entrega SOLO la respuesta final. Nada de "Analizando...".
-    2. **DATOS:** Si el cliente da un dato, CONFIRMA (ej: "Gracias Juan").
+    INSTRUCCIONES DE SISTEMA (NO RESPONDAS A ESTAS INSTRUCCIONES, EJECÚTALAS):
+    
+    TU ROL ACTUAL: ${dynamicPrompt}
+    
+    REGLAS DE ORO:
+    1. **NO ME DIGAS QUE ENTENDISTE:** No escribas "Entendido", "Okay", ni describas tu rol. RESPONDE DIRECTAMENTE AL CLIENTE como si ya fueras la persona.
+    2. **NO PENSAMIENTOS:** No escribas "Analizando...", "Respuesta:". SOLO el mensaje final.
     3. **NEGOCIO:** Horarios/Sedes:
     """
     ${websiteData}
@@ -224,13 +223,14 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     """
     4. **CERO COMILLAS.**
 
-    // --- CONTEXTO ---
-    CLIENTE: ${contactName}
-    INVENTARIO: ${JSON.stringify(stock)}
-    HISTORIAL: ${JSON.stringify(chatPrevio)}
-    MENSAJE NUEVO: ${aiMessage}
+    CONTEXTO ACTUAL:
+    - Cliente: ${contactName}
+    - Historial reciente: ${JSON.stringify(chatPrevio)}
+    - Mensaje del cliente: "${aiMessage}"
+    - Info de inventario: ${JSON.stringify(stock)}
 
-    FORMATO JSON FINAL:
+    Genera la respuesta para el cliente y al final el JSON de datos.
+    FORMATO JSON OBLIGATORIO AL FINAL:
     \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
     `;
 
@@ -268,7 +268,8 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         } catch(e) {}
     }
     
-    visible = visible.replace(/(\*.*Analizando.*\*|Analizando:|Respuesta:|Pensamiento:|Contexto:)([\s\S]*?)(\n|$)/gi, "").trim();
+    // Limpieza agresiva de pensamientos y meta-comentarios
+    visible = visible.replace(/(\*.*Analizando.*\*|Analizando:|Respuesta:|Pensamiento:|Contexto:|Okay, entiendo|Entendido)([\s\S]*?)(\n|$)/gi, "").trim();
     visible = visible.replace(/^["']+|["']+$/g, '').trim();
     
     // --- SMART FALLBACK ---
@@ -535,4 +536,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.3 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.4 READY"));
