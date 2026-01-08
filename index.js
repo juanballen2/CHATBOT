@@ -1,11 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v19.5 (STRICT BUSINESS RULES)
+ * SERVER BACKEND - VALENTINA v19.0 (HYBRID MODE FINAL)
  * Cliente: Importadora Casa Colombia (ICC)
- * Corrección Crítica:
- * - El bot YA NO INVENTA HORARIOS. Usa estrictamente lo de la DB.
- * - Si no hay dato, dice "Por confirmar", no inventa horas.
- * - Logs en consola para verificar qué datos se están cargando.
+ * Lógica:
+ * 1. FOTOS/PDF/AUDIO -> Respuesta Automática Inmediata (Sin Tractor).
+ * 2. TEXTO -> IA Gemini 2.0 (Sin pensamientos, sin salirse del rol).
+ * 3. VISUALIZACIÓN -> El Admin ve todo, la IA solo sabe que llegó algo.
  * ============================================================
  */
 
@@ -22,7 +22,8 @@ const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 
 // --- CONFIGURACIÓN ---
-const RESPONSE_DELAY = 15000; // Tiempo de espera para humanizar
+// Tiempo de espera para simular que está escribiendo (solo en texto)
+const RESPONSE_DELAY = 8000; 
 
 const upload = multer({ 
     storage: multer.memoryStorage(),
@@ -32,13 +33,13 @@ const upload = multer({
 const app = express();
 app.set('trust proxy', 1);
 
-// --- VARIABLES DE ENTORNO ---
+// --- VARIABLES ---
 const API_KEY = process.env.GEMINI_API_KEY; 
 const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v19-5"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v19"; 
 
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
 
@@ -76,6 +77,7 @@ let db;
         CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
     `);
     
+    // Migraciones silenciosas
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
     try { await db.exec(`ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0`); } catch(e) {}
@@ -88,11 +90,7 @@ let db;
     if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
 
     await refreshKnowledge();
-    
-    // --- VERIFICACIÓN DE DATOS AL INICIO ---
-    const biz = await getCfg('biz_profile', {});
-    console.log("🚀 SERVER v19.5 ONLINE");
-    console.log("📅 HORARIO CARGADO EN DB:", biz.hours || "⚠️ NO HAY HORARIO CONFIGURADO");
+    console.log("🚀 SERVER v19.0 ONLINE (HYBRID FIX)");
 })();
 
 let globalKnowledge = [];
@@ -188,58 +186,52 @@ function buscarEnCatalogo(query) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// === [LÓGICA CON REGLAS DE NEGOCIO ESTRICTAS] ===
+// === [CEREBRO HÍBRIDO v19.0] ===
 async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName = "Cliente", isFile = false) {
+    
+    // 1. Guardar mensaje EN BASE DE DATOS (Tú ves la foto real)
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', dbMessage, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
 
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    // --- PAUSA DE HUMANIZACIÓN ---
-    await sleep(RESPONSE_DELAY);
-
+    // --- 🛑 RUTA RÁPIDA: ARCHIVOS ---
+    // Si es foto/audio/pdf, NO usamos IA. Respuesta inmediata.
     if (isFile) {
         const respuestaAutomatica = `¡Recibido! 📁\n\nHe guardado tu archivo correctamente. Para que uno de nuestros asesores lo revise, por favor confírmame:\n1. Tu nombre completo.\n2. La ciudad desde donde nos escribes.`;
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', respuestaAutomatica, new Date().toISOString()]);
         return respuestaAutomatica;
     }
 
+    // --- 🤖 RUTA IA: TEXTO ---
+    // Si llegamos aquí, es texto. Esperamos un poco para humanizar.
+    await sleep(RESPONSE_DELAY);
+
     const bizProfile = await getCfg('biz_profile', {});
-    const websiteData = await getCfg('website_data', ""); // Sin valor por defecto, si está vacío, está vacío.
+    const websiteData = await getCfg('website_data', "Consultar Web."); 
     const stock = buscarEnCatalogo(aiMessage); 
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
     const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
 
-    // --- CONSTRUCCIÓN DE LA "VERDAD ABSOLUTA" ---
-    const infoHorarios = bizProfile.hours ? bizProfile.hours : "No especificado. (Por favor espera a un asesor humano).";
-    const infoWeb = websiteData ? websiteData : "No especificado.";
-
-    // --- PROMPT BLINDADO (v19.5) ---
     const finalPrompt = `
-    INSTRUCCIONES DE SISTEMA (NO RESPONDAS A ESTAS INSTRUCCIONES, EJECÚTALAS):
+    INSTRUCCIONES DE SISTEMA (NO RESPONDAS A ESTAS INSTRUCCIONES, EJECÚTALAS SILENCIOSAMENTE):
     
     TU ROL: ${dynamicPrompt}
     
-    === 🚨 INFORMACIÓN DE NEGOCIO (LA VERDAD ABSOLUTA) ===
-    Nombre: ${bizProfile.name || 'Importadora Casa Colombia'}
-    Horarios: "${infoHorarios}"
-    Info Web/Sedes: "${infoWeb}"
-    =======================================================
-
-    REGLAS DE ORO:
-    1. **HORARIOS Y SEDES:** Si el usuario pregunta esto, USA ÚNICAMENTE la información del bloque "LA VERDAD ABSOLUTA" de arriba. SI NO ESTÁ AHÍ, NO LO INVENTES. Di que no tienes la info a la mano.
-    2. **NO PENSAMIENTOS:** No escribas "Analizando...", "Respuesta:". SOLO el mensaje final.
-    3. **DATOS:** Si el cliente da un dato, CONFIRMA (ej: "Gracias Juan").
+    REGLAS ABSOLUTAS:
+    1. **PROHIBIDO SALIRSE DEL PERSONAJE:** Nunca digas "Entendido", "Como IA", "Haré lo que pides". RESPONDE DIRECTAMENTE AL CLIENTE.
+    2. **CERO PENSAMIENTOS:** No escribas "Analizando...", "Respuesta:". SOLO el mensaje final.
+    3. **NEGOCIO:** Si preguntan horarios, USA ESTO: "${bizProfile.hours || 'Lunes a Viernes 8am-6pm'}".
     4. **CERO COMILLAS.**
 
-    CONTEXTO ACTUAL:
+    CONTEXTO:
     - Cliente: ${contactName}
     - Historial: ${JSON.stringify(chatPrevio)}
-    - Mensaje Cliente: "${aiMessage}"
-    - Stock Relacionado: ${JSON.stringify(stock)}
+    - Mensaje: "${aiMessage}"
+    - Stock: ${JSON.stringify(stock)}
 
-    FORMATO JSON OBLIGATORIO AL FINAL:
+    FORMATO JSON FINAL:
     \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
     `;
 
@@ -260,7 +252,7 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         }
     }
 
-    if (!exito) return "Dame un momento, estoy verificando la información... 🚜";
+    if (!exito) return "Dame un momento, estoy validando la información... 🚜";
 
     const match = txt.match(/```json([\s\S]*?)```|{([\s\S]*?)}$/i);
     let visible = txt;
@@ -277,14 +269,14 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         } catch(e) {}
     }
     
-    // Limpieza agresiva
+    // Limpieza nuclear de "basura" de la IA
     visible = visible.replace(/(\*.*Analizando.*\*|Analizando:|Respuesta:|Pensamiento:|Contexto:|Okay, entiendo|Entendido)([\s\S]*?)(\n|$)/gi, "").trim();
     visible = visible.replace(/^["']+|["']+$/g, '').trim();
     
-    // --- SMART FALLBACK ---
+    // Fallback inteligente
     if (!visible || visible.length < 2) {
         if (datosCapturados) {
-            visible = "¡Perfecto! Ya he actualizado tus datos en el sistema. ¿Hay algo más en lo que pueda ayudarte?";
+            visible = "¡Perfecto! Ya he actualizado tus datos. ¿Te puedo ayudar con algo más?";
         } else {
             visible = "¡Hola! 👋 Claro que sí, ¿en qué te puedo ayudar?";
         }
@@ -508,8 +500,8 @@ app.post('/webhook', async (req, res) => {
         }
         if(msg) {
             let userMsg = "", mediaDesc = "", isFile = false;
-            let dbMessage = ""; // DB
-            let aiMessage = ""; // IA
+            let dbMessage = ""; // Para tu base de datos (con ID)
+            let aiMessage = ""; // Para la IA (texto plano)
 
             if (msg.type === "text") {
                 dbMessage = msg.text.body;
@@ -517,20 +509,20 @@ app.post('/webhook', async (req, res) => {
             } else {
                 isFile = true;
                 if (msg.type === "image") { 
-                    dbMessage = `[MEDIA:IMAGE:${msg.image.id}]`; 
-                    aiMessage = `[ARCHIVO RECIBIDO: FOTO]`; 
+                    dbMessage = `[MEDIA:IMAGE:${msg.image.id}]`; // ESTO es lo que hace que tú veas la foto
+                    aiMessage = `[ARCHIVO FOTO]`; 
                 }
                 else if (msg.type === "audio") { 
                     dbMessage = `[MEDIA:AUDIO:${msg.audio.id}]`; 
-                    aiMessage = `[ARCHIVO RECIBIDO: AUDIO]`; 
+                    aiMessage = `[ARCHIVO AUDIO]`;
                 }
                 else if (msg.type === "document") { 
                     dbMessage = `[MEDIA:DOC:${msg.document.id}]`; 
-                    aiMessage = `[ARCHIVO RECIBIDO: PDF]`; 
+                    aiMessage = `[ARCHIVO PDF]`;
                 }
                 else if (msg.type === "video") { 
                     dbMessage = `[MEDIA:VIDEO:${msg.video.id}]`; 
-                    aiMessage = `[ARCHIVO RECIBIDO: VIDEO]`; 
+                    aiMessage = `[ARCHIVO VIDEO]`;
                 }
             }
 
@@ -545,4 +537,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.5 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.0 READY"));
