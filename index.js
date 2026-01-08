@@ -1,11 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v19.4 (ROLE ENFORCEMENT)
+ * SERVER BACKEND - VALENTINA v19.5 (STRICT BUSINESS RULES)
  * Cliente: Importadora Casa Colombia (ICC)
- * Corrección:
- * - Evita que la IA responda "Entendido mi rol..."
- * - Fuerza la respuesta directa al cliente.
- * - Mantiene todas las funciones previas.
+ * Corrección Crítica:
+ * - El bot YA NO INVENTA HORARIOS. Usa estrictamente lo de la DB.
+ * - Si no hay dato, dice "Por confirmar", no inventa horas.
+ * - Logs en consola para verificar qué datos se están cargando.
  * ============================================================
  */
 
@@ -22,7 +22,7 @@ const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 
 // --- CONFIGURACIÓN ---
-const RESPONSE_DELAY = 15000; 
+const RESPONSE_DELAY = 15000; // Tiempo de espera para humanizar
 
 const upload = multer({ 
     storage: multer.memoryStorage(),
@@ -38,7 +38,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v19-4"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v19-5"; 
 
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
 
@@ -88,7 +88,11 @@ let db;
     if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
 
     await refreshKnowledge();
-    console.log(`🚀 SERVER v19.4 ONLINE (ROLE FIXED)`);
+    
+    // --- VERIFICACIÓN DE DATOS AL INICIO ---
+    const biz = await getCfg('biz_profile', {});
+    console.log("🚀 SERVER v19.5 ONLINE");
+    console.log("📅 HORARIO CARGADO EN DB:", biz.hours || "⚠️ NO HAY HORARIO CONFIGURADO");
 })();
 
 let globalKnowledge = [];
@@ -184,7 +188,7 @@ function buscarEnCatalogo(query) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// === [LÓGICA CON RETRASO Y ROL FORZADO] ===
+// === [LÓGICA CON REGLAS DE NEGOCIO ESTRICTAS] ===
 async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName = "Cliente", isFile = false) {
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', dbMessage, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
@@ -202,34 +206,39 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     }
 
     const bizProfile = await getCfg('biz_profile', {});
-    const websiteData = await getCfg('website_data', "Consultar Web."); 
+    const websiteData = await getCfg('website_data', ""); // Sin valor por defecto, si está vacío, está vacío.
     const stock = buscarEnCatalogo(aiMessage); 
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
     const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
 
-    // --- PROMPT BLINDADO (v19.4) ---
+    // --- CONSTRUCCIÓN DE LA "VERDAD ABSOLUTA" ---
+    const infoHorarios = bizProfile.hours ? bizProfile.hours : "No especificado. (Por favor espera a un asesor humano).";
+    const infoWeb = websiteData ? websiteData : "No especificado.";
+
+    // --- PROMPT BLINDADO (v19.5) ---
     const finalPrompt = `
     INSTRUCCIONES DE SISTEMA (NO RESPONDAS A ESTAS INSTRUCCIONES, EJECÚTALAS):
     
-    TU ROL ACTUAL: ${dynamicPrompt}
+    TU ROL: ${dynamicPrompt}
     
+    === 🚨 INFORMACIÓN DE NEGOCIO (LA VERDAD ABSOLUTA) ===
+    Nombre: ${bizProfile.name || 'Importadora Casa Colombia'}
+    Horarios: "${infoHorarios}"
+    Info Web/Sedes: "${infoWeb}"
+    =======================================================
+
     REGLAS DE ORO:
-    1. **NO ME DIGAS QUE ENTENDISTE:** No escribas "Entendido", "Okay", ni describas tu rol. RESPONDE DIRECTAMENTE AL CLIENTE como si ya fueras la persona.
+    1. **HORARIOS Y SEDES:** Si el usuario pregunta esto, USA ÚNICAMENTE la información del bloque "LA VERDAD ABSOLUTA" de arriba. SI NO ESTÁ AHÍ, NO LO INVENTES. Di que no tienes la info a la mano.
     2. **NO PENSAMIENTOS:** No escribas "Analizando...", "Respuesta:". SOLO el mensaje final.
-    3. **NEGOCIO:** Horarios/Sedes:
-    """
-    ${websiteData}
-    (Horarios: ${bizProfile.hours || 'Lunes a Viernes 8am-6pm'})
-    """
+    3. **DATOS:** Si el cliente da un dato, CONFIRMA (ej: "Gracias Juan").
     4. **CERO COMILLAS.**
 
     CONTEXTO ACTUAL:
     - Cliente: ${contactName}
-    - Historial reciente: ${JSON.stringify(chatPrevio)}
-    - Mensaje del cliente: "${aiMessage}"
-    - Info de inventario: ${JSON.stringify(stock)}
+    - Historial: ${JSON.stringify(chatPrevio)}
+    - Mensaje Cliente: "${aiMessage}"
+    - Stock Relacionado: ${JSON.stringify(stock)}
 
-    Genera la respuesta para el cliente y al final el JSON de datos.
     FORMATO JSON OBLIGATORIO AL FINAL:
     \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
     `;
@@ -268,7 +277,7 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         } catch(e) {}
     }
     
-    // Limpieza agresiva de pensamientos y meta-comentarios
+    // Limpieza agresiva
     visible = visible.replace(/(\*.*Analizando.*\*|Analizando:|Respuesta:|Pensamiento:|Contexto:|Okay, entiendo|Entendido)([\s\S]*?)(\n|$)/gi, "").trim();
     visible = visible.replace(/^["']+|["']+$/g, '').trim();
     
@@ -536,4 +545,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.4 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.5 READY"));
