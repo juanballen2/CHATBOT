@@ -1,11 +1,12 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v19.7 (JSON CLEANER + MEMORY)
+ * SERVER BACKEND - VALENTINA v19.8 (BROAD SCOPE)
  * Cliente: Importadora Casa Colombia (ICC)
- * Correcciones:
- * 1. ELIMINACIÓN TOTAL del JSON visible en el chat.
- * 2. MEMORIA: Si el cliente vuelve, lo saluda por nombre y retoma.
- * 3. Mantiene: Fotos visibles para admin, modo híbrido.
+ * Mejoras:
+ * 1. MENTALIDAD ABIERTA: La IA ya no asume que todo es "un repuesto".
+ * (Entiende Maquinaria, Servicio, Alquiler, Info).
+ * 2. MEMORIA: Saludo más natural y flexible para clientes recurrentes.
+ * 3. Mantiene: Limpieza de JSON y Modo Híbrido.
  * ============================================================
  */
 
@@ -22,7 +23,7 @@ const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 
 // --- CONFIGURACIÓN ---
-const RESPONSE_DELAY = 10000; 
+const RESPONSE_DELAY = 8000; 
 
 const upload = multer({ 
     storage: multer.memoryStorage(),
@@ -38,7 +39,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v19-7"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v19-8"; 
 
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
 
@@ -88,7 +89,7 @@ let db;
     if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
 
     await refreshKnowledge();
-    console.log("🚀 SERVER v19.7 ONLINE (JSON CLEANER)");
+    console.log("🚀 SERVER v19.8 ONLINE (SCOPE FIXED)");
 })();
 
 let globalKnowledge = [];
@@ -184,8 +185,9 @@ function buscarEnCatalogo(query) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// === [LÓGICA MEJORADA v19.7] ===
+// === [LÓGICA MEJORADA v19.8] ===
 async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName = "Cliente", isFile = false) {
+    
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', dbMessage, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
 
@@ -194,7 +196,9 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
 
     // --- MODO RECEPCIONISTA (ARCHIVOS) ---
     if (isFile) {
-        const respuestaAutomatica = `¡Recibido! 📁\n\nHe guardado tu archivo. Uno de nuestros asesores lo revisará pronto.`;
+        const leadFile = await db.get("SELECT nombre FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [sessionId]);
+        const saludoFile = leadFile && leadFile.nombre && leadFile.nombre !== 'Cliente' ? `Hola ${leadFile.nombre}, ` : '';
+        const respuestaAutomatica = `${saludoFile}¡Recibido! 📁\n\nYa lo guardé en el sistema. Un asesor lo revisará en breve.`;
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', respuestaAutomatica, new Date().toISOString()]);
         return respuestaAutomatica;
     }
@@ -208,21 +212,24 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
     const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
 
-    // --- DETECCIÓN DE CLIENTE ANTIGUO ---
-    // Buscamos si ya existe un lead con este teléfono
+    // 🧠 MEMORIA + ALCANCE ABIERTO
     const leadPrevio = await db.get("SELECT nombre, interes, ciudad FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [sessionId]);
+    
     let contextoCliente = "";
-    if (leadPrevio) {
+    if (leadPrevio && leadPrevio.nombre && leadPrevio.nombre !== "Cliente") {
         contextoCliente = `
-        ¡ATENCIÓN! ESTE ES UN CLIENTE RECURRENTE.
-        Se llama: ${leadPrevio.nombre || contactName}
+        [CLIENTE RECURRENTE DETECTADO]
+        Nombre: ${leadPrevio.nombre}
         Ciudad: ${leadPrevio.ciudad}
-        Último interés: ${leadPrevio.interes}
+        Interés Anterior: ${leadPrevio.interes}
         
-        INSTRUCCIÓN CLAVE: NO le pidas sus datos de nuevo a menos que sea necesario. Salúdalo por su nombre y pregúntale en qué le puedes ayudar hoy o si busca algo relacionado con su interés anterior.
+        TUS INSTRUCCIONES:
+        1. Salúdalo por su nombre con naturalidad.
+        2. NO asumas que quiere lo mismo. Pregunta: "¿Retomamos lo de ${leadPrevio.interes} o buscas algo nuevo hoy?".
+        3. Recuerda que puede buscar MAQUINARIA, REPUESTOS o SERVICIO. Escúchalo.
         `;
     } else {
-        contextoCliente = `Cliente Nuevo. Intenta obtener su Nombre y Ciudad amablemente.`;
+        contextoCliente = `Cliente Nuevo. Obtén Nombre y Ciudad amablemente. No asumas que busca repuestos, puede ser maquinaria.`;
     }
 
     const finalPrompt = `
@@ -230,20 +237,20 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     
     TU ROL: ${dynamicPrompt}
     
-    CONTEXTO DEL CLIENTE:
+    CONTEXTO:
     ${contextoCliente}
 
-    REGLAS:
+    REGLAS DE ORO:
     1. **NO PENSAMIENTOS:** Solo respuesta final.
-    2. **NEGOCIO:** Horarios: "${bizProfile.hours || 'Lunes a Viernes 8am-6pm'}".
-    3. **CERO COMILLAS.**
-    4. **FORMATO:** Si vas a generar el JSON, ponlo AL FINAL y asegúrate de que el texto para el cliente esté antes.
+    2. **ALCANCE ABIERTO:** No te cierres a "repuestos". El cliente puede querer una EXCAVADORA COMPLETA, un ALQUILER o una COTIZACIÓN GRANDE. Atiéndelo según lo que pida.
+    3. **CIERRE:** Siempre confirma que un humano revisará el caso.
+    4. **CERO COMILLAS.**
 
     HISTORIAL: ${JSON.stringify(chatPrevio)}
-    MENSAJE: "${aiMessage}"
+    MENSAJE NUEVO: "${aiMessage}"
     STOCK: ${JSON.stringify(stock)}
 
-    FORMATO JSON OBLIGATORIO AL FINAL (Invisible para el usuario):
+    FORMATO JSON OBLIGATORIO AL FINAL (Invisible):
     \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
     `;
 
@@ -266,35 +273,36 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
 
     if (!exito) return "Dame un momento, estoy verificando la información... 🚜";
 
-    const match = txt.match(/```json([\s\S]*?)```|{([\s\S]*?)}$/i);
+    const match = txt.match(/```json([\s\S]*?)```|{([\s\S]*?)}|'''json([\s\S]*?)'''/i);
     let visible = txt;
     let datosCapturados = false;
     
     if (match) {
-        // --- AQUÍ ESTÁ EL FIX DEL JSON VISIBLE ---
-        // Borramos TODO el bloque JSON del texto visible
         visible = txt.replace(match[0], "").trim(); 
-        
         try {
-            const info = JSON.parse((match[1]||match[2]||match[0]).replace(/```json/g,"").replace(/```/g,"").trim());
+            let jsonStr = (match[1] || match[2] || match[0]).replace(/```json/g,"").replace(/```/g,"").replace(/'''json/g,"").replace(/'''/g,"").trim();
+            const info = JSON.parse(jsonStr);
+            
             if(info.nombre || info.celular || info.interes || info.correo || info.ciudad) {
+                if (leadPrevio && (!info.nombre || info.nombre === "null")) info.nombre = leadPrevio.nombre;
+                if (leadPrevio && (!info.ciudad || info.ciudad === "null")) info.ciudad = leadPrevio.ciudad;
+                
                 await gestionarLead(sessionId, info, contactName);
                 datosCapturados = true;
             }
         } catch(e) {}
     }
     
-    // Limpieza de basura
     visible = visible.replace(/(\*.*Analizando.*\*|Analizando:|Respuesta:|Pensamiento:|Contexto:|Okay, entiendo|Entendido)([\s\S]*?)(\n|$)/gi, "").trim();
     visible = visible.replace(/^["']+|["']+$/g, '').trim();
-    visible = visible.replace(/```/g, ""); // Seguridad extra contra comillas de código
+    visible = visible.replace(/```/g, ""); 
     
-    // Si quedó vacío después de limpiar el JSON (pasa a veces), ponemos un fallback
     if (!visible || visible.length < 2) {
         if (datosCapturados) {
-            visible = "¡Listo! Ya tomé nota de la información. ¿Te puedo colaborar con algo más?";
+            const nombreSaludo = leadPrevio?.nombre || "Cliente";
+            visible = `¡Listo ${nombreSaludo}! He actualizado tu solicitud. Un asesor comercial te contactará a la brevedad.`;
         } else {
-            visible = "¡Hola! 👋 Claro que sí, cuéntame, ¿qué repuesto estás buscando hoy?";
+            visible = "¡Hola! 👋 Claro que sí, ¿en qué te puedo ayudar?";
         }
     }
 
@@ -303,20 +311,23 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
 }
 
 async function gestionarLead(phone, info, fallbackName) {
-    let nombreFinal = (info.nombre && info.nombre !== "null") ? info.nombre : fallbackName;
+    let nombreFinal = (info.nombre && info.nombre !== "null" && info.nombre !== "Cliente") ? info.nombre : fallbackName;
     const existe = await db.get("SELECT id, interes, ciudad, correo, etiqueta FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
 
     if (existe) {
-        const nuevoInteres = info.interes || existe.interes;
-        const nuevaCiudad = info.ciudad || existe.ciudad;
-        const nuevoCorreo = info.correo || existe.correo;
+        const nuevoInteres = (info.interes && info.interes !== "null") ? info.interes : existe.interes;
+        const nuevaCiudad = (info.ciudad && info.ciudad !== "null") ? info.ciudad : existe.ciudad;
+        const nuevoCorreo = (info.correo && info.correo !== "null") ? info.correo : existe.correo;
         const nuevaEtiqueta = (info.etiqueta && info.etiqueta !== "Pendiente") ? info.etiqueta : existe.etiqueta;
+        
         await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=? WHERE id=?`, 
             [nombreFinal, nuevoInteres, nuevaEtiqueta, new Date().toLocaleString(), nuevaCiudad, nuevoCorreo, existe.id]);
+        await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [nombreFinal, phone]);
     } else {
         if (info.interes || info.correo || info.ciudad || info.es_lead) {
             await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
                 [phone, nombreFinal, info.interes || "Consultando", info.etiqueta || "Pendiente", new Date().toLocaleString(), info.ciudad, info.correo]);
+            await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [nombreFinal, phone]);
         }
     }
     
@@ -553,4 +564,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.7 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.8 READY"));
