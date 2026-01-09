@@ -1,11 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v19.6 (MEDIA FIX)
+ * SERVER BACKEND - VALENTINA v19.7 (JSON CLEANER + MEMORY)
  * Cliente: Importadora Casa Colombia (ICC)
- * Corrección Crítica:
- * - Reparado el PROXY DE IMÁGENES. Ahora sí cargan en el panel.
- * - Mantiene: Modo Híbrido (Archivos rápidos / Texto IA).
- * - Mantiene: Reglas de Negocio Estrictas.
+ * Correcciones:
+ * 1. ELIMINACIÓN TOTAL del JSON visible en el chat.
+ * 2. MEMORIA: Si el cliente vuelve, lo saluda por nombre y retoma.
+ * 3. Mantiene: Fotos visibles para admin, modo híbrido.
  * ============================================================
  */
 
@@ -22,7 +22,7 @@ const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 
 // --- CONFIGURACIÓN ---
-const RESPONSE_DELAY = 10000; // 10 segundos de espera "humana"
+const RESPONSE_DELAY = 10000; 
 
 const upload = multer({ 
     storage: multer.memoryStorage(),
@@ -32,13 +32,13 @@ const upload = multer({
 const app = express();
 app.set('trust proxy', 1);
 
-// --- VARIABLES DE ENTORNO ---
+// --- VARIABLES ---
 const API_KEY = process.env.GEMINI_API_KEY; 
 const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v19-6"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v19-7"; 
 
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
 
@@ -88,7 +88,7 @@ let db;
     if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
 
     await refreshKnowledge();
-    console.log("🚀 SERVER v19.6 ONLINE (IMAGES FIXED)");
+    console.log("🚀 SERVER v19.7 ONLINE (JSON CLEANER)");
 })();
 
 let globalKnowledge = [];
@@ -117,7 +117,7 @@ app.use(session({
     cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } 
 }));
 
-// --- META API UTILS ---
+// --- UTILS ---
 async function uploadToMeta(buffer, mimeType, filename) {
     try {
         const form = new FormData();
@@ -158,35 +158,17 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     } catch (e) { return false; }
 }
 
-// === [CORRECCIÓN PRINCIPAL: PROXY DE MEDIOS REPARADO] ===
 app.get('/api/media-proxy/:id', async (req, res) => {
     if (!req.session.isLogged) return res.status(401).send("No auth");
-    
     try {
-        // 1. Obtener la URL Real de Facebook
-        const urlResponse = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, {
-            headers: { 'Authorization': `Bearer ${META_TOKEN}` }
-        });
-        const imageUrl = urlResponse.data.url;
-
-        // 2. Descargar la imagen pasando el Token (CRÍTICO)
-        const imageResponse = await axios.get(imageUrl, {
-            headers: { 'Authorization': `Bearer ${META_TOKEN}` },
-            responseType: 'stream'
-        });
-
-        // 3. Pasar el tipo de archivo al navegador
-        if (imageResponse.headers['content-type']) {
-            res.setHeader('Content-Type', imageResponse.headers['content-type']);
-        }
-        
-        // 4. Enviar el stream
-        imageResponse.data.pipe(res);
-
-    } catch (e) {
-        console.error("PROXY ERROR:", e.message); // Log para ver si falla
-        res.status(500).send("Error loading media");
-    }
+        const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
+        const mediaUrl = new URL(urlRes.data.url);
+        mediaUrl.searchParams.append('access_token', META_TOKEN);
+        const media = await axios.get(mediaUrl.toString(), { responseType: 'stream' });
+        if (urlRes.data.mime_type) res.setHeader('Content-Type', urlRes.data.mime_type);
+        if (media.headers['content-length']) res.setHeader('Content-Length', media.headers['content-length']);
+        media.data.pipe(res);
+    } catch (e) { res.status(500).send("Error Media"); }
 });
 
 function buscarEnCatalogo(query) {
@@ -202,9 +184,8 @@ function buscarEnCatalogo(query) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// === [LÓGICA HÍBRIDA + DELAY] ===
+// === [LÓGICA MEJORADA v19.7] ===
 async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName = "Cliente", isFile = false) {
-    // 1. Guardar mensaje
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', dbMessage, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
 
@@ -213,14 +194,13 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
 
     // --- MODO RECEPCIONISTA (ARCHIVOS) ---
     if (isFile) {
-        // Respuesta Inmediata (Sin Delay) para confirmar recepción
-        const respuestaAutomatica = `¡Recibido! 📁\n\nHe guardado tu archivo correctamente. Para que uno de nuestros asesores lo revise, por favor confírmame:\n1. Tu nombre completo.\n2. La ciudad desde donde nos escribes.`;
+        const respuestaAutomatica = `¡Recibido! 📁\n\nHe guardado tu archivo. Uno de nuestros asesores lo revisará pronto.`;
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', respuestaAutomatica, new Date().toISOString()]);
         return respuestaAutomatica;
     }
 
     // --- MODO ASESOR (TEXTO) ---
-    await sleep(RESPONSE_DELAY); // Delay Humano solo para texto
+    await sleep(RESPONSE_DELAY);
 
     const bizProfile = await getCfg('biz_profile', {});
     const websiteData = await getCfg('website_data', "Consultar Web."); 
@@ -228,23 +208,42 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
     const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
 
+    // --- DETECCIÓN DE CLIENTE ANTIGUO ---
+    // Buscamos si ya existe un lead con este teléfono
+    const leadPrevio = await db.get("SELECT nombre, interes, ciudad FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [sessionId]);
+    let contextoCliente = "";
+    if (leadPrevio) {
+        contextoCliente = `
+        ¡ATENCIÓN! ESTE ES UN CLIENTE RECURRENTE.
+        Se llama: ${leadPrevio.nombre || contactName}
+        Ciudad: ${leadPrevio.ciudad}
+        Último interés: ${leadPrevio.interes}
+        
+        INSTRUCCIÓN CLAVE: NO le pidas sus datos de nuevo a menos que sea necesario. Salúdalo por su nombre y pregúntale en qué le puedes ayudar hoy o si busca algo relacionado con su interés anterior.
+        `;
+    } else {
+        contextoCliente = `Cliente Nuevo. Intenta obtener su Nombre y Ciudad amablemente.`;
+    }
+
     const finalPrompt = `
     INSTRUCCIONES DE SISTEMA:
     
     TU ROL: ${dynamicPrompt}
     
+    CONTEXTO DEL CLIENTE:
+    ${contextoCliente}
+
     REGLAS:
     1. **NO PENSAMIENTOS:** Solo respuesta final.
     2. **NEGOCIO:** Horarios: "${bizProfile.hours || 'Lunes a Viernes 8am-6pm'}".
     3. **CERO COMILLAS.**
+    4. **FORMATO:** Si vas a generar el JSON, ponlo AL FINAL y asegúrate de que el texto para el cliente esté antes.
 
-    CONTEXTO:
-    - Cliente: ${contactName}
-    - Historial: ${JSON.stringify(chatPrevio)}
-    - Mensaje: "${aiMessage}"
-    - Stock: ${JSON.stringify(stock)}
+    HISTORIAL: ${JSON.stringify(chatPrevio)}
+    MENSAJE: "${aiMessage}"
+    STOCK: ${JSON.stringify(stock)}
 
-    FORMATO JSON FINAL:
+    FORMATO JSON OBLIGATORIO AL FINAL (Invisible para el usuario):
     \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
     `;
 
@@ -272,7 +271,10 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     let datosCapturados = false;
     
     if (match) {
-        visible = txt.replace(match[0], "").trim();
+        // --- AQUÍ ESTÁ EL FIX DEL JSON VISIBLE ---
+        // Borramos TODO el bloque JSON del texto visible
+        visible = txt.replace(match[0], "").trim(); 
+        
         try {
             const info = JSON.parse((match[1]||match[2]||match[0]).replace(/```json/g,"").replace(/```/g,"").trim());
             if(info.nombre || info.celular || info.interes || info.correo || info.ciudad) {
@@ -282,14 +284,17 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         } catch(e) {}
     }
     
+    // Limpieza de basura
     visible = visible.replace(/(\*.*Analizando.*\*|Analizando:|Respuesta:|Pensamiento:|Contexto:|Okay, entiendo|Entendido)([\s\S]*?)(\n|$)/gi, "").trim();
     visible = visible.replace(/^["']+|["']+$/g, '').trim();
+    visible = visible.replace(/```/g, ""); // Seguridad extra contra comillas de código
     
+    // Si quedó vacío después de limpiar el JSON (pasa a veces), ponemos un fallback
     if (!visible || visible.length < 2) {
         if (datosCapturados) {
-            visible = "¡Perfecto! Ya he actualizado tus datos. ¿Te puedo ayudar con algo más?";
+            visible = "¡Listo! Ya tomé nota de la información. ¿Te puedo colaborar con algo más?";
         } else {
-            visible = "¡Hola! 👋 Claro que sí, ¿en qué te puedo ayudar?";
+            visible = "¡Hola! 👋 Claro que sí, cuéntame, ¿qué repuesto estás buscando hoy?";
         }
     }
 
@@ -548,4 +553,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.6 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.7 READY"));
