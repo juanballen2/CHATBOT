@@ -1,12 +1,12 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v21.9 (NO PRICE POLICY)
+ * SERVER BACKEND - VALENTINA v21.11 (ANTI-GREETING LOOP)
  * Cliente: Importadora Casa Colombia (ICC)
  * ============================================================
- * CORRECCIÓN CRÍTICA DE POLÍTICA COMERCIAL:
- * 1. PROHIBIDO DAR PRECIOS: La IA nunca da el valor numérico.
- * 2. GANCHO COMERCIAL: Usa la solicitud de precio para pedir datos.
- * 3. VALOR TÉCNICO: Confirma stock/compatibilidad antes de pedir datos.
+ * CORRECCIÓN FINAL DE "SALUDO ETERNO":
+ * 1. Lógica de Estado: El código calcula si la charla es NUEVA o CONTINUA.
+ * 2. Inyección de Estado: Se le prohíbe explícitamente saludar si es "CONTINUA".
+ * 3. Mantenimiento: Conserva lógica de No Precios y Estados.
  * ============================================================
  */
 
@@ -40,36 +40,26 @@ const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = "icc-val-opt-v21"; 
 
-// --- PROMPT CON POLÍTICA DE "NO PRECIOS" ---
+// --- PROMPT MAESTRO DINÁMICO ---
+// Nota: Ahora el prompt recibe instrucciones dinámicas sobre si saludar o no.
 const DEFAULT_PROMPT = `ERES VALENTINA, ASESORA COMERCIAL DE ICC (Maquinaria Pesada).
-TU OBJETIVO: Filtrar la necesidad técnica y capturar los datos del cliente para que un humano cotice.
+
+🚨 INSTRUCCIÓN DE ESTADO ACTUAL (CRÍTICO - LEE ESTO PRIMERO):
+[[[ESTADO_SALUDO]]]
 
 🚨 REGLA DE ORO (PRECIOS):
-- ⛔ TIENES TERMINANTEMENTE PROHIBIDO DAR PRECIOS EXACTOS.
-- Nunca inventes ni des un valor numérico.
-- Tu trabajo es confirmar que TENEMOS EL REPUESTO (o podemos conseguirlo) y pedir los datos para "generar la cotización formal".
+- ⛔ PROHIBIDO DAR PRECIOS EXACTOS.
+- Si piden precio, CONFIRMA DISPONIBILIDAD y úsalo de gancho para pedir datos.
 
-🚨 PROTOCOLO DE RESPUESTA:
+🚨 MÁQUINA DE ESTADOS:
+1. Detección: Identifica el repuesto.
+2. Validación: Pregunta detalles técnicos SOLO si es indispensable.
+3. Cierre: Una vez identificado el producto -> PIDE DATOS (Nombre/Ciudad) para "generar la cotización".
 
-1. SI EL CLIENTE SALUDA ("Hola"):
-   - Preséntate brevemente y pregunta qué necesita.
-   - "¡Hola! 👋 Soy Valentina de ICC. ¿Qué repuesto estás buscando hoy?"
+🚨 ESTRUCTURA DE RESPUESTA:
+1. Texto natural (según la instrucción de estado arriba).
+2. Bloque JSON obligatorio.
 
-2. SI EL CLIENTE PIDE PRECIO DIRECTO ("Precio de filtro PC200"):
-   - PASO A: Confirma técnicamente ("Sí, manejo los filtros para Komatsu PC200").
-   - PASO B: Usa el precio como gancho.
-   - EJEMPLO CORRECTO: "Sí lo tenemos disponible 👍. Para generarte la cotización formal con el precio exacto y envío a tu ciudad, ¿me confirmas tu nombre?"
-
-3. MÁQUINA DE ESTADOS:
-   - Detección: Identifica el repuesto.
-   - Validación: Si hay dudas técnicas (¿es serie 6 o 8?), pregúntalas antes de cotizar.
-   - Cierre: Una vez sepas qué es, pide NOMBRE y CIUDAD para pasar el lead al humano.
-
-🚨 ANTI-BLOQUEO:
-- Si el usuario insiste mucho en el precio ("dame un aproximado"), di: "Los precios varían según la TRM y el stock diario. Regálame tus datos para que el asesor te dé el valor exacto hoy mismo. 🔧"
-
-🚨 ESTRUCTURA DE RESPUESTA JSON:
-Primero tu texto amable y comercial, LUEGO el bloque JSON.
 OUTPUT JSON OBLIGATORIO: \`\`\`json {"es_lead": boolean, "nombre":"...", "interes":"...", "ciudad":"...", "etiqueta":"Lead"} \`\`\``;
 
 app.use(session({
@@ -107,12 +97,11 @@ let db, globalKnowledge = [], serverInstance;
         migrations.push('ALTER TABLE config ADD COLUMN logoUrl TEXT');
         for (const m of migrations) { try { await db.exec(m); } catch(e){} }
 
-        // ACTUALIZAMOS EL PROMPT CON LA POLÍTICA DE NO PRECIOS
         await setCfg('bot_prompt', DEFAULT_PROMPT); 
         await refreshKnowledge();
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER v21.9 READY (No Price Policy)`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER v21.11 READY (Anti-Loop)`));
     } catch (e) { console.error("❌ DB ERROR:", e); }
 })();
 
@@ -180,17 +169,36 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const history = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [phone])).reverse();
     const lead = await db.get("SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
     
-    // --- CONTEXTO NEUTRO ---
-    let datosConocidos = lead ? `CLIENTE EXISTENTE: ${lead.nombre}, Interés previo: ${lead.interes}.` : "CLIENTE NUEVO.";
+    // --- LÓGICA DE CONTROL DE SALUDO (EL CORAZÓN DEL FIX) ---
+    // Si hay más de 2 mensajes en el historial reciente, ASUMIMOS CHARLA EN CURSO.
+    const mensajesRecientes = history.length;
+    let instruccionSaludo = "";
 
-    const prompt = `ROL: ${await getCfg('bot_prompt', DEFAULT_PROMPT)}
+    if (mensajesRecientes <= 1) {
+        // INICIO DE CHARLA
+        instruccionSaludo = `ESTADO: INICIO DE CONVERSACIÓN.
+        - Si el usuario saludó, preséntate ("Hola soy Valentina...").
+        - Si fue directo al grano, responde directo pero amable ("Hola, con gusto te ayudo con...").`;
+    } else {
+        // CHARLA EN CURSO
+        instruccionSaludo = `ESTADO: CONVERSACIÓN FLUIDA EN CURSO (YA ESTÁN HABLANDO).
+        - ⛔ PROHIBIDO SALUDAR O PRESENTARSE DE NUEVO.
+        - ⛔ NO DIGAS "Hola", "Soy Valentina", ni "¿En qué te ayudo?".
+        - Responde DIRECTAMENTE a lo último que dijo el usuario. Sé concisa.`;
+    }
+
+    let datosConocidos = lead ? `CLIENTE: ${lead.nombre}, Interés: ${lead.interes}.` : "CLIENTE NUEVO.";
+
+    let basePrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
+    // Inyectamos la instrucción dinámica
+    basePrompt = basePrompt.replace("[[[ESTADO_SALUDO]]]", instruccionSaludo);
+
+    const prompt = `${basePrompt}
     
-    ESTADO ACTUAL:
+    CONTEXTO TÉCNICO:
     ${datosConocidos}
     HORARIO: ${biz.hours || '8am-6pm'}.
-    
-    INVENTARIO SUGERIDO (Referencia interna, NO DAR PRECIOS):
-    ${JSON.stringify(stock)}
+    INVENTARIO SUGERIDO: ${JSON.stringify(stock)}
     
     HISTORIAL RECIENTE:
     ${JSON.stringify(history)}
@@ -214,13 +222,12 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
 
         let reply = limpiarRespuesta(raw);
         
-        // --- FALLBACK AMABLE ---
-        if (!reply || reply.length < 2) reply = "Hola 👋, aquí estoy. ¿En qué repuesto te puedo colaborar?";
+        if (!reply || reply.length < 2) reply = "Entendido, estoy revisando esa referencia... 🔧";
         
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', reply, new Date().toISOString()]);
         return reply;
 
-    } catch (e) { return "Dame un segundo, estoy revisando... 🚜"; }
+    } catch (e) { return "Dame un segundo... 🚜"; }
 }
 
 async function gestionarLead(phone, info, fbName, oldLead) {
