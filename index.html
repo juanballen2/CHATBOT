@@ -125,7 +125,12 @@
 
         /* Area Chat */
         .chat-area { flex: 1; display: flex; flex-direction: column; position: relative; background: #efe7dd; }
-        .chat-bg { position: absolute; top:0; left:0; width:100%; height:100%; background-image: radial-gradient(#d4c7b8 1px, transparent 1px); background-size: 20px 20px; opacity: 0.6; z-index: 0; }
+        .chat-bg { 
+            position: absolute; top:0; left:0; width:100%; height:100%; 
+            background-image: radial-gradient(#d4c7b8 1px, transparent 1px); 
+            background-size: 20px 20px; opacity: 0.6; z-index: 0; 
+            pointer-events: none; /* CORRECCIÓN: Permite clics a través del fondo */
+        }
         
         #chat-placeholder { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1; color: #9ca3af; }
         #chat-interface { display: none; flex-direction: column; height: 100%; z-index: 1; }
@@ -133,12 +138,16 @@
         .ca-header { background: #f0f2f5; padding: 10px 20px; border-bottom: 1px solid #d1d7db; display: flex; justify-content: space-between; align-items: center; }
         .messages-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 
-        .bubble { padding: 10px 15px; border-radius: 8px; font-size: 14px; max-width: 70%; line-height: 1.5; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .bubble { 
+            padding: 10px 15px; border-radius: 8px; font-size: 14px; max-width: 70%; line-height: 1.5; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); 
+            /* CORRECCIÓN: Habilita selección de texto */
+            user-select: text; -webkit-user-select: text; cursor: text;
+        }
         .b-bot { align-self: flex-start; background: #fff; border-radius: 0 12px 12px 12px; border-left: 3px solid #10b981; }
-        .b-manual { align-self: flex-end; background: #d9fdd3; border-radius: 12px 0 12px 12px; }
+        .b-manual { align-self: flex-end; background: #d9fdd3; border-radius: 12px 0 12px 12px; color: #111; }
         .b-user { align-self: flex-start; background: #fff; border-radius: 0 12px 12px 12px; }
-        .msg-time { font-size: 10px; color: #999; text-align: right; margin-top: 4px; }
-        .date-divider { align-self: center; background: rgba(255,255,255,0.8); padding: 4px 12px; border-radius: 12px; font-size: 11px; color: #555; margin: 10px 0; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
+        .msg-time { font-size: 10px; color: #999; text-align: right; margin-top: 4px; user-select: none; }
+        .date-divider { align-self: center; background: rgba(255,255,255,0.8); padding: 4px 12px; border-radius: 12px; font-size: 11px; color: #555; margin: 10px 0; box-shadow: 0 1px 1px rgba(0,0,0,0.1); user-select: none; }
 
         .input-area { background: #f0f2f5; padding: 10px 15px; display: flex; align-items: center; gap: 10px; }
         .msg-field { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #fff; outline: none; font-size: 14px; }
@@ -607,14 +616,17 @@
                     lastDate = dateStr;
                 }
 
-                const cls = m.role==='bot'?'b-bot':(m.role==='manual'?'b-manual':'b-user');
+                // CORRECCIÓN LÓGICA DE ROLES
+                let cls = 'b-user';
+                if (m.role === 'manual' || m.role === 'assistant') cls = 'b-manual'; // Nosotros (Verde/Der)
+                if (m.role === 'bot') cls = 'b-bot'; // Bot (Blanco/Izq + Borde)
+
                 let txt = m.text;
                 if(txt.includes('[MEDIA:IMAGE:')) {
                     const id = txt.match(/IMAGE:(.*?)\]/)[1];
                     txt = `<img src="/api/media-proxy/${id}" style="max-width:250px; border-radius:10px; cursor:pointer;" onclick="window.open(this.src)">`;
                 } else if(txt.includes('[MEDIA:AUDIO:')) {
                     const id = txt.match(/AUDIO:(.*?)\]/)[1];
-                    // AUDIO FIX: preload="metadata" ayuda a que el navegador sepa la duración sin descargar todo
                     txt = `<div class="audio-wrapper"><audio src="/api/media-proxy/${id}" controls preload="metadata"></audio></div>`;
                 } else if(txt.includes('[MEDIA:DOC:')) {
                      const id = txt.match(/DOC:(.*?)\]/)[1];
@@ -628,7 +640,7 @@
                          </div>`;
             });
 
-            const isAtBottom = (box.scrollHeight - box.scrollTop - box.clientHeight) <= 50;
+            const isAtBottom = (box.scrollHeight - box.scrollTop - box.clientHeight) <= 100;
             const isFirstLoad = box.innerHTML.includes('Cargando') || box.innerHTML === '';
 
             if(box.innerHTML !== html) { 
