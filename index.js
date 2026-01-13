@@ -1,11 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v20.7 (UNIVERSAL BUFFER)
+ * SERVER BACKEND - VALENTINA v20.9 (CONTEXT AWARENESS)
  * Cliente: Importadora Casa Colombia (ICC)
- * Corrección Final de Medios:
- * - Se usa 'arraybuffer' para TODO (Audio, Video, Imagen).
- * - Garantiza que el navegador reciba el peso exacto del archivo.
- * - Soluciona el problema de reproducción de audios cortados.
+ * Mejoras de Inteligencia:
+ * 1. PRIORIDAD DE INTENCIÓN: Si el cliente pide algo nuevo, ignora el historial.
+ * 2. SALUDO CONTEXTUAL: Solo ofrece "retomar" si el cliente solo saluda.
+ * 3. Mantiene: Media Fix, Safe Boot y Anti-Loop.
  * ============================================================
  */
 
@@ -38,7 +38,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v20-7"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v20-9"; 
 
 // --- PERSONALIDAD BASE ---
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
@@ -101,7 +101,7 @@ async function startServer() {
         await refreshKnowledge();
 
         app.listen(process.env.PORT || 10000, () => {
-            console.log("🔥 SERVER v20.7 READY (UNIVERSAL BUFFER)");
+            console.log("🔥 SERVER v20.9 READY (CONTEXT AWARE)");
         });
 
     } catch (error) {
@@ -130,6 +130,7 @@ async function setCfg(key, value) {
     await db.run("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", [key, JSON.stringify(value)]);
 }
 
+// --- UTILS ---
 async function uploadToMeta(buffer, mimeType, filename) {
     try {
         const form = new FormData();
@@ -170,12 +171,11 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     } catch (e) { return false; }
 }
 
-// === [PROXY DE MEDIOS v20.7: BUFFER UNIVERSAL] ===
+// === [PROXY DE MEDIOS v20.9 (Estable)] ===
 app.get('/api/media-proxy/:id', async (req, res) => {
     if (!req.session.isLogged) return res.status(401).send("No auth");
     
     try {
-        // 1. Obtener URL firmada
         const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
@@ -183,16 +183,21 @@ app.get('/api/media-proxy/:id', async (req, res) => {
         const mediaUrl = urlRes.data.url;
         const mimeType = urlRes.data.mime_type;
 
-        // 2. Descarga COMPLETA en Memoria (ArrayBuffer)
-        // Esto funciona perfecto para audios de WhatsApp que son pequeños (<5MB)
+        // Descargar Completo (Buffer) para estabilidad
         const media = await axios.get(mediaUrl, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` },
             responseType: 'arraybuffer' 
         });
 
-        // 3. Entregar con peso exacto
-        if (mimeType) res.setHeader('Content-Type', mimeType);
         res.setHeader('Content-Length', media.data.length);
+        res.setHeader('Content-Disposition', 'inline');
+
+        if (mimeType && mimeType.includes('audio')) {
+            res.setHeader('Content-Type', 'audio/ogg');
+        } else {
+            if (mimeType) res.setHeader('Content-Type', mimeType);
+        }
+
         res.send(media.data);
 
     } catch (e) { 
@@ -214,7 +219,7 @@ function buscarEnCatalogo(query) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// === [LÓGICA CONVERSACIONAL] ===
+// === [LÓGICA CONVERSACIONAL INTELIGENTE] ===
 async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName = "Cliente", isFile = false) {
     
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', dbMessage, new Date().toISOString()]);
@@ -223,7 +228,7 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    // Anti-Loop
+    // --- ANTI-LOOP ---
     const lastBotMsg = await db.get("SELECT text FROM history WHERE phone = ? AND role = 'bot' ORDER BY id DESC LIMIT 1", [sessionId]);
     if (lastBotMsg && (lastBotMsg.text.includes("ejecutivo") || lastBotMsg.text.includes("contactará"))) {
         const msgClean = aiMessage.toLowerCase().trim();
@@ -247,48 +252,67 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
     const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
 
+    // --- 🧠 CEREBRO CONTEXTUAL: DETECCIÓN DE INTENCIÓN ---
+    // Palabras clave que indican una NUEVA intención comercial
+    const regexIntencion = /quiero|busco|necesito|cotizar|precio|tienes|vendes|repuesto|filtro|motor|maquina|oruga|bomba|cilindro|cuanto vale/i;
+    const tieneIntencionNueva = regexIntencion.test(aiMessage);
+
     const leadPrevio = await db.get("SELECT nombre, interes, ciudad FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [sessionId]);
+    let contextoCliente = "";
     let esRecurrente = false;
-    let contextoCliente = "Estado: CLIENTE NUEVO (Fase CAPTURA). Objetivo: Obtener Nombre y Ciudad.";
-    
+
     if (leadPrevio && leadPrevio.nombre && leadPrevio.nombre !== "Cliente") {
         esRecurrente = true;
-        contextoCliente = `
-        Estado: CLIENTE RECURRENTE.
-        Nombre: ${leadPrevio.nombre}
-        Ciudad: ${leadPrevio.ciudad}
-        Interés Previo: ${leadPrevio.interes}
-        INSTRUCCIÓN: Saluda SOLO en el primer mensaje. Ve directo al grano: "¿Retomamos lo anterior o buscas algo nuevo?".
-        `;
+        // Lógica de bifurcación:
+        if (tieneIntencionNueva) {
+            // Cliente Recurrente PERO con intención nueva -> NO USAR MEMORIA DE "RETOMAR"
+            contextoCliente = `
+            Estado: CLIENTE RECURRENTE CON NUEVA SOLICITUD.
+            Nombre: ${leadPrevio.nombre}
+            INSTRUCCIÓN CRÍTICA:
+            1. Salúdalo por su nombre (${leadPrevio.nombre}).
+            2. IGNORA su interés pasado (${leadPrevio.interes}). El cliente busca algo nuevo HOY.
+            3. NO preguntes "¿Retomamos lo anterior?". Atiende DIRECTAMENTE la nueva solicitud ("${aiMessage}").
+            `;
+        } else {
+            // Cliente Recurrente SOLO SALUDANDO -> Usar Memoria
+            contextoCliente = `
+            Estado: CLIENTE RECURRENTE (Saludo/Seguimiento).
+            Nombre: ${leadPrevio.nombre}
+            Interés Previo: ${leadPrevio.interes}
+            INSTRUCCIÓN:
+            1. Saluda por nombre.
+            2. Pregunta: "¿Retomamos lo de ${leadPrevio.interes} o buscas algo nuevo hoy?".
+            `;
+        }
+    } else {
+        contextoCliente = `Estado: CLIENTE NUEVO (Fase CAPTURA). Objetivo: Obtener Nombre y Ciudad. No asumas intención.`;
     }
 
     const finalPrompt = `
-    INSTRUCCIONES MAESTRAS DE SISTEMA (BACKEND):
+    INSTRUCCIONES DE CONTROL — IA BACKEND (v20.9)
     
     1️⃣ ROL REAL:
-    Eres ASISTENTE DE PERFILACIÓN de Importadora Casa Colombia.
-    NO eres vendedora. NO asesoras técnicamente. NO das precios.
-    Tu único fin es: Capturar datos -> Clasificar -> Escalar al humano.
+    Eres ASISTENTE DE PERFILACIÓN. No vendedora. Tu meta es capturar datos y escalar.
 
-    2️⃣ ESTADOS DE CONVERSACIÓN:
-    - CAPTURA: Faltan datos (Nombre, Ciudad, Necesidad). Pídelos amablemente.
-    - ESCALADO: Ya tienes los datos. Di: "Un ejecutivo revisará tu caso y te contactará". (Y CIERRA).
-    - CERRADO: Ya te despediste. No hables más a menos que pregunten algo nuevo.
+    2️⃣ MANEJO DE INTENCIÓN (PRIORIDAD ALTA):
+    La intención del mensaje actual ("${aiMessage}") SIEMPRE mata al historial.
+    Si el cliente pide cotizar algo, IGNORA lo que compró el mes pasado.
 
-    3️⃣ MANEJO DE AMBIGÜEDAD:
-    Si el mensaje es corto (ej: "Hitachi 120", "Caterpillar", "Motor"), NO asumas que es un repuesto.
-    PREGUNTA PRIMERO: "¿Buscas repuestos, maquinaria o servicio?".
+    3️⃣ ESTADOS DE CONVERSACIÓN:
+    - CAPTURA: Faltan datos.
+    - ESCALADO: Datos completos. Cierre: "Un ejecutivo te contactará".
+    - CERRADO: Silencio.
 
     4️⃣ REGLAS DE ORO:
-    - Cliente Nuevo: No saludes por nombre si no te lo ha dicho.
-    - Cliente Recurrente: No pidas datos que ya tienes.
+    - Cliente Nuevo: No saludes por nombre si no lo sabes.
+    - Ambigüedad: "Hitachi 120" -> Pregunta si es repuesto, máquina o servicio.
     - Negocio: Horarios ${bizProfile.hours || '8am-6pm'}.
 
-    CONTEXTO ACTUAL:
+    CONTEXTO ACTUAL (OBLIGATORIO):
     ${contextoCliente}
     
     HISTORIAL: ${JSON.stringify(chatPrevio)}
-    MENSAJE NUEVO: "${aiMessage}"
     STOCK REF: ${JSON.stringify(stock)}
 
     FORMATO JSON OBLIGATORIO AL FINAL (Invisible):
@@ -325,8 +349,18 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
             const info = JSON.parse(jsonStr);
             
             if(info.nombre || info.celular || info.interes || info.correo || info.ciudad) {
-                if (esRecurrente && (!info.nombre || info.nombre === "null")) info.nombre = leadPrevio.nombre;
-                if (esRecurrente && (!info.ciudad || info.ciudad === "null")) info.ciudad = leadPrevio.ciudad;
+                // Si la IA detecta un nuevo interés, actualizamos. Si devuelve null, mantenemos el viejo (solo para nombre/ciudad).
+                let updateInteres = (info.interes && info.interes !== "null") ? info.interes : null;
+                
+                // Si es recurrente, mantenemos nombre/ciudad antiguos si la IA no trajo nuevos
+                if (esRecurrente) {
+                    if (!info.nombre || info.nombre === "null") info.nombre = leadPrevio.nombre;
+                    if (!info.ciudad || info.ciudad === "null") info.ciudad = leadPrevio.ciudad;
+                    // IMPORTANTE: Si la IA detectó nuevo interés, úsalo. Si no, mantén el viejo.
+                    if (!updateInteres && !tieneIntencionNueva) updateInteres = leadPrevio.interes;
+                }
+                
+                info.interes = updateInteres; // Asignar el interés decidido
                 await gestionarLead(sessionId, info, contactName);
                 datosCapturados = true;
             }
@@ -339,7 +373,8 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     
     if (!visible || visible.length < 2) {
         if (datosCapturados) {
-            visible = "Datos actualizados. Un asesor te contactará pronto.";
+            const nombreDisplay = leadPrevio?.nombre || "Cliente";
+            visible = `¡Listo ${nombreDisplay}! He tomado nota. Un asesor comercial te contactará pronto.`;
         } else {
             visible = "¿En qué te puedo colaborar hoy?";
         }
@@ -354,6 +389,8 @@ async function gestionarLead(phone, info, fallbackName) {
     const existe = await db.get("SELECT id, interes, ciudad, correo, etiqueta FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
 
     if (existe) {
+        // ACTUALIZACIÓN INTELIGENTE
+        // Si viene un interés nuevo, lo ponemos. Si no, dejamos el viejo.
         const nuevoInteres = (info.interes && info.interes !== "null") ? info.interes : existe.interes;
         const nuevaCiudad = (info.ciudad && info.ciudad !== "null") ? info.ciudad : existe.ciudad;
         const nuevoCorreo = (info.correo && info.correo !== "null") ? info.correo : existe.correo;
@@ -603,3 +640,5 @@ app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login'
 app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
+
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v20.9 READY"));
