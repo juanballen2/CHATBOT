@@ -1,11 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v20.9 (CONTEXT AWARENESS)
+ * SERVER BACKEND - VALENTINA v20.10 (PORT GUARD)
  * Cliente: Importadora Casa Colombia (ICC)
- * Mejoras de Inteligencia:
- * 1. PRIORIDAD DE INTENCIÓN: Si el cliente pide algo nuevo, ignora el historial.
- * 2. SALUDO CONTEXTUAL: Solo ofrece "retomar" si el cliente solo saluda.
- * 3. Mantiene: Media Fix, Safe Boot y Anti-Loop.
+ * Corrección Técnica:
+ * - Se añade 'Graceful Shutdown' para liberar el puerto (EADDRINUSE).
+ * - Evita que el servidor crashee al reiniciar en Railway.
+ * - Mantiene: Lógica Perfiladora + Media Fix v20.9.
  * ============================================================
  */
 
@@ -38,7 +38,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v20-9"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v20-10"; 
 
 // --- PERSONALIDAD BASE ---
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
@@ -65,6 +65,7 @@ app.use((req, res, next) => {
 
 // --- BASE DE DATOS E INICIO SEGURO ---
 let db;
+let serverInstance; // Variable para controlar el servidor
 
 async function startServer() {
     try {
@@ -100,14 +101,52 @@ async function startServer() {
 
         await refreshKnowledge();
 
-        app.listen(process.env.PORT || 10000, () => {
-            console.log("🔥 SERVER v20.9 READY (CONTEXT AWARE)");
+        // --- INICIO CON PROTECCIÓN DE PUERTO ---
+        const PORT = process.env.PORT || 10000;
+        serverInstance = app.listen(PORT, () => {
+            console.log(`🔥 SERVER v20.10 READY ON PORT ${PORT}`);
+        });
+
+        serverInstance.on('error', (e) => {
+            if (e.code === 'EADDRINUSE') {
+                console.log('⚠️ Puerto ocupado, reintentando en 1s...');
+                setTimeout(() => {
+                    serverInstance.close();
+                    serverInstance.listen(PORT);
+                }, 1000);
+            }
         });
 
     } catch (error) {
         console.error("❌ ERROR FATAL:", error);
     }
 }
+
+// --- APAGADO ELEGANTE (GRACEFUL SHUTDOWN) ---
+// Esto evita que el puerto se quede "pegado" al reiniciar en Railway
+process.on('SIGTERM', () => {
+    console.info('SIGTERM signal received.');
+    if (serverInstance) {
+        serverInstance.close(() => {
+            console.log('Http server closed.');
+            process.exit(0);
+        });
+    } else {
+        process.exit(0);
+    }
+});
+
+process.on('SIGINT', () => {
+    console.info('SIGINT signal received.');
+    if (serverInstance) {
+        serverInstance.close(() => {
+            console.log('Http server closed.');
+            process.exit(0);
+        });
+    } else {
+        process.exit(0);
+    }
+});
 
 startServer();
 
@@ -171,7 +210,7 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     } catch (e) { return false; }
 }
 
-// === [PROXY DE MEDIOS v20.9 (Estable)] ===
+// === [PROXY DE MEDIOS v20.10] ===
 app.get('/api/media-proxy/:id', async (req, res) => {
     if (!req.session.isLogged) return res.status(401).send("No auth");
     
@@ -183,12 +222,13 @@ app.get('/api/media-proxy/:id', async (req, res) => {
         const mediaUrl = urlRes.data.url;
         const mimeType = urlRes.data.mime_type;
 
-        // Descargar Completo (Buffer) para estabilidad
+        // Descarga Completa (Buffer) para evitar cortes
         const media = await axios.get(mediaUrl, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` },
             responseType: 'arraybuffer' 
         });
 
+        // UX Headers
         res.setHeader('Content-Length', media.data.length);
         res.setHeader('Content-Disposition', 'inline');
 
@@ -219,7 +259,7 @@ function buscarEnCatalogo(query) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// === [LÓGICA CONVERSACIONAL INTELIGENTE] ===
+// === [LÓGICA CONVERSACIONAL (PERFILADORA + INTENCIÓN)] ===
 async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName = "Cliente", isFile = false) {
     
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', dbMessage, new Date().toISOString()]);
@@ -252,8 +292,7 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
     const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
 
-    // --- 🧠 CEREBRO CONTEXTUAL: DETECCIÓN DE INTENCIÓN ---
-    // Palabras clave que indican una NUEVA intención comercial
+    // --- CEREBRO CONTEXTUAL ---
     const regexIntencion = /quiero|busco|necesito|cotizar|precio|tienes|vendes|repuesto|filtro|motor|maquina|oruga|bomba|cilindro|cuanto vale/i;
     const tieneIntencionNueva = regexIntencion.test(aiMessage);
 
@@ -263,26 +302,23 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
 
     if (leadPrevio && leadPrevio.nombre && leadPrevio.nombre !== "Cliente") {
         esRecurrente = true;
-        // Lógica de bifurcación:
         if (tieneIntencionNueva) {
-            // Cliente Recurrente PERO con intención nueva -> NO USAR MEMORIA DE "RETOMAR"
             contextoCliente = `
             Estado: CLIENTE RECURRENTE CON NUEVA SOLICITUD.
             Nombre: ${leadPrevio.nombre}
             INSTRUCCIÓN CRÍTICA:
-            1. Salúdalo por su nombre (${leadPrevio.nombre}).
-            2. IGNORA su interés pasado (${leadPrevio.interes}). El cliente busca algo nuevo HOY.
-            3. NO preguntes "¿Retomamos lo anterior?". Atiende DIRECTAMENTE la nueva solicitud ("${aiMessage}").
+            1. Salúdalo por su nombre.
+            2. IGNORA interés pasado.
+            3. Atiende DIRECTAMENTE la nueva solicitud.
             `;
         } else {
-            // Cliente Recurrente SOLO SALUDANDO -> Usar Memoria
             contextoCliente = `
-            Estado: CLIENTE RECURRENTE (Saludo/Seguimiento).
+            Estado: CLIENTE RECURRENTE (Saludo).
             Nombre: ${leadPrevio.nombre}
             Interés Previo: ${leadPrevio.interes}
             INSTRUCCIÓN:
             1. Saluda por nombre.
-            2. Pregunta: "¿Retomamos lo de ${leadPrevio.interes} o buscas algo nuevo hoy?".
+            2. Pregunta: "¿Retomamos lo de ${leadPrevio.interes} o buscas algo nuevo?".
             `;
         }
     } else {
@@ -290,14 +326,13 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     }
 
     const finalPrompt = `
-    INSTRUCCIONES DE CONTROL — IA BACKEND (v20.9)
+    INSTRUCCIONES DE CONTROL — IA BACKEND:
     
     1️⃣ ROL REAL:
     Eres ASISTENTE DE PERFILACIÓN. No vendedora. Tu meta es capturar datos y escalar.
 
     2️⃣ MANEJO DE INTENCIÓN (PRIORIDAD ALTA):
     La intención del mensaje actual ("${aiMessage}") SIEMPRE mata al historial.
-    Si el cliente pide cotizar algo, IGNORA lo que compró el mes pasado.
 
     3️⃣ ESTADOS DE CONVERSACIÓN:
     - CAPTURA: Faltan datos.
@@ -349,18 +384,15 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
             const info = JSON.parse(jsonStr);
             
             if(info.nombre || info.celular || info.interes || info.correo || info.ciudad) {
-                // Si la IA detecta un nuevo interés, actualizamos. Si devuelve null, mantenemos el viejo (solo para nombre/ciudad).
                 let updateInteres = (info.interes && info.interes !== "null") ? info.interes : null;
                 
-                // Si es recurrente, mantenemos nombre/ciudad antiguos si la IA no trajo nuevos
                 if (esRecurrente) {
                     if (!info.nombre || info.nombre === "null") info.nombre = leadPrevio.nombre;
                     if (!info.ciudad || info.ciudad === "null") info.ciudad = leadPrevio.ciudad;
-                    // IMPORTANTE: Si la IA detectó nuevo interés, úsalo. Si no, mantén el viejo.
                     if (!updateInteres && !tieneIntencionNueva) updateInteres = leadPrevio.interes;
                 }
                 
-                info.interes = updateInteres; // Asignar el interés decidido
+                info.interes = updateInteres;
                 await gestionarLead(sessionId, info, contactName);
                 datosCapturados = true;
             }
@@ -389,8 +421,6 @@ async function gestionarLead(phone, info, fallbackName) {
     const existe = await db.get("SELECT id, interes, ciudad, correo, etiqueta FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
 
     if (existe) {
-        // ACTUALIZACIÓN INTELIGENTE
-        // Si viene un interés nuevo, lo ponemos. Si no, dejamos el viejo.
         const nuevoInteres = (info.interes && info.interes !== "null") ? info.interes : existe.interes;
         const nuevaCiudad = (info.ciudad && info.ciudad !== "null") ? info.ciudad : existe.ciudad;
         const nuevoCorreo = (info.correo && info.correo !== "null") ? info.correo : existe.correo;
@@ -640,5 +670,3 @@ app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login'
 app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
-
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v20.9 READY"));
