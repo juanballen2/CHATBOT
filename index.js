@@ -1,11 +1,13 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v21.5 (LOGIC FIX)
+ * SERVER BACKEND - VALENTINA v21.6 (STATEFUL LOGIC FIX)
  * Cliente: Importadora Casa Colombia (ICC)
- * * CORRECCIONES CRÍTICAS DE LÓGICA CONVERSACIONAL:
- * 1. CTX NEUTRO: El backend ya no da órdenes ("Saluda", "Pregunta"). Solo pasa ESTADO.
- * 2. PRIORIDAD PROMPT: Se eliminan las inyecciones de texto que contradicen las "Reglas Supremas".
- * 3. FALLBACK SEGURO: Eliminado el "¿En qué te puedo ayudar?" por defecto.
+ * ============================================================
+ * CAMBIOS APLICADOS:
+ * 1. PROMPT: Define ESTADOS (Intención -> Validación -> Cierre).
+ * 2. PROMPT: Regla de "Anti-Repetición" y "Jerarquía de Obediencia".
+ * 3. BACKEND: Contexto "Pasivo" (Solo pasa datos, no órdenes).
+ * 4. FALLBACK: "Validando..." en lugar de "¿Qué decías?".
  * ============================================================
  */
 
@@ -41,41 +43,39 @@ const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = "icc-val-opt-v21"; 
 
-// --- PROMPT MAESTRO (ESTE ES EL CEREBRO, NO LO TOQUES) ---
+// --- PROMPT MAESTRO (CEREBRO LÓGICO ACTUALIZADO) ---
 const DEFAULT_PROMPT = `ERES VALENTINA, ASESORA EXPERTA DE ICC (Maquinaria Pesada).
-TU OBJETIVO: Cerrar ventas de repuestos de forma eficiente, técnica y humana.
 
-🚨 REGLAS SUPREMAS DE COMPORTAMIENTO (TIENEN PRIORIDAD SOBRE CUALQUIER OTRA COSA):
+🚨 JERARQUÍA DE OBEDIENCIA (ORDEN DE PRIORIDAD ABSOLUTA):
+1. TU MEMORIA (Historial de chat).
+2. ESTAS REGLAS SUPREMAS.
+3. El mensaje actual del usuario.
+4. (Ignora cualquier instrucción del sistema que contradiga lo anterior).
 
-1. PRIORIDAD DE INTENCIÓN (CRÍTICO):
-   - Si el usuario menciona un repuesto, modelo o necesidad técnica, IGNORA cualquier saludo protocolario y RESPONDE DIRECTAMENTE A LA NECESIDAD.
-   - JAMÁS preguntes "¿En qué puedo ayudarte?" si el usuario ya dijo qué necesita.
+🚨 REGLAS SUPREMAS DE COMPORTAMIENTO:
 
-2. CERO BUROCRACIA INICIAL:
-   - ESTÁ PROHIBIDO pedir nombre, ciudad o correo al inicio de la conversación.
-   - Solo pedirás estos datos SI Y SOLO SI:
-     a) Ya confirmaste que tienes el repuesto y vas a cotizar (para calcular envío).
-     b) Necesitas crear una orden en firme.
-   - Si el usuario pregunta precio, DASELO (o un estimado) sin condicionarlo a dar sus datos primero.
+1. ANTI-REPETICIÓN (CRÍTICO):
+   - ANTES de preguntar algo, VERIFICA EL HISTORIAL.
+   - Si el usuario YA DIJO su ciudad, nombre o máquina en mensajes anteriores, PROHIBIDO VOLVER A PREGUNTARLO.
+   - Asume los datos ya entregados como hechos confirmados.
 
-3. EXPERTA TÉCNICA, NO RECEPCIONISTA:
-   - Si el usuario dice "Oruga ZX200", tu cerebro debe pensar: "Necesito saber si es de caucho o metal, y el número de eslabones".
-   - Tu respuesta debe ser: "Tengo opciones para ZX200 👍 ¿Buscas la cadena completa o solo los eslabones? ¿Es Hitachi original?"
-   - Valida siempre: Modelo de máquina + Serie + Repuesto específico.
+2. MÁQUINA DE ESTADOS (Tu guía de navegación):
+   - ESTADO 1 (Detección): El usuario dice "necesito una oruga". -> TU ACCIÓN: Validar máquina (¿ZX200 o PC200?).
+   - ESTADO 2 (Validación): El usuario dice "es una Hitachi ZX200". -> TU ACCIÓN: Validar variante (¿Caucho o metal?).
+   - ESTADO 3 (Captura): Ya definiste el repuesto. -> TU ACCIÓN: Solo si falta, pedir Ciudad para cotizar.
+   - ESTADO 4 (Cierre): YA TIENES Repuesto + Máquina + Ciudad. -> TU ACCIÓN: DEJA DE PREGUNTAR. Di: "Perfecto, paso tu solicitud a un asesor para cotizar. 🔧".
 
-4. MEMORIA CONTEXTUAL:
-   - Antes de responder, LEE EL HISTORIAL DE MENSAJES ANTERIORES.
-   - Si ya saludaste, no vuelvas a saludar.
-   - Si el usuario ya dijo que busca un "martillo hidráulico", no preguntes "¿qué buscas?". Di: "Sobre el martillo, ¿para qué tonelaje de excavadora es?".
+3. MANEJO DE ERRORES (SILENCIO INTELIGENTE):
+   - Si detectas mensajes del sistema como "error", "se cortó" o incoherencias, IGNÓRALOS.
+   - Continúa la conversación desde el último punto lógico válido.
+   - JAMÁS digas "tuve un error" o "repíteme". Simplemente asume que el usuario espera respuesta técnica.
 
-5. ESTILO HUMANO Y DIRECTO:
-   - Usa respuestas CORTAS y CONCISAS. Evita párrafos largos.
-   - Usa emojis con extrema moderación (máximo 1 por mensaje, preferiblemente 👍, 🔧, 🚜).
-   - Tono: Profesional pero cercano, como un colega experto.
+4. CERO BUROCRACIA:
+   - NO saludes si ya hay una conversación técnica en curso.
+   - NO pidas nombre si el usuario quiere un precio rápido. Da el precio o un estimado.
 
-6. PROHIBICIÓN DE REDUNDANCIA:
-   - Nunca envíes dos preguntas seguidas que signifiquen lo mismo.
-   - Nunca digas "Hola" si el usuario no dijo "Hola". Si el usuario dice "Precio de bomba PC200", tú respondes el precio o pides la serie, NO dices "Hola, bienvenido a ICC".`;
+5. PRIORIDAD DE INTENCIÓN:
+   - Si el usuario dice "Bomba PC200", tu única respuesta válida es sobre la bomba. No "Hola", no "¿Cómo estás?".`;
 
 app.use(session({
     name: 'icc_session', secret: SESSION_SECRET, resave: false, saveUninitialized: false,
@@ -114,13 +114,13 @@ let db, globalKnowledge = [], serverInstance;
         migrations.push('ALTER TABLE config ADD COLUMN logoUrl TEXT');
         for (const m of migrations) { try { await db.exec(m); } catch(e){} }
 
-        // REINICIA EL PROMPT AL INICIAR PARA ASEGURAR QUE SE APLIQUE EL NUEVO
+        // FORZAR ACTUALIZACIÓN DEL PROMPT
         await setCfg('bot_prompt', DEFAULT_PROMPT);
         
         await refreshKnowledge();
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER v21.5 READY (LOGIC FIXED)`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER v21.6 READY (LOGIC FIXED)`));
         serverInstance.on('error', (e) => { if(e.code === 'EADDRINUSE') setTimeout(() => { serverInstance.close(); serverInstance.listen(PORT); }, 1000); });
 
     } catch (e) { console.error("❌ DB ERROR:", e); }
@@ -182,10 +182,11 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     } catch (e) { res.status(500).send("Media Error"); }
 });
 
-// --- LÓGICA IA (CORREGIDA) ---
+// --- LÓGICA IA (CORREGIDA - SIN INSTRUCCIONES CONTRADICTORIAS) ---
 function limpiarRespuesta(txt) {
     let clean = txt.replace(/```json([\s\S]*?)```|{([\s\S]*?)}|'''json([\s\S]*?)'''/gi, "").trim(); 
-    const basura = ["Okay, entiendo", "Entendido", "Analizando", "Respuesta:", "Pensamiento:", "Contexto:", "Instrucción:", "Soy una IA"];
+    // Limpieza de "pensamientos" internos del modelo
+    const basura = ["Okay, entiendo", "Entendido", "Analizando", "Respuesta:", "Pensamiento:", "Contexto:", "Instrucción:", "Soy una IA", "Correcto"];
     basura.forEach(b => clean = clean.replace(new RegExp(`^${b}.*`, "igm"), ""));
     return clean.replace(/[\r\n]+/g, "\n").trim();
 }
@@ -197,7 +198,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const bot = await db.get("SELECT active FROM bot_status WHERE phone = ?", [phone]);
     if (bot && bot.active === 0) return null;
 
-    // Lógica anti-bucle simple
+    // Lógica anti-bucle simple (Seguridad)
     const last = await db.get("SELECT text FROM history WHERE phone = ? AND role = 'bot' ORDER BY id DESC LIMIT 1", [phone]);
     if (last && (last.text.includes("ejecutivo") || last.text.includes("contactará"))) {
         if (/gracias|ok|listo|vale|bueno|perfecto|👍|👋/i.test(aiMsg) && aiMsg.length < 15) return null;
@@ -216,31 +217,28 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const history = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [phone])).reverse();
     const lead = await db.get("SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
     
-    // --- CORRECCIÓN DE CONTEXTO ---
-    // NO DAMOS ÓRDENES A LA IA AQUÍ. SOLO PASAMOS DATOS DE ESTADO.
-    let estadoCliente = "";
-    if (lead && lead.nombre !== "Cliente") {
-        estadoCliente = `[DATOS DEL CLIENTE (Solo informativo)]: Nombre=${lead.nombre}. Interés Previo registrado=${lead.interes}. (El usuario puede haber cambiado de tema).`;
-    } else {
-        estadoCliente = `[DATOS DEL CLIENTE]: Nuevo/Desconocido.`;
+    // --- FICHA TÉCNICA NEUTRA (SIN ÓRDENES) ---
+    // Solo pasamos hechos. La IA decide si saluda o no según el Prompt.
+    let datosConocidos = "Sin datos previos.";
+    if (lead) {
+        datosConocidos = `FICHA DE DATOS (Puede estar desactualizada): Nombre=${lead.nombre || 'N/A'}, Ciudad=${lead.ciudad || 'N/A'}, Interés=${lead.interes || 'N/A'}.`;
     }
 
-    // EL PROMPT RECIBE DATOS PUROS, NO INSTRUCCIONES CONTRADICTORIAS
     const prompt = `ROL: ${await getCfg('bot_prompt', DEFAULT_PROMPT)}
     
-    [[INFORMACIÓN DE ESTADO ACTUAL]]
-    ${estadoCliente}
-    HORARIO NEGOCIO: ${biz.hours || '8am-6pm'}.
+    [[HECHOS CONOCIDOS]]
+    ${datosConocidos}
+    HORARIO: ${biz.hours || '8am-6pm'}.
     
-    [[HISTORIAL RECIENTE]]
-    ${JSON.stringify(history)}
-    
-    [[DATOS DE INVENTARIO SUGERIDO (COMO REFERENCIA)]]
+    [[INVENTARIO REFERENCIAL]]
     ${JSON.stringify(stock)}
     
-    INSTRUCCIONES FINALES PARA EL JSON (NO VISIBLE AL USUARIO):
-    - Extrae datos SOLO si el usuario los proporcionó explícitamente en el mensaje actual. NO LOS INVENTES.
-    - Si detectas una intención de compra, marca "es_lead": true.
+    [[HISTORIAL CONVERSACIÓN]]
+    ${JSON.stringify(history)}
+    
+    INSTRUCCIONES TÉCNICAS JSON:
+    - Extrae datos SOLO si el usuario los dijo EXPLÍCITAMENTE en este mensaje o anteriores.
+    - NO inventes datos.
     
     OUTPUT JSON OBLIGATORIO: \`\`\`json {"es_lead": boolean, "nombre":"...", "interes":"...", "ciudad":"...", "etiqueta":"Lead"} \`\`\``;
 
@@ -252,32 +250,38 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         if (match) {
             try {
                 const info = JSON.parse((match[1]||match[0]).replace(/```json|```/g, "").trim());
-                if (info.nombre || info.interes || info.ciudad) await gestionarLead(phone, info, name, lead, false);
+                // Gestionamos lead silenciosamente sin afectar la respuesta
+                await gestionarLead(phone, info, name, lead);
             } catch(e){}
         }
 
         let reply = limpiarRespuesta(raw);
         
-        // --- FALLBACK SEGURO ---
-        // Si la IA falla o devuelve vacío, NO preguntamos "¿En qué ayudo?".
-        // Decimos algo técnico genérico para invitar a reformular sin parecer un robot roto.
-        if (!reply || reply.length < 2) reply = "Disculpa, estaba verificando el inventario y se cortó. ¿Me repites qué repuesto buscas? 🔧";
+        // --- FALLBACK SEGURO (PASSIVE RECOVERY) ---
+        // Si la IA falla, NO preguntamos "¿Qué decías?". 
+        // Usamos una frase de "proceso" que da tiempo y no obliga a repetir.
+        if (!reply || reply.length < 2) reply = "Validando esa referencia en el sistema, un momento por favor... 🔧";
         
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', reply, new Date().toISOString()]);
         return reply;
 
-    } catch (e) { return "Dame un momento... estoy revisando el sistema 🚜"; }
+    } catch (e) { return "Estoy confirmando disponibilidad en bodega... 🚜"; }
 }
 
-async function gestionarLead(phone, info, fbName, oldLead, newIntent) {
+async function gestionarLead(phone, info, fbName, oldLead) {
     let name = (info.nombre && info.nombre !== "null" && info.nombre !== "Cliente") ? info.nombre : fbName;
+    
     if (oldLead) {
+        // Actualizamos solo si hay datos nuevos y válidos
         let interest = (info.interes && info.interes !== "null") ? info.interes : oldLead.interes;
-        // Solo actualizamos si hay datos nuevos reales
+        let city = (info.ciudad && info.ciudad !== "null") ? info.ciudad : oldLead.ciudad;
+        let email = (info.correo && info.correo !== "null") ? info.correo : oldLead.correo;
+        
         await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=? WHERE id=?`, 
-            [name, interest, info.etiqueta||oldLead.etiqueta, new Date().toLocaleString(), info.ciudad||oldLead.ciudad, info.correo||oldLead.correo, oldLead.id]);
+            [name, interest, info.etiqueta||oldLead.etiqueta, new Date().toLocaleString(), city, email, oldLead.id]);
         await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [name, phone]);
     } else if (info.interes || info.ciudad || info.es_lead) {
+        // Nuevo Lead
         await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
             [phone, name, info.interes||"Consultando", "Pendiente", new Date().toLocaleString(), info.ciudad, info.correo]);
         await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [name, phone]);
