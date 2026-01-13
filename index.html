@@ -8,7 +8,189 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="style.css"> </head>
+    
+    <style>
+        /* =========================================
+           1. VARIABLES Y RESET
+           ========================================= */
+        :root {
+            --primary: #E9511D;
+            --primary-dark: #c03d12;
+            --bg-dark: #1e1e1e;
+            --bg-light: #f3f4f6;
+            --white: #ffffff;
+            --border: #e5e7eb;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --success: #10b981;
+            --danger: #ef4444;
+            --sidebar-width: 60px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+        /* =========================================
+           2. SIDEBAR
+           ========================================= */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--bg-dark);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 20px;
+            z-index: 20;
+            box-shadow: 4px 0 10px rgba(0,0,0,0.1);
+            flex-shrink: 0;
+        }
+
+        .logo-area {
+            width: 40px; height: 40px; margin-bottom: 30px; cursor: pointer;
+            background: white; border-radius: 8px; padding: 2px;
+        }
+
+        .nav-item {
+            width: 40px; height: 40px; border-radius: 10px; display: flex;
+            align-items: center; justify-content: center; color: #9ca3af;
+            cursor: pointer; margin-bottom: 15px; transition: all 0.2s ease; font-size: 18px;
+        }
+        .nav-item:hover { background: rgba(255,255,255,0.1); color: white; }
+        .nav-item.active { background: var(--primary); color: white; box-shadow: 0 4px 12px rgba(233, 81, 29, 0.4); }
+
+        /* =========================================
+           3. LAYOUT PRINCIPAL
+           ========================================= */
+        .main-content {
+            flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column;
+        }
+
+        .view { display: none; height: 100%; flex-direction: column; overflow-y: auto; }
+        .view.active { display: flex; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .page-container { padding: 30px; }
+
+        h1 { font-size: 24px; font-weight: 700; margin-bottom: 20px; color: #111827; }
+        h3 { font-size: 16px; font-weight: 600; margin-bottom: 15px; color: #374151; }
+
+        /* =========================================
+           4. COMPONENTES
+           ========================================= */
+        .card {
+            background: var(--white); border-radius: 12px; padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid var(--border); height: 100%;
+        }
+
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th { text-align: left; padding: 12px; border-bottom: 2px solid var(--border); color: var(--text-muted); font-weight: 600; }
+        td { padding: 12px; border-bottom: 1px solid var(--border); color: #333; }
+        tr:hover td { background: #f9fafb; }
+
+        .card h1 { font-size: 36px; color: var(--primary); margin: 0; }
+
+        /* =========================================
+           5. CHAT SYSTEM
+           ========================================= */
+        .chat-layout { display: flex; height: 100%; overflow: hidden; background: white; }
+        
+        /* Panel Lista */
+        .chat-list-panel { width: 320px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: #fff; flex-shrink: 0; }
+        .cl-header { padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f0f0; }
+        .search-row { padding: 10px 15px; border-bottom: 1px solid #f0f0f0; display: flex; gap: 5px; }
+        .search-input { flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: #f9fafb; font-size: 13px; }
+        .cl-items { flex: 1; overflow-y: auto; }
+
+        .chat-item { padding: 12px 15px; border-bottom: 1px solid #f0f0f0; cursor: pointer; display: flex; gap: 12px; position: relative; transition: background 0.2s; }
+        .chat-item:hover { background: #f9fafb; }
+        .chat-item.active { background: #fff7ed; border-left: 3px solid var(--primary); }
+
+        .avatar { width: 40px; height: 40px; border-radius: 50%; background-color: #e5e7eb; background-size: cover; background-position: center; display: flex; align-items: center; justify-content: center; color: #9ca3af; flex-shrink: 0; }
+        .unread-badge { background: var(--primary); color: white; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 10px; position: absolute; right: 15px; top: 15px; }
+        .pin-indicator { color: #9ca3af; font-size: 10px; position: absolute; right: 15px; bottom: 12px; transform: rotate(45deg); }
+
+        /* Area Chat */
+        .chat-area { flex: 1; display: flex; flex-direction: column; position: relative; background: #efe7dd; }
+        .chat-bg { position: absolute; top:0; left:0; width:100%; height:100%; background-image: radial-gradient(#d4c7b8 1px, transparent 1px); background-size: 20px 20px; opacity: 0.6; z-index: 0; }
+        
+        #chat-placeholder { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1; color: #9ca3af; }
+        #chat-interface { display: none; flex-direction: column; height: 100%; z-index: 1; }
+        
+        .ca-header { background: #f0f2f5; padding: 10px 20px; border-bottom: 1px solid #d1d7db; display: flex; justify-content: space-between; align-items: center; }
+        .messages-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+
+        .bubble { padding: 10px 15px; border-radius: 8px; font-size: 14px; max-width: 70%; line-height: 1.5; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .b-bot { align-self: flex-start; background: #fff; border-radius: 0 12px 12px 12px; border-left: 3px solid #10b981; }
+        .b-manual { align-self: flex-end; background: #d9fdd3; border-radius: 12px 0 12px 12px; }
+        .b-user { align-self: flex-start; background: #fff; border-radius: 0 12px 12px 12px; }
+        .msg-time { font-size: 10px; color: #999; text-align: right; margin-top: 4px; }
+        .date-divider { align-self: center; background: rgba(255,255,255,0.8); padding: 4px 12px; border-radius: 12px; font-size: 11px; color: #555; margin: 10px 0; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
+
+        .input-area { background: #f0f2f5; padding: 10px 15px; display: flex; align-items: center; gap: 10px; }
+        .msg-field { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #fff; outline: none; font-size: 14px; }
+        .btn-icon { background: none; border: none; font-size: 18px; color: #54656f; cursor: pointer; padding: 8px; border-radius: 50%; }
+        .btn-icon:hover { background: rgba(0,0,0,0.05); }
+        .btn-send { color: var(--primary); }
+
+        /* Panel Perfil */
+        .profile-panel { width: 300px; background: white; border-left: 1px solid var(--border); position: absolute; right: 0; top: 0; bottom: 0; z-index: 10; transform: translateX(100%); transition: transform 0.3s ease; display: flex; flex-direction: column; box-shadow: -5px 0 15px rgba(0,0,0,0.05); }
+        .profile-panel.open { transform: translateX(0); }
+        .pp-header { padding: 30px; background: #f9fafb; text-align: center; border-bottom: 1px solid var(--border); }
+        .pp-avatar-lg { width: 80px; height: 80px; border-radius: 50%; background: #ccc; margin: 0 auto 15px; background-size: cover; cursor: pointer; }
+        .pp-body { padding: 20px; overflow-y: auto; }
+
+        /* =========================================
+           6. UI GENERAL
+           ========================================= */
+        .btn { background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: 0.2s; }
+        .btn:hover { background: var(--primary-dark); }
+        .btn-outline { background: transparent; border: 1px solid #ccc; color: #555; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+        .btn-outline:hover { background: #f0f0f0; }
+
+        .form-control { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 10px; font-family: inherit; font-size: 14px; }
+        .form-control:focus { border-color: var(--primary); }
+
+        .tag-pill { display: inline-block; padding: 2px 8px; border-radius: 12px; color: white; font-size: 10px; font-weight: 600; margin-right: 4px; }
+        .tag-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 2px; }
+
+        /* Modals & Context */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+        .modal { background: white; width: 90%; max-width: 400px; padding: 25px; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        #context-menu { position: absolute; display: none; background: white; border: 1px solid #eee; box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 1000; border-radius: 6px; width: 180px; padding: 5px 0; }
+        .cm-item { padding: 10px 15px; cursor: pointer; font-size: 13px; color: #444; display: flex; align-items: center; gap: 10px; }
+        .cm-item:hover { background: #f3f4f6; }
+        .cm-item.delete:hover { background: #fee2e2; color: #ef4444; }
+
+        #quick-replies { position: absolute; bottom: 70px; left: 20px; background: white; border: 1px solid #ccc; border-radius: 8px; width: 300px; max-height: 200px; overflow-y: auto; display: none; box-shadow: 0 -5px 20px rgba(0,0,0,0.1); }
+        .qr-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px; }
+        .qr-item:hover { background: #f9fafb; }
+
+        @media (max-width: 768px) {
+            .sidebar { position: fixed; bottom: 0; width: 100%; height: 60px; flex-direction: row; padding: 0; justify-content: space-around; top: auto; }
+            .logo-area { display: none; }
+            .main-content { margin-bottom: 60px; }
+            .chat-list-panel { width: 100%; }
+            .chat-area { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform: translateX(100%); transition: transform 0.3s; z-index: 30; }
+            .chat-area.show { transform: translateX(0); }
+        }
+    </style>
+</head>
 <body onclick="hideContextMenu()">
 
     <div id="context-menu">
@@ -256,24 +438,31 @@
         }
 
         async function loadGlobalData() {
-            const data = await fetch('/api/data/config').then(r=>r.json());
-            document.getElementById('biz-name').value = data.biz_profile?.name||'';
-            document.getElementById('biz-hours').value = data.biz_profile?.hours||'';
-            document.getElementById('biz-web').value = data.website_data||'';
-            if(data.logo_url) {
-                document.getElementById('preview-logo').src = data.logo_url;
-                document.getElementById('preview-logo').style.display = 'block';
-                document.getElementById('sidebar-logo-img').src = data.logo_url;
-            }
-            renderRules(data.tech_rules||[]);
-            globalTags = await fetch('/api/data/tags').then(r=>r.json());
-            renderGlobalTags();
-            shortcuts = await fetch('/api/data/shortcuts').then(r=>r.json());
-            renderShortcuts();
             try {
-                const promptData = await fetch('/api/config/prompt').then(r=>r.json());
-                document.getElementById('bot-prompt').value = promptData.prompt || "";
-            } catch(e) {}
+                const data = await fetch('/api/data/config').then(r=>r.json());
+                if(data) {
+                    document.getElementById('biz-name').value = data.biz_profile?.name||'';
+                    document.getElementById('biz-hours').value = data.biz_profile?.hours||'';
+                    document.getElementById('biz-web').value = data.website_data||'';
+                    if(data.logo_url) {
+                        document.getElementById('preview-logo').src = data.logo_url;
+                        document.getElementById('preview-logo').style.display = 'block';
+                        document.getElementById('sidebar-logo-img').src = data.logo_url;
+                    }
+                    renderRules(data.tech_rules||[]);
+                }
+                
+                try { globalTags = await fetch('/api/data/tags').then(r=>r.json()) || []; } catch(e){ globalTags=[]; }
+                renderGlobalTags();
+                
+                try { shortcuts = await fetch('/api/data/shortcuts').then(r=>r.json()) || []; } catch(e){ shortcuts=[]; }
+                renderShortcuts();
+                
+                try {
+                    const promptData = await fetch('/api/config/prompt').then(r=>r.json());
+                    document.getElementById('bot-prompt').value = promptData.prompt || "";
+                } catch(e) {}
+            } catch(e) { console.log('Init Data Error (Running Offline Mode?)'); }
         }
 
         async function savePrompt() {
@@ -524,8 +713,10 @@
         }
         
         async function loadLeads() { 
-            allLeads = await fetch('/api/data/leads').then(r=>r.json()); 
-            document.getElementById('leads-body').innerHTML = allLeads.map(l => `<tr><td>${l.fecha.split(',')[0]}</td><td><a href="#" style="color:var(--primary); font-weight:bold;" onclick="openEditLead(${l.id})">${l.nombre}</a></td><td>${l.ciudad}</td><td>${l.interes}</td><td><span class="tag-pill" style="background:#F97316">${l.etiqueta}</span></td><td><button class="btn" style="background:red; padding:4px;" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button></td></tr>`).join(''); 
+            try {
+                allLeads = await fetch('/api/data/leads').then(r=>r.json()); 
+                document.getElementById('leads-body').innerHTML = allLeads.map(l => `<tr><td>${l.fecha.split(',')[0]}</td><td><a href="#" style="color:var(--primary); font-weight:bold;" onclick="openEditLead(${l.id})">${l.nombre}</a></td><td>${l.ciudad}</td><td>${l.interes}</td><td><span class="tag-pill" style="background:#F97316">${l.etiqueta}</span></td><td><button class="btn" style="background:red; padding:4px;" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button></td></tr>`).join(''); 
+            } catch(e) { console.error("Error loading leads"); }
         }
         
         function openEditLead(id) { 
@@ -726,8 +917,10 @@
         }
         
         async function loadInventory() { 
-            allProducts = await fetch('/api/data/knowledge').then(r=>r.json()); 
-            document.getElementById('inv-body').innerHTML = allProducts.map((p,i) => `<tr><td>${p.searchable}</td><td style="text-align:center;"><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="deleteProduct(${i})"></i></td></tr>`).join(''); 
+            try {
+                allProducts = await fetch('/api/data/knowledge').then(r=>r.json()); 
+                document.getElementById('inv-body').innerHTML = allProducts.map((p,i) => `<tr><td>${p.searchable}</td><td style="text-align:center;"><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="deleteProduct(${i})"></i></td></tr>`).join(''); 
+            } catch(e){}
         }
         
         async function deleteProduct(i) { 
@@ -748,15 +941,17 @@
         }
         
         async function loadDash() { 
-            const [l,c,s] = await Promise.all([ 
-                fetch('/api/data/leads').then(r=>r.json()), 
-                fetch('/api/chats-full').then(r=>r.json()), 
-                fetch('/api/data/knowledge').then(r=>r.json()) 
-            ]); 
-            document.getElementById('kpi-leads').innerText = l.length; 
-            document.getElementById('kpi-chats').innerText = c.length; 
-            document.getElementById('kpi-stock').innerText = s.length; 
-            document.getElementById('dash-leads-body').innerHTML = (l||[]).slice(0,5).map(x => `<tr><td>${x.nombre}</td><td>${x.ciudad}</td><td>${x.interes}</td><td>${x.fecha.split(',')[0]}</td></tr>`).join(''); 
+            try {
+                const [l,c,s] = await Promise.all([ 
+                    fetch('/api/data/leads').then(r=>r.json()), 
+                    fetch('/api/chats-full').then(r=>r.json()), 
+                    fetch('/api/data/knowledge').then(r=>r.json()) 
+                ]); 
+                document.getElementById('kpi-leads').innerText = l.length; 
+                document.getElementById('kpi-chats').innerText = c.length; 
+                document.getElementById('kpi-stock').innerText = s.length; 
+                document.getElementById('dash-leads-body').innerHTML = (l||[]).slice(0,5).map(x => `<tr><td>${x.nombre}</td><td>${x.ciudad}</td><td>${x.interes}</td><td>${x.fecha.split(',')[0]}</td></tr>`).join(''); 
+            } catch(e) {}
         }
         
         function addContactPrompt() { 
