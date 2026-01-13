@@ -1,10 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v20.3 (SYNTAX FIX)
+ * SERVER BACKEND - VALENTINA v20.4 (SAFE BOOT)
  * Cliente: Importadora Casa Colombia (ICC)
- * Correcciones:
- * 1. FIX: Error de sintaxis en 'toggle-bot' solucionado.
- * 2. Mantiene: Proxy de Medios Híbrido, Anti-Loop, Memoria CRM.
+ * Corrección Crítica:
+ * - El servidor SOLO inicia cuando la Base de Datos está lista.
+ * - Evita pantallas en blanco por "Base de datos no cargada".
+ * - Mantiene: Media Proxy, Lógica Híbrida y Anti-Loop.
  * ============================================================
  */
 
@@ -37,12 +38,20 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v20-3"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v20-4"; 
 
 // --- MIDDLEWARES ---
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors());
+
+app.use(session({
+    name: 'icc_session',
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } 
+}));
 
 app.use((req, res, next) => {
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
@@ -51,40 +60,61 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- BASE DE DATOS ---
+// --- BASE DE DATOS E INICIO SEGURO ---
 let db;
-(async () => {
-    const DATA_DIR = path.resolve(__dirname, 'data');
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-    db = await open({
-        filename: path.join(DATA_DIR, 'database.db'),
-        driver: sqlite3.Database
-    });
+async function startServer() {
+    try {
+        const DATA_DIR = path.resolve(__dirname, 'data');
+        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-    await db.exec(`
-        CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
-        CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT); 
-        CREATE TABLE IF NOT EXISTS metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0, photoUrl TEXT, archived INTEGER DEFAULT 0, unreadCount INTEGER DEFAULT 0);
-        CREATE TABLE IF NOT EXISTS bot_status (phone TEXT PRIMARY KEY, active INTEGER DEFAULT 1);
-        CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, searchable TEXT UNIQUE, raw_data TEXT);
-        CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
-        CREATE TABLE IF NOT EXISTS shortcuts (id INTEGER PRIMARY KEY AUTOINCREMENT, keyword TEXT UNIQUE, text TEXT);
-        CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
-    `);
-    
-    try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
-    try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
-    try { await db.exec(`ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0`); } catch(e) {}
-    try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {}
-    
-    const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
-    for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
+        // 1. Iniciar DB
+        db = await open({
+            filename: path.join(DATA_DIR, 'database.db'),
+            driver: sqlite3.Database
+        });
 
-    await refreshKnowledge();
-    console.log("🚀 SERVER v20.3 ONLINE (SYNTAX FIXED)");
-})();
+        // 2. Crear Tablas
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
+            CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT); 
+            CREATE TABLE IF NOT EXISTS metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0, photoUrl TEXT, archived INTEGER DEFAULT 0, unreadCount INTEGER DEFAULT 0);
+            CREATE TABLE IF NOT EXISTS bot_status (phone TEXT PRIMARY KEY, active INTEGER DEFAULT 1);
+            CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, searchable TEXT UNIQUE, raw_data TEXT);
+            CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
+            CREATE TABLE IF NOT EXISTS shortcuts (id INTEGER PRIMARY KEY AUTOINCREMENT, keyword TEXT UNIQUE, text TEXT);
+            CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
+        `);
+        
+        // 3. Migraciones
+        try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
+        try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
+        try { await db.exec(`ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0`); } catch(e) {}
+        try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {}
+        
+        const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
+        for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
 
+        // 4. Cargar Configuración Inicial
+        const currentPrompt = await getCfg('bot_prompt');
+        if(!currentPrompt) await setCfg('bot_prompt', `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`);
+
+        await refreshKnowledge();
+
+        // 5. ENCENDER SERVIDOR (Solo si la DB cargó bien)
+        app.listen(process.env.PORT || 10000, () => {
+            console.log("🔥 SERVER v20.4 READY & DB CONNECTED");
+        });
+
+    } catch (error) {
+        console.error("❌ ERROR FATAL INICIANDO SERVIDOR:", error);
+    }
+}
+
+// Ejecutar Inicio
+startServer();
+
+// --- HELPERS DB ---
 let globalKnowledge = [];
 async function refreshKnowledge() {
     try {
@@ -102,14 +132,6 @@ async function getCfg(key, fallback=null) {
 async function setCfg(key, value) {
     await db.run("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", [key, JSON.stringify(value)]);
 }
-
-app.use(session({
-    name: 'icc_session',
-    secret: SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } 
-}));
 
 // --- UTILS ---
 async function uploadToMeta(buffer, mimeType, filename) {
@@ -152,7 +174,6 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     } catch (e) { return false; }
 }
 
-// === [PROXY DE MEDIOS v20.2 (CORREGIDO)] ===
 app.get('/api/media-proxy/:id', async (req, res) => {
     if (!req.session.isLogged) return res.status(401).send("No auth");
     
@@ -351,10 +372,12 @@ async function gestionarLead(phone, info, fallbackName) {
         
         await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=? WHERE id=?`, 
             [nombreFinal, nuevoInteres, nuevaEtiqueta, new Date().toLocaleString(), nuevaCiudad, nuevoCorreo, existe.id]);
+        await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [nombreFinal, phone]);
     } else {
         if (info.interes || info.correo || info.ciudad || info.es_lead) {
             await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
                 [phone, nombreFinal, info.interes || "Consultando", info.etiqueta || "Pendiente", new Date().toLocaleString(), info.ciudad, info.correo]);
+            await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [nombreFinal, phone]);
         }
     }
     
@@ -387,6 +410,7 @@ app.post('/api/config/prompt', proteger, async (req, res) => { await setCfg('bot
 
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
+        if (!db) throw new Error("DB no lista");
         const view = req.query.view || 'active'; 
         const whereClause = view === 'archived' ? 'm.archived = 1' : '(m.archived = 0 OR m.archived IS NULL)';
         const query = `
@@ -590,5 +614,3 @@ app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login'
 app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
-
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v20.3 READY"));
