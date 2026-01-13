@@ -1,12 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v19.9 (PROFILER MODE)
+ * SERVER BACKEND - VALENTINA v20.0 (MEDIA REPAIR)
  * Cliente: Importadora Casa Colombia (ICC)
- * Lógica:
- * 1. ROL: Asistente de perfilación (No vendedora).
- * 2. ESTADOS: Captura -> Escalado -> Cerrado.
- * 3. ANTI-LOOP: Ignora "gracias/ok" si ya se cerró el lead.
- * 4. AMBIGÜEDAD: Pregunta antes de clasificar mensajes cortos.
+ * Correcciones:
+ * 1. FOTOS/AUDIOS: Método de descarga 'ArrayBuffer' (Más estable).
+ * 2. CEREBRO: Mantiene la lógica de Perfiladora + Anti-Loop.
+ * 3. ESTADO: Versión consolidada.
  * ============================================================
  */
 
@@ -23,7 +22,7 @@ const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 
 // --- CONFIGURACIÓN ---
-const RESPONSE_DELAY = 6000; // Un poco más rápido para perfilar
+const RESPONSE_DELAY = 6000; 
 
 const upload = multer({ 
     storage: multer.memoryStorage(),
@@ -39,7 +38,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v19-9"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v20"; 
 
 // --- MIDDLEWARES ---
 app.use(express.json({ limit: '100mb' }));
@@ -84,7 +83,7 @@ let db;
     for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
 
     await refreshKnowledge();
-    console.log("🚀 SERVER v19.9 ONLINE (PROFILER MODE)");
+    console.log("🚀 SERVER v20.0 ONLINE (MEDIA FIXED)");
 })();
 
 let globalKnowledge = [];
@@ -154,16 +153,37 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     } catch (e) { return false; }
 }
 
+// === [CORRECCIÓN ABSOLUTA: PROXY DE MEDIOS] ===
 app.get('/api/media-proxy/:id', async (req, res) => {
     if (!req.session.isLogged) return res.status(401).send("No auth");
+    
     try {
-        const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
-        const mediaUrl = new URL(urlRes.data.url);
-        mediaUrl.searchParams.append('access_token', META_TOKEN);
-        const media = await axios.get(mediaUrl.toString(), { responseType: 'stream' });
+        // 1. Obtener URL
+        const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
+        });
+        
+        const imageUrl = new URL(urlRes.data.url);
+        // NO agregamos access_token a la URL si usamos Header Authorization, pero por seguridad en redirecciones:
+        // imageUrl.searchParams.append('access_token', META_TOKEN); // A veces causa conflicto con headers
+
+        // 2. Descargar COMO BUFFER (Más seguro que stream para imágenes)
+        const media = await axios.get(imageUrl.toString(), { 
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` },
+            responseType: 'arraybuffer' // CLAVE: Descarga completa en memoria
+        });
+
+        // 3. Headers Correctos
         if (urlRes.data.mime_type) res.setHeader('Content-Type', urlRes.data.mime_type);
-        media.data.pipe(res);
-    } catch (e) { res.status(500).send("Error Media"); }
+        res.setHeader('Content-Length', media.data.length); // CLAVE: Decirle al navegador cuánto pesa
+
+        // 4. Enviar
+        res.send(media.data);
+
+    } catch (e) { 
+        console.error("Media Error:", e.message); 
+        res.status(500).send("Error"); 
+    }
 });
 
 function buscarEnCatalogo(query) {
@@ -179,7 +199,7 @@ function buscarEnCatalogo(query) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// === [CEREBRO: PERFILADORA COMERCIAL ESTRICTA] ===
+// === [LÓGICA CONVERSACIONAL v20.0] ===
 async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName = "Cliente", isFile = false) {
     
     // 1. Guardar mensaje
@@ -189,34 +209,30 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    // --- 🚨 FILTRO ANTI-LOOP (ESTADO CERRADO) ---
-    // Si lo último que dijo el bot sugiere cierre, y el cliente dice "gracias", NO responder.
+    // --- 🚨 ANTI-LOOP ---
     const lastBotMsg = await db.get("SELECT text FROM history WHERE phone = ? AND role = 'bot' ORDER BY id DESC LIMIT 1", [sessionId]);
-    if (lastBotMsg && 
-       (lastBotMsg.text.includes("ejecutivo") || lastBotMsg.text.includes("contactará") || lastBotMsg.text.includes("revisará")) ) {
+    if (lastBotMsg && (lastBotMsg.text.includes("ejecutivo") || lastBotMsg.text.includes("contactará"))) {
         const msgClean = aiMessage.toLowerCase().trim();
         const courtesyWords = ["gracias", "ok", "listo", "vale", "bueno", "grx", "ty", "perfecto", "quedo atento", "dele", "👍", "👋"];
-        if (courtesyWords.some(w => msgClean === w || msgClean.includes(w) && msgClean.length < 15)) {
-            console.log("🚫 Loop de cortesía detectado. Silencio.");
-            return null; // NO RESPONDER
-        }
+        if (courtesyWords.some(w => msgClean === w || msgClean.includes(w) && msgClean.length < 15)) return null;
     }
 
-    // --- MODO ARCHIVOS (RECEPCIÓN DIRECTA) ---
+    // --- MODO ARCHIVOS ---
     if (isFile) {
         const respuestaAutomatica = `📁 Archivo recibido. Lo he adjuntado a tu perfil para que el ejecutivo lo revise.`;
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', respuestaAutomatica, new Date().toISOString()]);
         return respuestaAutomatica;
     }
 
-    // --- MODO TEXTO (IA) ---
+    // --- MODO TEXTO ---
     await sleep(RESPONSE_DELAY);
 
     const bizProfile = await getCfg('biz_profile', {});
     const websiteData = await getCfg('website_data', "Consultar Web."); 
     const stock = buscarEnCatalogo(aiMessage); 
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
-    
+    const dynamicPrompt = await getCfg('bot_prompt', `ROL: Eres Valentina.`);
+
     // --- CONTEXTO CRM ---
     const leadPrevio = await db.get("SELECT nombre, interes, ciudad FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [sessionId]);
     let esRecurrente = false;
@@ -225,7 +241,7 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     if (leadPrevio && leadPrevio.nombre && leadPrevio.nombre !== "Cliente") {
         esRecurrente = true;
         contextoCliente = `
-        Estado: CLIENTE RECURRENTE (Fase PERFILACIÓN RÁPIDA).
+        Estado: CLIENTE RECURRENTE.
         Nombre: ${leadPrevio.nombre}
         Ciudad: ${leadPrevio.ciudad}
         Interés Previo: ${leadPrevio.interes}
@@ -233,7 +249,6 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         `;
     }
 
-    // --- PROMPT MAESTRO (LA LEY) ---
     const finalPrompt = `
     INSTRUCCIONES MAESTRAS DE SISTEMA (BACKEND):
     
@@ -247,14 +262,13 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     - ESCALADO: Ya tienes los datos. Di: "Un ejecutivo revisará tu caso y te contactará". (Y CIERRA).
     - CERRADO: Ya te despediste. No hables más a menos que pregunten algo nuevo y complejo.
 
-    3️⃣ MANEJO DE AMBIGÜEDAD (CRÍTICO):
+    3️⃣ MANEJO DE AMBIGÜEDAD:
     Si el mensaje es corto (ej: "Hitachi 120", "Caterpillar", "Motor"), NO asumas que es un repuesto.
     PREGUNTA PRIMERO: "¿Buscas repuestos para esa máquina, la maquinaria completa o servicio técnico?".
 
     4️⃣ REGLAS DE ORO:
     - Cliente Nuevo: No saludes por nombre si no te lo ha dicho.
     - Cliente Recurrente: No pidas datos que ya tienes.
-    - Cierre Definitivo: Una vez escalado, no respondas a "gracias" o "ok".
     - Negocio: Horarios ${bizProfile.hours || '8am-6pm'}.
 
     CONTEXTO ACTUAL:
@@ -307,12 +321,10 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         } catch(e) {}
     }
     
-    // Limpieza
     visible = visible.replace(/(\*.*Analizando.*\*|Analizando:|Respuesta:|Pensamiento:|Contexto:|Okay, entiendo|Entendido)([\s\S]*?)(\n|$)/gi, "").trim();
     visible = visible.replace(/^["']+|["']+$/g, '').trim();
     visible = visible.replace(/```/g, ""); 
     
-    // Fallback
     if (!visible || visible.length < 2) {
         if (datosCapturados) {
             visible = "Datos actualizados. Un asesor te contactará pronto.";
@@ -359,7 +371,7 @@ async function gestionarLead(phone, info, fallbackName) {
 }
 
 // ============================================================
-// API ENDPOINTS (SIN CAMBIOS)
+// API ENDPOINTS
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No auth");
 
@@ -579,4 +591,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.9 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v20.0 READY"));
