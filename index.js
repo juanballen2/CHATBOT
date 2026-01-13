@@ -1,12 +1,12 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v20.12 (FULL AUDIO LOAD)
+ * SERVER BACKEND - VALENTINA v21.0 (RANGE SUPPORT + TEXT CLEANER)
  * Cliente: Importadora Casa Colombia (ICC)
- * Estrategia de Audio:
- * - Se elimina el streaming complejo (Range Requests).
- * - Se descarga TODO el archivo en memoria y se envía completo.
- * - Garantiza que el audio se escuche hasta el final.
- * - Mantiene: Lógica de Perfilación, Anti-Loop y Safe Boot.
+ * * 1. AUDIO FIX (DEFINITIVO): Implementa soporte HTTP 206 (Range Requests).
+ * Esto permite a Chrome/Safari reproducir audios largos sin cortarlos.
+ * 2. TEXT CLEANER: Una función dedicada elimina JSONs y "alucinaciones"
+ * antes de que lleguen al usuario.
+ * 3. LOGIC: Mantiene la perfilación y memoria de contexto.
  * ============================================================
  */
 
@@ -23,7 +23,7 @@ const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 
 // --- CONFIGURACIÓN ---
-const RESPONSE_DELAY = 6000; 
+const RESPONSE_DELAY = 5000; 
 
 const upload = multer({ 
     storage: multer.memoryStorage(),
@@ -39,7 +39,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v20-12"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v21"; 
 
 // --- PERSONALIDAD BASE ---
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
@@ -57,6 +57,7 @@ app.use(session({
     cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } 
 }));
 
+// --- MIDDLEWARE DE SEGURIDAD ---
 app.use((req, res, next) => {
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
         return res.status(403).send('🚫 Acceso Prohibido');
@@ -64,7 +65,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- BASE DE DATOS E INICIO SEGURO ---
+// --- INICIO DE SERVIDOR Y DB ---
 let db;
 let serverInstance;
 
@@ -89,13 +90,20 @@ async function startServer() {
             CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
         `);
         
-        try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
-        try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
-        try { await db.exec(`ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0`); } catch(e) {}
-        try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {}
-        
-        const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
-        for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
+        // Migraciones silenciosas
+        const migrations = [
+            `ALTER TABLE metadata ADD COLUMN photoUrl TEXT`,
+            `ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`,
+            `ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0`,
+            `ALTER TABLE config ADD COLUMN logoUrl TEXT`,
+            `ALTER TABLE leads ADD COLUMN nombre TEXT`,
+            `ALTER TABLE leads ADD COLUMN interes TEXT`,
+            `ALTER TABLE leads ADD COLUMN etiqueta TEXT`,
+            `ALTER TABLE leads ADD COLUMN fecha TEXT`,
+            `ALTER TABLE leads ADD COLUMN ciudad TEXT`,
+            `ALTER TABLE leads ADD COLUMN correo TEXT`
+        ];
+        for (const m of migrations) { try { await db.exec(m); } catch(e) {} }
 
         const currentPrompt = await getCfg('bot_prompt');
         if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
@@ -104,30 +112,26 @@ async function startServer() {
 
         const PORT = process.env.PORT || 10000;
         serverInstance = app.listen(PORT, () => {
-            console.log(`🔥 SERVER v20.12 READY (FULL AUDIO LOAD)`);
+            console.log(`🔥 SERVER v21.0 READY (RANGE SUPPORT ACTIVE)`);
         });
 
         serverInstance.on('error', (e) => {
             if (e.code === 'EADDRINUSE') {
                 console.log('⚠️ Puerto ocupado, reintentando...');
-                setTimeout(() => {
-                    serverInstance.close();
-                    serverInstance.listen(PORT);
-                }, 1000);
+                setTimeout(() => { serverInstance.close(); serverInstance.listen(PORT); }, 1000);
             }
         });
 
-    } catch (error) {
-        console.error("❌ ERROR FATAL:", error);
-    }
+    } catch (error) { console.error("❌ ERROR FATAL:", error); }
 }
 
+// Graceful Shutdown
 process.on('SIGTERM', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
 process.on('SIGINT', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
 
 startServer();
 
-// --- HELPERS ---
+// --- HELPERS DE DATOS ---
 let globalKnowledge = [];
 async function refreshKnowledge() {
     try {
@@ -146,7 +150,7 @@ async function setCfg(key, value) {
     await db.run("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", [key, JSON.stringify(value)]);
 }
 
-// --- UTILS ---
+// --- UTILS WHATSAPP ---
 async function uploadToMeta(buffer, mimeType, filename) {
     try {
         const form = new FormData();
@@ -187,44 +191,64 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     } catch (e) { return false; }
 }
 
-// === [PROXY DE MEDIOS v20.12 - CARGA COMPLETA] ===
+// === [PROXY MULTIMEDIA v21.0 - BUFFER + RANGE SUPPORT] ===
 app.get('/api/media-proxy/:id', async (req, res) => {
     if (!req.session.isLogged) return res.status(401).send("No auth");
     
     try {
+        // 1. Obtener URL firmada
         const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
         
         const mediaUrl = urlRes.data.url;
-        let mimeType = urlRes.data.mime_type;
+        let contentType = urlRes.data.mime_type || 'application/octet-stream';
 
-        // Forzar audio/ogg para máxima compatibilidad con el reproductor HTML5
-        if (mimeType && (mimeType.includes('audio') || mimeType.includes('ogg'))) {
-            mimeType = 'audio/ogg';
+        // Normalizar Audio
+        if (contentType.includes('audio') || contentType.includes('ogg')) {
+            contentType = 'audio/ogg';
         }
 
-        // Descarga TODO el archivo a la RAM
-        const media = await axios.get(mediaUrl, { 
+        // 2. Descargar TODO a Memoria (Buffer)
+        const response = await axios.get(mediaUrl, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` },
             responseType: 'arraybuffer' 
         });
+        const buffer = response.data;
+        const totalSize = buffer.length;
 
-        // Configurar Headers para que el navegador sepa que ya tiene TODO
-        res.setHeader('Content-Type', mimeType);
-        res.setHeader('Content-Length', media.data.length);
-        
-        // Estos headers evitan el cacheo erróneo que a veces corta el audio
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
+        // 3. Manejo de Rangos (Lo que pide el navegador para streaming)
+        const range = req.headers.range;
 
-        // Enviar buffer completo
-        res.send(media.data);
+        if (range) {
+            // Si el navegador pide un pedazo (streaming)
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+            const chunksize = (end - start) + 1;
+            
+            const fileChunk = buffer.slice(start, end + 1);
+            
+            res.writeHead(206, {
+                'Content-Range': `bytes ${start}-${end}/${totalSize}`,
+                'Accept-Ranges': 'bytes',
+                'Content-Length': chunksize,
+                'Content-Type': contentType,
+            });
+            res.end(fileChunk);
+        } else {
+            // Si el navegador pide todo (descarga normal)
+            res.writeHead(200, {
+                'Content-Length': totalSize,
+                'Content-Type': contentType,
+                'Accept-Ranges': 'bytes' // Le avisamos que soportamos streaming
+            });
+            res.end(buffer);
+        }
 
     } catch (e) { 
-        console.error("Proxy Error:", e.message); 
-        res.status(500).send("Error Media"); 
+        console.error("Media Proxy Error:", e.message); 
+        res.status(500).send("Error loading media"); 
     }
 });
 
@@ -241,27 +265,28 @@ function buscarEnCatalogo(query) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// === [LÓGICA CONVERSACIONAL (PERFILADORA + INTENCIÓN)] ===
+// === [LÓGICA CONVERSACIONAL + LIMPIEZA DE TEXTO] ===
 async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName = "Cliente", isFile = false) {
     
+    // Guardar usuario
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', dbMessage, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
 
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    // --- ANTI-LOOP ---
+    // --- ANTI-LOOP (Evitar responder a "gracias" si ya se cerró) ---
     const lastBotMsg = await db.get("SELECT text FROM history WHERE phone = ? AND role = 'bot' ORDER BY id DESC LIMIT 1", [sessionId]);
     if (lastBotMsg && (lastBotMsg.text.includes("ejecutivo") || lastBotMsg.text.includes("contactará"))) {
         const msgClean = aiMessage.toLowerCase().trim();
-        const courtesyWords = ["gracias", "ok", "listo", "vale", "bueno", "grx", "ty", "perfecto", "quedo atento", "dele", "👍", "👋"];
+        const courtesyWords = ["gracias", "ok", "listo", "vale", "bueno", "grx", "ty", "perfecto", "quedo atento", "dele", "👍", "👋", "muchas gracias"];
         if (courtesyWords.some(w => msgClean === w || msgClean.includes(w) && msgClean.length < 15)) return null;
     }
 
     if (isFile) {
         const leadFile = await db.get("SELECT nombre FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [sessionId]);
         const saludoFile = leadFile && leadFile.nombre && leadFile.nombre !== 'Cliente' ? `Hola ${leadFile.nombre}, ` : '';
-        const respuestaAutomatica = `${saludoFile}¡Recibido! 📁\n\nHe guardado tu archivo. Lo adjunté a tu perfil para revisión.`;
+        const respuestaAutomatica = `${saludoFile}¡Recibido! 📁\n\nHe guardado tu archivo en el sistema para revisión.`;
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', respuestaAutomatica, new Date().toISOString()]);
         return respuestaAutomatica;
     }
@@ -274,7 +299,7 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
     const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
 
-    // --- CEREBRO CONTEXTUAL ---
+    // --- CONTEXTO INTELIGENTE ---
     const regexIntencion = /quiero|busco|necesito|cotizar|precio|tienes|vendes|repuesto|filtro|motor|maquina|oruga|bomba|cilindro|cuanto vale/i;
     const tieneIntencionNueva = regexIntencion.test(aiMessage);
 
@@ -288,51 +313,34 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
             contextoCliente = `
             Estado: CLIENTE RECURRENTE CON NUEVA SOLICITUD.
             Nombre: ${leadPrevio.nombre}
-            INSTRUCCIÓN CRÍTICA:
-            1. Salúdalo por su nombre.
-            2. IGNORA interés pasado.
-            3. Atiende DIRECTAMENTE la nueva solicitud.
+            INSTRUCCIÓN: Saluda por nombre y atiende DIRECTAMENTE la nueva solicitud. NO menciones lo anterior.
             `;
         } else {
             contextoCliente = `
             Estado: CLIENTE RECURRENTE (Saludo).
             Nombre: ${leadPrevio.nombre}
             Interés Previo: ${leadPrevio.interes}
-            INSTRUCCIÓN:
-            1. Saluda por nombre.
-            2. Pregunta: "¿Retomamos lo de ${leadPrevio.interes} o buscas algo nuevo?".
+            INSTRUCCIÓN: Saluda por nombre y pregunta: "¿Retomamos lo de ${leadPrevio.interes} o buscas algo nuevo?".
             `;
         }
     } else {
-        contextoCliente = `Estado: CLIENTE NUEVO (Fase CAPTURA). Objetivo: Obtener Nombre y Ciudad. No asumas intención.`;
+        contextoCliente = `Estado: CLIENTE NUEVO (Fase CAPTURA). Objetivo: Obtener Nombre y Ciudad.`;
     }
 
     const finalPrompt = `
-    INSTRUCCIONES DE CONTROL — IA BACKEND:
-    
-    1️⃣ ROL REAL:
-    Eres ASISTENTE DE PERFILACIÓN. No vendedora. Tu meta es capturar datos y escalar.
+    INSTRUCCIONES MAESTRAS (v21.0):
+    1. Eres ASISTENTE DE PERFILACIÓN de Importadora Casa Colombia.
+    2. SIEMPRE prioriza la intención actual del cliente ("${aiMessage}").
+    3. Si ya tienes los datos, di: "Un ejecutivo revisará tu caso y te contactará".
+    4. REGLA DE ORO: JAMÁS muestres JSON, código o digas "Okay entiendo". SOLO responde al cliente.
 
-    2️⃣ MANEJO DE INTENCIÓN (PRIORIDAD ALTA):
-    La intención del mensaje actual ("${aiMessage}") SIEMPRE mata al historial.
-
-    3️⃣ ESTADOS DE CONVERSACIÓN:
-    - CAPTURA: Faltan datos.
-    - ESCALADO: Datos completos. Cierre: "Un ejecutivo te contactará".
-    - CERRADO: Silencio.
-
-    4️⃣ REGLAS DE ORO:
-    - Cliente Nuevo: No saludes por nombre si no lo sabes.
-    - Ambigüedad: "Hitachi 120" -> Pregunta si es repuesto, máquina o servicio.
-    - Negocio: Horarios ${bizProfile.hours || '8am-6pm'}.
-
-    CONTEXTO ACTUAL (OBLIGATORIO):
+    CONTEXTO:
     ${contextoCliente}
     
     HISTORIAL: ${JSON.stringify(chatPrevio)}
-    STOCK REF: ${JSON.stringify(stock)}
+    STOCK: ${JSON.stringify(stock)}
 
-    FORMATO JSON OBLIGATORIO AL FINAL (Invisible):
+    Genera la respuesta y al final añade el JSON oculto:
     \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
     `;
 
@@ -353,27 +361,26 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         }
     }
 
-    if (!exito) return "Dame un momento, estoy registrando tu solicitud... 🚜";
+    if (!exito) return "Dame un momento... 🚜";
 
+    // --- LAVADORA DE TEXTO (TEXT CLEANER) ---
     const match = txt.match(/```json([\s\S]*?)```|{([\s\S]*?)}|'''json([\s\S]*?)'''/i);
     let visible = txt;
     let datosCapturados = false;
     
     if (match) {
-        visible = txt.replace(match[0], "").trim(); 
+        visible = txt.replace(match[0], "").trim(); // Borrar JSON del texto visible
         try {
             let jsonStr = (match[1] || match[2] || match[0]).replace(/```json/g,"").replace(/```/g,"").replace(/'''json/g,"").replace(/'''/g,"").trim();
             const info = JSON.parse(jsonStr);
             
             if(info.nombre || info.celular || info.interes || info.correo || info.ciudad) {
                 let updateInteres = (info.interes && info.interes !== "null") ? info.interes : null;
-                
                 if (esRecurrente) {
                     if (!info.nombre || info.nombre === "null") info.nombre = leadPrevio.nombre;
                     if (!info.ciudad || info.ciudad === "null") info.ciudad = leadPrevio.ciudad;
                     if (!updateInteres && !tieneIntencionNueva) updateInteres = leadPrevio.interes;
                 }
-                
                 info.interes = updateInteres;
                 await gestionarLead(sessionId, info, contactName);
                 datosCapturados = true;
@@ -381,17 +388,22 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         } catch(e) {}
     }
     
-    visible = visible.replace(/(\*.*Analizando.*\*|Analizando:|Respuesta:|Pensamiento:|Contexto:|Okay, entiendo|Entendido)([\s\S]*?)(\n|$)/gi, "").trim();
-    visible = visible.replace(/^["']+|["']+$/g, '').trim();
-    visible = visible.replace(/```/g, ""); 
+    // Limpieza agresiva de alucinaciones
+    const basuraIA = [
+        "Okay, entiendo", "Entendido", "Analizando", "Respuesta:", "Pensamiento:", "Contexto:",
+        "Instrucción:", "Como asistente", "Soy una IA"
+    ];
+    basuraIA.forEach(basura => {
+        let regex = new RegExp(`^${basura}.*`, "igm");
+        visible = visible.replace(regex, "");
+    });
+    
+    visible = visible.replace(/[\r\n]+/g, "\n").trim(); // Quitar saltos de línea extra
     
     if (!visible || visible.length < 2) {
-        if (datosCapturados) {
-            const nombreDisplay = leadPrevio?.nombre || "Cliente";
-            visible = `¡Listo ${nombreDisplay}! He tomado nota. Un asesor comercial te contactará pronto.`;
-        } else {
-            visible = "¿En qué te puedo colaborar hoy?";
-        }
+        visible = datosCapturados 
+            ? `¡Listo ${leadPrevio?.nombre || ""}! Datos actualizados. Un asesor te contactará.`
+            : "¿En qué te puedo colaborar hoy?";
     }
 
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', visible, new Date().toISOString()]);
@@ -652,5 +664,3 @@ app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login'
 app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
-
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v20.12 READY"));
