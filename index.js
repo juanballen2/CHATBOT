@@ -1,11 +1,12 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v20.11 (MEDIA STREAMING PRO)
+ * SERVER BACKEND - VALENTINA v20.12 (FULL AUDIO LOAD)
  * Cliente: Importadora Casa Colombia (ICC)
- * Corrección Final de Audio:
- * - Implementa "Range Requests" (Código 206) para audios largos.
- * - Permite adelantar/atrasar y reproducir notas de voz completas.
- * - Mantiene: Lógica de Negocio, Perfilación y Seguridad.
+ * Estrategia de Audio:
+ * - Se elimina el streaming complejo (Range Requests).
+ * - Se descarga TODO el archivo en memoria y se envía completo.
+ * - Garantiza que el audio se escuche hasta el final.
+ * - Mantiene: Lógica de Perfilación, Anti-Loop y Safe Boot.
  * ============================================================
  */
 
@@ -38,7 +39,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v20-11"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v20-12"; 
 
 // --- PERSONALIDAD BASE ---
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
@@ -101,10 +102,9 @@ async function startServer() {
 
         await refreshKnowledge();
 
-        // Inicio con protección de puerto
         const PORT = process.env.PORT || 10000;
         serverInstance = app.listen(PORT, () => {
-            console.log(`🔥 SERVER v20.11 READY ON PORT ${PORT} (AUDIO STREAMING)`);
+            console.log(`🔥 SERVER v20.12 READY (FULL AUDIO LOAD)`);
         });
 
         serverInstance.on('error', (e) => {
@@ -122,7 +122,6 @@ async function startServer() {
     }
 }
 
-// Graceful Shutdown
 process.on('SIGTERM', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
 process.on('SIGINT', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
 
@@ -188,60 +187,40 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     } catch (e) { return false; }
 }
 
-// === [PROXY DE MEDIOS v20.11 - STREAMING REAL] ===
+// === [PROXY DE MEDIOS v20.12 - CARGA COMPLETA] ===
 app.get('/api/media-proxy/:id', async (req, res) => {
     if (!req.session.isLogged) return res.status(401).send("No auth");
     
     try {
-        // 1. Obtener URL de Facebook
         const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
         
         const mediaUrl = urlRes.data.url;
-        let contentType = urlRes.data.mime_type || 'application/octet-stream';
+        let mimeType = urlRes.data.mime_type;
 
-        // Fix para audios de WhatsApp: Siempre usar audio/ogg
-        if (contentType.includes('audio') || contentType.includes('ogg')) {
-            contentType = 'audio/ogg';
+        // Forzar audio/ogg para máxima compatibilidad con el reproductor HTML5
+        if (mimeType && (mimeType.includes('audio') || mimeType.includes('ogg'))) {
+            mimeType = 'audio/ogg';
         }
 
-        // 2. Descargar el archivo COMPLETO a la RAM (Buffer)
-        // Esto es necesario para poder calcular el tamaño y soportar rangos manualmente
-        const mediaResponse = await axios.get(mediaUrl, { 
+        // Descarga TODO el archivo a la RAM
+        const media = await axios.get(mediaUrl, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` },
             responseType: 'arraybuffer' 
         });
 
-        const buffer = mediaResponse.data;
-        const totalSize = buffer.length;
-        const range = req.headers.range;
+        // Configurar Headers para que el navegador sepa que ya tiene TODO
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Content-Length', media.data.length);
+        
+        // Estos headers evitan el cacheo erróneo que a veces corta el audio
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
 
-        // 3. Manejo de RANGOS (Clave para reproducción fluida)
-        if (range) {
-            // El navegador pide un pedazo (Ej: "bytes=0-")
-            const parts = range.replace(/bytes=/, "").split("-");
-            const start = parseInt(parts[0], 10);
-            const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
-            const chunksize = (end - start) + 1;
-            const fileStream = buffer.slice(start, end + 1); // Cortamos el buffer
-
-            res.writeHead(206, {
-                'Content-Range': `bytes ${start}-${end}/${totalSize}`,
-                'Accept-Ranges': 'bytes',
-                'Content-Length': chunksize,
-                'Content-Type': contentType,
-            });
-            res.end(fileStream);
-        } else {
-            // El navegador pide todo el archivo (Primera carga)
-            res.writeHead(200, {
-                'Content-Length': totalSize,
-                'Content-Type': contentType,
-                'Accept-Ranges': 'bytes' // Le avisamos que soportamos rangos para la próxima
-            });
-            res.end(buffer);
-        }
+        // Enviar buffer completo
+        res.send(media.data);
 
     } catch (e) { 
         console.error("Proxy Error:", e.message); 
@@ -674,4 +653,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v20.11 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v20.12 READY"));
