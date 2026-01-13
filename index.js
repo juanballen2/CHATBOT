@@ -1,11 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v21.2 (STABLE & OPTIMIZED)
+ * SERVER BACKEND - VALENTINA v21.3 (PROMPT ENGINEERED)
  * Cliente: Importadora Casa Colombia (ICC)
- * Correcciones:
- * 1. FIX: Se redefinió 'upload' (Multer) que causaba el crash.
- * 2. AUDIO STREAMING: Activo y protegido (Range Requests).
- * 3. TEXT CLEANER: Activo.
+ * Mejoras:
+ * 1. PROMPT MAESTRO INTEGRADO: Lógica de ventas e ingeniería.
+ * 2. Cero Burocracia: Prioriza la intención técnica sobre el saludo.
+ * 3. Core estable: Mantiene fixes de Multer y Audio.
  * ============================================================
  */
 
@@ -13,7 +13,7 @@ const express = require('express');
 const session = require('express-session');
 const fs = require('fs');
 const path = require('path');
-const multer = require('multer'); // Importante
+const multer = require('multer');
 const { parse } = require('csv-parse/sync');
 const axios = require('axios');
 const cors = require('cors');
@@ -28,7 +28,7 @@ app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors());
 
-// --- UPLOAD CONFIG (Aquí estaba el error) ---
+// --- UPLOAD CONFIG ---
 const upload = multer({ 
     storage: multer.memoryStorage(),
     limits: { fileSize: 100 * 1024 * 1024 } 
@@ -40,7 +40,42 @@ const PHONE_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = "icc-val-opt-v21"; 
-const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
+
+// --- PROMPT MAESTRO (INTEGRADO) ---
+const DEFAULT_PROMPT = `ERES VALENTINA, ASESORA EXPERTA DE ICC (Maquinaria Pesada).
+TU OBJETIVO: Cerrar ventas de repuestos de forma eficiente, técnica y humana.
+
+🚨 REGLAS SUPREMAS DE COMPORTAMIENTO (NO ROMPER NUNCA):
+
+1. PRIORIDAD DE INTENCIÓN (CRÍTICO):
+   - Si el usuario menciona un repuesto, modelo o necesidad técnica, IGNORA cualquier saludo protocolario y RESPONDE DIRECTAMENTE A LA NECESIDAD.
+   - JAMÁS preguntes "¿En qué puedo ayudarte?" si el usuario ya dijo qué necesita.
+
+2. CERO BUROCRACIA INICIAL:
+   - ESTÁ PROHIBIDO pedir nombre, ciudad o correo al inicio de la conversación.
+   - Solo pedirás estos datos SI Y SOLO SI:
+     a) Ya confirmaste que tienes el repuesto y vas a cotizar (para calcular envío).
+     b) Necesitas crear una orden en firme.
+   - Si el usuario pregunta precio, DASELO (o un estimado) sin condicionarlo a dar sus datos primero.
+
+3. EXPERTA TÉCNICA, NO RECEPCIONISTA:
+   - Si el usuario dice "Oruga ZX200", tu cerebro debe pensar: "Necesito saber si es de caucho o metal, y el número de eslabones".
+   - Tu respuesta debe ser: "Tengo opciones para ZX200 👍 ¿Buscas la cadena completa o solo los eslabones? ¿Es Hitachi original?"
+   - Valida siempre: Modelo de máquina + Serie + Repuesto específico.
+
+4. MEMORIA CONTEXTUAL:
+   - Antes de responder, LEE EL HISTORIAL DE MENSAJES ANTERIORES.
+   - Si ya saludaste, no vuelvas a saludar.
+   - Si el usuario ya dijo que busca un "martillo hidráulico", no preguntes "¿qué buscas?". Di: "Sobre el martillo, ¿para qué tonelaje de excavadora es?".
+
+5. ESTILO HUMANO Y DIRECTO:
+   - Usa respuestas CORTAS y CONCISAS. Evita párrafos largos.
+   - Usa emojis con extrema moderación (máximo 1 por mensaje, preferiblemente 👍, 🔧, 🚜).
+   - Tono: Profesional pero cercano, como un colega experto.
+
+6. PROHIBICIÓN DE REDUNDANCIA:
+   - Nunca envíes dos preguntas seguidas que signifiquen lo mismo.
+   - Nunca digas "Hola" si el usuario no dijo "Hola". Si el usuario dice "Precio de bomba PC200", tú respondes el precio o pides la serie, NO dices "Hola, bienvenido a ICC".`;
 
 app.use(session({
     name: 'icc_session', secret: SESSION_SECRET, resave: false, saveUninitialized: false,
@@ -79,11 +114,13 @@ let db, globalKnowledge = [], serverInstance;
         migrations.push('ALTER TABLE config ADD COLUMN logoUrl TEXT');
         for (const m of migrations) { try { await db.exec(m); } catch(e){} }
 
-        if(!(await getCfg('bot_prompt'))) await setCfg('bot_prompt', DEFAULT_PROMPT);
+        // ACTUALIZACIÓN FORZADA DEL PROMPT AL REINICIAR (Para aplicar los cambios)
+        await setCfg('bot_prompt', DEFAULT_PROMPT);
+        
         await refreshKnowledge();
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER v21.2 READY`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER v21.3 READY (New Personality Loaded)`));
         serverInstance.on('error', (e) => { if(e.code === 'EADDRINUSE') setTimeout(() => { serverInstance.close(); serverInstance.listen(PORT); }, 1000); });
 
     } catch (e) { console.error("❌ DB ERROR:", e); }
@@ -181,14 +218,19 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const isNewIntent = /quiero|busco|necesito|cotizar|precio|tienes|repuesto|filtro|motor/i.test(aiMsg);
     let ctx = lead && lead.nombre !== "Cliente" 
         ? (isNewIntent ? `CLIENTE RECURRENTE (${lead.nombre}) CON NUEVA SOLICITUD. IGNORA historial.` : `CLIENTE RECURRENTE (${lead.nombre}). Saluda y pregunta si retoma lo anterior (${lead.interes}).`)
-        : `CLIENTE NUEVO. Obtén Nombre y Ciudad.`;
+        : `CLIENTE NUEVO. Obtén Nombre y Ciudad SOLO SI es necesario para avanzar.`;
 
+    // AQUÍ SE INYECTA EL PROMPT MAESTRO
     const prompt = `ROL: ${await getCfg('bot_prompt', DEFAULT_PROMPT)}
     CONTEXTO: ${ctx}
     NEGOCIO: ${biz.hours || '8am-6pm'}.
     HISTORIAL: ${JSON.stringify(history)}
-    STOCK: ${JSON.stringify(stock)}
-    INSTRUCCIONES: Prioriza intención actual. Si tienes datos, cierra con "Un ejecutivo te contactará".
+    STOCK SUGERIDO (Referencia): ${JSON.stringify(stock)}
+    
+    INSTRUCCIONES FINALES PARA JSON:
+    - Si detectas una intención de compra clara, marca "es_lead": true.
+    - Extrae datos SOLO si el usuario los proporcionó explícitamente en este turno o los anteriores. NO LOS INVENTES.
+    
     OUTPUT JSON OBLIGATORIO: \`\`\`json {"es_lead": boolean, "nombre":"...", "interes":"...", "ciudad":"...", "etiqueta":"Lead"} \`\`\``;
 
     try {
