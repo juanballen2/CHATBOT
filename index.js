@@ -1,12 +1,12 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v19.8 (BROAD SCOPE)
+ * SERVER BACKEND - VALENTINA v19.9 (PROFILER MODE)
  * Cliente: Importadora Casa Colombia (ICC)
- * Mejoras:
- * 1. MENTALIDAD ABIERTA: La IA ya no asume que todo es "un repuesto".
- * (Entiende Maquinaria, Servicio, Alquiler, Info).
- * 2. MEMORIA: Saludo más natural y flexible para clientes recurrentes.
- * 3. Mantiene: Limpieza de JSON y Modo Híbrido.
+ * Lógica:
+ * 1. ROL: Asistente de perfilación (No vendedora).
+ * 2. ESTADOS: Captura -> Escalado -> Cerrado.
+ * 3. ANTI-LOOP: Ignora "gracias/ok" si ya se cerró el lead.
+ * 4. AMBIGÜEDAD: Pregunta antes de clasificar mensajes cortos.
  * ============================================================
  */
 
@@ -23,7 +23,7 @@ const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 
 // --- CONFIGURACIÓN ---
-const RESPONSE_DELAY = 8000; 
+const RESPONSE_DELAY = 6000; // Un poco más rápido para perfilar
 
 const upload = multer({ 
     storage: multer.memoryStorage(),
@@ -39,9 +39,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v19-8"; 
-
-const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
+const SESSION_SECRET = "icc-valentina-secret-final-v19-9"; 
 
 // --- MIDDLEWARES ---
 app.use(express.json({ limit: '100mb' }));
@@ -85,11 +83,8 @@ let db;
     const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
     for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
 
-    const currentPrompt = await getCfg('bot_prompt');
-    if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
-
     await refreshKnowledge();
-    console.log("🚀 SERVER v19.8 ONLINE (SCOPE FIXED)");
+    console.log("🚀 SERVER v19.9 ONLINE (PROFILER MODE)");
 })();
 
 let globalKnowledge = [];
@@ -167,7 +162,6 @@ app.get('/api/media-proxy/:id', async (req, res) => {
         mediaUrl.searchParams.append('access_token', META_TOKEN);
         const media = await axios.get(mediaUrl.toString(), { responseType: 'stream' });
         if (urlRes.data.mime_type) res.setHeader('Content-Type', urlRes.data.mime_type);
-        if (media.headers['content-length']) res.setHeader('Content-Length', media.headers['content-length']);
         media.data.pipe(res);
     } catch (e) { res.status(500).send("Error Media"); }
 });
@@ -185,70 +179,90 @@ function buscarEnCatalogo(query) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// === [LÓGICA MEJORADA v19.8] ===
+// === [CEREBRO: PERFILADORA COMERCIAL ESTRICTA] ===
 async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName = "Cliente", isFile = false) {
     
+    // 1. Guardar mensaje
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', dbMessage, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
 
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    // --- MODO RECEPCIONISTA (ARCHIVOS) ---
+    // --- 🚨 FILTRO ANTI-LOOP (ESTADO CERRADO) ---
+    // Si lo último que dijo el bot sugiere cierre, y el cliente dice "gracias", NO responder.
+    const lastBotMsg = await db.get("SELECT text FROM history WHERE phone = ? AND role = 'bot' ORDER BY id DESC LIMIT 1", [sessionId]);
+    if (lastBotMsg && 
+       (lastBotMsg.text.includes("ejecutivo") || lastBotMsg.text.includes("contactará") || lastBotMsg.text.includes("revisará")) ) {
+        const msgClean = aiMessage.toLowerCase().trim();
+        const courtesyWords = ["gracias", "ok", "listo", "vale", "bueno", "grx", "ty", "perfecto", "quedo atento", "dele", "👍", "👋"];
+        if (courtesyWords.some(w => msgClean === w || msgClean.includes(w) && msgClean.length < 15)) {
+            console.log("🚫 Loop de cortesía detectado. Silencio.");
+            return null; // NO RESPONDER
+        }
+    }
+
+    // --- MODO ARCHIVOS (RECEPCIÓN DIRECTA) ---
     if (isFile) {
-        const leadFile = await db.get("SELECT nombre FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [sessionId]);
-        const saludoFile = leadFile && leadFile.nombre && leadFile.nombre !== 'Cliente' ? `Hola ${leadFile.nombre}, ` : '';
-        const respuestaAutomatica = `${saludoFile}¡Recibido! 📁\n\nYa lo guardé en el sistema. Un asesor lo revisará en breve.`;
+        const respuestaAutomatica = `📁 Archivo recibido. Lo he adjuntado a tu perfil para que el ejecutivo lo revise.`;
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', respuestaAutomatica, new Date().toISOString()]);
         return respuestaAutomatica;
     }
 
-    // --- MODO ASESOR (TEXTO) ---
+    // --- MODO TEXTO (IA) ---
     await sleep(RESPONSE_DELAY);
 
     const bizProfile = await getCfg('biz_profile', {});
     const websiteData = await getCfg('website_data', "Consultar Web."); 
     const stock = buscarEnCatalogo(aiMessage); 
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
-    const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
-
-    // 🧠 MEMORIA + ALCANCE ABIERTO
-    const leadPrevio = await db.get("SELECT nombre, interes, ciudad FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [sessionId]);
     
-    let contextoCliente = "";
+    // --- CONTEXTO CRM ---
+    const leadPrevio = await db.get("SELECT nombre, interes, ciudad FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [sessionId]);
+    let esRecurrente = false;
+    let contextoCliente = "Estado: CLIENTE NUEVO (Fase CAPTURA). Objetivo: Obtener Nombre y Ciudad.";
+    
     if (leadPrevio && leadPrevio.nombre && leadPrevio.nombre !== "Cliente") {
+        esRecurrente = true;
         contextoCliente = `
-        [CLIENTE RECURRENTE DETECTADO]
+        Estado: CLIENTE RECURRENTE (Fase PERFILACIÓN RÁPIDA).
         Nombre: ${leadPrevio.nombre}
         Ciudad: ${leadPrevio.ciudad}
-        Interés Anterior: ${leadPrevio.interes}
-        
-        TUS INSTRUCCIONES:
-        1. Salúdalo por su nombre con naturalidad.
-        2. NO asumas que quiere lo mismo. Pregunta: "¿Retomamos lo de ${leadPrevio.interes} o buscas algo nuevo hoy?".
-        3. Recuerda que puede buscar MAQUINARIA, REPUESTOS o SERVICIO. Escúchalo.
+        Interés Previo: ${leadPrevio.interes}
+        INSTRUCCIÓN: Saluda SOLO en el primer mensaje. Ve directo al grano: "¿Retomamos lo anterior o buscas algo nuevo?".
         `;
-    } else {
-        contextoCliente = `Cliente Nuevo. Obtén Nombre y Ciudad amablemente. No asumas que busca repuestos, puede ser maquinaria.`;
     }
 
+    // --- PROMPT MAESTRO (LA LEY) ---
     const finalPrompt = `
-    INSTRUCCIONES DE SISTEMA:
+    INSTRUCCIONES MAESTRAS DE SISTEMA (BACKEND):
     
-    TU ROL: ${dynamicPrompt}
-    
-    CONTEXTO:
+    1️⃣ ROL REAL:
+    Eres ASISTENTE DE PERFILACIÓN de Importadora Casa Colombia.
+    NO eres vendedora. NO asesoras técnicamente. NO das precios.
+    Tu único fin es: Capturar datos -> Clasificar -> Escalar al humano.
+
+    2️⃣ ESTADOS DE CONVERSACIÓN:
+    - CAPTURA: Faltan datos (Nombre, Ciudad, Necesidad). Pídelos amablemente.
+    - ESCALADO: Ya tienes los datos. Di: "Un ejecutivo revisará tu caso y te contactará". (Y CIERRA).
+    - CERRADO: Ya te despediste. No hables más a menos que pregunten algo nuevo y complejo.
+
+    3️⃣ MANEJO DE AMBIGÜEDAD (CRÍTICO):
+    Si el mensaje es corto (ej: "Hitachi 120", "Caterpillar", "Motor"), NO asumas que es un repuesto.
+    PREGUNTA PRIMERO: "¿Buscas repuestos para esa máquina, la maquinaria completa o servicio técnico?".
+
+    4️⃣ REGLAS DE ORO:
+    - Cliente Nuevo: No saludes por nombre si no te lo ha dicho.
+    - Cliente Recurrente: No pidas datos que ya tienes.
+    - Cierre Definitivo: Una vez escalado, no respondas a "gracias" o "ok".
+    - Negocio: Horarios ${bizProfile.hours || '8am-6pm'}.
+
+    CONTEXTO ACTUAL:
     ${contextoCliente}
-
-    REGLAS DE ORO:
-    1. **NO PENSAMIENTOS:** Solo respuesta final.
-    2. **ALCANCE ABIERTO:** No te cierres a "repuestos". El cliente puede querer una EXCAVADORA COMPLETA, un ALQUILER o una COTIZACIÓN GRANDE. Atiéndelo según lo que pida.
-    3. **CIERRE:** Siempre confirma que un humano revisará el caso.
-    4. **CERO COMILLAS.**
-
+    
     HISTORIAL: ${JSON.stringify(chatPrevio)}
     MENSAJE NUEVO: "${aiMessage}"
-    STOCK: ${JSON.stringify(stock)}
+    STOCK REF: ${JSON.stringify(stock)}
 
     FORMATO JSON OBLIGATORIO AL FINAL (Invisible):
     \`\`\`json {"es_lead": boolean, "nombre":"...", "celular":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead|Pendiente"} \`\`\`
@@ -271,7 +285,7 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         }
     }
 
-    if (!exito) return "Dame un momento, estoy verificando la información... 🚜";
+    if (!exito) return "Dame un momento, estoy registrando tu solicitud... 🚜";
 
     const match = txt.match(/```json([\s\S]*?)```|{([\s\S]*?)}|'''json([\s\S]*?)'''/i);
     let visible = txt;
@@ -284,8 +298,8 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
             const info = JSON.parse(jsonStr);
             
             if(info.nombre || info.celular || info.interes || info.correo || info.ciudad) {
-                if (leadPrevio && (!info.nombre || info.nombre === "null")) info.nombre = leadPrevio.nombre;
-                if (leadPrevio && (!info.ciudad || info.ciudad === "null")) info.ciudad = leadPrevio.ciudad;
+                if (esRecurrente && (!info.nombre || info.nombre === "null")) info.nombre = leadPrevio.nombre;
+                if (esRecurrente && (!info.ciudad || info.ciudad === "null")) info.ciudad = leadPrevio.ciudad;
                 
                 await gestionarLead(sessionId, info, contactName);
                 datosCapturados = true;
@@ -293,16 +307,17 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
         } catch(e) {}
     }
     
+    // Limpieza
     visible = visible.replace(/(\*.*Analizando.*\*|Analizando:|Respuesta:|Pensamiento:|Contexto:|Okay, entiendo|Entendido)([\s\S]*?)(\n|$)/gi, "").trim();
     visible = visible.replace(/^["']+|["']+$/g, '').trim();
     visible = visible.replace(/```/g, ""); 
     
+    // Fallback
     if (!visible || visible.length < 2) {
         if (datosCapturados) {
-            const nombreSaludo = leadPrevio?.nombre || "Cliente";
-            visible = `¡Listo ${nombreSaludo}! He actualizado tu solicitud. Un asesor comercial te contactará a la brevedad.`;
+            visible = "Datos actualizados. Un asesor te contactará pronto.";
         } else {
-            visible = "¡Hola! 👋 Claro que sí, ¿en qué te puedo ayudar?";
+            visible = "¿En qué te puedo colaborar hoy?";
         }
     }
 
@@ -344,7 +359,7 @@ async function gestionarLead(phone, info, fallbackName) {
 }
 
 // ============================================================
-// API ENDPOINTS
+// API ENDPOINTS (SIN CAMBIOS)
 // ============================================================
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No auth");
 
@@ -355,7 +370,7 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-app.get('/api/config/prompt', proteger, async (req, res) => { res.json({ prompt: await getCfg('bot_prompt', DEFAULT_PROMPT) }); });
+app.get('/api/config/prompt', proteger, async (req, res) => { res.json({ prompt: await getCfg('bot_prompt', `ROL: Eres Valentina, asesora comercial.`) }); });
 app.post('/api/config/prompt', proteger, async (req, res) => { await setCfg('bot_prompt', req.body.prompt); res.json({ success: true }); });
 
 app.get('/api/chats-full', proteger, async (req, res) => {
@@ -564,4 +579,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.8 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v19.9 READY"));
