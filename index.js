@@ -1,11 +1,10 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v20.4 (SAFE BOOT)
+ * SERVER BACKEND - VALENTINA v20.5 (VARIABLE FIX)
  * Cliente: Importadora Casa Colombia (ICC)
- * Corrección Crítica:
- * - El servidor SOLO inicia cuando la Base de Datos está lista.
- * - Evita pantallas en blanco por "Base de datos no cargada".
- * - Mantiene: Media Proxy, Lógica Híbrida y Anti-Loop.
+ * Corrección:
+ * - Se redefinió 'DEFAULT_PROMPT' que causaba el crash.
+ * - El servidor arranca correctamente sin ReferenceError.
  * ============================================================
  */
 
@@ -38,7 +37,10 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v20-4"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v20-5"; 
+
+// --- PERSONALIDAD BASE (Aquí estaba el error, ya corregido) ---
+const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
 
 // --- MIDDLEWARES ---
 app.use(express.json({ limit: '100mb' }));
@@ -97,13 +99,13 @@ async function startServer() {
 
         // 4. Cargar Configuración Inicial
         const currentPrompt = await getCfg('bot_prompt');
-        if(!currentPrompt) await setCfg('bot_prompt', `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`);
+        if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
 
         await refreshKnowledge();
 
         // 5. ENCENDER SERVIDOR (Solo si la DB cargó bien)
         app.listen(process.env.PORT || 10000, () => {
-            console.log("🔥 SERVER v20.4 READY & DB CONNECTED");
+            console.log("🔥 SERVER v20.5 READY & DB CONNECTED");
         });
 
     } catch (error) {
@@ -176,7 +178,6 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
 
 app.get('/api/media-proxy/:id', async (req, res) => {
     if (!req.session.isLogged) return res.status(401).send("No auth");
-    
     try {
         const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
@@ -254,7 +255,7 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     const websiteData = await getCfg('website_data', "Consultar Web."); 
     const stock = buscarEnCatalogo(aiMessage); 
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
-    const dynamicPrompt = await getCfg('bot_prompt', `ROL: Eres Valentina.`);
+    const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
 
     // --- CONTEXTO CRM ---
     const leadPrevio = await db.get("SELECT nombre, interes, ciudad FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [sessionId]);
@@ -614,3 +615,5 @@ app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login'
 app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
+
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v20.5 READY"));
