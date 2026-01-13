@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICC | Valentina Suite v18.2 (Full Expanded)</title>
+    <title>ICC | Valentina Suite v21.0 (Audio & Copy Fix)</title>
     <link rel="icon" href="https://github.com/juanballen2/CHATBOT/blob/main/images/favicon.jpg?raw=true">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -25,7 +25,6 @@
             box-sizing: border-box; 
             outline: none; 
             -webkit-tap-highlight-color: transparent; 
-            user-select: none; 
         }
 
         body { 
@@ -38,9 +37,10 @@
             overflow: hidden; 
         }
 
-        input, textarea { 
-            user-select: text; 
-        }
+        /* --- FIX DE COPIAR Y PEGAR --- */
+        /* Permitir selección de texto en general, excepto en botones/iconos */
+        body, .nav-item, .btn, .btn-icon, .avatar { user-select: none; }
+        .bubble, input, textarea, #prof-phone, #prof-name, .chat-item, table { user-select: text !important; }
 
         /* --- SIDEBAR --- */
         .sidebar { 
@@ -292,7 +292,7 @@
             flex-direction: column; 
             gap: 6px; 
             z-index: 5; 
-            scroll-behavior: auto; /* IMPORTANTE: AUTO */
+            scroll-behavior: auto; 
         }
         
         /* BURBUJAS Y FECHAS */
@@ -305,7 +305,6 @@
             position: relative; 
             box-shadow: 0 1px 1px rgba(0,0,0,0.1); 
             word-wrap: break-word; 
-            user-select: text; 
             display: flex; 
             flex-direction: column; 
         }
@@ -336,9 +335,11 @@
             box-shadow: 0 1px 2px rgba(0,0,0,0.05); 
         }
 
-        /* Estilos de Audio */
-        audio { height: 32px; max-width: 220px; border-radius: 20px; }
-        .audio-wrapper { display: flex; align-items: center; gap: 5px; background: rgba(0,0,0,0.03); padding: 4px; border-radius: 25px; }
+        /* --- AUDIO FIX --- */
+        audio { height: 40px; max-width: 250px; border-radius: 20px; outline: none; }
+        /* Safari Fix */
+        audio::-webkit-media-controls-panel { background-color: #f1f5f9; }
+        .audio-wrapper { display: flex; align-items: center; gap: 5px; background: #f1f5f9; padding: 5px; border-radius: 25px; }
 
         .input-area { 
             background: var(--surface); 
@@ -565,7 +566,7 @@
                         <div class="pp-avatar-lg" id="prof-avatar" onclick="document.getElementById('photo-input').click()"></div>
                         <input type="file" id="photo-input" hidden accept="image/*" onchange="uploadPhoto(this)">
                         <h3 id="prof-name">...</h3>
-                        <div id="prof-phone">...</div>
+                        <div id="prof-phone" title="Click para copiar" onclick="navigator.clipboard.writeText(this.innerText); alert('Teléfono copiado');">...</div>
                         <div style="margin-top:15px;"><button id="prof-bot-btn" class="btn" style="width:100%;" onclick="toggleBot()">BOT STATUS</button></div>
                     </div>
                     <div class="pp-body">
@@ -753,7 +754,6 @@
                 const res = await fetch(`/api/chats-full?view=${view}`);
                 const data = await res.json();
                 
-                // FILTRO DE NO LEÍDOS (NUEVA LÓGICA DE FILTRADO)
                 let finalData = data;
                 if(view === 'unread') {
                     finalData = data.filter(c => c.unreadCount > 0);
@@ -767,7 +767,6 @@
                 }
                 if(selectedId) {
                     const current = chats.find(c => c.id === selectedId);
-                    // RESETEAR CONTADOR AL ABRIR CHAT
                     if(current && current.unreadCount > 0) {
                         await fetch(`/api/chat-history/${selectedId}`);
                     }
@@ -801,7 +800,6 @@
             document.getElementById('tag-filter').value = f;
 
             list.innerHTML = filtered.map(c => {
-                // GENERAR BOLITAS DE COLORES (NUEVO)
                 const tagsHtml = (c.labels || []).map(l => `<span class="tag-dot" style="background:${getTagColor(l)}" title="${l}"></span>`).join('');
                 
                 return `
@@ -860,7 +858,6 @@
             let lastDate = '';
 
             msgs.forEach(m => {
-                // LOGICA DE FECHAS (NUEVO)
                 const dateObj = new Date(m.time);
                 const dateStr = dateObj.toLocaleDateString();
                 const todayStr = new Date().toLocaleDateString();
@@ -883,10 +880,10 @@
                     txt = `<img src="/api/media-proxy/${id}" style="max-width:250px; border-radius:10px; cursor:pointer;" onclick="window.open(this.src)">`;
                 } else if(txt.includes('[MEDIA:AUDIO:')) {
                     const id = txt.match(/AUDIO:(.*?)\]/)[1];
-                    txt = `<div class="audio-wrapper"><audio src="/api/media-proxy/${id}" controls></audio></div>`;
+                    // FIX: AUDIO PRELOAD="METADATA" PARA QUE CARGUE MEJOR
+                    txt = `<div class="audio-wrapper"><audio src="/api/media-proxy/${id}" controls preload="metadata"></audio></div>`;
                 } else if(txt.includes('[MEDIA:DOC:')) {
                      const id = txt.match(/DOC:(.*?)\]/)[1];
-                     // FIX: AHORA EL DOCUMENTO ES CLICKEABLE
                      txt = `<div onclick="window.open('/api/media-proxy/${id}')" style="cursor:pointer; background:#eee; padding:10px; border-radius:5px; display:flex; align-items:center; gap:10px;"><i class="fas fa-file-pdf" style="color:red; font-size:20px;"></i> <span>Documento Adjunto</span></div>`;
                 }
                 
@@ -897,14 +894,11 @@
                          </div>`;
             });
 
-            // SCROLL INTELIGENTE (NUEVO: Solo baja si estás al final)
-            // Se redujo el umbral a 50px y se eliminó la condición || msgs.length < 20
             const isAtBottom = (box.scrollHeight - box.scrollTop - box.clientHeight) <= 50;
             const isFirstLoad = box.innerHTML.includes('Cargando') || box.innerHTML === '';
 
             if(box.innerHTML !== html) { 
                 box.innerHTML = html; 
-                // Solo bajar si es la primera carga o el usuario ya estaba abajo
                 if(isAtBottom || isFirstLoad) {
                     box.scrollTop = box.scrollHeight; 
                 }
@@ -916,14 +910,13 @@
             document.getElementById('msg-input').value = '';
             document.getElementById('quick-replies').style.display = 'none';
             const box = document.getElementById('msgs-box');
-            // Render optimista
             box.innerHTML += `<div class="bubble b-manual">${m}<div class="msg-time">...</div></div>`;
             box.scrollTop = box.scrollHeight;
             await fetch('/api/chat/send', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, message:m})});
             syncLoop(true);
         }
 
-        // FUNCIONES DE SOPORTE (TODAS ESTÁN AQUÍ)
+        // FUNCIONES DE SOPORTE
         function showContextMenu(e, id) { 
             e.preventDefault(); 
             contextMenuChatId = id; 
