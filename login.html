@@ -4,39 +4,241 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ICC Acceso Seguro</title>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { margin: 0; font-family: 'Montserrat', sans-serif; background: #f0f2f5; height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .box { background: #fff; padding: 40px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 350px; text-align: center; border-top: 5px solid #FF8C00; }
-        input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; background: #202c33; color: #fff; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
-        button:hover { background: #FF8C00; }
+        :root {
+            --primary: #E9511D;       /* Tu naranja corporativo */
+            --primary-dark: #c03d12;
+            --dark-bg: #1a1b1f;       /* Fondo oscuro profundo */
+            --card-bg: #ffffff;
+            --text-gray: #6d707a;
+            --border: #e1e4e8;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Montserrat', sans-serif;
+            /* Fondo moderno con degradado sutil */
+            background: linear-gradient(135deg, #131417 0%, #2c3e50 100%);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* Efecto de partículas o luz de fondo (opcional visual) */
+        body::before {
+            content: '';
+            position: absolute;
+            width: 120%;
+            height: 120%;
+            background: radial-gradient(circle at center, rgba(233, 81, 29, 0.1) 0%, transparent 60%);
+            z-index: -1;
+        }
+
+        .box {
+            background: var(--card-bg);
+            padding: 50px 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3); /* Sombra profunda */
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            border-top: 6px solid var(--primary);
+            animation: slideUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h2 {
+            color: #2c3e50;
+            margin: 0 0 5px 0;
+            font-weight: 700;
+            font-size: 24px;
+            letter-spacing: -0.5px;
+        }
+
+        .subtitle {
+            color: var(--text-gray);
+            font-size: 13px;
+            margin-bottom: 35px;
+            font-weight: 500;
+        }
+
+        /* Contenedor de inputs para los iconos */
+        .input-group {
+            position: relative;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .input-group i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #a0a0a0;
+            font-size: 14px;
+            transition: 0.3s;
+        }
+
+        input {
+            width: 100%;
+            padding: 14px 14px 14px 45px; /* Padding extra a la izq para el icono */
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            outline: none;
+            background: #f9f9f9;
+        }
+
+        /* Efecto Focus */
+        input:focus {
+            border-color: var(--primary);
+            background: #fff;
+            box-shadow: 0 0 0 4px rgba(233, 81, 29, 0.1);
+        }
+
+        input:focus + i {
+            color: var(--primary);
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: #fff;
+            border: none;
+            border-radius: 50px; /* Botón redondeado moderno */
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 14px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(233, 81, 29, 0.3);
+            margin-top: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(233, 81, 29, 0.4);
+            filter: brightness(1.1);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #err {
+            background: #ffebeb;
+            color: #d63031;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-top: 20px;
+            display: none;
+            border: 1px solid #fab1a0;
+            font-weight: 600;
+        }
+
+        /* Animación de error (Temblor) */
+        .shake {
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+            100% { transform: translateX(0); }
+        }
     </style>
 </head>
 <body>
-    <div class="box">
-        <h2 style="color:#202c33; margin-bottom:5px;">ICC System</h2>
-        <p style="color:#777; font-size:12px; margin-bottom:20px;">Acceso exclusivo administrativo</p>
+
+    <div class="box" id="loginBox">
+        <div style="margin-bottom: 20px;">
+            <i class="fa-solid fa-layer-group fa-3x" style="color: var(--primary);"></i>
+        </div>
+
+        <h2>ICC System</h2>
+        <p class="subtitle">Ingresa tus credenciales administrativas</p>
+        
         <form onsubmit="login(event)">
-            <input type="text" id="u" placeholder="Usuario" required>
-            <input type="password" id="p" placeholder="Contraseña" required>
-            <button id="btn">INGRESAR</button>
-            <p id="err" style="color:red; font-size:12px; display:none; margin-top:10px;">Acceso Denegado</p>
+            <div class="input-group">
+                <input type="text" id="u" placeholder="Usuario" required autocomplete="off">
+                <i class="fa-solid fa-user"></i>
+            </div>
+            
+            <div class="input-group">
+                <input type="password" id="p" placeholder="Contraseña" required>
+                <i class="fa-solid fa-lock"></i>
+            </div>
+
+            <button id="btn">Ingresar al Sistema</button>
+            
+            <div id="err">
+                <i class="fa-solid fa-circle-exclamation"></i> Acceso Denegado
+            </div>
         </form>
     </div>
+
     <script>
         async function login(e) {
             e.preventDefault();
+            
             const btn = document.getElementById('btn');
+            const errorMsg = document.getElementById('err');
+            const box = document.getElementById('loginBox');
+            
+            // Reset estados
+            errorMsg.style.display = 'none';
+            box.classList.remove('shake');
+            
+            // Estado Cargando
+            const originalText = btn.innerText;
             btn.innerText = "Verificando...";
-            const res = await fetch('/auth', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ user: document.getElementById('u').value, pass: document.getElementById('p').value })
-            });
-            const d = await res.json();
-            if(d.success) window.location.href = '/';
-            else { document.getElementById('err').style.display = 'block'; btn.innerText = "INGRESAR"; }
+            btn.disabled = true;
+            btn.style.opacity = "0.7";
+
+            try {
+                const res = await fetch('/auth', {
+                    method:'POST', 
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({ user: document.getElementById('u').value, pass: document.getElementById('p').value })
+                });
+                
+                const d = await res.json();
+                
+                if(d.success) {
+                    btn.innerText = "¡Éxito!";
+                    btn.style.background = "#27ae60"; // Verde éxito
+                    setTimeout(() => { window.location.href = '/'; }, 500);
+                } else { 
+                    throw new Error('Login failed');
+                }
+            } catch (error) {
+                // Manejo de Error Visual
+                errorMsg.style.display = 'block';
+                box.classList.add('shake'); // Activa la animación de temblor
+                btn.innerText = originalText;
+                btn.disabled = false;
+                btn.style.opacity = "1";
+            }
         }
     </script>
 </body>
