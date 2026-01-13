@@ -1,460 +1,327 @@
 /* =========================================
-   1. VARIABLES, FUENTES Y GENERAL
+   1. VARIABLES Y RESET
    ========================================= */
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-    --naranja: #E9511D;
-    --naranja-dark: #c03d12; /* Para efectos hover */
-    --naranja-light: #FF7043;
-    --naranja-glow: rgba(233, 81, 29, 0.3);
-    
-    --dark-bg: #22242a;
-    --sidebar-hover: #2c2f36;
-    
-    --light-bg: #f0f2f5; /* Un poco más gris para contraste */
+    --primary: #E9511D;
+    --primary-dark: #c03d12;
+    --bg-dark: #1e1e1e;
+    --bg-light: #f3f4f6;
     --white: #ffffff;
-    --text-main: #2b2d31;
-    --text-secondary: #6d707a;
-    
-    --border: #e1e4e8;
-    --success: #27ae60;
-    --whatsapp: #25d366;
-    
-    --shadow-card: 0 10px 30px -5px rgba(0, 0, 0, 0.05);
-    --shadow-hover: 0 20px 40px -5px rgba(0, 0, 0, 0.1);
+    --border: #e5e7eb;
+    --text-main: #1f2937;
+    --text-muted: #6b7280;
+    --success: #10b981;
+    --danger: #ef4444;
+    --sidebar-width: 60px; /* Sidebar colapsado estilo icono */
 }
 
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    /* Suavizado de fuentes para Mac/Windows */
-    -webkit-font-smoothing: antialiased; 
-    -moz-osx-font-smoothing: grayscale;
-}
-
-/* Scrollbar Personalizado (Webkit) */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-::-webkit-scrollbar-track {
-    background: transparent;
-}
-::-webkit-scrollbar-thumb {
-    background: #ccc;
-    border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-    background: var(--naranja);
-}
+* { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
 
 body {
-    font-family: 'Montserrat', sans-serif;
-    height: 100vh;
-    background: var(--light-bg);
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-light);
     color: var(--text-main);
+    height: 100vh;
     display: flex;
     overflow: hidden;
 }
 
-/* Selección de texto con tu color de marca */
-::selection {
-    background: var(--naranja);
-    color: white;
-}
+/* Scrollbar moderno */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
 
 /* =========================================
-   2. SIDEBAR (Navegación Izquierda)
+   2. SIDEBAR (Barra Lateral Iconos)
    ========================================= */
 .sidebar {
-    width: 270px;
-    background: var(--dark-bg);
-    color: #fff;
+    width: var(--sidebar-width);
+    background: var(--bg-dark);
     display: flex;
     flex-direction: column;
-    flex-shrink: 0;
-    transition: width 0.3s ease;
-    z-index: 10;
-    box-shadow: 5px 0 15px rgba(0,0,0,0.1);
-}
-
-.logo-box {
-    padding: 30px;
-    background: white;
-    margin: 20px;
-    border-radius: 16px;
-    display: flex;
     align-items: center;
-    justify-content: center;
-    min-height: 90px;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-    transition: transform 0.3s ease;
+    padding-top: 20px;
+    z-index: 20;
+    box-shadow: 4px 0 10px rgba(0,0,0,0.1);
+    flex-shrink: 0;
 }
 
-.logo-box:hover {
-    transform: translateY(-2px);
-}
-
-.logo-box img {
-    max-width: 100%;
-    max-height: 60px;
-    object-fit: contain;
-}
-
-.nav-label {
-    font-size: 11px;
-    text-transform: uppercase;
-    color: #6d707a;
-    padding: 20px 30px 10px;
-    letter-spacing: 1.2px;
-    font-weight: 700;
+.logo-area {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 30px;
+    cursor: pointer;
+    background: white;
+    border-radius: 8px;
+    padding: 2px;
 }
 
 .nav-item {
-    padding: 16px 30px;
-    cursor: pointer;
-    color: #a2a5b9;
-    transition: all 0.2s ease;
-    font-weight: 500;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
-    gap: 14px;
-    border-left: 4px solid transparent;
-    position: relative;
-    overflow: hidden;
-}
-
-.nav-item i {
+    justify-content: center;
+    color: #9ca3af;
+    cursor: pointer;
+    margin-bottom: 15px;
+    transition: all 0.2s ease;
     font-size: 18px;
-    width: 24px;
-    text-align: center;
 }
 
 .nav-item:hover {
-    background: var(--sidebar-hover);
+    background: rgba(255,255,255,0.1);
     color: white;
-    padding-left: 35px; /* Pequeño desplazamiento a la derecha */
 }
 
 .nav-item.active {
-    background: linear-gradient(90deg, rgba(233, 81, 29, 0.1) 0%, transparent 100%);
-    color: var(--naranja);
-    border-left: 4px solid var(--naranja);
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 4px 12px rgba(233, 81, 29, 0.4);
 }
 
 /* =========================================
-   3. CONTENIDO PRINCIPAL
+   3. LAYOUT PRINCIPAL
    ========================================= */
 .main-content {
     flex: 1;
+    position: relative;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    position: relative;
 }
 
-.view { 
-    display: none; 
-    padding: 40px; 
-    flex: 1;
+.view {
+    display: none;
+    height: 100%;
+    flex-direction: column;
     overflow-y: auto;
-    /* Scroll suave dentro de las vistas */
-    scroll-behavior: smooth;
 }
 
-.view.active { 
-    display: flex; 
-    flex-direction: column; 
-    animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes slideUpFade {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-h2 {
-    margin-bottom: 30px;
-    font-size: 28px;
-    font-weight: 700;
+.view.active {
     display: flex;
-    align-items: center;
-    gap: 15px;
-    color: var(--dark-bg);
-    letter-spacing: -0.5px;
+    animation: fadeIn 0.3s ease;
 }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.page-container {
+    padding: 30px;
+}
+
+h1 { font-size: 24px; font-weight: 700; margin-bottom: 20px; color: #111827; }
+h3 { font-size: 16px; font-weight: 600; margin-bottom: 15px; color: #374151; }
 
 /* =========================================
-   4. TARJETAS (CARDS)
+   4. COMPONENTES: CARDS Y TABLAS
    ========================================= */
 .card {
     background: var(--white);
-    padding: 30px;
-    border-radius: 16px;
-    box-shadow: var(--shadow-card);
-    margin-bottom: 30px;
-    border-top: 4px solid var(--naranja);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--border);
+    height: 100%;
 }
 
-.card:hover {
-    transform: translateY(-5px);
-    box-shadow: var(--shadow-hover);
-}
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; padding: 12px; border-bottom: 2px solid var(--border); color: var(--text-muted); font-weight: 600; }
+td { padding: 12px; border-bottom: 1px solid var(--border); color: #333; }
+tr:hover td { background: #f9fafb; }
 
-.card h3 {
-    margin-top: 0;
-    font-size: 18px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: var(--naranja);
-    margin-bottom: 20px;
-    font-weight: 600;
-}
+/* Dashboard KPI Numbers */
+.card h1 { font-size: 36px; color: var(--primary); margin: 0; }
 
 /* =========================================
-   5. CHAT (Estilo WhatsApp Mejorado)
+   5. CHAT SYSTEM (Layout Específico)
    ========================================= */
-.chat-container {
-    display: grid;
-    grid-template-columns: 300px 1fr;
-    height: 650px;
-    background: white;
-    border-radius: 20px;
+.chat-layout {
+    display: flex;
+    height: 100%;
     overflow: hidden;
-    box-shadow: 0 15px 40px rgba(0,0,0,0.08);
-    border: 1px solid var(--border);
+    background: white;
 }
 
-.chat-list {
+/* Panel Izquierdo (Lista) */
+.chat-list-panel {
+    width: 320px;
     border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
     background: #fff;
-    overflow-y: auto;
+    flex-shrink: 0;
 }
 
-.chat-user {
-    padding: 20px;
+.cl-header { padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f0f0; }
+.search-row { padding: 10px 15px; border-bottom: 1px solid #f0f0f0; display: flex; gap: 5px; }
+
+.search-input {
+    flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: #f9fafb; font-size: 13px;
+}
+
+.cl-items { flex: 1; overflow-y: auto; }
+
+.chat-item {
+    padding: 12px 15px;
     border-bottom: 1px solid #f0f0f0;
     cursor: pointer;
     display: flex;
-    align-items: center;
-    gap: 15px;
+    gap: 12px;
+    position: relative;
     transition: background 0.2s;
 }
+.chat-item:hover { background: #f9fafb; }
+.chat-item.active { background: #fff7ed; border-left: 3px solid var(--primary); }
 
-.chat-user:hover { background: #fafafa; }
-.chat-user.active { background: #fff3e0; border-left: 4px solid var(--naranja); }
+.avatar {
+    width: 40px; height: 40px; border-radius: 50%; background-color: #e5e7eb; 
+    background-size: cover; background-position: center; display: flex; align-items: center; justify-content: center; color: #9ca3af; flex-shrink: 0;
+}
 
-.chat-main {
-    background-color: #efe7dd; /* Fondo base */
-    /* Patrón sutil para dar textura estilo WA */
-    background-image: radial-gradient(#d4c7b8 1px, transparent 1px);
-    background-size: 20px 20px;
+.unread-badge {
+    background: var(--primary); color: white; font-size: 10px; font-weight: bold; 
+    padding: 2px 6px; border-radius: 10px; position: absolute; right: 15px; top: 15px;
+}
+.pin-indicator { color: #9ca3af; font-size: 10px; position: absolute; right: 15px; bottom: 12px; transform: rotate(45deg); }
+
+/* Panel Derecho (Área de Chat) */
+.chat-area {
+    flex: 1;
     display: flex;
     flex-direction: column;
     position: relative;
+    background: #efe7dd;
 }
 
-#t-msgs {
-    flex: 1;
-    padding: 30px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
+.chat-bg {
+    position: absolute; top:0; left:0; width:100%; height:100%;
+    background-image: radial-gradient(#d4c7b8 1px, transparent 1px);
+    background-size: 20px 20px; opacity: 0.6; z-index: 0;
+}
+
+#chat-placeholder {
+    height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1; color: #9ca3af;
+}
+
+#chat-interface {
+    display: none; flex-direction: column; height: 100%; z-index: 1;
+}
+
+.ca-header {
+    background: #f0f2f5; padding: 10px 20px; border-bottom: 1px solid #d1d7db;
+    display: flex; justify-content: space-between; align-items: center;
+}
+
+.messages-box {
+    flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;
 }
 
 /* Burbujas */
 .bubble {
-    padding: 12px 20px;
-    font-size: 14px;
-    line-height: 1.6;
-    border-radius: 12px;
-    max-width: 70%;
-    position: relative;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    padding: 10px 15px; border-radius: 8px; font-size: 14px; max-width: 70%; line-height: 1.5; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
+.b-bot { align-self: flex-start; background: #fff; border-radius: 0 12px 12px 12px; border-left: 3px solid #10b981; }
+.b-manual { align-self: flex-end; background: #d9fdd3; border-radius: 12px 0 12px 12px; } /* Color WhatsApp */
+.b-user { align-self: flex-start; background: #fff; border-radius: 0 12px 12px 12px; }
 
-@keyframes popIn {
-    from { opacity: 0; transform: scale(0.9); }
-    to { opacity: 1; transform: scale(1); }
-}
+.msg-time { font-size: 10px; color: #999; text-align: right; margin-top: 4px; }
+.date-divider { align-self: center; background: rgba(255,255,255,0.8); padding: 4px 12px; border-radius: 12px; font-size: 11px; color: #555; margin: 10px 0; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
 
-/* Estilo Bot */
-.bot-row {
-    align-self: flex-start;
-    background: white;
-    color: var(--text-main);
-    border-radius: 0 15px 15px 15px; /* Cola a la izquierda */
+/* Input Area */
+.input-area {
+    background: #f0f2f5; padding: 10px 15px; display: flex; align-items: center; gap: 10px;
 }
-.bot-row::before {
-    content: "";
-    position: absolute;
-    top: 0; left: -10px;
-    width: 10px; height: 20px;
-    background: linear-gradient(to bottom right, white 50%, transparent 50%);
+.msg-field {
+    flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #fff; outline: none; font-size: 14px;
 }
+.btn-icon {
+    background: none; border: none; font-size: 18px; color: #54656f; cursor: pointer; padding: 8px; border-radius: 50%;
+}
+.btn-icon:hover { background: rgba(0,0,0,0.05); }
+.btn-send { color: var(--primary); }
 
-/* Estilo Usuario */
-.user-row {
-    align-self: flex-end;
-    background: var(--naranja);
-    color: white;
-    border-radius: 15px 0 15px 15px; /* Cola a la derecha */
+/* Panel Perfil Lateral (Sliding) */
+.profile-panel {
+    width: 300px; background: white; border-left: 1px solid var(--border);
+    position: absolute; right: 0; top: 0; bottom: 0; z-index: 10;
+    transform: translateX(100%); transition: transform 0.3s ease;
+    display: flex; flex-direction: column; box-shadow: -5px 0 15px rgba(0,0,0,0.05);
 }
-.user-row::before {
-    content: "";
-    position: absolute;
-    top: 0; right: -10px;
-    width: 10px; height: 20px;
-    background: linear-gradient(to bottom left, var(--naranja) 50%, transparent 50%);
-}
+.profile-panel.open { transform: translateX(0); }
+
+.pp-header { padding: 30px; background: #f9fafb; text-align: center; border-bottom: 1px solid var(--border); }
+.pp-avatar-lg { width: 80px; height: 80px; border-radius: 50%; background: #ccc; margin: 0 auto 15px; background-size: cover; cursor: pointer; }
+.pp-body { padding: 20px; overflow-y: auto; }
 
 /* =========================================
-   6. INPUTS Y BOTONES
+   6. UI ELEMENTS GENÉRICOS
    ========================================= */
-input[type="text"], 
-input[type="file"],
-textarea,
-select {
-    width: 100%;
-    padding: 16px;
-    border-radius: 10px;
-    border: 2px solid #e1e4e8; /* Borde más suave por defecto */
-    outline: none;
-    font-family: 'Montserrat', sans-serif;
-    font-size: 14px;
-    transition: all 0.3s ease;
-    background: #fdfdfd;
-}
-
-input:focus, textarea:focus, select:focus {
-    border-color: var(--naranja);
-    background: white;
-    box-shadow: 0 0 0 4px var(--naranja-glow);
-}
-
-/* Estilos de botones premium */
 .btn {
-    background: var(--naranja);
-    color: white;
-    border: none;
-    padding: 14px 30px;
-    font-size: 13px;
-    font-weight: 700;
-    border-radius: 50px;
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    box-shadow: 0 4px 15px var(--naranja-glow);
-    position: relative;
-    overflow: hidden;
+    background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: 0.2s;
 }
+.btn:hover { background: var(--primary-dark); }
 
-.btn:hover {
-    background: var(--naranja-dark);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(233, 81, 29, 0.4);
-}
+.btn-outline { background: transparent; border: 1px solid #ccc; color: #555; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+.btn-outline:hover { background: #f0f0f0; }
 
-.btn:active {
-    transform: translateY(1px); /* Efecto de click real */
-    box-shadow: 0 2px 10px rgba(233, 81, 29, 0.3);
+.form-control {
+    width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 10px; font-family: inherit; font-size: 14px;
 }
+.form-control:focus { border-color: var(--primary); ring: 2px solid rgba(233, 81, 29, 0.2); }
 
-/* Botón secundario (outline) */
-.btn-outline {
-    background: transparent;
-    border: 2px solid var(--naranja);
-    color: var(--naranja);
-    box-shadow: none;
+.tag-pill {
+    display: inline-block; padding: 2px 8px; border-radius: 12px; color: white; font-size: 10px; font-weight: 600; margin-right: 4px;
 }
-.btn-outline:hover {
-    background: var(--naranja);
-    color: white;
+.tag-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 2px;
 }
 
 /* =========================================
-   7. TABLAS Y AUDITORÍA
+   7. MODALS & CONTEXT MENU
    ========================================= */
-.table-container {
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.03);
-    border: 1px solid var(--border);
+.modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5); z-index: 100; display: none;
+    align-items: center; justify-content: center; backdrop-filter: blur(2px);
 }
 
-#knowledge-table {
-    width: 100%;
-    border-collapse: collapse;
-    background: white;
+.modal {
+    background: white; width: 90%; max-width: 400px; padding: 25px;
+    border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-#knowledge-table th {
-    background: #f8f9fa;
-    padding: 18px;
-    text-align: left;
-    color: #444;
-    font-weight: 600;
-    font-size: 13px;
-    text-transform: uppercase;
-    border-bottom: 2px solid var(--border);
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+#context-menu {
+    position: absolute; display: none; background: white; border: 1px solid #eee;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 1000; border-radius: 6px; width: 180px; padding: 5px 0;
 }
-
-#knowledge-table td {
-    padding: 18px;
-    border-bottom: 1px solid #eee;
-    font-size: 14px;
-    color: #555;
-    transition: background 0.2s;
+.cm-item {
+    padding: 10px 15px; cursor: pointer; font-size: 13px; color: #444; display: flex; align-items: center; gap: 10px;
 }
+.cm-item:hover { background: #f3f4f6; }
+.cm-item.delete:hover { background: #fee2e2; color: #ef4444; }
 
-#knowledge-table tr:last-child td { border-bottom: none; }
-#knowledge-table tr:hover td { background: #fafafa; }
-
-.badge-active {
-    background: #e6f7ed;
-    color: var(--success);
-    padding: 6px 14px;
-    border-radius: 30px;
-    font-weight: 700;
-    font-size: 11px;
-    display: inline-block;
+/* Quick Replies Popup */
+#quick-replies {
+    position: absolute; bottom: 70px; left: 20px; background: white;
+    border: 1px solid #ccc; border-radius: 8px; width: 300px; max-height: 200px; overflow-y: auto;
+    display: none; box-shadow: 0 -5px 20px rgba(0,0,0,0.1);
 }
+.qr-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px; }
+.qr-item:hover { background: #f9fafb; }
 
-/* =========================================
-   8. LABORATORIO / TERMINAL
-   ========================================= */
-.terminal {
-    background: #101114;
-    color: #0f0;
-    font-family: 'Courier New', monospace; /* O 'Fira Code' si la tienes */
-    padding: 25px;
-    border-radius: 12px;
-    height: 400px;
-    overflow-y: auto;
-    border: 1px solid #333;
-    line-height: 1.6;
-    font-size: 14px;
-    box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
-    position: relative;
-}
-
-/* Efecto de resplandor para texto terminal */
-.terminal-line {
-    text-shadow: 0 0 5px rgba(0, 255, 0, 0.4); 
-    margin-bottom: 5px;
-}
-
-.terminal::-webkit-scrollbar-thumb {
-    background: #333;
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .sidebar { position: fixed; bottom: 0; width: 100%; height: 60px; flex-direction: row; padding: 0; justify-content: space-around; top: auto; }
+    .logo-area { display: none; }
+    .main-content { margin-bottom: 60px; }
+    .chat-list-panel { width: 100%; }
+    .chat-area { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform: translateX(100%); transition: transform 0.3s; z-index: 30; }
+    .chat-area.show { transform: translateX(0); }
 }
