@@ -1,11 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v21.1 (OPTIMIZED CORE)
+ * SERVER BACKEND - VALENTINA v21.2 (STABLE & OPTIMIZED)
  * Cliente: Importadora Casa Colombia (ICC)
- * Mejoras:
- * 1. CÓDIGO REDUCIDO: Eliminación de redundancia y limpieza visual.
- * 2. AUDIO STREAMING: Protegido (Soporte HTTP 206 para iOS/Chrome).
- * 3. TEXT CLEANER: Optimizado con Regex unificado.
+ * Correcciones:
+ * 1. FIX: Se redefinió 'upload' (Multer) que causaba el crash.
+ * 2. AUDIO STREAMING: Activo y protegido (Range Requests).
+ * 3. TEXT CLEANER: Activo.
  * ============================================================
  */
 
@@ -13,7 +13,7 @@ const express = require('express');
 const session = require('express-session');
 const fs = require('fs');
 const path = require('path');
-const multer = require('multer');
+const multer = require('multer'); // Importante
 const { parse } = require('csv-parse/sync');
 const axios = require('axios');
 const cors = require('cors');
@@ -28,6 +28,12 @@ app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors());
 
+// --- UPLOAD CONFIG (Aquí estaba el error) ---
+const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 100 * 1024 * 1024 } 
+});
+
 const API_KEY = process.env.GEMINI_API_KEY; 
 const META_TOKEN = process.env.META_TOKEN;
 const PHONE_ID = process.env.PHONE_NUMBER_ID;
@@ -41,14 +47,14 @@ app.use(session({
     cookie: { secure: false, maxAge: 86400000 } 
 }));
 
-// Middleware Auth para API (excepto login/webhook)
+// Middleware Auth
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No auth");
 app.use((req, res, next) => {
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) return res.status(403).send('🚫');
     next();
 });
 
-// --- BASE DE DATOS OPTIMIZADA ---
+// --- BASE DE DATOS ---
 let db, globalKnowledge = [], serverInstance;
 
 (async () => {
@@ -57,7 +63,6 @@ let db, globalKnowledge = [], serverInstance;
         if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
         db = await open({ filename: path.join(DATA_DIR, 'database.db'), driver: sqlite3.Database });
 
-        // Tablas unificadas
         const tables = [
             `history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT)`,
             `leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT)`,
@@ -70,24 +75,21 @@ let db, globalKnowledge = [], serverInstance;
         ];
         for (const t of tables) await db.exec(`CREATE TABLE IF NOT EXISTS ${t}`);
 
-        // Migraciones silenciosas (Columnas nuevas)
         const migrations = ['photoUrl', 'archived', 'unreadCount'].map(c => `ALTER TABLE metadata ADD COLUMN ${c}`);
         migrations.push('ALTER TABLE config ADD COLUMN logoUrl TEXT');
         for (const m of migrations) { try { await db.exec(m); } catch(e){} }
 
-        // Config Inicial
         if(!(await getCfg('bot_prompt'))) await setCfg('bot_prompt', DEFAULT_PROMPT);
         await refreshKnowledge();
 
-        // Server Start con Graceful Shutdown
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER v21.1 OPTIMIZED READY`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER v21.2 READY`));
         serverInstance.on('error', (e) => { if(e.code === 'EADDRINUSE') setTimeout(() => { serverInstance.close(); serverInstance.listen(PORT); }, 1000); });
 
     } catch (e) { console.error("❌ DB ERROR:", e); }
 })();
 
-// --- HELPERS CORE ---
+// --- HELPERS ---
 async function refreshKnowledge() {
     try { globalKnowledge = (await db.all("SELECT * FROM inventory")).map(r => ({ searchable: r.searchable, data: JSON.parse(r.raw_data) })); } catch(e) { globalKnowledge = []; }
 }
@@ -118,14 +120,14 @@ async function enviarWhatsApp(to, content, type = "text") {
     } catch (e) { return false; }
 }
 
-// --- 🔥 PROXY MULTIMEDIA INTELIGENTE (AUDIO FIX) ---
+// --- PROXY MULTIMEDIA (RANGE SUPPORT) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     try {
         const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
         const { data: buffer } = await axios.get(urlData.url, { headers: { 'Authorization': `Bearer ${META_TOKEN}` }, responseType: 'arraybuffer' });
         
         let contentType = urlData.mime_type || 'application/octet-stream';
-        if (contentType.includes('audio') || contentType.includes('ogg')) contentType = 'audio/ogg'; // Fix Audio
+        if (contentType.includes('audio') || contentType.includes('ogg')) contentType = 'audio/ogg'; 
 
         const range = req.headers.range;
         if (range) {
@@ -143,9 +145,9 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     } catch (e) { res.status(500).send("Media Error"); }
 });
 
-// --- LÓGICA IA & CHAT ---
+// --- LÓGICA IA ---
 function limpiarRespuesta(txt) {
-    let clean = txt.replace(/```json([\s\S]*?)```|{([\s\S]*?)}|'''json([\s\S]*?)'''/gi, "").trim(); // Quitar JSON
+    let clean = txt.replace(/```json([\s\S]*?)```|{([\s\S]*?)}|'''json([\s\S]*?)'''/gi, "").trim(); 
     const basura = ["Okay, entiendo", "Entendido", "Analizando", "Respuesta:", "Pensamiento:", "Contexto:", "Instrucción:", "Soy una IA"];
     basura.forEach(b => clean = clean.replace(new RegExp(`^${b}.*`, "igm"), ""));
     return clean.replace(/[\r\n]+/g, "\n").trim();
@@ -158,27 +160,24 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const bot = await db.get("SELECT active FROM bot_status WHERE phone = ?", [phone]);
     if (bot && bot.active === 0) return null;
 
-    // Anti-Loop
     const last = await db.get("SELECT text FROM history WHERE phone = ? AND role = 'bot' ORDER BY id DESC LIMIT 1", [phone]);
     if (last && (last.text.includes("ejecutivo") || last.text.includes("contactará"))) {
         if (/gracias|ok|listo|vale|bueno|perfecto|👍|👋/i.test(aiMsg) && aiMsg.length < 15) return null;
     }
 
     if (isFile) {
-        const autoRep = `¡Recibido! 📁\n\nHe guardado tu archivo en el sistema para revisión.`;
+        const autoRep = `¡Recibido! 📁\n\nHe guardado tu archivo en el sistema.`;
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', autoRep, new Date().toISOString()]);
         return autoRep;
     }
 
     await sleep(5000); 
 
-    // Contexto
     const biz = await getCfg('biz_profile', {});
     const stock = globalKnowledge.filter(i => (i.searchable||"").toLowerCase().includes(aiMsg.toLowerCase().split(" ")[0])).slice(0,5); 
     const history = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [phone])).reverse();
     const lead = await db.get("SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
     
-    // Prompt Dinámico
     const isNewIntent = /quiero|busco|necesito|cotizar|precio|tienes|repuesto|filtro|motor/i.test(aiMsg);
     let ctx = lead && lead.nombre !== "Cliente" 
         ? (isNewIntent ? `CLIENTE RECURRENTE (${lead.nombre}) CON NUEVA SOLICITUD. IGNORA historial.` : `CLIENTE RECURRENTE (${lead.nombre}). Saluda y pregunta si retoma lo anterior (${lead.interes}).`)
@@ -196,7 +195,6 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: prompt }] }] });
         const raw = r.data.candidates[0].content.parts[0].text;
         
-        // Procesar JSON
         const match = raw.match(/```json([\s\S]*?)```|{([\s\S]*?)}/);
         if (match) {
             try {
@@ -211,14 +209,14 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', reply, new Date().toISOString()]);
         return reply;
 
-    } catch (e) { return "Dame un momento, estoy verificando... 🚜"; }
+    } catch (e) { return "Dame un momento... 🚜"; }
 }
 
 async function gestionarLead(phone, info, fbName, oldLead, newIntent) {
     let name = (info.nombre && info.nombre !== "null" && info.nombre !== "Cliente") ? info.nombre : fbName;
     if (oldLead) {
         let interest = (info.interes && info.interes !== "null") ? info.interes : oldLead.interes;
-        if (!newIntent && oldLead.interes) interest = oldLead.interes; // Mantener interés viejo si no hay nuevo
+        if (!newIntent && oldLead.interes) interest = oldLead.interes;
         
         await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=? WHERE id=?`, 
             [name, interest, info.etiqueta||oldLead.etiqueta, new Date().toLocaleString(), info.ciudad||oldLead.ciudad, info.correo||oldLead.correo, oldLead.id]);
@@ -230,7 +228,7 @@ async function gestionarLead(phone, info, fbName, oldLead, newIntent) {
     }
 }
 
-// --- RUTAS API COMPACTAS ---
+// --- RUTAS API ---
 app.post('/auth', (req, res) => {
     if (req.body.user === ADMIN_USER && req.body.pass === ADMIN_PASS) { req.session.isLogged = true; res.json({success:true}); } 
     else res.status(401).json({success:false});
@@ -276,7 +274,6 @@ app.get('/api/data/:type', proteger, async (req, res) => {
     else res.json([]);
 });
 
-// Config & Uploads
 app.post('/api/config/logo', proteger, upload.single('file'), async (req, res) => { await setCfg('logo_url', `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`); res.json({success:true}); });
 app.post('/api/config/biz/save', proteger, async (req, res) => { await setCfg('biz_profile', {name:req.body.name, hours:req.body.hours}); if(req.body.website_data) await setCfg('website_data', req.body.website_data); res.json({success:true}); });
 app.post('/api/tags/add', proteger, async (req, res) => { await db.run("INSERT INTO global_tags (name, color) VALUES (?, ?)", [req.body.name, req.body.color]); res.json({success:true}); });
