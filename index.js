@@ -1,10 +1,10 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v20.5 (VARIABLE FIX)
+ * SERVER BACKEND - VALENTINA v20.6 (STABLE BASE + AUDIO STREAM)
  * Cliente: Importadora Casa Colombia (ICC)
- * Corrección:
- * - Se redefinió 'DEFAULT_PROMPT' que causaba el crash.
- * - El servidor arranca correctamente sin ReferenceError.
+ * Base: v20.0 (Conexiones Estables).
+ * Fix Único: Los audios ahora usan 'stream' para escucharse completos.
+ * Las imágenes siguen usando 'buffer' para cargarse bien.
  * ============================================================
  */
 
@@ -37,23 +37,12 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v20-5"; 
-
-// --- PERSONALIDAD BASE (Aquí estaba el error, ya corregido) ---
-const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
+const SESSION_SECRET = "icc-valentina-secret-final-v20-6"; 
 
 // --- MIDDLEWARES ---
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors());
-
-app.use(session({
-    name: 'icc_session',
-    secret: SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } 
-}));
 
 app.use((req, res, next) => {
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
@@ -62,61 +51,40 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- BASE DE DATOS E INICIO SEGURO ---
+// --- BASE DE DATOS ---
 let db;
+(async () => {
+    const DATA_DIR = path.resolve(__dirname, 'data');
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-async function startServer() {
-    try {
-        const DATA_DIR = path.resolve(__dirname, 'data');
-        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    db = await open({
+        filename: path.join(DATA_DIR, 'database.db'),
+        driver: sqlite3.Database
+    });
 
-        // 1. Iniciar DB
-        db = await open({
-            filename: path.join(DATA_DIR, 'database.db'),
-            driver: sqlite3.Database
-        });
+    await db.exec(`
+        CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
+        CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT); 
+        CREATE TABLE IF NOT EXISTS metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0, photoUrl TEXT, archived INTEGER DEFAULT 0, unreadCount INTEGER DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS bot_status (phone TEXT PRIMARY KEY, active INTEGER DEFAULT 1);
+        CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, searchable TEXT UNIQUE, raw_data TEXT);
+        CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
+        CREATE TABLE IF NOT EXISTS shortcuts (id INTEGER PRIMARY KEY AUTOINCREMENT, keyword TEXT UNIQUE, text TEXT);
+        CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
+    `);
+    
+    try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
+    try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
+    try { await db.exec(`ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0`); } catch(e) {}
+    try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {}
+    
+    const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
+    for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
 
-        // 2. Crear Tablas
-        await db.exec(`
-            CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT);
-            CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT); 
-            CREATE TABLE IF NOT EXISTS metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0, photoUrl TEXT, archived INTEGER DEFAULT 0, unreadCount INTEGER DEFAULT 0);
-            CREATE TABLE IF NOT EXISTS bot_status (phone TEXT PRIMARY KEY, active INTEGER DEFAULT 1);
-            CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, searchable TEXT UNIQUE, raw_data TEXT);
-            CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
-            CREATE TABLE IF NOT EXISTS shortcuts (id INTEGER PRIMARY KEY AUTOINCREMENT, keyword TEXT UNIQUE, text TEXT);
-            CREATE TABLE IF NOT EXISTS global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT);
-        `);
-        
-        // 3. Migraciones
-        try { await db.exec(`ALTER TABLE metadata ADD COLUMN photoUrl TEXT`); } catch(e) {}
-        try { await db.exec(`ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0`); } catch(e) {}
-        try { await db.exec(`ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0`); } catch(e) {}
-        try { await db.exec(`ALTER TABLE config ADD COLUMN logoUrl TEXT`); } catch(e) {}
-        
-        const cols = ['nombre', 'interes', 'etiqueta', 'fecha', 'ciudad', 'correo'];
-        for (const c of cols) { try { await db.exec(`ALTER TABLE leads ADD COLUMN ${c} TEXT`); } catch (e) {} }
+    await refreshKnowledge();
+    console.log("🚀 SERVER v20.6 ONLINE (AUDIO STREAM FIX)");
+})();
 
-        // 4. Cargar Configuración Inicial
-        const currentPrompt = await getCfg('bot_prompt');
-        if(!currentPrompt) await setCfg('bot_prompt', DEFAULT_PROMPT);
-
-        await refreshKnowledge();
-
-        // 5. ENCENDER SERVIDOR (Solo si la DB cargó bien)
-        app.listen(process.env.PORT || 10000, () => {
-            console.log("🔥 SERVER v20.5 READY & DB CONNECTED");
-        });
-
-    } catch (error) {
-        console.error("❌ ERROR FATAL INICIANDO SERVIDOR:", error);
-    }
-}
-
-// Ejecutar Inicio
-startServer();
-
-// --- HELPERS DB ---
 let globalKnowledge = [];
 async function refreshKnowledge() {
     try {
@@ -134,6 +102,14 @@ async function getCfg(key, fallback=null) {
 async function setCfg(key, value) {
     await db.run("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", [key, JSON.stringify(value)]);
 }
+
+app.use(session({
+    name: 'icc_session',
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } 
+}));
 
 // --- UTILS ---
 async function uploadToMeta(buffer, mimeType, filename) {
@@ -176,35 +152,42 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     } catch (e) { return false; }
 }
 
+// === [PROXY DE MEDIOS INTELIGENTE (LA SOLUCIÓN)] ===
 app.get('/api/media-proxy/:id', async (req, res) => {
     if (!req.session.isLogged) return res.status(401).send("No auth");
+    
     try {
+        // 1. Pedir URL firmada a Facebook
         const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
         
-        const mediaUrl = urlRes.data.url;
+        const imageUrl = new URL(urlRes.data.url);
         const mimeType = urlRes.data.mime_type;
 
-        if (mimeType.startsWith('image')) {
-            const media = await axios.get(mediaUrl, { 
+        // 2. DECIDIR: ¿BUFFER O STREAM?
+        if (mimeType.includes('audio') || mimeType.includes('video')) {
+            // ==> SI ES AUDIO/VIDEO: Usamos STREAM (Flujo continuo) para que no se corte
+            const media = await axios.get(imageUrl.toString(), { 
                 headers: { 'Authorization': `Bearer ${META_TOKEN}` },
-                responseType: 'arraybuffer' 
+                responseType: 'stream' // Clave para audios largos
             });
-            res.setHeader('Content-Type', mimeType);
+            if (urlRes.data.mime_type) res.setHeader('Content-Type', urlRes.data.mime_type);
+            media.data.pipe(res);
+
+        } else {
+            // ==> SI ES IMAGEN: Usamos ARRAYBUFFER (Descarga completa) para evitar errores de carga
+            const media = await axios.get(imageUrl.toString(), { 
+                headers: { 'Authorization': `Bearer ${META_TOKEN}` },
+                responseType: 'arraybuffer' // Clave para imágenes estables
+            });
+            if (urlRes.data.mime_type) res.setHeader('Content-Type', urlRes.data.mime_type);
             res.setHeader('Content-Length', media.data.length);
             res.send(media.data);
-        } else {
-            const media = await axios.get(mediaUrl, { 
-                headers: { 'Authorization': `Bearer ${META_TOKEN}` },
-                responseType: 'stream' 
-            });
-            res.setHeader('Content-Type', mimeType);
-            media.data.pipe(res);
         }
 
     } catch (e) { 
-        console.error("Proxy Error:", e.message); 
+        console.error("Media Error:", e.message); 
         res.status(500).send("Error"); 
     }
 });
@@ -222,16 +205,17 @@ function buscarEnCatalogo(query) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// === [LÓGICA CONVERSACIONAL] ===
+// === [LÓGICA CONVERSACIONAL v20.0] ===
 async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName = "Cliente", isFile = false) {
     
+    // 1. Guardar mensaje
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'user', dbMessage, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [sessionId]);
 
     const status = await db.get("SELECT active FROM bot_status WHERE phone = ?", [sessionId]);
     if (status && status.active === 0) return null;
 
-    // --- ANTI-LOOP ---
+    // --- 🚨 ANTI-LOOP ---
     const lastBotMsg = await db.get("SELECT text FROM history WHERE phone = ? AND role = 'bot' ORDER BY id DESC LIMIT 1", [sessionId]);
     if (lastBotMsg && (lastBotMsg.text.includes("ejecutivo") || lastBotMsg.text.includes("contactará"))) {
         const msgClean = aiMessage.toLowerCase().trim();
@@ -241,9 +225,7 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
 
     // --- MODO ARCHIVOS ---
     if (isFile) {
-        const leadFile = await db.get("SELECT nombre FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [sessionId]);
-        const saludoFile = leadFile && leadFile.nombre && leadFile.nombre !== 'Cliente' ? `Hola ${leadFile.nombre}, ` : '';
-        const respuestaAutomatica = `${saludoFile}¡Recibido! 📁\n\nHe guardado tu archivo correctamente. Para que uno de nuestros asesores lo revise, por favor confírmame:\n1. Tu nombre completo.\n2. La ciudad desde donde nos escribes.`;
+        const respuestaAutomatica = `📁 Archivo recibido. Lo he adjuntado a tu perfil para que el ejecutivo lo revise.`;
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [sessionId, 'bot', respuestaAutomatica, new Date().toISOString()]);
         return respuestaAutomatica;
     }
@@ -255,7 +237,7 @@ async function procesarConValentina(dbMessage, aiMessage, sessionId, contactName
     const websiteData = await getCfg('website_data', "Consultar Web."); 
     const stock = buscarEnCatalogo(aiMessage); 
     const chatPrevio = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [sessionId])).reverse();
-    const dynamicPrompt = await getCfg('bot_prompt', DEFAULT_PROMPT);
+    const dynamicPrompt = await getCfg('bot_prompt', `ROL: Eres Valentina, asesora comercial.`);
 
     // --- CONTEXTO CRM ---
     const leadPrevio = await db.get("SELECT nombre, interes, ciudad FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [sessionId]);
@@ -406,12 +388,11 @@ app.post('/auth', (req, res) => {
     } else res.status(401).json({ success: false });
 });
 
-app.get('/api/config/prompt', proteger, async (req, res) => { res.json({ prompt: await getCfg('bot_prompt', DEFAULT_PROMPT) }); });
+app.get('/api/config/prompt', proteger, async (req, res) => { res.json({ prompt: await getCfg('bot_prompt', `ROL: Eres Valentina, asesora comercial.`) }); });
 app.post('/api/config/prompt', proteger, async (req, res) => { await setCfg('bot_prompt', req.body.prompt); res.json({ success: true }); });
 
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
-        if (!db) throw new Error("DB no lista");
         const view = req.query.view || 'active'; 
         const whereClause = view === 'archived' ? 'm.archived = 1' : '(m.archived = 0 OR m.archived IS NULL)';
         const query = `
@@ -616,4 +597,4 @@ app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.s
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
 
-app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v20.5 READY"));
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v20.6 READY"));
