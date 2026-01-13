@@ -1,11 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v21.3 (PROMPT ENGINEERED)
+ * SERVER BACKEND - VALENTINA v21.5 (LOGIC FIX)
  * Cliente: Importadora Casa Colombia (ICC)
- * Mejoras:
- * 1. PROMPT MAESTRO INTEGRADO: Lógica de ventas e ingeniería.
- * 2. Cero Burocracia: Prioriza la intención técnica sobre el saludo.
- * 3. Core estable: Mantiene fixes de Multer y Audio.
+ * * CORRECCIONES CRÍTICAS DE LÓGICA CONVERSACIONAL:
+ * 1. CTX NEUTRO: El backend ya no da órdenes ("Saluda", "Pregunta"). Solo pasa ESTADO.
+ * 2. PRIORIDAD PROMPT: Se eliminan las inyecciones de texto que contradicen las "Reglas Supremas".
+ * 3. FALLBACK SEGURO: Eliminado el "¿En qué te puedo ayudar?" por defecto.
  * ============================================================
  */
 
@@ -41,11 +41,11 @@ const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = "icc-val-opt-v21"; 
 
-// --- PROMPT MAESTRO (INTEGRADO) ---
+// --- PROMPT MAESTRO (ESTE ES EL CEREBRO, NO LO TOQUES) ---
 const DEFAULT_PROMPT = `ERES VALENTINA, ASESORA EXPERTA DE ICC (Maquinaria Pesada).
 TU OBJETIVO: Cerrar ventas de repuestos de forma eficiente, técnica y humana.
 
-🚨 REGLAS SUPREMAS DE COMPORTAMIENTO (NO ROMPER NUNCA):
+🚨 REGLAS SUPREMAS DE COMPORTAMIENTO (TIENEN PRIORIDAD SOBRE CUALQUIER OTRA COSA):
 
 1. PRIORIDAD DE INTENCIÓN (CRÍTICO):
    - Si el usuario menciona un repuesto, modelo o necesidad técnica, IGNORA cualquier saludo protocolario y RESPONDE DIRECTAMENTE A LA NECESIDAD.
@@ -114,13 +114,13 @@ let db, globalKnowledge = [], serverInstance;
         migrations.push('ALTER TABLE config ADD COLUMN logoUrl TEXT');
         for (const m of migrations) { try { await db.exec(m); } catch(e){} }
 
-        // ACTUALIZACIÓN FORZADA DEL PROMPT AL REINICIAR (Para aplicar los cambios)
+        // REINICIA EL PROMPT AL INICIAR PARA ASEGURAR QUE SE APLIQUE EL NUEVO
         await setCfg('bot_prompt', DEFAULT_PROMPT);
         
         await refreshKnowledge();
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER v21.3 READY (New Personality Loaded)`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER v21.5 READY (LOGIC FIXED)`));
         serverInstance.on('error', (e) => { if(e.code === 'EADDRINUSE') setTimeout(() => { serverInstance.close(); serverInstance.listen(PORT); }, 1000); });
 
     } catch (e) { console.error("❌ DB ERROR:", e); }
@@ -182,7 +182,7 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     } catch (e) { res.status(500).send("Media Error"); }
 });
 
-// --- LÓGICA IA ---
+// --- LÓGICA IA (CORREGIDA) ---
 function limpiarRespuesta(txt) {
     let clean = txt.replace(/```json([\s\S]*?)```|{([\s\S]*?)}|'''json([\s\S]*?)'''/gi, "").trim(); 
     const basura = ["Okay, entiendo", "Entendido", "Analizando", "Respuesta:", "Pensamiento:", "Contexto:", "Instrucción:", "Soy una IA"];
@@ -197,6 +197,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const bot = await db.get("SELECT active FROM bot_status WHERE phone = ?", [phone]);
     if (bot && bot.active === 0) return null;
 
+    // Lógica anti-bucle simple
     const last = await db.get("SELECT text FROM history WHERE phone = ? AND role = 'bot' ORDER BY id DESC LIMIT 1", [phone]);
     if (last && (last.text.includes("ejecutivo") || last.text.includes("contactará"))) {
         if (/gracias|ok|listo|vale|bueno|perfecto|👍|👋/i.test(aiMsg) && aiMsg.length < 15) return null;
@@ -215,21 +216,31 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const history = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [phone])).reverse();
     const lead = await db.get("SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
     
-    const isNewIntent = /quiero|busco|necesito|cotizar|precio|tienes|repuesto|filtro|motor/i.test(aiMsg);
-    let ctx = lead && lead.nombre !== "Cliente" 
-        ? (isNewIntent ? `CLIENTE RECURRENTE (${lead.nombre}) CON NUEVA SOLICITUD. IGNORA historial.` : `CLIENTE RECURRENTE (${lead.nombre}). Saluda y pregunta si retoma lo anterior (${lead.interes}).`)
-        : `CLIENTE NUEVO. Obtén Nombre y Ciudad SOLO SI es necesario para avanzar.`;
+    // --- CORRECCIÓN DE CONTEXTO ---
+    // NO DAMOS ÓRDENES A LA IA AQUÍ. SOLO PASAMOS DATOS DE ESTADO.
+    let estadoCliente = "";
+    if (lead && lead.nombre !== "Cliente") {
+        estadoCliente = `[DATOS DEL CLIENTE (Solo informativo)]: Nombre=${lead.nombre}. Interés Previo registrado=${lead.interes}. (El usuario puede haber cambiado de tema).`;
+    } else {
+        estadoCliente = `[DATOS DEL CLIENTE]: Nuevo/Desconocido.`;
+    }
 
-    // AQUÍ SE INYECTA EL PROMPT MAESTRO
+    // EL PROMPT RECIBE DATOS PUROS, NO INSTRUCCIONES CONTRADICTORIAS
     const prompt = `ROL: ${await getCfg('bot_prompt', DEFAULT_PROMPT)}
-    CONTEXTO: ${ctx}
-    NEGOCIO: ${biz.hours || '8am-6pm'}.
-    HISTORIAL: ${JSON.stringify(history)}
-    STOCK SUGERIDO (Referencia): ${JSON.stringify(stock)}
     
-    INSTRUCCIONES FINALES PARA JSON:
-    - Si detectas una intención de compra clara, marca "es_lead": true.
-    - Extrae datos SOLO si el usuario los proporcionó explícitamente en este turno o los anteriores. NO LOS INVENTES.
+    [[INFORMACIÓN DE ESTADO ACTUAL]]
+    ${estadoCliente}
+    HORARIO NEGOCIO: ${biz.hours || '8am-6pm'}.
+    
+    [[HISTORIAL RECIENTE]]
+    ${JSON.stringify(history)}
+    
+    [[DATOS DE INVENTARIO SUGERIDO (COMO REFERENCIA)]]
+    ${JSON.stringify(stock)}
+    
+    INSTRUCCIONES FINALES PARA EL JSON (NO VISIBLE AL USUARIO):
+    - Extrae datos SOLO si el usuario los proporcionó explícitamente en el mensaje actual. NO LOS INVENTES.
+    - Si detectas una intención de compra, marca "es_lead": true.
     
     OUTPUT JSON OBLIGATORIO: \`\`\`json {"es_lead": boolean, "nombre":"...", "interes":"...", "ciudad":"...", "etiqueta":"Lead"} \`\`\``;
 
@@ -241,25 +252,28 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         if (match) {
             try {
                 const info = JSON.parse((match[1]||match[0]).replace(/```json|```/g, "").trim());
-                if (info.nombre || info.interes || info.ciudad) await gestionarLead(phone, info, name, lead, isNewIntent);
+                if (info.nombre || info.interes || info.ciudad) await gestionarLead(phone, info, name, lead, false);
             } catch(e){}
         }
 
         let reply = limpiarRespuesta(raw);
-        if (!reply || reply.length < 2) reply = "¿En qué te puedo colaborar hoy?";
+        
+        // --- FALLBACK SEGURO ---
+        // Si la IA falla o devuelve vacío, NO preguntamos "¿En qué ayudo?".
+        // Decimos algo técnico genérico para invitar a reformular sin parecer un robot roto.
+        if (!reply || reply.length < 2) reply = "Disculpa, estaba verificando el inventario y se cortó. ¿Me repites qué repuesto buscas? 🔧";
         
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', reply, new Date().toISOString()]);
         return reply;
 
-    } catch (e) { return "Dame un momento... 🚜"; }
+    } catch (e) { return "Dame un momento... estoy revisando el sistema 🚜"; }
 }
 
 async function gestionarLead(phone, info, fbName, oldLead, newIntent) {
     let name = (info.nombre && info.nombre !== "null" && info.nombre !== "Cliente") ? info.nombre : fbName;
     if (oldLead) {
         let interest = (info.interes && info.interes !== "null") ? info.interes : oldLead.interes;
-        if (!newIntent && oldLead.interes) interest = oldLead.interes;
-        
+        // Solo actualizamos si hay datos nuevos reales
         await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=? WHERE id=?`, 
             [name, interest, info.etiqueta||oldLead.etiqueta, new Date().toLocaleString(), info.ciudad||oldLead.ciudad, info.correo||oldLead.correo, oldLead.id]);
         await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [name, phone]);
