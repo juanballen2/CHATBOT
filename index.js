@@ -1,11 +1,11 @@
 /*
  * ============================================================
- * SERVER BACKEND - VALENTINA v20.10 (PORT GUARD)
+ * SERVER BACKEND - VALENTINA v20.11 (MEDIA STREAMING PRO)
  * Cliente: Importadora Casa Colombia (ICC)
- * Corrección Técnica:
- * - Se añade 'Graceful Shutdown' para liberar el puerto (EADDRINUSE).
- * - Evita que el servidor crashee al reiniciar en Railway.
- * - Mantiene: Lógica Perfiladora + Media Fix v20.9.
+ * Corrección Final de Audio:
+ * - Implementa "Range Requests" (Código 206) para audios largos.
+ * - Permite adelantar/atrasar y reproducir notas de voz completas.
+ * - Mantiene: Lógica de Negocio, Perfilación y Seguridad.
  * ============================================================
  */
 
@@ -38,7 +38,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-valentina-secret-final-v20-10"; 
+const SESSION_SECRET = "icc-valentina-secret-final-v20-11"; 
 
 // --- PERSONALIDAD BASE ---
 const DEFAULT_PROMPT = `ROL: Eres Valentina, asesora comercial de Importadora Casa Colombia.`;
@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 
 // --- BASE DE DATOS E INICIO SEGURO ---
 let db;
-let serverInstance; // Variable para controlar el servidor
+let serverInstance;
 
 async function startServer() {
     try {
@@ -101,15 +101,15 @@ async function startServer() {
 
         await refreshKnowledge();
 
-        // --- INICIO CON PROTECCIÓN DE PUERTO ---
+        // Inicio con protección de puerto
         const PORT = process.env.PORT || 10000;
         serverInstance = app.listen(PORT, () => {
-            console.log(`🔥 SERVER v20.10 READY ON PORT ${PORT}`);
+            console.log(`🔥 SERVER v20.11 READY ON PORT ${PORT} (AUDIO STREAMING)`);
         });
 
         serverInstance.on('error', (e) => {
             if (e.code === 'EADDRINUSE') {
-                console.log('⚠️ Puerto ocupado, reintentando en 1s...');
+                console.log('⚠️ Puerto ocupado, reintentando...');
                 setTimeout(() => {
                     serverInstance.close();
                     serverInstance.listen(PORT);
@@ -122,31 +122,9 @@ async function startServer() {
     }
 }
 
-// --- APAGADO ELEGANTE (GRACEFUL SHUTDOWN) ---
-// Esto evita que el puerto se quede "pegado" al reiniciar en Railway
-process.on('SIGTERM', () => {
-    console.info('SIGTERM signal received.');
-    if (serverInstance) {
-        serverInstance.close(() => {
-            console.log('Http server closed.');
-            process.exit(0);
-        });
-    } else {
-        process.exit(0);
-    }
-});
-
-process.on('SIGINT', () => {
-    console.info('SIGINT signal received.');
-    if (serverInstance) {
-        serverInstance.close(() => {
-            console.log('Http server closed.');
-            process.exit(0);
-        });
-    } else {
-        process.exit(0);
-    }
-});
+// Graceful Shutdown
+process.on('SIGTERM', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
+process.on('SIGINT', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
 
 startServer();
 
@@ -210,39 +188,64 @@ async function enviarWhatsApp(destinatario, contenido, tipo = "text") {
     } catch (e) { return false; }
 }
 
-// === [PROXY DE MEDIOS v20.10] ===
+// === [PROXY DE MEDIOS v20.11 - STREAMING REAL] ===
 app.get('/api/media-proxy/:id', async (req, res) => {
     if (!req.session.isLogged) return res.status(401).send("No auth");
     
     try {
+        // 1. Obtener URL de Facebook
         const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
         
         const mediaUrl = urlRes.data.url;
-        const mimeType = urlRes.data.mime_type;
+        let contentType = urlRes.data.mime_type || 'application/octet-stream';
 
-        // Descarga Completa (Buffer) para evitar cortes
-        const media = await axios.get(mediaUrl, { 
+        // Fix para audios de WhatsApp: Siempre usar audio/ogg
+        if (contentType.includes('audio') || contentType.includes('ogg')) {
+            contentType = 'audio/ogg';
+        }
+
+        // 2. Descargar el archivo COMPLETO a la RAM (Buffer)
+        // Esto es necesario para poder calcular el tamaño y soportar rangos manualmente
+        const mediaResponse = await axios.get(mediaUrl, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` },
             responseType: 'arraybuffer' 
         });
 
-        // UX Headers
-        res.setHeader('Content-Length', media.data.length);
-        res.setHeader('Content-Disposition', 'inline');
+        const buffer = mediaResponse.data;
+        const totalSize = buffer.length;
+        const range = req.headers.range;
 
-        if (mimeType && mimeType.includes('audio')) {
-            res.setHeader('Content-Type', 'audio/ogg');
+        // 3. Manejo de RANGOS (Clave para reproducción fluida)
+        if (range) {
+            // El navegador pide un pedazo (Ej: "bytes=0-")
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+            const chunksize = (end - start) + 1;
+            const fileStream = buffer.slice(start, end + 1); // Cortamos el buffer
+
+            res.writeHead(206, {
+                'Content-Range': `bytes ${start}-${end}/${totalSize}`,
+                'Accept-Ranges': 'bytes',
+                'Content-Length': chunksize,
+                'Content-Type': contentType,
+            });
+            res.end(fileStream);
         } else {
-            if (mimeType) res.setHeader('Content-Type', mimeType);
+            // El navegador pide todo el archivo (Primera carga)
+            res.writeHead(200, {
+                'Content-Length': totalSize,
+                'Content-Type': contentType,
+                'Accept-Ranges': 'bytes' // Le avisamos que soportamos rangos para la próxima
+            });
+            res.end(buffer);
         }
-
-        res.send(media.data);
 
     } catch (e) { 
         console.error("Proxy Error:", e.message); 
-        res.status(500).send("Error"); 
+        res.status(500).send("Error Media"); 
     }
 });
 
@@ -670,3 +673,5 @@ app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login'
 app.get('/login', (req, res) => req.session.isLogged ? res.redirect('/') : res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 app.use(express.static(__dirname, { index: false }));
+
+app.listen(process.env.PORT || 10000, () => console.log("🔥 SERVER v20.11 READY"));
