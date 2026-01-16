@@ -1,5 +1,5 @@
 /* ============================================================
- * SERVER BACKEND - VALENTINA v22.0 (LOGIC FIXED & SEARCH OPTIMIZED)
+ * SERVER BACKEND - VALENTINA v22.5 (FULL ENTERPRISE & EXTENDED)
  * Cliente: Importadora Casa Colombia (ICC)
  * ============================================================
  */
@@ -16,29 +16,30 @@ const FormData = require('form-data');
 const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 
-// --- CONFIGURACIÓN DEL SERVIDOR ---
+// --- 1. CONFIGURACIÓN DEL SERVIDOR ---
 const app = express();
 app.set('trust proxy', 1);
+
+// Aumentamos límites para archivos pesados (imágenes/videos)
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors());
 
-// --- CONFIGURACIÓN MULTER ---
+// Configuración de carga de archivos
 const upload = multer({ 
     storage: multer.memoryStorage(),
     limits: { fileSize: 100 * 1024 * 1024 } // 100MB Límite
 });
 
-// --- VARIABLES DE ENTORNO ---
+// --- 2. VARIABLES DE ENTORNO ---
 const API_KEY = process.env.GEMINI_API_KEY; 
 const META_TOKEN = process.env.META_TOKEN;
 const PHONE_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-val-opt-v22"; 
+const SESSION_SECRET = "icc-val-secure-v22"; 
 
-// --- PROMPT MAESTRO (MÁQUINA DE ESTADOS) ---
-// Este prompt impide que el bot salude repetidamente y lo fuerza a seguir el flujo de venta.
+// --- 3. PROMPT MAESTRO (PERSONALIDAD) ---
 const DEFAULT_PROMPT = `ERES VALENTINA, ASISTENTE DE VENTAS DE IMPORTADORA CASA COLOMBIA (ICC).
 
 TU ÚNICO OBJETIVO:
@@ -73,7 +74,7 @@ OUTPUT JSON OBLIGATORIO AL FINAL DE TU MENSAJE:
 \`\`\`json {"es_lead": boolean, "nombre":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead"} \`\`\`
 `;
 
-// --- GESTIÓN DE SESIONES ---
+// --- 4. GESTIÓN DE SESIONES ---
 app.use(session({
     name: 'icc_session', 
     secret: SESSION_SECRET, 
@@ -82,10 +83,12 @@ app.use(session({
     cookie: { secure: false, maxAge: 86400000 } // 24 Horas
 }));
 
-// Middleware de Protección
-const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
+// Middleware de Protección (Login)
+const proteger = (req, res, next) => {
+    return req.session.isLogged ? next() : res.status(401).send("No autorizado");
+};
 
-// Protección de Archivos
+// Protección de Archivos JSON/Data directos
 app.use((req, res, next) => {
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
         return res.status(403).send('🚫 Acceso Denegado');
@@ -93,7 +96,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- INICIALIZACIÓN DB ---
+// --- 5. INICIALIZACIÓN DE BASE DE DATOS ---
 let db, globalKnowledge = [], serverInstance;
 
 (async () => {
@@ -106,6 +109,7 @@ let db, globalKnowledge = [], serverInstance;
             driver: sqlite3.Database 
         });
 
+        // Definición de Tablas (COMPLETAS)
         const tables = [
             `history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT)`,
             `leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT)`,
@@ -117,19 +121,30 @@ let db, globalKnowledge = [], serverInstance;
             `global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT)`
         ];
 
-        for (const t of tables) await db.exec(`CREATE TABLE IF NOT EXISTS ${t}`);
+        for (const t of tables) {
+            await db.exec(`CREATE TABLE IF NOT EXISTS ${t}`);
+        }
 
-        // Migraciones básicas
+        // Migraciones de Seguridad (Para no perder datos viejos)
         const migrations = ['photoUrl', 'archived', 'unreadCount'].map(c => `ALTER TABLE metadata ADD COLUMN ${c}`);
         migrations.push('ALTER TABLE config ADD COLUMN logoUrl TEXT');
-        for (const m of migrations) { try { await db.exec(m); } catch(e){} }
+        
+        for (const m of migrations) { 
+            try { await db.exec(m); } catch(e){} 
+        }
 
-        await setCfg('bot_prompt', DEFAULT_PROMPT); 
-        await refreshKnowledge();
+        // Asegurar Prompt Inicial
+        const currentPrompt = await getCfg('bot_prompt');
+        if (!currentPrompt) {
+            await setCfg('bot_prompt', DEFAULT_PROMPT); 
+        }
+        
+        await refreshKnowledge(); // Cargar inventario en memoria RAM
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER v22.0 READY`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER v22.5 READY (Full Mode)`));
         
+        // Manejo de errores de puerto ocupado
         serverInstance.on('error', (e) => { 
             if(e.code === 'EADDRINUSE') {
                 console.log("Puerto ocupado, reintentando...");
@@ -140,7 +155,8 @@ let db, globalKnowledge = [], serverInstance;
     } catch (e) { console.error("❌ DB CRITICAL ERROR:", e); }
 })();
 
-// --- HELPERS ---
+// --- 6. FUNCIONES AUXILIARES ---
+
 async function refreshKnowledge() {
     try { 
         globalKnowledge = (await db.all("SELECT * FROM inventory")).map(r => ({ 
@@ -161,7 +177,8 @@ async function setCfg(k, v) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// --- META (WHATSAPP) ---
+// --- 7. CONEXIÓN CON META (WHATSAPP API) ---
+
 async function uploadToMeta(buffer, mime, name) {
     try {
         const form = new FormData();
@@ -197,7 +214,7 @@ async function enviarWhatsApp(to, content, type = "text") {
     } catch (e) { console.error("Error Meta Send:", e.message); return false; }
 }
 
-// --- MEDIA PROXY ---
+// Proxy Multimedia
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     try {
         const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
@@ -221,44 +238,45 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     } catch (e) { res.status(500).send("Media Error"); }
 });
 
-// --- LÓGICA IA (NÚCLEO OPTIMIZADO) ---
+// --- 8. LÓGICA DE INTELIGENCIA ARTIFICIAL ---
+
 function limpiarRespuesta(txt) {
     let clean = txt.replace(/```json([\s\S]*?)```|{([\s\S]*?)}/gi, "").trim(); 
     return clean.replace(/[\r\n]+/g, "\n").trim();
 }
 
 async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFile = false) {
-    // 1. Guardar mensaje User
+    // 1. Guardar mensaje del usuario
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', dbMsg, new Date().toISOString()]);
     
-    // 2. Metadata
+    // 2. Actualizar metadatos
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [phone]);
 
-    // 3. Estado Bot
+    // 3. Verificar estado del Bot
     const bot = await db.get("SELECT active FROM bot_status WHERE phone = ?", [phone]);
     if (bot && bot.active === 0) return null;
 
-    // 4. Archivos
+    // 4. Manejo de Archivos
     if (isFile) {
-        const rFile = "¡Recibido! 📁 Lo reviso enseguida.";
-        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', rFile, new Date().toISOString()]);
-        return rFile;
+        const replyFile = "¡Recibido! 📁 Lo reviso enseguida.";
+        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', replyFile, new Date().toISOString()]);
+        return replyFile;
     }
 
-    await sleep(2000); // Pausa natural
+    await sleep(2000); 
 
-    // --- RECOPILACIÓN DE CONTEXTO ---
+    // --- CONTEXTO ---
     const webData = await getCfg('website_data', "Sin políticas.");
     const techRules = await getCfg('tech_rules', []);
     const biz = await getCfg('biz_profile', {});
     
-    // Historial reciente
+    // Historial
     const history = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [phone])).reverse();
     
-    // CRM Check
+    // CRM
     const lead = await db.get("SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
     
-    // INYECCIÓN DE MEMORIA
+    // Memoria
     let memoriaDatos = `DATOS YA CAPTURADOS (NO PREGUNTAR DE NUEVO):\n- Teléfono: ${phone}\n`;
     if (lead) {
         if (lead.nombre && lead.nombre !== "Cliente" && lead.nombre !== "null") memoriaDatos += `- Nombre: ${lead.nombre}\n`;
@@ -348,7 +366,7 @@ async function gestionarLead(phone, info, fbName, oldLead) {
     }
 }
 
-// --- RUTAS API ---
+// --- 9. RUTAS API (ENDPOINTS) ---
 
 app.post('/auth', (req, res) => {
     if (req.body.user === ADMIN_USER && req.body.pass === ADMIN_PASS) { 
@@ -365,7 +383,7 @@ app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirna
 app.get('/api/config/prompt', proteger, async (req, res) => res.json({ prompt: await getCfg('bot_prompt', DEFAULT_PROMPT) }));
 app.post('/api/config/prompt', proteger, async (req, res) => { await setCfg('bot_prompt', req.body.prompt); res.json({success:true}); });
 
-// --- CHATS & BUSCADOR (FIXED) ---
+// --- CHATS & BUSCADOR ---
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
         const view = req.query.view || 'active';
@@ -469,10 +487,17 @@ app.post('/api/config/rules/delete', proteger, async (req, res) => { let r=await
 app.post('/api/leads/update', proteger, async(req,res)=>{ await db.run(`UPDATE leads SET ${req.body.field}=? WHERE id=?`,[req.body.value, req.body.id]); res.json({success:true}); });
 app.post('/api/leads/delete', proteger, async(req,res)=>{ await db.run("DELETE FROM leads WHERE id=?",[req.body.id]); res.json({success:true}); });
 
+// --- AQUÍ ESTÁ LA NUEVA FUNCIÓN DE LIMPIEZA DE INVENTARIO ---
 app.post('/api/knowledge/delete', proteger, async (req, res) => { 
     const i=await db.all("SELECT id FROM inventory"); 
     if(i[req.body.index]) await db.run("DELETE FROM inventory WHERE id=?",[i[req.body.index].id]); 
     await refreshKnowledge(); res.json({success:true}); 
+});
+// NUEVA FUNCIÓN AÑADIDA: Borrar todo el inventario
+app.post('/api/knowledge/clear', proteger, async (req, res) => { 
+    await db.run("DELETE FROM inventory"); 
+    await refreshKnowledge(); 
+    res.json({success:true}); 
 });
 app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res) => { 
     try { 
@@ -482,7 +507,7 @@ app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res)
     } catch(e) { res.status(500).json({ error: "CSV Error" }); } 
 });
 
-// --- ENVIOS Y NUEVOS CHATS (FIXED) ---
+// --- ENVIOS Y NUEVOS CHATS ---
 app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => { 
     try { 
         const mid = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname); 
