@@ -3,36 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICC | Valentina Suite v22.9 (Full Enterprise)</title>
+    <title>ICC | Valentina Suite v22.11 (Full Enterprise Expanded)</title>
+    
     <link rel="icon" href="https://github.com/juanballen2/CHATBOT/blob/main/images/favicon.jpg?raw=true">
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
     <style>
-        /* =========================================
-           1. VARIABLES DEL SISTEMA (AZUL CORPORATIVO)
-           ========================================= */
+        /* ============================================================
+           1. VARIABLES DEL SISTEMA (TEMA CORPORATIVO AZUL ICC)
+           ============================================================ */
         :root {
             --primary: #0F52BA;        /* Azul Zafiro */
-            --primary-dark: #0a3d8f;   /* Azul Oscuro */
+            --primary-dark: #0a3d8f;   /* Azul Profundo */
             --bg-body: #F3F4F6;        /* Gris Fondo */
-            --bg-sidebar: #1E293B;     /* Azul Noche */
-            --bg-card: #FFFFFF;        /* Blanco */
-            --text-main: #1F2937;      /* Gris Oscuro */
-            --text-light: #6B7280;     /* Gris Claro */
-            --border: #E5E7EB;         /* Bordes */
+            --bg-sidebar: #1E293B;     /* Azul Noche (Sidebar) */
+            --bg-card: #FFFFFF;        /* Blanco Tarjetas */
+            --text-main: #1F2937;      /* Texto Principal */
+            --text-light: #6B7280;     /* Texto Secundario */
+            --border: #E5E7EB;         /* Bordes Suaves */
             --chat-bg: #EAEFF5;        /* Fondo Chat */
-            --terminal-bg: #0F172A;    /* Fondo Terminal */
-            --danger: #EF4444;         /* Rojo */
-            --success: #10B981;        /* Verde */
+            --terminal-bg: #0F172A;    /* Fondo Terminal Sandbox */
+            --danger: #EF4444;         /* Rojo Alerta */
+            --success: #10B981;        /* Verde Éxito */
         }
 
-        /* =========================================
-           2. ESTILOS GENERALES
-           ========================================= */
+        /* ============================================================
+           2. ESTILOS BASE Y RESET
+           ============================================================ */
         * {
             box-sizing: border-box;
             margin: 0;
@@ -46,40 +48,49 @@
             color: var(--text-main);
             height: 100vh;
             display: flex;
-            overflow: hidden;
+            overflow: hidden; /* Evita doble barra de scroll */
         }
 
-        /* Scrollbars Personalizados */
+        /* Scrollbars Personalizados (Finos y Elegantes) */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
         }
+        
         ::-webkit-scrollbar-track {
             background: transparent;
         }
+        
         ::-webkit-scrollbar-thumb {
             background: #CBD5E1;
             border-radius: 4px;
         }
+        
         ::-webkit-scrollbar-thumb:hover {
             background: var(--primary);
         }
 
-        /* Animaciones */
+        /* Animaciones Globales */
         @keyframes slideIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from { 
+                opacity: 0; 
+                transform: translateY(10px); 
+            }
+            to { 
+                opacity: 1; 
+                transform: translateY(0); 
+            }
         }
         
         .msg-anim {
             animation: slideIn 0.3s ease-out forwards;
         }
 
-        /* =========================================
+        /* ============================================================
            3. BARRA LATERAL (SIDEBAR)
-           ========================================= */
+           ============================================================ */
         .sidebar {
-            width: 75px;
+            width: 80px;
             background: var(--bg-sidebar);
             display: flex;
             flex-direction: column;
@@ -99,41 +110,47 @@
             border-radius: 12px;
             padding: 4px;
             transition: transform 0.2s;
+            overflow: hidden;
         }
+        
         .logo-area:hover {
             transform: scale(1.05);
         }
 
         .nav-item {
-            width: 46px;
-            height: 46px;
+            width: 48px;
+            height: 48px;
             border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #94A3B8;
+            color: #94A3B8; /* Gris azulado */
             cursor: pointer;
-            margin-bottom: 18px;
+            margin-bottom: 20px;
             transition: all 0.2s ease;
             position: relative;
         }
+        
         .nav-item:hover {
             background: rgba(255,255,255,0.15);
             color: white;
         }
+        
         .nav-item.active {
             background: var(--primary);
             color: white;
             box-shadow: 0 4px 15px rgba(15, 82, 186, 0.4);
         }
+        
         .nav-item i {
             font-size: 22px;
         }
-        /* Tooltip */
+
+        /* Tooltip simple al hacer hover */
         .nav-item::after {
             content: attr(title);
             position: absolute;
-            left: 65px;
+            left: 70px;
             background: #333;
             color: white;
             padding: 6px 10px;
@@ -146,13 +163,14 @@
             z-index: 100;
             box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
         }
+        
         .nav-item:hover::after {
             opacity: 1;
         }
 
-        /* =========================================
+        /* ============================================================
            4. CONTENEDOR PRINCIPAL
-           ========================================= */
+           ============================================================ */
         .main-content {
             flex: 1;
             display: flex;
@@ -168,10 +186,12 @@
             overflow-y: auto;
             padding: 0;
         }
+        
         .view.active {
             display: flex;
-            animation: slideIn 0.3s ease-out;
+            /* Nota: Animación removida aquí para evitar parpadeo general */
         }
+        
         .page-container {
             padding: 30px;
             max-width: 1600px;
@@ -187,6 +207,7 @@
             color: var(--text-main);
             letter-spacing: -0.5px;
         }
+        
         h2, h3 {
             color: var(--text-main);
             font-weight: 600;
@@ -204,7 +225,7 @@
             flex-direction: column;
         }
 
-        /* Botones e Inputs */
+        /* Botones */
         .btn {
             background: var(--primary);
             color: white;
@@ -220,6 +241,7 @@
             gap: 8px;
             justify-content: center;
         }
+        
         .btn:hover {
             background: var(--primary-dark);
             transform: translateY(-1px);
@@ -236,6 +258,7 @@
             font-weight: 500;
             transition: 0.2s;
         }
+        
         .btn-outline:hover {
             background: #F8FAFC;
             border-color: #CBD5E1;
@@ -251,11 +274,13 @@
             border-radius: 50%;
             transition: 0.2s;
         }
+        
         .btn-icon:hover {
             background: rgba(0,0,0,0.05);
             color: var(--primary);
         }
         
+        /* Inputs */
         .form-control {
             width: 100%;
             padding: 12px 15px;
@@ -267,15 +292,16 @@
             transition: 0.2s;
             color: var(--text-main);
         }
+        
         .form-control:focus {
             border-color: var(--primary);
             background: white;
             box-shadow: 0 0 0 3px rgba(15, 82, 186, 0.1);
         }
 
-        /* =========================================
+        /* ============================================================
            5. SISTEMA DE CHAT (LAYOUT 3 COLUMNAS)
-           ========================================= */
+           ============================================================ */
         .chat-layout {
             display: flex;
             height: 100%;
@@ -283,7 +309,7 @@
             background: white;
         }
         
-        /* -- LISTA DE CHATS -- */
+        /* -- COLUMNA 1: LISTA DE CHATS -- */
         .cl-panel {
             width: 340px;
             border-right: 1px solid var(--border);
@@ -292,16 +318,19 @@
             background: white;
             flex-shrink: 0;
         }
+        
         .cl-header {
             padding: 20px;
             border-bottom: 1px solid var(--border);
             background: white;
         }
+        
         .cl-tools {
             display: flex;
             gap: 10px;
             margin-top: 10px;
         }
+        
         .cl-list {
             flex: 1;
             overflow-y: auto;
@@ -318,9 +347,11 @@
             transition: all 0.2s;
             background: white;
         }
+        
         .chat-item:hover {
             background: #F8FAFC;
         }
+        
         .chat-item.active {
             background: #EFF6FF;
             border-left: 4px solid var(--primary);
@@ -341,7 +372,7 @@
             font-size: 20px;
         }
 
-        /* -- ÁREA DE CONVERSACIÓN -- */
+        /* -- COLUMNA 2: ÁREA DE CONVERSACIÓN -- */
         .ca-panel {
             flex: 1;
             display: flex;
@@ -350,6 +381,7 @@
             background: var(--chat-bg);
             min-width: 400px;
         }
+        
         .chat-bg-pattern {
             position: absolute;
             width: 100%;
@@ -370,6 +402,7 @@
             z-index: 10;
             height: 70px;
         }
+        
         .messages-box {
             flex: 1;
             padding: 20px 40px;
@@ -379,6 +412,7 @@
             gap: 10px;
             z-index: 5;
         }
+        
         .input-area {
             background: white;
             padding: 15px 25px;
@@ -399,25 +433,29 @@
             border-radius: 12px;
             box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         }
+        
         .b-user {
             align-self: flex-start;
             background: white;
             border-radius: 0 12px 12px 12px;
             color: #1e293b;
         }
+        
         .b-manual {
             align-self: flex-end;
-            background: #DBEAFE;
+            background: #DBEAFE; /* Azul suave para manual */
             border-radius: 12px 0 12px 12px;
             color: #1e3a8a;
         }
+        
         .b-bot {
             align-self: flex-end;
             background: #FFFFFF;
             border-radius: 12px 0 12px 12px;
-            border-right: 5px solid var(--primary);
+            border-right: 5px solid var(--primary); /* Distintivo del Bot */
             margin-right: 2px;
         }
+        
         .msg-time {
             font-size: 11px;
             opacity: 0.6;
@@ -425,7 +463,7 @@
             margin-top: 5px;
         }
 
-        /* -- PANEL CRM -- */
+        /* -- COLUMNA 3: PANEL CRM -- */
         .crm-panel {
             width: 320px;
             background: white;
@@ -437,18 +475,22 @@
             transform: translateX(0);
             transition: transform 0.3s;
         }
+        
         .crm-panel.closed {
             display: none;
         }
+        
         .crm-header {
             padding: 30px 20px;
             text-align: center;
             background: #F8FAFC;
             border-bottom: 1px solid var(--border);
         }
+        
         .crm-body {
             padding: 25px;
         }
+        
         .crm-stat {
             background: #F8FAFC;
             padding: 15px;
@@ -458,15 +500,16 @@
             border: 1px solid var(--border);
         }
         
-        /* =========================================
-           6. DASHBOARD & TABLAS
-           ========================================= */
+        /* ============================================================
+           6. DASHBOARD, TABLAS Y UTILIDADES
+           ============================================================ */
         .kpi-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 25px;
             margin-bottom: 30px;
         }
+        
         .kpi-card {
             background: white;
             padding: 25px;
@@ -477,6 +520,7 @@
             gap: 20px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.02);
         }
+        
         .kpi-icon {
             width: 55px;
             height: 55px;
@@ -489,12 +533,14 @@
             font-size: 24px;
         }
         
+        /* Estilos de Tabla */
         table {
             width: 100%;
             border-collapse: separate;
             border-spacing: 0;
             font-size: 14px;
         }
+        
         th {
             text-align: left;
             padding: 18px;
@@ -505,11 +551,13 @@
             position: sticky;
             top: 0;
         }
+        
         td {
             padding: 16px 18px;
             border-bottom: 1px solid #F1F5F9;
             color: #334155;
         }
+        
         tr:hover td {
             background: #F8FAFC;
         }
@@ -525,15 +573,16 @@
             letter-spacing: 0.5px;
         }
 
-        /* =========================================
+        /* ============================================================
            7. SANDBOX (TERMINAL)
-           ========================================= */
+           ============================================================ */
         .sandbox-layout {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 25px;
             height: 75vh;
         }
+        
         .terminal {
             background: var(--terminal-bg);
             color: #00FF00;
@@ -547,18 +596,30 @@
             border: 1px solid #333;
             resize: vertical;
         }
+        
         .log-entry {
             margin-bottom: 12px;
             border-bottom: 1px solid #333;
             padding-bottom: 8px;
             word-wrap: break-word;
         }
+        
         .log-req { color: #60A5FA; }
         .log-res { color: #FCD34D; }
 
-        /* =========================================
-           8. MODALES Y MENÚS
-           ========================================= */
+        /* Contenedores con Scroll para Configuración */
+        .scrollable-list {
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 8px;
+            background: #fafafa;
+        }
+
+        /* ============================================================
+           8. VENTANAS EMERGENTES (MODALS) Y MENU
+           ============================================================ */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -572,6 +633,7 @@
             justify-content: center;
             backdrop-filter: blur(3px);
         }
+        
         .modal {
             background: white;
             width: 90%;
@@ -579,11 +641,7 @@
             padding: 35px;
             border-radius: 16px;
             box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
-            animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        @keyframes slideUp {
-            from { transform: translateY(40px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
+            animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         #context-menu {
@@ -597,6 +655,7 @@
             width: 180px;
             overflow: hidden;
         }
+        
         .cm-item {
             padding: 12px 16px;
             cursor: pointer;
@@ -606,13 +665,16 @@
             align-items: center;
             gap: 12px;
         }
+        
         .cm-item:hover {
             background: #F3F4F6;
         }
+        
         .cm-item.delete {
             color: #EF4444;
         }
 
+        /* Fix para móviles */
         @media (max-width: 1024px) {
             .crm-panel {
                 display: none;
@@ -633,23 +695,23 @@
     <div id="context-menu">
         <div class="cm-item" onclick="cmAction('pin')"><i class="fas fa-thumbtack"></i> Fijar/Desfijar</div>
         <div class="cm-item" onclick="cmAction('archive')"><i class="fas fa-archive"></i> Archivar</div>
-        <div class="cm-item" onclick="cmAction('labels')"><i class="fas fa-tags"></i> Etiquetar</div>
+        <div class="cm-item" onclick="cmAction('labels')"><i class="fas fa-tags"></i> Etiquetas</div>
         <div style="height:1px; background:#eee; margin:2px 0;"></div>
         <div class="cm-item delete" onclick="cmAction('delete')"><i class="fas fa-trash"></i> Eliminar</div>
     </div>
 
     <div class="sidebar">
-        <div class="logo-area" onclick="nav('config')" title="Configuración">
+        <div class="logo-area" onclick="nav('config')" title="Configuración Global">
             <img id="sidebar-logo-img" src="https://github.com/juanballen2/CHATBOT/blob/main/images/ICC.png?raw=true" style="width:100%; height:100%; object-fit:contain;">
         </div>
         <div class="nav-item active" onclick="nav('dashboard')" id="nav-dashboard" title="Dashboard"><i class="fas fa-chart-pie"></i></div>
         <div class="nav-item" onclick="nav('chat')" id="nav-chat" title="Chat & CRM"><i class="fas fa-comment-dots"></i></div>
-        <div class="nav-item" onclick="nav('leads')" id="nav-leads" title="Leads"><i class="fas fa-users"></i></div>
+        <div class="nav-item" onclick="nav('leads')" id="nav-leads" title="Base de Leads"><i class="fas fa-users"></i></div>
         <div class="nav-item" onclick="nav('inventory')" id="nav-inventory" title="Inventario IA"><i class="fas fa-box-open"></i></div>
         <div class="nav-item" onclick="nav('config')" id="nav-config" title="Configuración"><i class="fas fa-cog"></i></div>
-        <div class="nav-item" onclick="nav('sandbox')" id="nav-sandbox" title="Laboratorio"><i class="fas fa-terminal"></i></div>
+        <div class="nav-item" onclick="nav('sandbox')" id="nav-sandbox" title="Laboratorio IA"><i class="fas fa-terminal"></i></div>
         <div style="flex:1"></div>
-        <div class="nav-item" onclick="location.href='/logout'" style="color:#EF4444;" title="Salir"><i class="fas fa-power-off"></i></div>
+        <div class="nav-item" onclick="location.href='/logout'" style="color:#EF4444;" title="Cerrar Sesión"><i class="fas fa-power-off"></i></div>
     </div>
 
     <div class="main-content">
@@ -660,15 +722,15 @@
             <div class="kpi-grid">
                 <div class="kpi-card">
                     <div class="kpi-icon"><i class="fas fa-users"></i></div>
-                    <div><h2 id="kpi-leads" style="margin:0">0</h2><p style="margin:0; font-size:13px; color:#666;">Leads Totales</p></div>
+                    <div><h2 id="kpi-leads">0</h2><p class="text-light" style="font-size:12px;">Total Leads Generados</p></div>
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-icon"><i class="fas fa-comments"></i></div>
-                    <div><h2 id="kpi-chats" style="margin:0">0</h2><p style="margin:0; font-size:13px; color:#666;">Chats Activos</p></div>
+                    <div><h2 id="kpi-chats">0</h2><p class="text-light" style="font-size:12px;">Conversaciones Activas</p></div>
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-icon"><i class="fas fa-cube"></i></div>
-                    <div><h2 id="kpi-stock" style="margin:0">0</h2><p style="margin:0; font-size:13px; color:#666;">Referencias</p></div>
+                    <div><h2 id="kpi-stock">0</h2><p class="text-light" style="font-size:12px;">Referencias en Stock</p></div>
                 </div>
             </div>
             
@@ -676,7 +738,7 @@
                 <h3><i class="fas fa-history"></i> Leads Recientes</h3>
                 <div style="margin-top:15px; overflow-x:auto;">
                     <table id="dash-leads-table">
-                        <thead><tr><th>Fecha</th><th>Cliente</th><th>Ciudad</th><th>Interés</th></tr></thead>
+                        <thead><tr><th>Cliente</th><th>Ciudad</th><th>Interés Detectado</th><th>Fecha</th></tr></thead>
                         <tbody id="dash-leads-body"></tbody>
                     </table>
                 </div>
@@ -685,13 +747,14 @@
 
         <div id="view-chat" class="view">
             <div class="chat-layout">
+                
                 <div class="cl-panel">
                     <div class="cl-header">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                             <h3 style="font-size:16px;">Mensajería</h3>
                             <button class="btn" style="padding:6px 12px; font-size:11px;" onclick="addContactPrompt()"><i class="fas fa-plus"></i> Nuevo</button>
                         </div>
-                        <input id="search" class="form-control" placeholder="Buscar nombre, teléfono..." style="margin-bottom:8px;" oninput="renderChatList()">
+                        <input id="search" class="form-control" placeholder="Buscar nombre o teléfono..." style="margin-bottom:8px;" oninput="renderChatList()">
                         <div class="cl-tools">
                             <select id="view-selector" class="form-control" style="margin:0; font-size:12px;" onchange="syncLoop(true)">
                                 <option value="active">Activos</option>
@@ -704,7 +767,7 @@
                         </div>
                     </div>
                     <div class="cl-list" id="chat-list-box">
-                        <div style="padding:30px; text-align:center; color:#999;">Cargando...</div>
+                        <div style="padding:30px; text-align:center; color:#999;">Cargando chats...</div>
                     </div>
                 </div>
 
@@ -714,6 +777,7 @@
                     <div id="chat-placeholder" style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#94A3B8; z-index:10;">
                         <i class="fas fa-comments" style="font-size:60px; margin-bottom:20px; opacity:0.5;"></i>
                         <h3 style="color:#64748B;">Selecciona una conversación</h3>
+                        <p>Gestiona las ventas desde aquí</p>
                     </div>
 
                     <div id="chat-interface" style="display:none; flex-direction:column; height:100%; z-index:10;">
@@ -731,13 +795,14 @@
                         </div>
 
                         <div class="messages-box" id="msgs-box"></div>
+                        
                         <div id="quick-replies" style="padding:10px 20px; display:none; background:white; border-top:1px solid #eee;"></div>
 
                         <div class="input-area">
                             <button class="btn-icon" onclick="document.getElementById('file-input').click()"><i class="fas fa-paperclip"></i></button>
                             <input type="file" id="file-input" hidden onchange="handleFileUpload(this)">
                             
-                            <input id="msg-input" class="form-control" style="margin:0; border-radius:20px;" placeholder="Escribe un mensaje..." onkeyup="checkQuickReply(this)" onkeypress="if(event.key==='Enter') sendMsg()">
+                            <input id="msg-input" class="form-control" style="margin:0; border-radius:20px;" placeholder="Escribe un mensaje (usa / para atajos)..." onkeyup="checkQuickReply(this)" onkeypress="if(event.key==='Enter') sendMsg()">
                             
                             <button class="btn-icon" id="btn-mic" onclick="toggleRecord()"><i class="fas fa-microphone"></i></button>
                             <button class="btn-icon" style="color:var(--primary);" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button>
@@ -801,7 +866,6 @@
                     <div style="display:flex; gap:10px; margin-bottom:15px;">
                         <input type="file" id="csv-file" class="form-control" style="margin:0;">
                         <button class="btn" onclick="uploadCSV()">Subir</button>
-                        
                         <button class="btn" onclick="limpiarInventario()" style="background:#EF4444;">🗑️ Borrar Todo</button>
                     </div>
                     <div style="flex:1; overflow-y:auto; border:1px solid #eee; border-radius:8px;">
@@ -881,17 +945,17 @@
                     
                     <div>
                         <h4 style="font-size:14px; border-bottom:1px solid #eee; padding-bottom:8px; margin-bottom:10px;">Etiquetas Activas</h4>
-                        <div id="tags-viewer-list" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+                        <div id="tags-viewer-list" class="scrollable-list" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
                     </div>
                     
                     <div>
                         <h4 style="font-size:14px; border-bottom:1px solid #eee; padding-bottom:8px; margin-bottom:10px;">Atajos (Shortcuts)</h4>
-                        <div id="shortcuts-list" style="max-height:250px; overflow-y:auto; border:1px solid #eee; border-radius:8px;"></div>
+                        <div id="shortcuts-list" class="scrollable-list"></div>
                     </div>
                     
                     <div>
                         <h4 style="font-size:14px; border-bottom:1px solid #eee; padding-bottom:8px; margin-bottom:10px;">Reglas Técnicas</h4>
-                        <div id="rules-list" style="max-height:250px; overflow-y:auto; border:1px solid #eee; border-radius:8px;"></div>
+                        <div id="rules-list" class="scrollable-list"></div>
                     </div>
                 </div>
             </div>
@@ -923,9 +987,7 @@
             </div>
         </div>
 
-    </div>
-
-    <div id="modal-edit-lead" class="modal-overlay">
+    </div> <div id="modal-edit-lead" class="modal-overlay">
         <div class="modal">
             <h3>Editar Lead</h3>
             <input id="edit-lead-id" type="hidden">
@@ -1073,11 +1135,13 @@
                 
                 data.sort((a,b) => (b.pinned - a.pinned) || (new Date(b.timestamp) - new Date(a.timestamp)));
 
+                // Solo renderizar si la lista cambió
                 if(force || JSON.stringify(data) !== JSON.stringify(chats)) {
                     chats = data;
                     renderChatList();
                 }
                 
+                // Actualizar mensajes activos sin parpadeo
                 if(selectedId) {
                     const current = chats.find(c => c.id === selectedId);
                     if(current && current.unreadCount > 0) await fetch(`/api/chat-history/${selectedId}`); 
@@ -1100,20 +1164,15 @@
                 return matchTxt && matchTag;
             });
 
-            // Actualizar opciones del filtro
-            const tagSet = new Set(); 
-            chats.forEach(c => (c.labels || []).forEach(l => tagSet.add(l)));
-            
-            let opts = '<option value="">Filtrar Etiqueta</option>';
-            tagSet.forEach(t => opts += `<option value="${t}">${t}</option>`);
-            
+            // Actualizar opciones filtro
+            const tagSet = new Set(); chats.forEach(c=>(c.labels||[]).forEach(l=>tagSet.add(l)));
+            let opts = '<option value="">Filtrar Etiqueta</option>'; tagSet.forEach(t=>opts+=`<option value="${t}">${t}</option>`);
             const filterEl = document.getElementById('tag-filter');
-            if (filterEl && filterEl.innerHTML !== opts) filterEl.innerHTML = opts;
-            if (filterEl) filterEl.value = f;
+            if(filterEl && filterEl.innerHTML !== opts) filterEl.innerHTML = opts;
+            if(filterEl) filterEl.value = f;
 
             list.innerHTML = filtered.map(c => {
                 const tagsHtml = (c.labels || []).map(l => `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${getTagColor(l)}; margin-right:4px;" title="${l}"></span>`).join('');
-                
                 return `
                 <div class="chat-item ${c.id===selectedId?'active':''}" onclick="selChat('${c.id}')" oncontextmenu="showContextMenu(event, '${c.id}')">
                     <div class="avatar" style="${c.photoUrl?`background-image:url('${c.photoUrl}')`:''}">${!c.photoUrl?'<i class="fas fa-user"></i>':''}</div>
@@ -1149,6 +1208,7 @@
             renderBotStatus(c.botActive);
             renderChatTags(c.labels||[]);
             
+            // Feedback visual carga
             document.getElementById('msgs-box').innerHTML = '<div style="text-align:center; padding:30px; color:#999;">Cargando...</div>';
             syncLoop(true);
         }
@@ -1162,30 +1222,43 @@
             } catch(e) {}
         }
 
+        // LOGICA DE RENDERIZADO ESTABLE
         function renderMsgs(msgs) {
             const box = document.getElementById('msgs-box');
-            if(!msgs || msgs.length === 0) { box.innerHTML = '<div style="text-align:center; padding:30px; color:#aaa;">Conversación nueva.</div>'; return; }
+            if(!msgs || msgs.length === 0) { 
+                box.innerHTML = '<div style="text-align:center; padding:40px; color:#aaa;">Conversación nueva.</div>'; 
+                return; 
+            }
+            
             let html = '';
             msgs.forEach(m => {
                 let cls = 'b-user';
                 if (m.role === 'manual' || m.role === 'assistant') cls = 'b-manual';
                 if (m.role === 'bot') cls = 'b-bot';
+                
                 let txt = formatMedia(m.text);
                 const time = new Date(m.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                
+                // Animación suave de entrada
                 html += `<div class="bubble ${cls} msg-anim">${txt}<div class="msg-time">${time}</div></div>`;
             });
-            if(box.innerHTML !== html) { 
-                const isBottom = (box.scrollHeight - box.scrollTop - box.clientHeight) <= 100;
+
+            // Solo actualizar si hay diferencia real en el contenido HTML
+            if (box.innerHTML !== html) { 
+                const isBottom = (box.scrollHeight - box.scrollTop - box.clientHeight) <= 150;
                 box.innerHTML = html;
-                if(isBottom || box.childElementCount < 20) box.scrollTop = box.scrollHeight;
+                if (isBottom || box.childElementCount < 20) box.scrollTop = box.scrollHeight;
             }
         }
 
         function formatMedia(txt) {
-            if(txt.includes('[MEDIA:IMAGE:')) {
+            // Imagen
+            if (txt.includes('[MEDIA:IMAGE:')) {
                 const id = txt.match(/IMAGE:(.*?)\]/)[1];
-                return `<img src="/api/media-proxy/${id}" style="max-width:200px; border-radius:8px; cursor:pointer; box-shadow:0 2px 5px rgba(0,0,0,0.1);" onclick="window.open(this.src)">`;
-            } else if(txt.includes('[MEDIA:AUDIO:')) {
+                return `<img src="/api/media-proxy/${id}" style="max-width:250px; border-radius:8px; cursor:pointer; box-shadow:0 2px 5px rgba(0,0,0,0.1);" onclick="window.open(this.src)">`;
+            } 
+            // Audio (Preload + Descarga)
+            else if (txt.includes('[MEDIA:AUDIO:')) {
                 const id = txt.match(/AUDIO:(.*?)\]/)[1];
                 const url = `/api/media-proxy/${id}`;
                 return `
@@ -1196,7 +1269,9 @@
                         <i class="fas fa-download" style="font-size:14px;"></i>
                     </a>
                 </div>`;
-            } else if(txt.includes('[MEDIA:DOC:')) {
+            } 
+            // Documento
+            else if (txt.includes('[MEDIA:DOC:')) {
                  const id = txt.match(/DOC:(.*?)\]/)[1];
                  return `<a href="/api/media-proxy/${id}" target="_blank" style="display:flex; align-items:center; gap:12px; background:#f9f9f9; padding:12px; border-radius:8px; text-decoration:none; color:#333; border:1px solid #ddd;">
                             <i class="fas fa-file-pdf" style="color:#0F52BA; font-size:28px;"></i>
@@ -1206,25 +1281,32 @@
             return txt;
         }
 
+        /* --- 7. ENVÍO Y GRABACIÓN --- */
         async function sendMsg() {
             const m = document.getElementById('msg-input').value; 
-            if(!m || !selectedId) return;
+            if (!m || !selectedId) return;
             document.getElementById('msg-input').value = '';
+            
+            // Optimistic Update
             const box = document.getElementById('msgs-box');
             box.innerHTML += `<div class="bubble b-manual msg-anim">${m}<div class="msg-time">...</div></div>`;
             box.scrollTop = box.scrollHeight;
+
             await fetch('/api/chat/send', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, message:m})});
             syncLoop(true);
         }
 
         async function handleFileUpload(inp) { 
-            if(!inp.files[0] || !selectedId) return; 
-            const f=inp.files[0]; 
-            const type=f.type.includes('image')?'image':(f.type.includes('audio')?'audio':(f.type.includes('video')?'video':'document')); 
-            const fd=new FormData(); 
-            fd.append('file',f); fd.append('phone',selectedId); fd.append('type',type); 
+            if (!inp.files[0] || !selectedId) return; 
+            const f = inp.files[0]; 
+            const type = f.type.includes('image') ? 'image' : (f.type.includes('audio') ? 'audio' : (f.type.includes('video') ? 'video' : 'document')); 
+            const fd = new FormData(); 
+            fd.append('file', f); 
+            fd.append('phone', selectedId); 
+            fd.append('type', type); 
+            
             await fetch('/api/chat/upload-send', {method:'POST', body:fd}); 
-            inp.value=''; 
+            inp.value = ''; 
             syncLoop(true); 
         }
 
@@ -1247,7 +1329,7 @@
                     }; 
                     mediaRecorder.start(); 
                     isRecording = true; 
-                    document.getElementById('btn-mic').style.color = '#EF4444';
+                    document.getElementById('btn-mic').style.color = '#EF4444'; // Rojo al grabar
                 } catch(e) { alert("Microfono bloqueado"); }
             } else { 
                 mediaRecorder.stop(); 
@@ -1255,13 +1337,14 @@
             } 
         }
 
+        /* --- 8. ATAJOS RÁPIDOS --- */
         function checkQuickReply(input) { 
             const val = input.value; 
             const popup = document.getElementById('quick-replies'); 
-            if(val.startsWith('/')) { 
+            if (val.startsWith('/')) { 
                 const key = val.substring(1).toLowerCase(); 
                 const matches = shortcuts.filter(s => s.keyword.toLowerCase().includes(key)); 
-                if(matches.length) { 
+                if (matches.length) { 
                     popup.innerHTML = matches.map(s => `<div style="padding:8px; cursor:pointer; border-bottom:1px solid #eee;" onclick="useQuickReply('${s.text}')"><b>/${s.keyword}</b>: ${s.text}</div>`).join(''); 
                     popup.style.display = 'block'; 
                 } else popup.style.display = 'none'; 
@@ -1273,16 +1356,19 @@
             document.getElementById('msg-input').focus(); 
         }
         
+        /* --- 9. SANDBOX --- */
         async function runTest() {
             const input = document.getElementById('sand-in'); 
             const chatBox = document.getElementById('sand-chat'); 
             const logBox = document.getElementById('sand-log'); 
             const msg = input.value; 
-            if(!msg) return;
+            if (!msg) return;
 
+            // 1. Mostrar User Msg
             chatBox.innerHTML += `<div style="text-align:right; margin:5px;"><span style="background:#e2e8f0; padding:8px 12px; border-radius:10px;">${msg}</span></div>`; 
             input.value = '';
 
+            // 2. Log Request
             logBox.innerHTML += `<div class="log-entry log-req">> Enviando: "${msg}"</div>`; 
             logBox.scrollTop = logBox.scrollHeight;
 
@@ -1296,9 +1382,11 @@
                 const data = await res.json(); 
                 const latency = Date.now() - startT;
 
+                // 3. Mostrar Texto Respuesta
                 chatBox.innerHTML += `<div style="text-align:left; margin:5px;"><span style="background:var(--primary); color:white; padding:8px 12px; border-radius:10px;">${data.response}</span></div>`; 
                 chatBox.scrollTop = chatBox.scrollHeight;
 
+                // 4. Log JSON Response
                 logBox.innerHTML += `
                 <div class="log-entry log-res">
                     <span style="color:#0f0;">✔ RESPONSE (${latency}ms):</span><br>
@@ -1311,7 +1399,7 @@
             }
         }
 
-        /* --- 6. ACTIONS & UTILS --- */
+        /* --- 10. ACCIONES Y UTILIDADES --- */
         async function loadLeads() { try { allLeads = await fetch('/api/data/leads').then(r=>r.json()); document.getElementById('leads-body').innerHTML = allLeads.map(l => `<tr><td>${l.fecha.split(',')[0]}</td><td><a href="#" style="color:var(--primary); font-weight:600;" onclick="openEditLead(${l.id})">${l.nombre}</a></td><td>${l.ciudad}</td><td>${l.interes}</td><td><span class="tag-pill" style="background:${getLeadColor(l.etiqueta)}">${l.etiqueta}</span></td><td><button class="btn-icon" onclick="openEditLead(${l.id})"><i class="fas fa-edit"></i></button><button class="btn-icon" style="color:#EF4444;" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button></td></tr>`).join(''); } catch(e){} }
         function getLeadColor(s) { return s==='Vendido'?'#10B981':(s==='Lead'?'#3B82F6':(s==='Cotización'?'#F59E0B':'#64748B')); }
         async function downloadLeadsExcel() { try { const leadsRaw = await fetch('/api/data/leads').then(r=>r.json()); if(!leadsRaw.length) return alert("No hay datos"); const dataExport = leadsRaw.map(l => ({ Fecha: l.fecha, Nombre: l.nombre, Telefono: l.phone, Ciudad: l.ciudad, Interes: l.interes, Estado: l.etiqueta, Correo: l.correo })); const ws = XLSX.utils.json_to_sheet(dataExport); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Leads"); XLSX.writeFile(wb, `Leads_${new Date().toISOString().slice(0,10)}.xlsx`); } catch(e) { alert("Error al exportar"); } }
@@ -1392,7 +1480,7 @@
             loadInventory(); 
         }
         
-        // --- FUNCIÓN AGREGADA: BORRAR TODO EL INVENTARIO ---
+        // FUNCIÓN BORRAR INVENTARIO
         async function limpiarInventario() { 
             if(confirm("⚠ ¿ESTÁS SEGURO?\nEsto borrará TODO el inventario actual.")) { 
                 await fetch('/api/knowledge/clear', {method:'POST'}); 
@@ -1430,13 +1518,13 @@
             loadGlobalData(); 
         }
         
-        // --- ACTUALIZACIONES QUIRÚRGICAS (SOLO LO NECESARIO) ---
         async function addGlobalTag() { 
             const n=document.getElementById('new-tag-name').value; 
             const c=document.getElementById('new-tag-color').value; 
             if(!n) return; 
             await fetch('/api/tags/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:n, color:c})}); 
             document.getElementById('new-tag-name').value=''; 
+            
             // Solo actualizamos tags, no todo
             const tagsRes = await fetch('/api/data/tags');
             globalTags = await tagsRes.json() || [];
@@ -1476,7 +1564,6 @@
         async function addRule() { 
             const r = document.getElementById('rule-input').value; 
             if(!r) return; 
-            // Recibimos respuesta específica del backend para actualizar solo reglas
             const res = await fetch('/api/config/rules/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({rule:r})}).then(x=>x.json());
             document.getElementById('rule-input').value = ''; 
             renderRules(res.rules);
@@ -1510,7 +1597,7 @@
         function openTagSelector() { 
             const list = document.getElementById('tag-selector-list'); 
             const c = chats.find(x=>x.id===selectedId); 
-            if(!c) return; 
+            if (!c) return;
             const cur = c.labels || []; 
             list.innerHTML = globalTags.map(t => `
                 <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #eee; cursor:pointer;" onclick="toggleChatTag('${t.name}')">
