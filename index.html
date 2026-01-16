@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICC | Valentina Suite v22.3 Enterprise</title>
+    <title>ICC | Valentina Suite v22.4 Final</title>
     <link rel="icon" href="https://github.com/juanballen2/CHATBOT/blob/main/images/favicon.jpg?raw=true">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -127,11 +127,10 @@
         .form-control:focus { border-color: var(--primary); background: white; box-shadow: 0 0 0 3px rgba(15, 82, 186, 0.1); }
 
         /* =========================================
-           4. SISTEMA DE CHAT (3 COLUMNAS)
+           4. SISTEMA DE CHAT
            ========================================= */
         .chat-layout { display: flex; height: 100%; width: 100%; background: white; }
         
-        /* Columna 1: Lista */
         .cl-panel { width: 340px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: white; flex-shrink: 0; }
         .cl-header { padding: 18px; border-bottom: 1px solid var(--border); background: white; }
         .cl-tools { display: flex; gap: 8px; margin-top: 10px; }
@@ -150,7 +149,6 @@
             display: flex; align-items: center; justify-content: center; color: #94A3B8; font-size: 18px;
         }
 
-        /* Columna 2: Chat */
         .ca-panel { flex: 1; display: flex; flex-direction: column; position: relative; background: var(--chat-bg); min-width: 400px; }
         .chat-bg-pattern {
             position: absolute; width: 100%; height: 100%; opacity: 0.04;
@@ -165,14 +163,12 @@
         .messages-box { flex: 1; padding: 20px 40px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; z-index: 5; }
         .input-area { background: white; padding: 15px 24px; display: flex; align-items: center; gap: 12px; z-index: 10; border-top: 1px solid var(--border); }
         
-        /* Burbujas */
         .bubble { padding: 10px 16px; font-size: 14.5px; max-width: 65%; line-height: 1.5; position: relative; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .b-user { align-self: flex-start; background: white; border-radius: 0 12px 12px 12px; color: #1e293b; }
-        .b-manual { align-self: flex-end; background: #DBEAFE; border-radius: 12px 0 12px 12px; color: #1e3a8a; } /* Azul claro */
+        .b-manual { align-self: flex-end; background: #DBEAFE; border-radius: 12px 0 12px 12px; color: #1e3a8a; } 
         .b-bot { align-self: flex-end; background: #FFFFFF; border-radius: 12px 0 12px 12px; border-right: 4px solid var(--primary); margin-right: 2px; }
         .msg-time { font-size: 10px; opacity: 0.7; text-align: right; margin-top: 4px; }
 
-        /* Columna 3: CRM */
         .crm-panel { width: 320px; background: white; border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; transform: translateX(0); transition: transform 0.3s; }
         .crm-panel.closed { display: none; }
         .crm-header { padding: 30px 20px; text-align: center; background: #F8FAFC; border-bottom: 1px solid var(--border); }
@@ -192,14 +188,20 @@
         tr:hover td { background: #F8FAFC; }
         .tag-pill { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 15px; font-size: 11px; font-weight: 600; color: white; letter-spacing: 0.5px; }
 
-        /* Sandbox Terminal */
-        .sandbox-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 80vh; }
+        /* SANDBOX (CORREGIDO) */
+        .sandbox-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 75vh; }
+        
+        /* La terminal negra ahora tiene tamaño fijo y scroll propio */
         .terminal {
             background: var(--terminal-bg); color: #00FF00; font-family: 'Fira Code', monospace;
-            padding: 20px; border-radius: 10px; overflow-y: auto; font-size: 12px;
+            padding: 20px; border-radius: 10px; 
+            height: 100%; /* Ocupa todo el contenedor */
+            overflow-y: auto; /* Scroll */
+            font-size: 12px;
             box-shadow: inset 0 0 10px rgba(0,0,0,0.5); border: 1px solid #333;
+            resize: vertical; /* Permite redimensionar verticalmente si se desea */
         }
-        .log-entry { margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        .log-entry { margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px; word-wrap: break-word; }
         .log-req { color: #60A5FA; }
         .log-res { color: #FCD34D; }
 
@@ -400,47 +402,59 @@
 
         <div id="view-config" class="view page-container">
             <h1>Configuración del Sistema</h1>
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px;">
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:20px;">
                 
                 <div class="card" style="border-left: 4px solid var(--primary);">
                     <h3>🧠 Personalidad de Valentina</h3>
-                    <p class="text-light" style="font-size:12px; margin-bottom:10px;">Instrucciones base para la Inteligencia Artificial.</p>
-                    <textarea id="bot-prompt" class="form-control" style="height:250px; font-family:'Fira Code', monospace; font-size:12px;"></textarea>
+                    <p class="text-light" style="font-size:12px; margin-bottom:10px;">Instrucciones base (Prompt) del cerebro de la IA.</p>
+                    <textarea id="bot-prompt" class="form-control" style="height:300px; font-family:'Fira Code', monospace; font-size:12px; line-height:1.4; background:#f8f9fa; color:#333;"></textarea>
                     <div style="text-align:right;"><button class="btn" onclick="savePrompt()">Guardar Prompt</button></div>
                 </div>
 
                 <div class="card">
                     <h3>🏢 Identidad Visual</h3>
                     <div style="display:flex; align-items:center; gap:15px; margin:15px 0;">
-                        <div style="width:80px; height:80px; border:1px dashed #ccc; border-radius:10px; padding:5px;">
-                            <img id="preview-logo" src="" style="width:100%; height:100%; object-fit:contain; display:none;">
+                        <div style="width:80px; height:80px; border:1px dashed #ccc; border-radius:10px; padding:5px; display:flex; align-items:center; justify-content:center;">
+                            <img id="preview-logo" src="" style="max-width:100%; max-height:100%; display:none;">
+                            <span id="no-logo-text" style="font-size:10px; color:#ccc;">Sin Logo</span>
                         </div>
-                        <button class="btn-outline" onclick="document.getElementById('logo-upload').click()">Cambiar Logo</button>
-                        <input type="file" id="logo-upload" hidden accept="image/*" onchange="uploadLogo()">
+                        <div style="flex:1;">
+                            <button class="btn-outline" onclick="document.getElementById('logo-upload').click()" style="width:100%;">Subir Logo</button>
+                            <input type="file" id="logo-upload" hidden accept="image/*" onchange="uploadLogo()">
+                        </div>
                     </div>
                     <label style="font-size:13px; font-weight:600;">Nombre Comercial</label>
-                    <input id="biz-name" class="form-control">
+                    <input id="biz-name" class="form-control" placeholder="Ej: Importadora Casa Colombia">
                     <label style="font-size:13px; font-weight:600;">Horario de Atención</label>
-                    <input id="biz-hours" class="form-control">
+                    <input id="biz-hours" class="form-control" placeholder="Ej: Lunes a Viernes 8am - 6pm">
                     <button class="btn" onclick="saveBizConfig()">Actualizar Perfil</button>
                 </div>
 
                 <div class="card">
-                    <h3>🏷️ Etiquetas y Automatización</h3>
-                    <div style="display:flex; gap:5px; margin-top:10px;">
-                        <input id="new-tag-name" class="form-control" placeholder="Nombre Etiqueta" style="margin:0;">
-                        <input type="color" id="new-tag-color" style="height:42px; border:none; width:50px; cursor:pointer;">
+                    <h3>🏷️ Etiquetas y Reglas</h3>
+                    
+                    <label style="font-size:12px; font-weight:bold; color:#666;">Etiquetas de Cliente</label>
+                    <div style="display:flex; gap:5px; margin-bottom:10px;">
+                        <input id="new-tag-name" class="form-control" placeholder="Nueva etiqueta" style="margin:0;">
+                        <input type="color" id="new-tag-color" style="height:42px; border:none; width:50px; cursor:pointer;" value="#E9511D">
                         <button class="btn" onclick="addGlobalTag()">+</button>
                     </div>
-                    <div id="global-tags-list" style="margin:15px 0; display:flex; flex-wrap:wrap; gap:6px;"></div>
+                    <div id="global-tags-list" style="margin-bottom:20px; display:flex; flex-wrap:wrap; gap:6px;"></div>
                     
-                    <h4 style="margin-top:20px; font-size:14px;">Respuestas Rápidas (Shortcuts)</h4>
-                    <div style="display:flex; gap:5px; margin-top:5px;">
-                        <input id="new-sc-key" class="form-control" placeholder="/clave" style="width:80px; margin:0;">
-                        <input id="new-sc-text" class="form-control" placeholder="Mensaje..." style="margin:0;">
+                    <label style="font-size:12px; font-weight:bold; color:#666; margin-top:10px; display:block;">Reglas de Negocio / Técnicas</label>
+                    <div style="display:flex; gap:5px; margin-bottom:5px;">
+                        <input id="rule-input" class="form-control" placeholder="Ej: PC200 es Komatsu" style="margin:0;">
+                        <button class="btn" onclick="addRule()">+</button>
+                    </div>
+                    <div id="rules-list" style="max-height:150px; overflow-y:auto; border:1px solid #eee; border-radius:6px; padding:5px; margin-bottom:20px;"></div>
+
+                    <label style="font-size:12px; font-weight:bold; color:#666; display:block;">Respuestas Rápidas (Shortcuts)</label>
+                    <div style="display:flex; gap:5px; margin-bottom:5px;">
+                        <input id="new-sc-key" class="form-control" placeholder="/precio" style="width:80px; margin:0;">
+                        <input id="new-sc-text" class="form-control" placeholder="Texto completo..." style="margin:0;">
                         <button class="btn" onclick="addShortcut()">+</button>
                     </div>
-                    <div id="shortcuts-list" style="margin-top:10px; max-height:150px; overflow-y:auto;"></div>
+                    <div id="shortcuts-list" style="max-height:150px; overflow-y:auto; border:1px solid #eee; border-radius:6px; padding:5px;"></div>
                 </div>
             </div>
         </div>
@@ -511,7 +525,7 @@
         async function init() {
             await loadGlobalData();
             nav('dashboard');
-            setInterval(() => syncLoop(), 2500); 
+            setInterval(() => syncLoop(), 3000); 
         }
 
         function nav(v) {
@@ -523,34 +537,62 @@
             if(v==='leads') loadLeads();
             if(v==='inventory') loadInventory();
             if(v==='dashboard') loadDash();
+            if(v==='config') loadGlobalData();
         }
 
         async function loadGlobalData() {
             try {
-                const data = await fetch('/api/data/config').then(r=>r.json());
-                if(data) {
-                    document.getElementById('biz-name').value = data.biz_profile?.name||'';
-                    document.getElementById('biz-hours').value = data.biz_profile?.hours||'';
-                    document.getElementById('biz-web').value = data.website_data||'';
-                    if(data.logo_url) {
-                        document.getElementById('preview-logo').src = data.logo_url;
-                        document.getElementById('preview-logo').style.display = 'block';
-                        document.getElementById('sidebar-logo-img').src = data.logo_url;
+                // Config Load
+                const configRes = await fetch('/api/data/config');
+                const config = await configRes.json();
+                if(config) {
+                    document.getElementById('biz-name').value = config.biz_profile?.name || '';
+                    document.getElementById('biz-hours').value = config.biz_profile?.hours || '';
+                    document.getElementById('biz-web').value = config.website_data || '';
+                    if(config.logo_url) {
+                        const img = document.getElementById('preview-logo');
+                        img.src = config.logo_url; img.style.display = 'block';
+                        document.getElementById('no-logo-text').style.display = 'none';
+                        document.getElementById('sidebar-logo-img').src = config.logo_url;
                     }
+                    renderRules(config.tech_rules || []);
                 }
-                globalTags = await fetch('/api/data/tags').then(r=>r.json()) || [];
+                
+                // Prompt Load
+                const promptRes = await fetch('/api/config/prompt');
+                const promptData = await promptRes.json();
+                if(promptData && promptData.prompt) document.getElementById('bot-prompt').value = promptData.prompt;
+
+                // Tags & Shortcuts Load
+                const tagsRes = await fetch('/api/data/tags');
+                globalTags = await tagsRes.json() || [];
                 renderGlobalTags();
-                shortcuts = await fetch('/api/data/shortcuts').then(r=>r.json()) || [];
+
+                const scRes = await fetch('/api/data/shortcuts');
+                shortcuts = await scRes.json() || [];
                 renderShortcuts();
-                const pData = await fetch('/api/config/prompt').then(r=>r.json());
-                document.getElementById('bot-prompt').value = pData.prompt || "";
-            } catch(e) { console.warn('Init Partial', e); }
+
+            } catch(e) { console.error('Error loading data', e); }
+        }
+
+        /* --- RENDER FUNCTIONS FOR CONFIG --- */
+        function renderGlobalTags() { 
+            const container = document.getElementById('global-tags-list'); if(!container) return;
+            container.innerHTML = globalTags.map(t => `<span class="tag-pill" style="background:${t.color}; padding:6px 12px; font-size:12px; border:1px solid rgba(0,0,0,0.1);">${t.name} <i class="fas fa-times" style="margin-left:8px; cursor:pointer; opacity:0.7;" onclick="deleteTag(${t.id})"></i></span>`).join(''); 
+        }
+        function renderShortcuts() { 
+            const container = document.getElementById('shortcuts-list'); if(!container) return;
+            container.innerHTML = shortcuts.map(s => `<div style="padding:8px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; font-size:13px;"><div><span style="font-weight:bold; color:var(--primary);">/${s.keyword}</span> <span style="color:#666;">${s.text.substring(0,30)}...</span></div><i class="fas fa-trash" style="color:#EF4444; cursor:pointer;" onclick="deleteShortcut(${s.id})"></i></div>`).join(''); 
+        }
+        function renderRules(rules) {
+            const container = document.getElementById('rules-list'); if(!container) return;
+            container.innerHTML = rules.map((r, i) => `<div style="padding:6px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; font-size:12px;"><span>• ${r}</span><i class="fas fa-trash" style="color:#EF4444; cursor:pointer;" onclick="deleteRule(${i})"></i></div>`).join('');
         }
 
         /* --- CHAT SYSTEM --- */
         async function syncLoop(force = false) {
             try {
-                const view = document.getElementById('view-selector').value;
+                const view = document.getElementById('view-selector')?.value || 'active';
                 const res = await fetch(`/api/chats-full?view=${view}`);
                 const data = await res.json();
                 data.sort((a,b) => (b.pinned - a.pinned) || (new Date(b.timestamp) - new Date(a.timestamp)));
@@ -559,13 +601,10 @@
                     chats = data;
                     renderChatList();
                 }
-                
                 if(selectedId) {
                     const current = chats.find(c => c.id === selectedId);
-                    if(current) {
-                        renderBotStatus(current.botActive);
-                        if(current.unreadCount > 0) await fetch(`/api/chat-history/${selectedId}`); 
-                    }
+                    if(current && current.unreadCount > 0) await fetch(`/api/chat-history/${selectedId}`); 
+                    if(current) renderBotStatus(current.botActive);
                     const msgs = await fetch(`/api/chat-history/${selectedId}`).then(r=>r.json());
                     renderMsgs(msgs);
                 }
@@ -584,9 +623,10 @@
             });
 
             const tagSet = new Set(); chats.forEach(c=>(c.labels||[]).forEach(l=>tagSet.add(l)));
-            let opts = '<option value="">Filtrar Etiqueta</option>'; tagSet.forEach(t=>opts+=`<option value="${t}">${t}</option>`);
-            if(document.getElementById('tag-filter').innerHTML !== opts) document.getElementById('tag-filter').innerHTML = opts;
-            document.getElementById('tag-filter').value = f;
+            let opts = '<option value="">Etiquetas</option>'; tagSet.forEach(t=>opts+=`<option value="${t}">${t}</option>`);
+            const filterEl = document.getElementById('tag-filter');
+            if(filterEl && filterEl.innerHTML !== opts) filterEl.innerHTML = opts;
+            if(filterEl) filterEl.value = f;
 
             list.innerHTML = filtered.map(c => {
                 const tagsHtml = (c.labels || []).map(l => `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${getTagColor(l)}; margin-right:4px;" title="${l}"></span>`).join('');
@@ -655,7 +695,6 @@
             }
         }
 
-        // --- FIX AUDIO LAG ---
         function formatMedia(txt) {
             if(txt.includes('[MEDIA:IMAGE:')) {
                 const id = txt.match(/IMAGE:(.*?)\]/)[1];
@@ -663,7 +702,6 @@
             } else if(txt.includes('[MEDIA:AUDIO:')) {
                 const id = txt.match(/AUDIO:(.*?)\]/)[1];
                 const url = `/api/media-proxy/${id}`;
-                // PRELOAD=METADATA: Clave para que no se congele la interfaz
                 return `
                 <div style="display:flex; align-items:center; gap:8px; background:#f1f5f9; padding:5px; border-radius:10px; width:fit-content;">
                     <audio src="${url}" controls preload="metadata" style="height:35px; max-width:220px;"></audio>
@@ -737,19 +775,51 @@
             } else popup.style.display = 'none'; 
         }
         function useQuickReply(text) { document.getElementById('msg-input').value = text; document.getElementById('quick-replies').style.display = 'none'; document.getElementById('msg-input').focus(); }
+        
+        /* --- SANDBOX LOGIC (CORREGIDA) --- */
         async function runTest() {
-            const input = document.getElementById('sand-in'); const chatBox = document.getElementById('sand-chat'); const logBox = document.getElementById('sand-log'); const msg = input.value; if(!msg) return;
-            chatBox.innerHTML += `<div style="text-align:right; margin:5px;"><span style="background:#e2e8f0; padding:5px 10px; border-radius:10px;">${msg}</span></div>`; input.value = '';
-            logBox.innerHTML += `<div class="log-entry log-req">> Enviando: "${msg}"</div>`; logBox.scrollTop = logBox.scrollHeight;
+            const input = document.getElementById('sand-in'); 
+            const chatBox = document.getElementById('sand-chat'); 
+            const logBox = document.getElementById('sand-log'); 
+            const msg = input.value; 
+            if(!msg) return;
+
+            // 1. Mostrar User Msg en Chat UI
+            chatBox.innerHTML += `<div style="text-align:right; margin:5px;"><span style="background:#e2e8f0; padding:5px 10px; border-radius:10px;">${msg}</span></div>`; 
+            input.value = '';
+
+            // 2. Log Request en Terminal
+            logBox.innerHTML += `<div class="log-entry log-req">> Enviando: "${msg}"</div>`; 
+            logBox.scrollTop = logBox.scrollHeight;
+
             try {
-                const startT = Date.now(); const res = await fetch('/api/test-ai', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({message: msg})});
-                const data = await res.json(); const latency = Date.now() - startT;
-                chatBox.innerHTML += `<div style="text-align:left; margin:5px;"><span style="background:var(--primary); color:white; padding:5px 10px; border-radius:10px;">${data.response}</span></div>`; chatBox.scrollTop = chatBox.scrollHeight;
-                logBox.innerHTML += `<div class="log-entry log-res"><span style="color:#0f0;">✔ RESPONSE (${latency}ms):</span><br>${JSON.stringify(data, null, 2).replace(/\n/g, '<br>').replace(/ /g, '&nbsp;')}</div>`; logBox.scrollTop = logBox.scrollHeight;
-            } catch(e) { logBox.innerHTML += `<div class="log-entry" style="color:red;">❌ ERROR: ${e.message}</div>`; }
+                const startT = Date.now(); 
+                const res = await fetch('/api/test-ai', {
+                    method: 'POST', 
+                    headers: {'Content-Type':'application/json'}, 
+                    body: JSON.stringify({message: msg})
+                });
+                const data = await res.json(); 
+                const latency = Date.now() - startT;
+
+                // 3. Mostrar Solo Texto Respuesta en Chat UI (LIMPIO)
+                chatBox.innerHTML += `<div style="text-align:left; margin:5px;"><span style="background:var(--primary); color:white; padding:5px 10px; border-radius:10px;">${data.response}</span></div>`; 
+                chatBox.scrollTop = chatBox.scrollHeight;
+
+                // 4. Mostrar JSON completo en Terminal (TÉCNICO)
+                logBox.innerHTML += `
+                <div class="log-entry log-res">
+                    <span style="color:#0f0;">✔ RESPONSE (${latency}ms):</span><br>
+                    ${JSON.stringify(data, null, 2).replace(/\n/g, '<br>').replace(/ /g, '&nbsp;')}
+                </div>`; 
+                logBox.scrollTop = logBox.scrollHeight;
+
+            } catch(e) { 
+                logBox.innerHTML += `<div class="log-entry" style="color:red;">❌ ERROR: ${e.message}</div>`; 
+            }
         }
 
-        /* --- LEADS, INVENTORY & UTILS --- */
+        /* --- ACTIONS & UTILS --- */
         async function loadLeads() { try { allLeads = await fetch('/api/data/leads').then(r=>r.json()); document.getElementById('leads-body').innerHTML = allLeads.map(l => `<tr><td>${l.fecha.split(',')[0]}</td><td><a href="#" style="color:var(--primary); font-weight:600;" onclick="openEditLead(${l.id})">${l.nombre}</a></td><td>${l.ciudad}</td><td>${l.interes}</td><td><span class="tag-pill" style="background:${getLeadColor(l.etiqueta)}">${l.etiqueta}</span></td><td><button class="btn-icon" onclick="openEditLead(${l.id})"><i class="fas fa-edit"></i></button><button class="btn-icon" style="color:#EF4444;" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button></td></tr>`).join(''); } catch(e){} }
         function getLeadColor(s) { return s==='Vendido'?'#10B981':(s==='Lead'?'#3B82F6':(s==='Cotización'?'#F59E0B':'#64748B')); }
         async function downloadLeadsExcel() { try { const leadsRaw = await fetch('/api/data/leads').then(r=>r.json()); if(!leadsRaw.length) return alert("No hay datos"); const dataExport = leadsRaw.map(l => ({ Fecha: l.fecha, Nombre: l.nombre, Telefono: l.phone, Ciudad: l.ciudad, Interes: l.interes, Estado: l.etiqueta, Correo: l.correo })); const ws = XLSX.utils.json_to_sheet(dataExport); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Leads"); XLSX.writeFile(wb, `Leads_${new Date().toISOString().slice(0,10)}.xlsx`); } catch(e) { alert("Error al exportar"); } }
@@ -762,22 +832,35 @@
         function callUser() { if(selectedId) window.open(`tel:${selectedId}`); }
         function openEditLead(id) { const l = allLeads.find(x=>x.id===id); if(!l)return; document.getElementById('edit-lead-id').value=id; document.getElementById('edit-lead-name').value=l.nombre; document.getElementById('edit-lead-city').value=l.ciudad; document.getElementById('edit-lead-interest').value=l.interes; document.getElementById('edit-lead-email').value=l.correo; document.getElementById('edit-lead-tag').value=l.etiqueta; document.getElementById('modal-edit-lead').style.display='flex'; }
         async function saveLeadChanges() { const id = document.getElementById('edit-lead-id').value; const fields = ['nombre','ciudad','interes','correo','etiqueta']; for(const f of fields) { const val = document.getElementById('edit-lead-'+(f==='etiqueta'?'tag':f)).value; await fetch('/api/leads/update', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, field:f, value:val})}); } closeModal('modal-edit-lead'); loadLeads(); }
-        async function addGlobalTag() { const n=document.getElementById('new-tag-name').value; const c=document.getElementById('new-tag-color').value; await fetch('/api/tags/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:n, color:c})}); loadGlobalData(); }
-        function renderGlobalTags() { document.getElementById('global-tags-list').innerHTML = globalTags.map(t=>`<span class="tag-pill" style="background:${t.color}; padding:4px 8px;">${t.name} <i class="fas fa-times" style="margin-left:5px; cursor:pointer;" onclick="deleteTag(${t.id})"></i></span>`).join(''); }
-        async function deleteTag(id) { await fetch('/api/tags/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadGlobalData(); }
+        
+        async function savePrompt() { await fetch('/api/config/prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt: document.getElementById('bot-prompt').value})}); alert("✅ Personalidad guardada."); }
+        async function saveBizConfig() { await fetch('/api/config/biz/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:document.getElementById('biz-name').value, hours:document.getElementById('biz-hours').value, website_data:document.getElementById('biz-web').value})}); alert("✅ Perfil actualizado."); }
+        async function uploadLogo() { const f=document.getElementById('logo-upload').files[0]; if(!f) return; const fd=new FormData(); fd.append('file',f); await fetch('/api/config/logo',{method:'POST',body:fd}); loadGlobalData(); }
+        
+        async function addGlobalTag() { const n=document.getElementById('new-tag-name').value; const c=document.getElementById('new-tag-color').value; if(!n) return; await fetch('/api/tags/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:n, color:c})}); document.getElementById('new-tag-name').value=''; loadGlobalData(); }
+        async function deleteTag(id) { if(confirm("¿Borrar etiqueta?")) { await fetch('/api/tags/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadGlobalData(); } }
+        async function addShortcut() { const k=document.getElementById('new-sc-key').value; const t=document.getElementById('new-sc-text').value; if(!k || !t) return; await fetch('/api/shortcuts/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({keyword:k, text:t})}); document.getElementById('new-sc-key').value=''; document.getElementById('new-sc-text').value=''; loadGlobalData(); }
+        async function deleteShortcut(id) { if(confirm("¿Borrar atajo?")) { await fetch('/api/shortcuts/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadGlobalData(); } }
+        async function addRule() { const r = document.getElementById('rule-input').value; if(!r) return; await fetch('/api/config/rules/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({rule:r})}); document.getElementById('rule-input').value = ''; loadGlobalData(); }
+        async function deleteRule(i) { if(confirm("¿Borrar regla?")) { await fetch('/api/config/rules/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadGlobalData(); } }
+
+        async function deleteLead(id) { if(confirm("¿Eliminar Lead?")) { await fetch('/api/leads/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadLeads(); } }
+        async function cmAction(a) { const id=contextMenuChatId||selectedId; if(!id)return; const c=chats.find(x=>x.id===id); if(a==='pin') await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'toggle_pin', value:!c.pinned})}); if(a==='archive') { await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'toggle_archive', value:!c.archived})}); if(selectedId===id) selectedId=null; } if(a==='delete' && confirm("¿Borrar Historial?")) { await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'delete'})}); if(selectedId===id) selectedId=null; } if(a==='labels') openTagSelector(); syncLoop(true); }
+        async function uploadPhoto(input) { if(!input.files[0] || !selectedId) return; const fd = new FormData(); fd.append('file', input.files[0]); fd.append('phone', selectedId); await fetch('/api/contacts/upload-photo', {method:'POST', body:fd}); syncLoop(true); }
         async function loadInventory() { try { const d = await fetch('/api/data/knowledge').then(r=>r.json()); document.getElementById('inv-body').innerHTML = d.map((p,i)=>`<tr><td>${p.searchable}</td><td style="text-align:right;"><i class="fas fa-trash" style="color:#EF4444; cursor:pointer;" onclick="deleteProduct(${i})"></i></td></tr>`).join(''); } catch(e){} }
         async function deleteProduct(i) { if(confirm("¿Eliminar?")) await fetch('/api/knowledge/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); }
         async function uploadCSV() { const f = document.getElementById('csv-file').files[0]; if(!f) return; const fd = new FormData(); fd.append('file',f); await fetch('/api/knowledge/csv', {method:'POST', body:fd}); loadInventory(); alert("Inventario actualizado"); }
-        async function savePrompt() { await fetch('/api/config/prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt: document.getElementById('bot-prompt').value})}); alert("Prompt Guardado"); }
-        async function saveBizConfig() { await fetch('/api/config/biz/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:document.getElementById('biz-name').value, hours:document.getElementById('biz-hours').value, website_data:document.getElementById('biz-web').value})}); alert("Perfil Actualizado"); }
         async function toggleBot() { const c = chats.find(x=>x.id===selectedId); await fetch('/api/chat/toggle-bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedId, active:!c.botActive})}); syncLoop(true); }
         function renderBotStatus(active) { const btn = document.getElementById('prof-bot-btn'); btn.innerText = active?"🤖 BOT ACTIVADO":"⛔ BOT PAUSADO"; btn.style.background=active?'#DCFCE7':'#FEE2E2'; btn.style.color=active?'#166534':'#991B1B'; }
         function addContactPrompt() { const p = prompt("Ingresa el número (Ej: 573001234567):"); if(p) fetch('/api/contacts/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:p,name:p})}).then(()=>syncLoop(true)); }
-        async function deleteLead(id) { if(confirm("¿Eliminar Lead?")) { await fetch('/api/leads/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadLeads(); } }
-        async function cmAction(a) { const id=contextMenuChatId||selectedId; if(!id)return; const c=chats.find(x=>x.id===id); if(a==='pin') await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'toggle_pin', value:!c.pinned})}); if(a==='archive') { await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'toggle_archive', value:!c.archived})}); if(selectedId===id) selectedId=null; } if(a==='delete' && confirm("¿Borrar Historial?")) { await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'delete'})}); if(selectedId===id) selectedId=null; } if(a==='labels') openTagSelector(); syncLoop(true); }
-        async function uploadLogo() { const f=document.getElementById('logo-upload').files[0]; if(!f) return; const fd=new FormData(); fd.append('file',f); const r=await fetch('/api/config/logo',{method:'POST',body:fd}).then(x=>x.json()); if(r.success) loadGlobalData(); }
-        async function uploadPhoto(input) { if(!input.files[0] || !selectedId) return; const fd = new FormData(); fd.append('file', input.files[0]); fd.append('phone', selectedId); await fetch('/api/contacts/upload-photo', {method:'POST', body:fd}); syncLoop(true); }
-        async function addShortcut() { const k=document.getElementById('new-sc-key').value; const t=document.getElementById('new-sc-text').value; await fetch('/api/shortcuts/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({keyword:k, text:t})}); loadGlobalData(); }
+        
+        function openTagSelector() { 
+            const list = document.getElementById('tag-selector-list'); const c = chats.find(x=>x.id===selectedId); if(!c) return;
+            const cur = c.labels || [];
+            list.innerHTML = globalTags.map(t => `<div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #eee; cursor:pointer;" onclick="toggleChatTag('${t.name}')"><span><span class="tag-pill" style="background:${t.color}">${t.name}</span></span> ${cur.includes(t.name)?'<i class="fas fa-check" style="color:green;"></i>':''}</div>`).join('');
+            document.getElementById('modal-tag-selector').style.display='flex';
+        }
+        async function toggleChatTag(n) { const c=chats.find(x=>x.id===selectedId); let tags=c.labels||[]; if(tags.includes(n)) tags=tags.filter(x=>x!==n); else tags.push(n); await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, action:'set_labels', value:tags})}); openTagSelector(); syncLoop(true); }
         async function loadDash() { try { const [l,c,s] = await Promise.all([ fetch('/api/data/leads').then(r=>r.json()), fetch('/api/chats-full').then(r=>r.json()), fetch('/api/data/knowledge').then(r=>r.json()) ]); document.getElementById('kpi-leads').innerText = l.length; document.getElementById('kpi-chats').innerText = c.length; document.getElementById('kpi-stock').innerText = s.length; document.getElementById('dash-leads-body').innerHTML = l.slice(0,5).map(x => `<tr><td style="font-weight:600;">${x.nombre}</td><td>${x.ciudad}</td><td>${x.interes}</td><td>${x.fecha.split(',')[0]}</td></tr>`).join(''); } catch(e){} }
 
         window.onload = init;
