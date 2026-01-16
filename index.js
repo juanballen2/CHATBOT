@@ -1,5 +1,5 @@
 /* ============================================================
- * SERVER BACKEND - VALENTINA v22.5 (FULL ENTERPRISE & EXTENDED)
+ * SERVER BACKEND - VALENTINA v22.12 (SYNTAX FIX & STABLE)
  * Cliente: Importadora Casa Colombia (ICC)
  * ============================================================
  */
@@ -20,12 +20,12 @@ const { open } = require('sqlite');
 const app = express();
 app.set('trust proxy', 1);
 
-// Aumentamos límites para archivos pesados (imágenes/videos)
+// Aumentamos límites para archivos pesados
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors());
 
-// Configuración de carga de archivos
+// Configuración de carga de archivos (Memoria)
 const upload = multer({ 
     storage: multer.memoryStorage(),
     limits: { fileSize: 100 * 1024 * 1024 } // 100MB Límite
@@ -39,7 +39,10 @@ const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = "icc-val-secure-v22"; 
 
-// --- 3. PROMPT MAESTRO (PERSONALIDAD) ---
+// --- 3. PROMPT MAESTRO (CORREGIDO: SINTAXIS SEGURA) ---
+/* NOTA IMPORTANTE: Las comillas invertidas internas (```) ahora tienen 
+   una barra invertida antes (\) para evitar que el servidor se rompa (CRASH).
+*/
 const DEFAULT_PROMPT = `ERES VALENTINA, ASISTENTE DE VENTAS DE IMPORTADORA CASA COLOMBIA VENDES MAQUINARIA PESADA Y REPUESTOS (ICC).
 
 TU ÚNICO OBJETIVO:
@@ -71,7 +74,9 @@ ESTADO 4: CIERRE (Tienes Producto + Nombre + Ubicación)
 -> "Gracias [Nombre]. Con estos datos paso tu solicitud a un asesor comercial para que te contacte en breve con el precio."
 
 OUTPUT JSON OBLIGATORIO AL FINAL DE TU MENSAJE:
-```json {"es_lead": boolean, "nombre":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead"} ```
+\`\`\`json 
+{"es_lead": boolean, "nombre":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead"} 
+\`\`\`
 `;
 
 // --- 4. GESTIÓN DE SESIONES ---
@@ -83,7 +88,6 @@ app.use(session({
     cookie: { secure: false, maxAge: 86400000 } // 24 Horas
 }));
 
-// Middleware de Protección (Login)
 const proteger = (req, res, next) => {
     return req.session.isLogged ? next() : res.status(401).send("No autorizado");
 };
@@ -109,7 +113,6 @@ let db, globalKnowledge = [], serverInstance;
             driver: sqlite3.Database 
         });
 
-        // Definición de Tablas (COMPLETAS)
         const tables = [
             `history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT)`,
             `leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT)`,
@@ -125,7 +128,7 @@ let db, globalKnowledge = [], serverInstance;
             await db.exec(`CREATE TABLE IF NOT EXISTS ${t}`);
         }
 
-        // Migraciones de Seguridad (Para no perder datos viejos)
+        // Migraciones de Seguridad
         const migrations = ['photoUrl', 'archived', 'unreadCount'].map(c => `ALTER TABLE metadata ADD COLUMN ${c}`);
         migrations.push('ALTER TABLE config ADD COLUMN logoUrl TEXT');
         
@@ -133,18 +136,17 @@ let db, globalKnowledge = [], serverInstance;
             try { await db.exec(m); } catch(e){} 
         }
 
-        // Asegurar Prompt Inicial
+        // Verificar Prompt Inicial
         const currentPrompt = await getCfg('bot_prompt');
         if (!currentPrompt) {
             await setCfg('bot_prompt', DEFAULT_PROMPT); 
         }
         
-        await refreshKnowledge(); // Cargar inventario en memoria RAM
+        await refreshKnowledge(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER v22.5 READY (Full Mode)`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER v22.12 READY (Stable)`));
         
-        // Manejo de errores de puerto ocupado
         serverInstance.on('error', (e) => { 
             if(e.code === 'EADDRINUSE') {
                 console.log("Puerto ocupado, reintentando...");
@@ -246,17 +248,17 @@ function limpiarRespuesta(txt) {
 }
 
 async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFile = false) {
-    // 1. Guardar mensaje del usuario
+    // 1. Guardar User Msg
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', dbMsg, new Date().toISOString()]);
     
-    // 2. Actualizar metadatos
+    // 2. Metadata (Archived=0, Unread+1)
     await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [phone]);
 
-    // 3. Verificar estado del Bot
+    // 3. Bot Status Check
     const bot = await db.get("SELECT active FROM bot_status WHERE phone = ?", [phone]);
     if (bot && bot.active === 0) return null;
 
-    // 4. Manejo de Archivos
+    // 4. File Handling
     if (isFile) {
         const replyFile = "¡Recibido! 📁 Lo reviso enseguida.";
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', replyFile, new Date().toISOString()]);
@@ -270,13 +272,9 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const techRules = await getCfg('tech_rules', []);
     const biz = await getCfg('biz_profile', {});
     
-    // Historial
     const history = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [phone])).reverse();
-    
-    // CRM
     const lead = await db.get("SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
     
-    // Memoria
     let memoriaDatos = `DATOS YA CAPTURADOS (NO PREGUNTAR DE NUEVO):\n- Teléfono: ${phone}\n`;
     if (lead) {
         if (lead.nombre && lead.nombre !== "Cliente" && lead.nombre !== "null") memoriaDatos += `- Nombre: ${lead.nombre}\n`;
@@ -287,7 +285,6 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         memoriaDatos += "- ESTADO: Cliente Nuevo (Falta Nombre y Ciudad).";
     }
 
-    // Búsqueda Inventario
     const stock = globalKnowledge.filter(i => (i.searchable||"").toLowerCase().includes(aiMsg.toLowerCase().split(" ")[0])).slice(0,5);
 
     const prompt = `
@@ -407,18 +404,10 @@ app.get('/api/chats-full', proteger, async (req, res) => {
             GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 50`;
 
         const rows = await db.all(query, params);
-        
         res.json(rows.map(r => ({ 
-            id: r.id, 
-            name: r.contactName || r.id, 
-            lastMessage: { text: r.lastText, time: r.timestamp }, 
-            botActive: r.botActive !== 0, 
-            pinned: r.pinned === 1, 
-            archived: r.archived === 1, 
-            unreadCount: r.unreadCount || 0, 
-            labels: JSON.parse(r.labels || "[]"), 
-            photoUrl: r.photoUrl, 
-            timestamp: r.timestamp 
+            id: r.id, name: r.contactName || r.id, lastMessage: { text: r.lastText, time: r.timestamp }, 
+            botActive: r.botActive !== 0, pinned: r.pinned === 1, archived: r.archived === 1, unreadCount: r.unreadCount || 0, 
+            labels: JSON.parse(r.labels || "[]"), photoUrl: r.photoUrl, timestamp: r.timestamp 
         })));
     } catch(e) { res.status(500).json([]); }
 });
@@ -445,12 +434,7 @@ app.get('/api/data/:type', proteger, async (req, res) => {
     else if (t === 'tags') res.json(await db.all("SELECT * FROM global_tags"));
     else if (t === 'shortcuts') res.json(await db.all("SELECT * FROM shortcuts"));
     else if (t === 'knowledge') res.json(await db.all("SELECT * FROM inventory"));
-    else if (t === 'config') res.json({ 
-        website_data: await getCfg('website_data', ""), 
-        tech_rules: await getCfg('tech_rules', []), 
-        biz_profile: await getCfg('biz_profile', {}), 
-        logo_url: await getCfg('logo_url') 
-    });
+    else if (t === 'config') res.json({ website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []), biz_profile: await getCfg('biz_profile', {}), logo_url: await getCfg('logo_url') });
     else res.json([]);
 });
 
@@ -487,13 +471,12 @@ app.post('/api/config/rules/delete', proteger, async (req, res) => { let r=await
 app.post('/api/leads/update', proteger, async(req,res)=>{ await db.run(`UPDATE leads SET ${req.body.field}=? WHERE id=?`,[req.body.value, req.body.id]); res.json({success:true}); });
 app.post('/api/leads/delete', proteger, async(req,res)=>{ await db.run("DELETE FROM leads WHERE id=?",[req.body.id]); res.json({success:true}); });
 
-// --- AQUÍ ESTÁ LA NUEVA FUNCIÓN DE LIMPIEZA DE INVENTARIO ---
 app.post('/api/knowledge/delete', proteger, async (req, res) => { 
     const i=await db.all("SELECT id FROM inventory"); 
     if(i[req.body.index]) await db.run("DELETE FROM inventory WHERE id=?",[i[req.body.index].id]); 
     await refreshKnowledge(); res.json({success:true}); 
 });
-// NUEVA FUNCIÓN AÑADIDA: Borrar todo el inventario
+// Endpoint LIMPIEZA TOTAL
 app.post('/api/knowledge/clear', proteger, async (req, res) => { 
     await db.run("DELETE FROM inventory"); 
     await refreshKnowledge(); 
@@ -507,7 +490,7 @@ app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res)
     } catch(e) { res.status(500).json({ error: "CSV Error" }); } 
 });
 
-// --- ENVIOS Y NUEVOS CHATS ---
+// --- ENVÍO DE MENSAJES ---
 app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => { 
     try { 
         const mid = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname); 
@@ -522,16 +505,13 @@ app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, r
 app.post('/api/chat/send', proteger, async (req, res) => { 
     const { phone, message } = req.body;
     const cleanPhone = phone.replace(/\D/g, ''); 
-
     try {
         const sent = await enviarWhatsApp(cleanPhone, message);
         if(sent) { 
             await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', message, new Date().toISOString()]); 
-            
-            // FIX: Registrar contacto manual para que aparezca en la lista
+            // FIX: Auto-registro de contacto manual
             await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount) 
                           VALUES (?, ?, 1, 0, 0) ON CONFLICT(phone) DO NOTHING`, [cleanPhone, cleanPhone]);
-            
             res.json({ success: true }); 
         } else res.status(500).json({ error: "Error enviando" }); 
     } catch(e) { res.status(500).json({ error: "Error interno" }); }
@@ -565,7 +545,5 @@ app.post('/webhook', async (req, res) => {
     } catch(e) { console.error("Webhook Error", e); } 
 });
 
-// --- CIERRE SEGURO ---
 process.on('SIGTERM', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
 process.on('SIGINT', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
-
