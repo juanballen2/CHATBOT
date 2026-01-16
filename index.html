@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICC | Valentina Suite v22.11 (Full Enterprise Expanded)</title>
+    <title>ICC | Valentina Suite v22.10 (Stable)</title>
     
     <link rel="icon" href="https://github.com/juanballen2/CHATBOT/blob/main/images/favicon.jpg?raw=true">
     
@@ -14,679 +14,209 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
     <style>
-        /* ============================================================
-           1. VARIABLES DEL SISTEMA (TEMA CORPORATIVO AZUL ICC)
-           ============================================================ */
+        /* =========================================
+           1. VARIABLES Y BASE
+           ========================================= */
         :root {
-            --primary: #0F52BA;        /* Azul Zafiro */
-            --primary-dark: #0a3d8f;   /* Azul Profundo */
-            --bg-body: #F3F4F6;        /* Gris Fondo */
-            --bg-sidebar: #1E293B;     /* Azul Noche (Sidebar) */
-            --bg-card: #FFFFFF;        /* Blanco Tarjetas */
-            --text-main: #1F2937;      /* Texto Principal */
-            --text-light: #6B7280;     /* Texto Secundario */
-            --border: #E5E7EB;         /* Bordes Suaves */
-            --chat-bg: #EAEFF5;        /* Fondo Chat */
-            --terminal-bg: #0F172A;    /* Fondo Terminal Sandbox */
-            --danger: #EF4444;         /* Rojo Alerta */
-            --success: #10B981;        /* Verde Éxito */
+            --primary: #0F52BA;        /* Azul Zafiro ICC */
+            --primary-dark: #0a3d8f;
+            --bg-body: #F3F4F6;
+            --bg-sidebar: #1E293B;     /* Azul Noche */
+            --bg-card: #FFFFFF;
+            --text-main: #1F2937;
+            --text-light: #6B7280;
+            --border: #E5E7EB;
+            --chat-bg: #EAEFF5;
+            --terminal-bg: #0F172A;
         }
 
-        /* ============================================================
-           2. ESTILOS BASE Y RESET
-           ============================================================ */
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            outline: none;
-            font-family: 'Inter', sans-serif;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; outline: none; font-family: 'Inter', sans-serif; }
         
         body {
             background-color: var(--bg-body);
             color: var(--text-main);
             height: 100vh;
             display: flex;
-            overflow: hidden; /* Evita doble barra de scroll */
+            overflow: hidden;
         }
 
-        /* Scrollbars Personalizados (Finos y Elegantes) */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: #CBD5E1;
-            border-radius: 4px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--primary);
-        }
+        /* Scrollbars Finos */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
 
-        /* Animaciones Globales */
-        @keyframes slideIn {
-            from { 
-                opacity: 0; 
-                transform: translateY(10px); 
-            }
-            to { 
-                opacity: 1; 
-                transform: translateY(0); 
-            }
-        }
-        
-        .msg-anim {
-            animation: slideIn 0.3s ease-out forwards;
-        }
-
-        /* ============================================================
-           3. BARRA LATERAL (SIDEBAR)
-           ============================================================ */
+        /* =========================================
+           2. SIDEBAR
+           ========================================= */
         .sidebar {
-            width: 80px;
+            width: 75px;
             background: var(--bg-sidebar);
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 25px 0;
+            padding: 20px 0;
             z-index: 50;
             box-shadow: 4px 0 15px rgba(0,0,0,0.15);
             flex-shrink: 0;
         }
 
         .logo-area {
-            width: 50px;
-            height: 50px;
-            margin-bottom: 40px;
-            cursor: pointer;
-            background: white;
-            border-radius: 12px;
-            padding: 4px;
-            transition: transform 0.2s;
-            overflow: hidden;
+            width: 50px; height: 50px; margin-bottom: 30px; cursor: pointer;
+            background: white; border-radius: 12px; padding: 4px; transition: transform 0.2s;
         }
-        
-        .logo-area:hover {
-            transform: scale(1.05);
-        }
+        .logo-area:hover { transform: scale(1.05); }
 
         .nav-item {
-            width: 48px;
-            height: 48px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #94A3B8; /* Gris azulado */
-            cursor: pointer;
-            margin-bottom: 20px;
-            transition: all 0.2s ease;
-            position: relative;
+            width: 44px; height: 44px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            color: #94A3B8; cursor: pointer; margin-bottom: 15px;
+            transition: all 0.2s ease; position: relative;
         }
-        
-        .nav-item:hover {
-            background: rgba(255,255,255,0.15);
-            color: white;
-        }
-        
-        .nav-item.active {
-            background: var(--primary);
-            color: white;
-            box-shadow: 0 4px 15px rgba(15, 82, 186, 0.4);
-        }
-        
-        .nav-item i {
-            font-size: 22px;
-        }
+        .nav-item:hover { background: rgba(255,255,255,0.15); color: white; }
+        .nav-item.active { background: var(--primary); color: white; box-shadow: 0 4px 15px rgba(15, 82, 186, 0.4); }
+        .nav-item i { font-size: 20px; }
 
-        /* Tooltip simple al hacer hover */
-        .nav-item::after {
-            content: attr(title);
-            position: absolute;
-            left: 70px;
-            background: #333;
-            color: white;
-            padding: 6px 10px;
-            border-radius: 4px;
-            font-size: 12px;
-            opacity: 0;
-            pointer-events: none;
-            transition: 0.2s;
-            white-space: nowrap;
-            z-index: 100;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
-        }
-        
-        .nav-item:hover::after {
-            opacity: 1;
-        }
-
-        /* ============================================================
-           4. CONTENEDOR PRINCIPAL
-           ============================================================ */
+        /* =========================================
+           3. LAYOUT PRINCIPAL
+           ========================================= */
         .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            position: relative;
+            flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative;
         }
         
         .view {
-            display: none;
-            height: 100%;
-            flex-direction: column;
-            overflow-y: auto;
-            padding: 0;
+            display: none; height: 100%; flex-direction: column; overflow-y: auto; padding: 0;
         }
-        
         .view.active {
-            display: flex;
-            /* Nota: Animación removida aquí para evitar parpadeo general */
+            display: flex; /* Animación removida para estabilidad */
         }
-        
         .page-container {
-            padding: 30px;
-            max-width: 1600px;
-            margin: 0 auto;
-            width: 100%;
+            padding: 30px; max-width: 1600px; margin: 0 auto; width: 100%;
         }
 
-        /* Títulos */
-        h1 {
-            font-size: 28px;
-            font-weight: 700;
-            margin-bottom: 25px;
-            color: var(--text-main);
-            letter-spacing: -0.5px;
-        }
-        
-        h2, h3 {
-            color: var(--text-main);
-            font-weight: 600;
-        }
+        h1 { font-size: 26px; font-weight: 700; margin-bottom: 20px; color: var(--text-main); }
+        h2, h3 { color: var(--text-main); font-weight: 600; }
 
-        /* Tarjetas */
         .card {
-            background: var(--bg-card);
-            border-radius: 16px;
-            padding: 25px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-            border: 1px solid var(--border);
-            height: 100%;
-            display: flex;
-            flex-direction: column;
+            background: var(--bg-card); border-radius: 12px; padding: 25px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid var(--border);
+            height: 100%; display: flex; flex-direction: column;
         }
 
-        /* Botones */
+        /* Botones e Inputs */
         .btn {
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 600;
-            transition: 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            justify-content: center;
+            background: var(--primary); color: white; border: none; padding: 10px 18px;
+            border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;
+            transition: 0.2s; display: inline-flex; align-items: center; gap: 8px; justify-content: center;
         }
-        
-        .btn:hover {
-            background: var(--primary-dark);
-            transform: translateY(-1px);
-        }
+        .btn:hover { background: var(--primary-dark); transform: translateY(-1px); }
         
         .btn-outline {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text-main);
-            padding: 8px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 500;
+            background: transparent; border: 1px solid var(--border); color: var(--text-main);
+            padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500;
             transition: 0.2s;
         }
-        
-        .btn-outline:hover {
-            background: #F8FAFC;
-            border-color: #CBD5E1;
-        }
+        .btn-outline:hover { background: #F8FAFC; border-color: #CBD5E1; }
 
         .btn-icon {
-            background: none;
-            border: none;
-            font-size: 18px;
-            color: #64748B;
-            cursor: pointer;
-            padding: 8px;
-            border-radius: 50%;
-            transition: 0.2s;
+            background: none; border: none; font-size: 18px; color: #64748B;
+            cursor: pointer; padding: 8px; border-radius: 50%; transition: 0.2s;
         }
+        .btn-icon:hover { background: rgba(0,0,0,0.05); color: var(--primary); }
         
-        .btn-icon:hover {
-            background: rgba(0,0,0,0.05);
-            color: var(--primary);
-        }
-        
-        /* Inputs */
         .form-control {
-            width: 100%;
-            padding: 12px 15px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            margin-bottom: 12px;
-            font-size: 14px;
-            background: #F8FAFC;
-            transition: 0.2s;
-            color: var(--text-main);
+            width: 100%; padding: 10px 14px; border: 1px solid var(--border);
+            border-radius: 8px; margin-bottom: 12px; font-size: 14px;
+            background: #F8FAFC; transition: 0.2s; color: var(--text-main);
         }
-        
-        .form-control:focus {
-            border-color: var(--primary);
-            background: white;
-            box-shadow: 0 0 0 3px rgba(15, 82, 186, 0.1);
-        }
+        .form-control:focus { border-color: var(--primary); background: white; box-shadow: 0 0 0 3px rgba(15, 82, 186, 0.1); }
 
-        /* ============================================================
-           5. SISTEMA DE CHAT (LAYOUT 3 COLUMNAS)
-           ============================================================ */
-        .chat-layout {
-            display: flex;
-            height: 100%;
-            width: 100%;
-            background: white;
-        }
+        /* =========================================
+           4. CHAT SYSTEM
+           ========================================= */
+        .chat-layout { display: flex; height: 100%; width: 100%; background: white; }
         
-        /* -- COLUMNA 1: LISTA DE CHATS -- */
-        .cl-panel {
-            width: 340px;
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            background: white;
-            flex-shrink: 0;
-        }
-        
-        .cl-header {
-            padding: 20px;
-            border-bottom: 1px solid var(--border);
-            background: white;
-        }
-        
-        .cl-tools {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
-        
-        .cl-list {
-            flex: 1;
-            overflow-y: auto;
-            background: #FAFAFA;
-        }
+        /* Lista */
+        .cl-panel { width: 340px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: white; flex-shrink: 0; }
+        .cl-header { padding: 18px; border-bottom: 1px solid var(--border); background: white; }
+        .cl-tools { display: flex; gap: 10px; margin-top: 10px; }
+        .cl-list { flex: 1; overflow-y: auto; background: #FAFAFA; }
         
         .chat-item {
-            padding: 15px 20px;
-            border-bottom: 1px solid #F1F5F9;
-            cursor: pointer;
-            display: flex;
-            gap: 12px;
-            position: relative;
-            transition: all 0.2s;
-            background: white;
+            padding: 14px 18px; border-bottom: 1px solid #F1F5F9; cursor: pointer;
+            display: flex; gap: 12px; position: relative; transition: background-color 0.2s; background: white;
         }
-        
-        .chat-item:hover {
-            background: #F8FAFC;
-        }
-        
-        .chat-item.active {
-            background: #EFF6FF;
-            border-left: 4px solid var(--primary);
-        }
-        
-        .avatar {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            background: #E2E8F0;
-            background-size: cover;
-            background-position: center;
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #94A3B8;
-            font-size: 20px;
-        }
+        .chat-item:hover { background: #F8FAFC; }
+        .chat-item.active { background: #EFF6FF; border-left: 4px solid var(--primary); }
+        .avatar { width: 45px; height: 45px; border-radius: 50%; background: #E2E8F0; background-size: cover; background-position: center; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #94A3B8; font-size: 20px; }
 
-        /* -- COLUMNA 2: ÁREA DE CONVERSACIÓN -- */
-        .ca-panel {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            background: var(--chat-bg);
-            min-width: 400px;
-        }
-        
+        /* Conversación */
+        .ca-panel { flex: 1; display: flex; flex-direction: column; position: relative; background: var(--chat-bg); min-width: 400px; }
         .chat-bg-pattern {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            opacity: 0.05;
+            position: absolute; width: 100%; height: 100%; opacity: 0.05;
             background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
-            pointer-events: none;
-            z-index: 0;
+            pointer-events: none; z-index: 0;
         }
         
-        .ca-header {
-            background: white;
-            padding: 15px 25px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            z-index: 10;
-            height: 70px;
-        }
-        
-        .messages-box {
-            flex: 1;
-            padding: 20px 40px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            z-index: 5;
-        }
-        
-        .input-area {
-            background: white;
-            padding: 15px 25px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            z-index: 10;
-            border-top: 1px solid var(--border);
-        }
+        .ca-header { background: white; padding: 12px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; z-index: 10; height: 70px; }
+        .messages-box { flex: 1; padding: 20px 40px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; z-index: 5; }
+        .input-area { background: white; padding: 15px 25px; display: flex; align-items: center; gap: 15px; z-index: 10; border-top: 1px solid var(--border); }
         
         /* Burbujas */
-        .bubble {
-            padding: 12px 18px;
-            font-size: 14.5px;
-            max-width: 70%;
-            line-height: 1.5;
-            position: relative;
-            border-radius: 12px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        }
-        
-        .b-user {
-            align-self: flex-start;
-            background: white;
-            border-radius: 0 12px 12px 12px;
-            color: #1e293b;
-        }
-        
-        .b-manual {
-            align-self: flex-end;
-            background: #DBEAFE; /* Azul suave para manual */
-            border-radius: 12px 0 12px 12px;
-            color: #1e3a8a;
-        }
-        
-        .b-bot {
-            align-self: flex-end;
-            background: #FFFFFF;
-            border-radius: 12px 0 12px 12px;
-            border-right: 5px solid var(--primary); /* Distintivo del Bot */
-            margin-right: 2px;
-        }
-        
-        .msg-time {
-            font-size: 11px;
-            opacity: 0.6;
-            text-align: right;
-            margin-top: 5px;
-        }
+        .bubble { padding: 10px 16px; font-size: 14.5px; max-width: 70%; line-height: 1.5; position: relative; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .b-user { align-self: flex-start; background: white; border-radius: 0 12px 12px 12px; color: #1e293b; }
+        .b-manual { align-self: flex-end; background: #DBEAFE; border-radius: 12px 0 12px 12px; color: #1e3a8a; }
+        .b-bot { align-self: flex-end; background: #FFFFFF; border-radius: 12px 0 12px 12px; border-right: 5px solid var(--primary); margin-right: 2px; }
+        .msg-time { font-size: 11px; opacity: 0.6; text-align: right; margin-top: 4px; }
 
-        /* -- COLUMNA 3: PANEL CRM -- */
-        .crm-panel {
-            width: 320px;
-            background: white;
-            border-left: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            overflow-y: auto;
-            flex-shrink: 0;
-            transform: translateX(0);
-            transition: transform 0.3s;
-        }
+        /* CRM */
+        .crm-panel { width: 320px; background: white; border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; transform: translateX(0); transition: transform 0.3s; }
+        .crm-panel.closed { display: none; }
+        .crm-header { padding: 30px 20px; text-align: center; background: #F8FAFC; border-bottom: 1px solid var(--border); }
+        .crm-body { padding: 24px; }
+        .crm-stat { background: #F8FAFC; padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; border: 1px solid var(--border); }
         
-        .crm-panel.closed {
-            display: none;
-        }
+        /* =========================================
+           6. UTILS, TABLAS Y SCROLLBARS DE CONFIG
+           ========================================= */
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 24px; margin-bottom: 30px; }
+        .kpi-card { background: white; padding: 24px; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .kpi-icon { width: 55px; height: 55px; border-radius: 12px; background: #EFF6FF; color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 24px; }
         
-        .crm-header {
-            padding: 30px 20px;
-            text-align: center;
-            background: #F8FAFC;
-            border-bottom: 1px solid var(--border);
-        }
-        
-        .crm-body {
-            padding: 25px;
-        }
-        
-        .crm-stat {
-            background: #F8FAFC;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            font-size: 13px;
-            border: 1px solid var(--border);
-        }
-        
-        /* ============================================================
-           6. DASHBOARD, TABLAS Y UTILIDADES
-           ============================================================ */
-        .kpi-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 25px;
-            margin-bottom: 30px;
-        }
-        
-        .kpi-card {
-            background: white;
-            padding: 25px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-        }
-        
-        .kpi-icon {
-            width: 55px;
-            height: 55px;
-            border-radius: 12px;
-            background: #EFF6FF;
-            color: var(--primary);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-        }
-        
-        /* Estilos de Tabla */
-        table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            font-size: 14px;
-        }
-        
-        th {
-            text-align: left;
-            padding: 18px;
-            background: #F8FAFC;
-            color: #475569;
-            font-weight: 600;
-            border-bottom: 1px solid var(--border);
-            position: sticky;
-            top: 0;
-        }
-        
-        td {
-            padding: 16px 18px;
-            border-bottom: 1px solid #F1F5F9;
-            color: #334155;
-        }
-        
-        tr:hover td {
-            background: #F8FAFC;
-        }
-        
-        .tag-pill {
-            display: inline-flex;
-            align-items: center;
-            padding: 4px 10px;
-            border-radius: 15px;
-            font-size: 11px;
-            font-weight: 600;
-            color: white;
-            letter-spacing: 0.5px;
-        }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
+        th { text-align: left; padding: 16px; background: #F8FAFC; color: #475569; font-weight: 600; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+        td { padding: 14px 16px; border-bottom: 1px solid #F1F5F9; color: #334155; }
+        tr:hover td { background: #F8FAFC; }
+        .tag-pill { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 15px; font-size: 11px; font-weight: 600; color: white; letter-spacing: 0.5px; }
 
-        /* ============================================================
-           7. SANDBOX (TERMINAL)
-           ============================================================ */
-        .sandbox-layout {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 25px;
-            height: 75vh;
-        }
-        
-        .terminal {
-            background: var(--terminal-bg);
-            color: #00FF00;
-            font-family: 'Fira Code', monospace;
-            padding: 20px;
-            border-radius: 10px;
-            height: 100%;
-            overflow-y: auto;
-            font-size: 13px;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
-            border: 1px solid #333;
-            resize: vertical;
-        }
-        
-        .log-entry {
-            margin-bottom: 12px;
-            border-bottom: 1px solid #333;
-            padding-bottom: 8px;
-            word-wrap: break-word;
-        }
-        
-        .log-req { color: #60A5FA; }
-        .log-res { color: #FCD34D; }
+        /* SANDBOX */
+        .sandbox-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 75vh; }
+        .terminal { background: var(--terminal-bg); color: #00FF00; font-family: 'Fira Code', monospace; padding: 20px; border-radius: 10px; height: 100%; overflow-y: auto; font-size: 13px; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); border: 1px solid #333; resize: vertical; }
+        .log-entry { margin-bottom: 12px; border-bottom: 1px solid #333; padding-bottom: 8px; word-wrap: break-word; }
+        .log-req { color: #60A5FA; } .log-res { color: #FCD34D; }
 
-        /* Contenedores con Scroll para Configuración */
-        .scrollable-list {
+        /* NUEVA CLASE PARA CAJAS CON SCROLL */
+        .scroll-container {
             max-height: 250px;
             overflow-y: auto;
-            border: 1px solid #eee;
+            border: 1px solid #E5E7EB;
             border-radius: 8px;
-            padding: 8px;
-            background: #fafafa;
+            padding: 10px;
+            background-color: #F9FAFB;
         }
 
-        /* ============================================================
-           8. VENTANAS EMERGENTES (MODALS) Y MENU
-           ============================================================ */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(15, 23, 42, 0.6);
-            z-index: 100;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(3px);
-        }
+        /* MODALS */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+        .modal { background: white; width: 90%; max-width: 450px; padding: 32px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
         
-        .modal {
-            background: white;
-            width: 90%;
-            max-width: 500px;
-            padding: 35px;
-            border-radius: 16px;
-            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
-            animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
+        #context-menu { position: absolute; display: none; background: white; border: 1px solid var(--border); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); z-index: 1000; border-radius: 8px; width: 180px; overflow: hidden; }
+        .cm-item { padding: 12px 16px; cursor: pointer; font-size: 13px; color: #444; display: flex; align-items: center; gap: 10px; }
+        .cm-item:hover { background: #F3F4F6; }
+        .cm-item.delete { color: #EF4444; }
 
-        #context-menu {
-            position: absolute;
-            display: none;
-            background: white;
-            border: 1px solid var(--border);
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
-            z-index: 1000;
-            border-radius: 8px;
-            width: 180px;
-            overflow: hidden;
-        }
-        
-        .cm-item {
-            padding: 12px 16px;
-            cursor: pointer;
-            font-size: 13px;
-            color: #444;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        
-        .cm-item:hover {
-            background: #F3F4F6;
-        }
-        
-        .cm-item.delete {
-            color: #EF4444;
-        }
-
-        /* Fix para móviles */
         @media (max-width: 1024px) {
-            .crm-panel {
-                display: none;
-                position: absolute;
-                right: 0;
-                height: 100%;
-                z-index: 20;
-                box-shadow: -5px 0 15px rgba(0,0,0,0.1);
-            }
-            .crm-panel.open {
-                display: flex;
-            }
+            .crm-panel { display: none; position: absolute; right: 0; height: 100%; z-index: 20; box-shadow: -5px 0 15px rgba(0,0,0,0.1); }
+            .crm-panel.open { display: flex; }
         }
     </style>
 </head>
@@ -695,7 +225,7 @@
     <div id="context-menu">
         <div class="cm-item" onclick="cmAction('pin')"><i class="fas fa-thumbtack"></i> Fijar/Desfijar</div>
         <div class="cm-item" onclick="cmAction('archive')"><i class="fas fa-archive"></i> Archivar</div>
-        <div class="cm-item" onclick="cmAction('labels')"><i class="fas fa-tags"></i> Etiquetas</div>
+        <div class="cm-item" onclick="cmAction('labels')"><i class="fas fa-tags"></i> Etiquetar</div>
         <div style="height:1px; background:#eee; margin:2px 0;"></div>
         <div class="cm-item delete" onclick="cmAction('delete')"><i class="fas fa-trash"></i> Eliminar</div>
     </div>
@@ -722,15 +252,15 @@
             <div class="kpi-grid">
                 <div class="kpi-card">
                     <div class="kpi-icon"><i class="fas fa-users"></i></div>
-                    <div><h2 id="kpi-leads">0</h2><p class="text-light" style="font-size:12px;">Total Leads Generados</p></div>
+                    <div><h2 id="kpi-leads" style="margin:0">0</h2><p class="text-light" style="font-size:12px;">Total Leads Generados</p></div>
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-icon"><i class="fas fa-comments"></i></div>
-                    <div><h2 id="kpi-chats">0</h2><p class="text-light" style="font-size:12px;">Conversaciones Activas</p></div>
+                    <div><h2 id="kpi-chats" style="margin:0">0</h2><p class="text-light" style="font-size:12px;">Conversaciones Activas</p></div>
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-icon"><i class="fas fa-cube"></i></div>
-                    <div><h2 id="kpi-stock">0</h2><p class="text-light" style="font-size:12px;">Referencias en Stock</p></div>
+                    <div><h2 id="kpi-stock" style="margin:0">0</h2><p class="text-light" style="font-size:12px;">Referencias en Stock</p></div>
                 </div>
             </div>
             
@@ -754,7 +284,7 @@
                             <h3 style="font-size:16px;">Mensajería</h3>
                             <button class="btn" style="padding:6px 12px; font-size:11px;" onclick="addContactPrompt()"><i class="fas fa-plus"></i> Nuevo</button>
                         </div>
-                        <input id="search" class="form-control" placeholder="Buscar nombre o teléfono..." style="margin-bottom:8px;" oninput="renderChatList()">
+                        <input id="search" class="form-control" placeholder="Buscar nombre, teléfono..." style="margin-bottom:8px;" oninput="renderChatList()">
                         <div class="cl-tools">
                             <select id="view-selector" class="form-control" style="margin:0; font-size:12px;" onchange="syncLoop(true)">
                                 <option value="active">Activos</option>
@@ -941,21 +471,21 @@
 
             <div class="card" style="min-height:300px;">
                 <h3>📂 Base de Datos de Configuración Activa</h3>
-                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:25px; margin-top:20px;">
+                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:25px; margin-top:20px;">
                     
                     <div>
                         <h4 style="font-size:14px; border-bottom:1px solid #eee; padding-bottom:8px; margin-bottom:10px;">Etiquetas Activas</h4>
-                        <div id="tags-viewer-list" class="scrollable-list" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+                        <div id="tags-viewer-list" class="scroll-container" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
                     </div>
                     
                     <div>
                         <h4 style="font-size:14px; border-bottom:1px solid #eee; padding-bottom:8px; margin-bottom:10px;">Atajos (Shortcuts)</h4>
-                        <div id="shortcuts-list" class="scrollable-list"></div>
+                        <div id="shortcuts-list" class="scroll-container"></div>
                     </div>
                     
                     <div>
                         <h4 style="font-size:14px; border-bottom:1px solid #eee; padding-bottom:8px; margin-bottom:10px;">Reglas Técnicas</h4>
-                        <div id="rules-list" class="scrollable-list"></div>
+                        <div id="rules-list" class="scroll-container"></div>
                     </div>
                 </div>
             </div>
@@ -1032,12 +562,15 @@
         let audioChunks = [];
         let isRecording = false;
         let contextMenuChatId = null;
+        
+        // Variable para control de renderizado (Anti-Parpadeo)
+        let lastMsgsHTML = ""; 
 
         /* --- 1. INICIALIZACIÓN --- */
         async function init() {
             await loadGlobalData();
             nav('dashboard');
-            setInterval(() => syncLoop(), 3000); 
+            setInterval(() => syncLoop(), 2500); 
         }
 
         /* --- 2. NAVEGACIÓN --- */
@@ -1126,7 +659,7 @@
             `).join('');
         }
 
-        /* --- 5. CHAT SYSTEM --- */
+        /* --- 5. CHAT SYSTEM (SIN PARPADEO) --- */
         async function syncLoop(force = false) {
             try {
                 const view = document.getElementById('view-selector')?.value || 'active';
@@ -1135,13 +668,13 @@
                 
                 data.sort((a,b) => (b.pinned - a.pinned) || (new Date(b.timestamp) - new Date(a.timestamp)));
 
-                // Solo renderizar si la lista cambió
+                // Solo renderizar lista de chats si cambió
                 if(force || JSON.stringify(data) !== JSON.stringify(chats)) {
                     chats = data;
                     renderChatList();
                 }
                 
-                // Actualizar mensajes activos sin parpadeo
+                // Actualizar mensajes activos
                 if(selectedId) {
                     const current = chats.find(c => c.id === selectedId);
                     if(current && current.unreadCount > 0) await fetch(`/api/chat-history/${selectedId}`); 
@@ -1189,9 +722,12 @@
             }).join('');
         }
 
-        // OPTIMIZACIÓN: Carga instantánea
         function selChat(id) {
+            // EVITAR RECARGAR SI ES EL MISMO CHAT
+            if (selectedId === id) return;
+            
             selectedId = id;
+            lastMsgsHTML = ""; // Resetear cache de mensajes
             const c = chats.find(x=>x.id===id);
             if(!c) return;
             
@@ -1208,7 +744,7 @@
             renderBotStatus(c.botActive);
             renderChatTags(c.labels||[]);
             
-            // Feedback visual carga
+            // Loading inicial limpio
             document.getElementById('msgs-box').innerHTML = '<div style="text-align:center; padding:30px; color:#999;">Cargando...</div>';
             syncLoop(true);
         }
@@ -1222,11 +758,13 @@
             } catch(e) {}
         }
 
-        // LOGICA DE RENDERIZADO ESTABLE
+        // --- RENDERIZADO INTELIGENTE (SIN PARPADEO) ---
         function renderMsgs(msgs) {
             const box = document.getElementById('msgs-box');
+            
             if(!msgs || msgs.length === 0) { 
                 box.innerHTML = '<div style="text-align:center; padding:40px; color:#aaa;">Conversación nueva.</div>'; 
+                lastMsgsHTML = "";
                 return; 
             }
             
@@ -1239,14 +777,15 @@
                 let txt = formatMedia(m.text);
                 const time = new Date(m.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
                 
-                // Animación suave de entrada
-                html += `<div class="bubble ${cls} msg-anim">${txt}<div class="msg-time">${time}</div></div>`;
+                // NO ANIMACIÓN EN BUCLE DE REFRESH PARA EVITAR PARPADEO
+                html += `<div class="bubble ${cls}">${txt}<div class="msg-time">${time}</div></div>`;
             });
 
-            // Solo actualizar si hay diferencia real en el contenido HTML
-            if (box.innerHTML !== html) { 
+            // Solo actualizar el DOM si el contenido HTML es diferente
+            if (lastMsgsHTML !== html) { 
                 const isBottom = (box.scrollHeight - box.scrollTop - box.clientHeight) <= 150;
                 box.innerHTML = html;
+                lastMsgsHTML = html; // Guardar estado
                 if (isBottom || box.childElementCount < 20) box.scrollTop = box.scrollHeight;
             }
         }
@@ -1287,10 +826,14 @@
             if (!m || !selectedId) return;
             document.getElementById('msg-input').value = '';
             
-            // Optimistic Update
+            // Inserción optimista
             const box = document.getElementById('msgs-box');
+            // Aquí sí usamos animación porque es un mensaje nuevo
             box.innerHTML += `<div class="bubble b-manual msg-anim">${m}<div class="msg-time">...</div></div>`;
             box.scrollTop = box.scrollHeight;
+            
+            // Resetear cache para forzar recarga correcta en el próximo loop
+            lastMsgsHTML = ""; 
 
             await fetch('/api/chat/send', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, message:m})});
             syncLoop(true);
