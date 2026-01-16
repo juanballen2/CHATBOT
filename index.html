@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICC | Valentina Suite v22.1 (Fixed & Stable)</title>
+    <title>ICC | Valentina Suite v22.16 (Etiquetas Full)</title>
     <link rel="icon" href="https://github.com/juanballen2/CHATBOT/blob/main/images/favicon.jpg?raw=true">
+    
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -94,7 +95,7 @@
         .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
         
         .view { display: none; height: 100%; flex-direction: column; overflow-y: auto; padding: 0; }
-        .view.active { display: flex; } /* Animación quitada del contenedor para evitar saltos globales */
+        .view.active { display: flex; } 
         .page-container { padding: 30px; max-width: 1400px; margin: 0 auto; width: 100%; }
         
         h1 { font-size: 24px; font-weight: 700; margin-bottom: 25px; color: var(--text-main); letter-spacing: -0.5px; }
@@ -188,9 +189,22 @@
         th { text-align: left; padding: 16px; background: #F9FAFB; color: #4B5563; font-weight: 600; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
         td { padding: 14px 16px; border-bottom: 1px solid #F1F5F9; color: #374151; }
         tr:hover td { background: #F8FAFC; }
-        .tag-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; color: white; letter-spacing: 0.5px; }
+        
+        /* PILDORA DE ETIQUETA (VISIBLE) */
+        .tag-pill { 
+            display: inline-flex; 
+            align-items: center; 
+            padding: 2px 8px; 
+            border-radius: 12px; 
+            font-size: 10px; /* Tamaño perfecto para lista */
+            font-weight: 600; 
+            color: white; 
+            letter-spacing: 0.5px;
+            margin-right: 4px;
+            margin-bottom: 2px;
+        }
 
-        /* CLASE PARA SCROLLBARS EN CONFIG (NUEVO) */
+        /* SCROLLABLE AREAS */
         .scrollable-list {
             max-height: 250px;
             overflow-y: auto;
@@ -602,7 +616,7 @@
             document.getElementById('tag-filter').value = f;
 
             list.innerHTML = filtered.map(c => {
-                const tagsHtml = (c.labels || []).map(l => `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${getTagColor(l)}; margin-right:4px;" title="${l}"></span>`).join('');
+                const tagsHtml = (c.labels || []).map(l => `<span class="tag-pill" style="background:${getTagColor(l)}; margin-right:4px;">${l}</span>`).join('');
                 return `
                 <div class="chat-item ${c.id===selectedId?'active':''}" onclick="selChat('${c.id}')" oncontextmenu="showContextMenu(event, '${c.id}')">
                     <div class="avatar" style="${c.photoUrl?`background-image:url('${c.photoUrl}')`:''}">${!c.photoUrl?'<i class="fas fa-user"></i>':''}</div>
@@ -621,8 +635,9 @@
             }).join('');
         }
 
+        // LIMPIEZA INMEDIATA
         function selChat(id) {
-            if (selectedId === id) return; // Evita parpadeo si clicas el mismo
+            if (selectedId === id) return; // Evita recarga si ya está activo
             selectedId = id;
             
             const c = chats.find(x=>x.id===id);
@@ -643,8 +658,9 @@
             renderBotStatus(c.botActive);
             renderChatTags(c.labels||[]);
             
-            // Limpiar área de mensajes UNA SOLA VEZ al cambiar de chat
-            document.getElementById('msgs-box').innerHTML = '<div style="text-align:center; padding:20px; color:#999;">Cargando...</div>';
+            // EL CHAT SE PONE EN BLANCO INMEDIATAMENTE
+            document.getElementById('msgs-box').innerHTML = '<div style="height:100%; display:flex; align-items:center; justify-content:center; color:#999;"><i class="fas fa-circle-notch fa-spin" style="font-size:24px; margin-right:10px;"></i> Cargando conversación...</div>';
+            
             syncLoop(true);
         }
 
@@ -662,7 +678,7 @@
             const box = document.getElementById('msgs-box');
             
             // Si estaba cargando, limpiarlo primero
-            if(box.innerText === 'Cargando...') box.innerHTML = '';
+            if(box.innerText.includes('Cargando')) box.innerHTML = '';
             
             if(!msgs || msgs.length === 0) { box.innerHTML = '<div style="text-align:center; padding:30px; color:#aaa;">Conversación nueva.</div>'; return; }
             
@@ -707,31 +723,10 @@
             return txt;
         }
 
-        async function sendMsg() {
-            const m = document.getElementById('msg-input').value; 
-            if(!m || !selectedId) return;
-            document.getElementById('msg-input').value = '';
-            
-            // Inyección rápida para sensación de velocidad
-            const box = document.getElementById('msgs-box');
-            box.innerHTML += `<div class="bubble b-manual msg-anim">${m}<div class="msg-time">...</div></div>`;
-            box.scrollTop = box.scrollHeight;
-
-            await fetch('/api/chat/send', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, message:m})});
-            syncLoop(true);
-        }
-
-        async function handleFileUpload(inp) { 
-            if(!inp.files[0] || !selectedId) return; 
-            const f=inp.files[0]; 
-            const type=f.type.includes('image')?'image':(f.type.includes('audio')?'audio':(f.type.includes('video')?'video':'document')); 
-            const fd=new FormData(); 
-            fd.append('file',f); fd.append('phone',selectedId); fd.append('type',type); 
-            await fetch('/api/chat/upload-send', {method:'POST', body:fd}); 
-            inp.value=''; 
-            syncLoop(true); 
-        }
-
+        /* --- ACCIONES & UTILS --- */
+        async function sendMsg() { const m = document.getElementById('msg-input').value; if(!m || !selectedId) return; document.getElementById('msg-input').value = ''; await fetch('/api/chat/send', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, message:m})}); syncLoop(true); }
+        async function handleFileUpload(inp) { if(!inp.files[0] || !selectedId) return; const f=inp.files[0]; const type=f.type.includes('image')?'image':(f.type.includes('audio')?'audio':(f.type.includes('video')?'video':'document')); const fd=new FormData(); fd.append('file',f); fd.append('phone',selectedId); fd.append('type',type); await fetch('/api/chat/upload-send', {method:'POST', body:fd}); inp.value=''; syncLoop(true); }
+        
         async function toggleRecord() { 
             if (!isRecording) { 
                 try {
@@ -752,60 +747,12 @@
             } else { mediaRecorder.stop(); isRecording = false; } 
         }
 
-        function checkQuickReply(input) { 
-            const val = input.value; 
-            const popup = document.getElementById('quick-replies'); 
-            if(val.startsWith('/')) { 
-                const key = val.substring(1).toLowerCase(); 
-                const matches = shortcuts.filter(s => s.keyword.toLowerCase().includes(key)); 
-                if(matches.length) { 
-                    popup.innerHTML = matches.map(s => `<div style="padding:8px; cursor:pointer; border-bottom:1px solid #eee;" onclick="useQuickReply('${s.text}')"><b>/${s.keyword}</b>: ${s.text}</div>`).join(''); 
-                    popup.style.display = 'block'; 
-                } else popup.style.display = 'none'; 
-            } else popup.style.display = 'none'; 
-        }
-        function useQuickReply(text) { 
-            document.getElementById('msg-input').value = text; 
-            document.getElementById('quick-replies').style.display = 'none'; 
-            document.getElementById('msg-input').focus(); 
-        }
-
-        /* --- SANDBOX & LOGIC --- */
-        async function runTest() {
-            const input = document.getElementById('sand-in');
-            const chatBox = document.getElementById('sand-chat');
-            const logBox = document.getElementById('sand-log');
-            const msg = input.value;
-            if(!msg) return;
-
-            chatBox.innerHTML += `<div style="text-align:right; margin:5px;"><span style="background:#e5e7eb; padding:5px 10px; border-radius:10px;">${msg}</span></div>`;
-            input.value = '';
-            logBox.innerHTML += `<div class="log-entry log-req">> Enviando: "${msg}"</div>`;
-            logBox.scrollTop = logBox.scrollHeight;
-
-            try {
-                const startT = Date.now();
-                const res = await fetch('/api/test-ai', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({message: msg}) });
-                const data = await res.json();
-                const latency = Date.now() - startT;
-
-                chatBox.innerHTML += `<div style="text-align:left; margin:5px;"><span style="background:var(--primary); color:white; padding:5px 10px; border-radius:10px;">${data.response}</span></div>`;
-                chatBox.scrollTop = chatBox.scrollHeight;
-                
-                logBox.innerHTML += `<div class="log-entry log-res"><span style="color:#0f0;">✔ RESPONSE (${latency}ms):</span><br>${JSON.stringify(data, null, 2).replace(/\n/g, '<br>').replace(/ /g, '&nbsp;')}</div>`;
-                logBox.scrollTop = logBox.scrollHeight;
-            } catch(e) {
-                logBox.innerHTML += `<div class="log-entry" style="color:red;">❌ ERROR: ${e.message}</div>`;
-            }
-        }
-
-        /* --- INVENTORY (CON BOTÓN DE BORRAR) --- */
-        async function loadInventory() { try { const d = await fetch('/api/data/knowledge').then(r=>r.json()); document.getElementById('inv-body').innerHTML = d.map((p,i)=>`<tr><td>${p.searchable}</td><td style="text-align:right;"><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="deleteProduct(${i})"></i></td></tr>`).join(''); } catch(e){} }
-        async function deleteProduct(i) { if(confirm("¿Eliminar?")) await fetch('/api/knowledge/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); }
-        async function uploadCSV() { const f = document.getElementById('csv-file').files[0]; if(!f) return; const fd = new FormData(); fd.append('file',f); await fetch('/api/knowledge/csv', {method:'POST', body:fd}); loadInventory(); alert("Inventario actualizado"); }
-        async function limpiarInventario() { if(confirm("¿BORRAR TODO EL INVENTARIO? Esta acción no se puede deshacer.")) { await fetch('/api/knowledge/clear', {method:'POST'}); loadInventory(); } }
-
-        /* --- HELPERS --- */
+        /* --- GESTIÓN DE DATOS --- */
+        async function loadLeads() { try { allLeads = await fetch('/api/data/leads').then(r=>r.json()); document.getElementById('leads-body').innerHTML = allLeads.map(l => `<tr><td>${l.fecha.split(',')[0]}</td><td><a href="#" style="color:var(--primary); font-weight:600;" onclick="openEditLead(${l.id})">${l.nombre}</a></td><td>${l.ciudad}</td><td>${l.interes}</td><td><span class="tag-pill" style="background:${getLeadColor(l.etiqueta)}">${l.etiqueta}</span></td><td><button class="btn-icon" onclick="openEditLead(${l.id})"><i class="fas fa-edit"></i></button><button class="btn-icon" style="color:red;" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button></td></tr>`).join(''); } catch(e){} }
+        function getLeadColor(s) { return s==='Vendido'?'#10B981':(s==='Lead'?'#3B82F6':(s==='Cotización'?'#F59E0B':'#6B7280')); }
+        
+        async function downloadLeadsExcel() { try { const leadsRaw = await fetch('/api/data/leads').then(r=>r.json()); if(!leadsRaw.length) return alert("No hay datos"); const dataExport = leadsRaw.map(l => ({ Fecha: l.fecha, Nombre: l.nombre, Telefono: l.phone, Ciudad: l.ciudad, Interes: l.interes, Estado: l.etiqueta, Correo: l.correo })); const ws = XLSX.utils.json_to_sheet(dataExport); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Leads"); XLSX.writeFile(wb, `Leads_${new Date().toISOString().slice(0,10)}.xlsx`); } catch(e) { alert("Error al exportar"); } }
+        
         function toggleCrmPanel() { document.getElementById('crm-panel').classList.toggle('closed'); }
         function getTagColor(name) { const t = globalTags.find(gt => gt.name === name); return t ? t.color : '#ccc'; }
         function copyToClip(txt) { navigator.clipboard.writeText(txt); alert("Copiado: "+txt); }
@@ -814,33 +761,47 @@
         function closeModal(id) { document.getElementById(id).style.display='none'; }
         function callUser() { if(selectedId) window.open(`tel:${selectedId}`); }
         
-        async function loadLeads() { try { allLeads = await fetch('/api/data/leads').then(r=>r.json()); document.getElementById('leads-body').innerHTML = allLeads.map(l => `<tr><td>${l.fecha.split(',')[0]}</td><td><a href="#" style="color:var(--primary); font-weight:600;" onclick="openEditLead(${l.id})">${l.nombre}</a></td><td>${l.ciudad}</td><td>${l.interes}</td><td><span class="tag-pill" style="background:${getLeadColor(l.etiqueta)}">${l.etiqueta}</span></td><td><button class="btn-icon" onclick="openEditLead(${l.id})"><i class="fas fa-edit"></i></button><button class="btn-icon" style="color:red;" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button></td></tr>`).join(''); } catch(e){} }
-        function getLeadColor(s) { return s==='Vendido'?'#10B981':(s==='Lead'?'#3B82F6':(s==='Cotización'?'#F59E0B':'#6B7280')); }
-        async function downloadLeadsExcel() { try { const leadsRaw = await fetch('/api/data/leads').then(r=>r.json()); if(!leadsRaw.length) return alert("No hay datos"); const dataExport = leadsRaw.map(l => ({ Fecha: l.fecha, Nombre: l.nombre, Telefono: l.phone, Ciudad: l.ciudad, Interes: l.interes, Estado: l.etiqueta, Correo: l.correo })); const ws = XLSX.utils.json_to_sheet(dataExport); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Leads"); XLSX.writeFile(wb, `Leads_${new Date().toISOString().slice(0,10)}.xlsx`); } catch(e) { alert("Error al exportar"); } }
-
         function openEditLead(id) { const l = allLeads.find(x=>x.id===id); if(!l)return; document.getElementById('edit-lead-id').value=id; document.getElementById('edit-lead-name').value=l.nombre; document.getElementById('edit-lead-city').value=l.ciudad; document.getElementById('edit-lead-interest').value=l.interes; document.getElementById('edit-lead-email').value=l.correo; document.getElementById('edit-lead-tag').value=l.etiqueta; document.getElementById('modal-edit-lead').style.display='flex'; }
         async function saveLeadChanges() { const id = document.getElementById('edit-lead-id').value; const fields = ['nombre','ciudad','interes','correo','etiqueta']; for(const f of fields) { const val = document.getElementById('edit-lead-'+(f==='etiqueta'?'tag':f)).value; await fetch('/api/leads/update', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, field:f, value:val})}); } closeModal('modal-edit-lead'); loadLeads(); }
         async function deleteLead(id) { if(confirm("¿Eliminar Lead?")) { await fetch('/api/leads/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadLeads(); } }
+        async function cmAction(a) { const id=contextMenuChatId||selectedId; if(!id)return; const c=chats.find(x=>x.id===id); if(a==='pin') await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'toggle_pin', value:!c.pinned})}); if(a==='archive') { await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'toggle_archive', value:!c.archived})}); if(selectedId===id) selectedId=null; } if(a==='delete' && confirm("¿Borrar Historial?")) { await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'delete'})}); if(selectedId===id) selectedId=null; } if(a==='labels') openTagSelector(); syncLoop(true); }
+        async function uploadPhoto(input) { if(!input.files[0] || !selectedId) return; const fd = new FormData(); fd.append('file', input.files[0]); fd.append('phone', selectedId); await fetch('/api/contacts/upload-photo', {method:'POST', body:fd}); syncLoop(true); }
+        
+        async function loadInventory() { try { const d = await fetch('/api/data/knowledge').then(r=>r.json()); document.getElementById('inv-body').innerHTML = d.map((p,i)=>`<tr><td>${p.searchable}</td><td style="text-align:right;"><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="deleteProduct(${i})"></i></td></tr>`).join(''); } catch(e){} }
+        async function deleteProduct(i) { if(confirm("¿Eliminar?")) await fetch('/api/knowledge/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); }
+        async function limpiarInventario() { if(confirm("⚠ ¿ESTÁS SEGURO?\nEsto borrará TODO el inventario actual.")) { await fetch('/api/knowledge/clear', {method:'POST'}); loadInventory(); alert("Base de datos limpia."); } }
+        async function uploadCSV() { const f = document.getElementById('csv-file').files[0]; if(!f) return; const fd = new FormData(); fd.append('file',f); await fetch('/api/knowledge/csv', {method:'POST', body:fd}); loadInventory(); alert("Inventario actualizado"); }
+        
+        async function savePrompt() { await fetch('/api/config/prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt: document.getElementById('bot-prompt').value})}); alert("✅ Personalidad guardada."); }
+        async function saveBizConfig() { await fetch('/api/config/biz/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:document.getElementById('biz-name').value, hours:document.getElementById('biz-hours').value, website_data:document.getElementById('biz-web').value})}); alert("✅ Perfil actualizado."); }
+        async function uploadLogo() { const f=document.getElementById('logo-upload').files[0]; if(!f) return; const fd=new FormData(); fd.append('file',f); await fetch('/api/config/logo',{method:'POST',body:fd}); loadGlobalData(); }
+        
+        async function addGlobalTag() { const n=document.getElementById('new-tag-name').value; const c=document.getElementById('new-tag-color').value; if(!n) return; await fetch('/api/tags/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:n, color:c})}); document.getElementById('new-tag-name').value=''; loadGlobalData(); }
+        async function deleteTag(id) { if(confirm("¿Borrar etiqueta?")) { await fetch('/api/tags/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadGlobalData(); } }
+        async function addShortcut() { const k=document.getElementById('new-sc-key').value; const t=document.getElementById('new-sc-text').value; if(!k || !t) return; await fetch('/api/shortcuts/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({keyword:k, text:t})}); document.getElementById('new-sc-key').value=''; document.getElementById('new-sc-text').value=''; loadGlobalData(); }
+        async function deleteShortcut(id) { if(confirm("¿Borrar atajo?")) { await fetch('/api/shortcuts/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadGlobalData(); } }
+        async function addRule() { const r = document.getElementById('rule-input').value; if(!r) return; await fetch('/api/config/rules/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({rule:r})}); document.getElementById('rule-input').value = ''; loadGlobalData(); }
+        async function deleteRule(i) { if(confirm("¿Borrar regla?")) { await fetch('/api/config/rules/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadGlobalData(); } }
 
-        async function addGlobalTag() { const n=document.getElementById('new-tag-name').value; const c=document.getElementById('new-tag-color').value; await fetch('/api/tags/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:n, color:c})}); loadGlobalData(); }
-        function renderGlobalTags() { document.getElementById('global-tags-list').innerHTML = globalTags.map(t=>`<span class="tag-pill" style="background:${t.color}; padding:4px 8px;">${t.name} <i class="fas fa-times" style="margin-left:5px; cursor:pointer;" onclick="deleteTag(${t.id})"></i></span>`).join(''); }
-        async function deleteTag(id) { await fetch('/api/tags/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadGlobalData(); }
-        async function savePrompt() { await fetch('/api/config/prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt: document.getElementById('bot-prompt').value})}); alert("Prompt Guardado"); }
-        async function saveBizConfig() { await fetch('/api/config/biz/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:document.getElementById('biz-name').value, hours:document.getElementById('biz-hours').value, website_data:document.getElementById('biz-web').value})}); alert("Perfil Actualizado"); }
         async function toggleBot() { const c = chats.find(x=>x.id===selectedId); await fetch('/api/chat/toggle-bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedId, active:!c.botActive})}); syncLoop(true); }
         function renderBotStatus(active) { const btn = document.getElementById('prof-bot-btn'); btn.innerText = active?"🤖 BOT ACTIVADO":"⛔ BOT PAUSADO"; btn.style.background=active?'#DCFCE7':'#FEE2E2'; btn.style.color=active?'#166534':'#991B1B'; }
         function addContactPrompt() { const p = prompt("Ingresa el número (Ej: 573001234567):"); if(p) fetch('/api/contacts/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:p,name:p})}).then(()=>syncLoop(true)); }
-        async function cmAction(a) { const id=contextMenuChatId||selectedId; if(!id)return; const c=chats.find(x=>x.id===id); if(a==='pin') await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'toggle_pin', value:!c.pinned})}); if(a==='archive') { await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'toggle_archive', value:!c.archived})}); if(selectedId===id) selectedId=null; } if(a==='delete' && confirm("¿Borrar Historial?")) { await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'delete'})}); if(selectedId===id) selectedId=null; } if(a==='labels') openTagSelector(); syncLoop(true); }
-        async function uploadLogo() { const f=document.getElementById('logo-upload').files[0]; if(!f) return; const fd=new FormData(); fd.append('file',f); const r=await fetch('/api/config/logo',{method:'POST',body:fd}).then(x=>x.json()); if(r.success) loadGlobalData(); }
-        async function uploadPhoto(input) { if(!input.files[0] || !selectedId) return; const fd = new FormData(); fd.append('file', input.files[0]); fd.append('phone', selectedId); await fetch('/api/contacts/upload-photo', {method:'POST', body:fd}); syncLoop(true); }
         
-        async function loadDash() { try { const [l,c,s] = await Promise.all([ fetch('/api/data/leads').then(r=>r.json()), fetch('/api/chats-full').then(r=>r.json()), fetch('/api/data/knowledge').then(r=>r.json()) ]); document.getElementById('kpi-leads').innerText = l.length; document.getElementById('kpi-chats').innerText = c.length; document.getElementById('kpi-stock').innerText = s.length; document.getElementById('dash-leads-body').innerHTML = l.slice(0,5).map(x => `<tr><td style="font-weight:600;">${x.nombre}</td><td>${x.ciudad}</td><td>${x.interes}</td><td>${x.fecha.split(',')[0]}</td></tr>`).join(''); } catch(e){} }
-
-        function openTagSelector() { const list = document.getElementById('tag-selector-list'); const c = chats.find(x=>x.id===selectedId); if(!c) return; const cur = c.labels || []; list.innerHTML = globalTags.map(t => `<div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #eee; cursor:pointer;" onclick="toggleChatTag('${t.name}')"><span><span class="tag-pill" style="background:${t.color}">${t.name}</span></span> ${cur.includes(t.name)?'<i class="fas fa-check" style="color:green;"></i>':''}</div>`).join(''); document.getElementById('modal-tag-selector').style.display='flex'; }
+        function openTagSelector() { 
+            const list = document.getElementById('tag-selector-list'); const c = chats.find(x=>x.id===selectedId); if(!c) return;
+            const cur = c.labels || [];
+            list.innerHTML = globalTags.map(t => `
+                <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #eee; cursor:pointer;" onclick="toggleChatTag('${t.name}')">
+                    <span><span class="tag-pill" style="background:${t.color}">${t.name}</span></span> 
+                    ${cur.includes(t.name)?'<i class="fas fa-check" style="color:green;"></i>':''}
+                </div>`).join(''); 
+            document.getElementById('modal-tag-selector').style.display='flex'; 
+        }
         async function toggleChatTag(n) { const c=chats.find(x=>x.id===selectedId); let tags=c.labels||[]; if(tags.includes(n)) tags=tags.filter(x=>x!==n); else tags.push(n); await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, action:'set_labels', value:tags})}); openTagSelector(); syncLoop(true); }
-        async function addShortcut() { const k=document.getElementById('new-sc-key').value; const t=document.getElementById('new-sc-text').value; await fetch('/api/shortcuts/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({keyword:k, text:t})}); loadGlobalData(); }
-        function renderShortcuts() { document.getElementById('shortcuts-list').innerHTML = shortcuts.map(s => `<div style="padding:5px; border-bottom:1px solid #eee;"><b>/${s.keyword}</b>: ${s.text} <i class="fas fa-trash" style="color:red; float:right; cursor:pointer;" onclick="deleteShortcut(${s.id})"></i></div>`).join(''); }
-        async function deleteShortcut(id) { if(!confirm("Borrar?")) return; await fetch('/api/shortcuts/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadGlobalData(); }
+        async function loadDash() { try { const [l,c,s] = await Promise.all([ fetch('/api/data/leads').then(r=>r.json()), fetch('/api/chats-full').then(r=>r.json()), fetch('/api/data/knowledge').then(r=>r.json()) ]); document.getElementById('kpi-leads').innerText = l.length; document.getElementById('kpi-chats').innerText = c.length; document.getElementById('kpi-stock').innerText = s.length; document.getElementById('dash-leads-body').innerHTML = l.slice(0,5).map(x => `<tr><td style="font-weight:600;">${x.nombre}</td><td>${x.ciudad}</td><td>${x.interes}</td><td>${x.fecha.split(',')[0]}</td></tr>`).join(''); } catch(e){} }
+        function checkQuickReply(input) { const val = input.value; const popup = document.getElementById('quick-replies'); if(val.startsWith('/')) { const key = val.substring(1).toLowerCase(); const matches = shortcuts.filter(s => s.keyword.toLowerCase().includes(key)); if(matches.length) { popup.innerHTML = matches.map(s => `<div style="padding:8px; cursor:pointer; border-bottom:1px solid #eee;" onclick="useQuickReply('${s.text}')"><b>/${s.keyword}</b>: ${s.text}</div>`).join(''); popup.style.display = 'block'; } else popup.style.display = 'none'; } else popup.style.display = 'none'; }
+        function useQuickReply(text) { document.getElementById('msg-input').value = text; document.getElementById('quick-replies').style.display = 'none'; document.getElementById('msg-input').focus(); }
+        async function runTest() { const input = document.getElementById('sand-in'); const chatBox = document.getElementById('sand-chat'); const logBox = document.getElementById('sand-log'); const msg = input.value; if(!msg) return; chatBox.innerHTML += `<div style="text-align:right; margin:5px;"><span style="background:#e5e7eb; padding:5px 10px; border-radius:10px;">${msg}</span></div>`; input.value = ''; logBox.innerHTML += `<div class="log-entry log-req">> Enviando: "${msg}"</div>`; try { const startT = Date.now(); const res = await fetch('/api/test-ai', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({message: msg})}); const data = await res.json(); const latency = Date.now() - startT; chatBox.innerHTML += `<div style="text-align:left; margin:5px;"><span style="background:var(--primary); color:white; padding:5px 10px; border-radius:10px;">${data.response}</span></div>`; logBox.innerHTML += `<div class="log-entry log-res"><span style="color:#0f0;">✔ RESPONSE (${latency}ms):</span><br>${JSON.stringify(data, null, 2).replace(/\n/g, '<br>').replace(/ /g, '&nbsp;')}</div>`; } catch(e) { logBox.innerHTML += `<div class="log-entry" style="color:red;">❌ ERROR: ${e.message}</div>`; } }
 
         window.onload = init;
     </script>
