@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICC | Valentina Suite v22.1 Final</title>
+    <title>ICC | Valentina Suite v22.3 Enterprise</title>
     <link rel="icon" href="https://github.com/juanballen2/CHATBOT/blob/main/images/favicon.jpg?raw=true">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -11,19 +11,19 @@
     
     <style>
         /* =========================================
-           1. CORE & VARIABLES
+           1. ESTILOS CORPORATIVOS (AZUL ICC)
            ========================================= */
         :root {
-            --primary: #E9511D;
-            --primary-dark: #c03d12;
-            --bg-body: #F3F4F6;
-            --bg-sidebar: #0F172A;
+            --primary: #0F52BA; /* Azul Zafiro */
+            --primary-dark: #0a3d8f;
+            --bg-body: #F1F5F9;
+            --bg-sidebar: #1E293B; /* Azul oscuro */
             --bg-card: #FFFFFF;
-            --text-main: #1F2937;
-            --text-light: #6B7280;
-            --border: #E5E7EB;
-            --chat-bg: #EFEAE2;
-            --terminal-bg: #1e1e1e;
+            --text-main: #0F172A;
+            --text-light: #64748B;
+            --border: #E2E8F0;
+            --chat-bg: #EAEFF5; 
+            --terminal-bg: #0F172A;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; outline: none; font-family: 'Inter', sans-serif; }
@@ -36,56 +36,56 @@
             overflow: hidden;
         }
 
-        /* Scrollbars finos */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--text-light); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
 
         /* =========================================
-           2. SIDEBAR (Navegación)
+           2. SIDEBAR DE NAVEGACIÓN
            ========================================= */
         .sidebar {
-            width: 70px;
+            width: 72px;
             background: var(--bg-sidebar);
             display: flex;
             flex-direction: column;
             align-items: center;
             padding: 20px 0;
             z-index: 50;
-            box-shadow: 4px 0 15px rgba(0,0,0,0.1);
+            box-shadow: 4px 0 15px rgba(0,0,0,0.15);
         }
 
         .logo-area {
-            width: 45px; height: 45px; margin-bottom: 40px; cursor: pointer;
-            background: white; border-radius: 12px; padding: 4px;
+            width: 50px; height: 50px; margin-bottom: 40px; cursor: pointer;
+            background: white; border-radius: 10px; padding: 4px;
             transition: transform 0.2s;
         }
         .logo-area:hover { transform: scale(1.05); }
 
         .nav-item {
-            width: 42px; height: 42px; border-radius: 12px;
+            width: 44px; height: 44px; border-radius: 10px;
             display: flex; align-items: center; justify-content: center;
-            color: #94A3B8; cursor: pointer; margin-bottom: 18px;
+            color: #94A3B8; cursor: pointer; margin-bottom: 15px;
             transition: all 0.2s ease; position: relative;
         }
-        .nav-item i { font-size: 19px; }
-        .nav-item:hover { background: rgba(255,255,255,0.1); color: white; }
+        .nav-item i { font-size: 20px; }
+        .nav-item:hover { background: rgba(255,255,255,0.15); color: white; }
         .nav-item.active { 
             background: var(--primary); 
             color: white; 
-            box-shadow: 0 4px 12px rgba(233, 81, 29, 0.4);
+            box-shadow: 0 4px 15px rgba(15, 82, 186, 0.4);
         }
         .nav-item::after {
             content: attr(title);
             position: absolute; left: 60px; background: #333; color: white;
             padding: 4px 8px; border-radius: 4px; font-size: 11px;
-            opacity: 0; pointer-events: none; transition: 0.2s; white-space: nowrap;
+            opacity: 0; pointer-events: none; transition: 0.2s; white-space: nowrap; z-index: 100;
         }
         .nav-item:hover::after { opacity: 1; }
 
         /* =========================================
-           3. MAIN LAYOUT
+           3. ESTRUCTURA PRINCIPAL
            ========================================= */
         .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
         
@@ -95,12 +95,12 @@
         
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-        h1 { font-size: 24px; font-weight: 700; margin-bottom: 25px; color: var(--text-main); letter-spacing: -0.5px; }
-        h2, h3 { color: var(--text-main); }
+        h1 { font-size: 26px; font-weight: 700; margin-bottom: 25px; color: var(--text-main); letter-spacing: -0.5px; }
+        h2, h3 { color: var(--text-main); font-weight: 600; }
 
         .card {
             background: var(--bg-card);
-            border-radius: 16px;
+            border-radius: 12px;
             padding: 24px;
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
             border: 1px solid var(--border);
@@ -109,40 +109,40 @@
         }
 
         .btn {
-            background: var(--primary); color: white; border: none; padding: 10px 20px;
+            background: var(--primary); color: white; border: none; padding: 10px 18px;
             border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;
             transition: 0.2s; display: inline-flex; align-items: center; gap: 8px;
         }
         .btn:hover { background: var(--primary-dark); transform: translateY(-1px); }
         .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
-        .btn-outline:hover { background: #f9fafb; border-color: #ccc; }
-        .btn-icon { background: none; border: none; font-size: 18px; color: #54656F; cursor: pointer; padding: 8px; border-radius: 50%; transition: 0.2s; }
+        .btn-outline:hover { background: #F8FAFC; border-color: #CBD5E1; }
+        .btn-icon { background: none; border: none; font-size: 18px; color: #64748B; cursor: pointer; padding: 8px; border-radius: 50%; transition: 0.2s; }
         .btn-icon:hover { background: rgba(0,0,0,0.05); color: var(--primary); }
         
         .form-control {
             width: 100%; padding: 10px 14px; border: 1px solid var(--border);
             border-radius: 8px; margin-bottom: 12px; font-size: 14px;
-            background: #F9FAFB; transition: 0.2s;
+            background: #F8FAFC; transition: 0.2s; color: var(--text-main);
         }
-        .form-control:focus { border-color: var(--primary); background: white; box-shadow: 0 0 0 3px rgba(233, 81, 29, 0.1); }
+        .form-control:focus { border-color: var(--primary); background: white; box-shadow: 0 0 0 3px rgba(15, 82, 186, 0.1); }
 
         /* =========================================
-           4. CHAT SYSTEM (3 Column Layout)
+           4. SISTEMA DE CHAT (3 COLUMNAS)
            ========================================= */
         .chat-layout { display: flex; height: 100%; width: 100%; background: white; }
         
-        /* Lista de Chats */
+        /* Columna 1: Lista */
         .cl-panel { width: 340px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: white; flex-shrink: 0; }
-        .cl-header { padding: 16px; border-bottom: 1px solid var(--border); background: #F8FAFC; }
+        .cl-header { padding: 18px; border-bottom: 1px solid var(--border); background: white; }
         .cl-tools { display: flex; gap: 8px; margin-top: 10px; }
-        .cl-list { flex: 1; overflow-y: auto; }
+        .cl-list { flex: 1; overflow-y: auto; background: #FAFAFA; }
         
         .chat-item {
-            padding: 14px 16px; border-bottom: 1px solid #F1F5F9; cursor: pointer;
-            display: flex; gap: 12px; position: relative; transition: all 0.2s;
+            padding: 14px 18px; border-bottom: 1px solid #F1F5F9; cursor: pointer;
+            display: flex; gap: 12px; position: relative; transition: all 0.2s; background: white;
         }
         .chat-item:hover { background: #F8FAFC; }
-        .chat-item.active { background: #FFF7ED; border-left: 4px solid var(--primary); }
+        .chat-item.active { background: #EFF6FF; border-left: 4px solid var(--primary); }
         
         .avatar {
             width: 44px; height: 44px; border-radius: 50%; background: #E2E8F0;
@@ -150,47 +150,47 @@
             display: flex; align-items: center; justify-content: center; color: #94A3B8; font-size: 18px;
         }
 
-        /* Área de Chat */
+        /* Columna 2: Chat */
         .ca-panel { flex: 1; display: flex; flex-direction: column; position: relative; background: var(--chat-bg); min-width: 400px; }
         .chat-bg-pattern {
-            position: absolute; width: 100%; height: 100%; opacity: 0.06;
+            position: absolute; width: 100%; height: 100%; opacity: 0.04;
             background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
             pointer-events: none; z-index: 0;
         }
         
         .ca-header {
-            background: white; padding: 10px 20px; border-bottom: 1px solid var(--border);
+            background: white; padding: 12px 24px; border-bottom: 1px solid var(--border);
             display: flex; justify-content: space-between; align-items: center; z-index: 10;
         }
-        .messages-box { flex: 1; padding: 20px 40px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; z-index: 5; }
-        .input-area { background: white; padding: 12px 20px; display: flex; align-items: center; gap: 12px; z-index: 10; border-top: 1px solid var(--border); }
+        .messages-box { flex: 1; padding: 20px 40px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; z-index: 5; }
+        .input-area { background: white; padding: 15px 24px; display: flex; align-items: center; gap: 12px; z-index: 10; border-top: 1px solid var(--border); }
         
         /* Burbujas */
-        .bubble { padding: 8px 14px; font-size: 14.2px; max-width: 65%; line-height: 1.5; position: relative; border-radius: 8px; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
-        .b-user { align-self: flex-start; background: white; border-radius: 0 8px 8px 8px; }
-        .b-manual { align-self: flex-end; background: #D9FDD3; border-radius: 8px 0 8px 8px; color: #111; }
-        .b-bot { align-self: flex-end; background: #FFFFFF; border-radius: 8px 0 8px 8px; border-right: 4px solid var(--primary); margin-right: 2px; }
-        .msg-time { font-size: 10px; color: #888; text-align: right; margin-top: 2px; }
+        .bubble { padding: 10px 16px; font-size: 14.5px; max-width: 65%; line-height: 1.5; position: relative; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .b-user { align-self: flex-start; background: white; border-radius: 0 12px 12px 12px; color: #1e293b; }
+        .b-manual { align-self: flex-end; background: #DBEAFE; border-radius: 12px 0 12px 12px; color: #1e3a8a; } /* Azul claro */
+        .b-bot { align-self: flex-end; background: #FFFFFF; border-radius: 12px 0 12px 12px; border-right: 4px solid var(--primary); margin-right: 2px; }
+        .msg-time { font-size: 10px; opacity: 0.7; text-align: right; margin-top: 4px; }
 
-        /* CRM Panel */
-        .crm-panel { width: 300px; background: white; border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; transform: translateX(0); transition: transform 0.3s; }
+        /* Columna 3: CRM */
+        .crm-panel { width: 320px; background: white; border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; transform: translateX(0); transition: transform 0.3s; }
         .crm-panel.closed { display: none; }
         .crm-header { padding: 30px 20px; text-align: center; background: #F8FAFC; border-bottom: 1px solid var(--border); }
-        .crm-body { padding: 20px; }
-        .crm-stat { background: #F3F4F6; padding: 10px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; }
+        .crm-body { padding: 24px; }
+        .crm-stat { background: #F8FAFC; padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; border: 1px solid var(--border); }
         
         /* =========================================
            5. DASHBOARD & UTILS
            ========================================= */
-        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
-        .kpi-card { background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 15px; }
-        .kpi-icon { width: 50px; height: 50px; border-radius: 10px; background: #FFF7ED; color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; margin-bottom: 30px; }
+        .kpi-card { background: white; padding: 24px; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .kpi-icon { width: 50px; height: 50px; border-radius: 12px; background: #EFF6FF; color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 22px; }
         
         table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
-        th { text-align: left; padding: 16px; background: #F9FAFB; color: #4B5563; font-weight: 600; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
-        td { padding: 14px 16px; border-bottom: 1px solid #F1F5F9; color: #374151; }
+        th { text-align: left; padding: 16px; background: #F8FAFC; color: #475569; font-weight: 600; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+        td { padding: 14px 16px; border-bottom: 1px solid #F1F5F9; color: #334155; }
         tr:hover td { background: #F8FAFC; }
-        .tag-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; color: white; letter-spacing: 0.5px; }
+        .tag-pill { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 15px; font-size: 11px; font-weight: 600; color: white; letter-spacing: 0.5px; }
 
         /* Sandbox Terminal */
         .sandbox-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 80vh; }
@@ -200,23 +200,18 @@
             box-shadow: inset 0 0 10px rgba(0,0,0,0.5); border: 1px solid #333;
         }
         .log-entry { margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px; }
-        .log-req { color: #5dade2; }
-        .log-res { color: #f1c40f; }
+        .log-req { color: #60A5FA; }
+        .log-res { color: #FCD34D; }
 
         /* Modals */
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
-        .modal { background: white; width: 90%; max-width: 450px; padding: 30px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.5); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+        .modal { background: white; width: 90%; max-width: 450px; padding: 32px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
         @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
         #context-menu { position: absolute; display: none; background: white; border: 1px solid var(--border); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); z-index: 1000; border-radius: 8px; width: 160px; overflow: hidden; }
         .cm-item { padding: 10px 16px; cursor: pointer; font-size: 13px; color: #444; display: flex; align-items: center; gap: 10px; }
         .cm-item:hover { background: #F3F4F6; }
         .cm-item.delete { color: #EF4444; }
-
-        @media (max-width: 1024px) {
-            .crm-panel { display: none; position: absolute; right: 0; height: 100%; z-index: 20; box-shadow: -5px 0 15px rgba(0,0,0,0.1); }
-            .crm-panel.open { display: flex; }
-        }
     </style>
 </head>
 <body onclick="hideContextMenu()">
@@ -277,7 +272,7 @@
             <div class="chat-layout">
                 <div class="cl-panel">
                     <div class="cl-header">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                             <h3 style="font-size:16px;">Mensajería</h3>
                             <button class="btn" style="padding:6px 12px; font-size:11px;" onclick="addContactPrompt()"><i class="fas fa-plus"></i> Nuevo</button>
                         </div>
@@ -292,17 +287,16 @@
                         </div>
                     </div>
                     <div class="cl-list" id="chat-list-box">
-                        <div style="padding:20px; text-align:center; color:#999;">Cargando chats...</div>
+                        <div style="padding:30px; text-align:center; color:#999;">Cargando...</div>
                     </div>
                 </div>
 
                 <div class="ca-panel">
                     <div class="chat-bg-pattern"></div>
                     
-                    <div id="chat-placeholder" style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#aaa; z-index:10;">
-                        <i class="fas fa-comments" style="font-size:60px; margin-bottom:20px; color:#ddd;"></i>
-                        <h3>Selecciona una conversación</h3>
-                        <p>Gestiona ventas y leads desde aquí.</p>
+                    <div id="chat-placeholder" style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#94A3B8; z-index:10;">
+                        <i class="fas fa-comments" style="font-size:60px; margin-bottom:20px; opacity:0.5;"></i>
+                        <h3 style="color:#64748B;">Selecciona una conversación</h3>
                     </div>
 
                     <div id="chat-interface" style="display:none; flex-direction:column; height:100%; z-index:10;">
@@ -325,7 +319,7 @@
                         <div class="input-area">
                             <button class="btn-icon" onclick="document.getElementById('file-input').click()"><i class="fas fa-paperclip"></i></button>
                             <input type="file" id="file-input" hidden onchange="handleFileUpload(this)">
-                            <input id="msg-input" class="form-control" style="margin:0; border-radius:20px;" placeholder="Escribe un mensaje (o usa / para atajos)..." onkeyup="checkQuickReply(this)" onkeypress="if(event.key==='Enter') sendMsg()">
+                            <input id="msg-input" class="form-control" style="margin:0; border-radius:20px;" placeholder="Escribe un mensaje..." onkeyup="checkQuickReply(this)" onkeypress="if(event.key==='Enter') sendMsg()">
                             <button class="btn-icon" id="btn-mic" onclick="toggleRecord()"><i class="fas fa-microphone"></i></button>
                             <button class="btn-icon" style="color:var(--primary);" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button>
                         </div>
@@ -334,14 +328,14 @@
 
                 <div class="crm-panel" id="crm-panel">
                     <div class="crm-header">
-                        <div class="pp-avatar-lg" id="prof-avatar" style="width:80px; height:80px; border-radius:50%; background:#ddd; margin:0 auto 15px; background-size:cover; cursor:pointer;" onclick="document.getElementById('photo-input').click()"></div>
+                        <div class="pp-avatar-lg" id="prof-avatar" style="width:80px; height:80px; border-radius:50%; background:#E2E8F0; margin:0 auto 15px; background-size:cover; cursor:pointer;" onclick="document.getElementById('photo-input').click()"></div>
                         <input type="file" id="photo-input" hidden accept="image/*" onchange="uploadPhoto(this)">
                         <h3 id="prof-name">Nombre Cliente</h3>
                         <p id="prof-phone" style="font-size:13px; color:#666; cursor:pointer;" title="Copiar" onclick="copyToClip(this.innerText)">...</p>
                         <button id="prof-bot-btn" class="btn" style="width:100%; margin-top:15px; justify-content:center;" onclick="toggleBot()">BOT STATUS</button>
                     </div>
                     <div class="crm-body">
-                        <h4 style="font-size:13px; text-transform:uppercase; color:#999; margin-bottom:10px;">Datos del Lead</h4>
+                        <h4 style="font-size:12px; font-weight:700; text-transform:uppercase; color:#94A3B8; margin-bottom:10px;">Datos del Lead</h4>
                         <div class="crm-stat">
                             <strong><i class="fas fa-map-marker-alt"></i> Ciudad:</strong> <span id="prof-city">-</span>
                         </div>
@@ -349,15 +343,15 @@
                             <strong><i class="fas fa-search"></i> Interés:</strong> <span id="prof-interest">-</span>
                         </div>
                         
-                        <h4 style="font-size:13px; text-transform:uppercase; color:#999; margin:20px 0 10px;">Etiquetas</h4>
+                        <h4 style="font-size:12px; font-weight:700; text-transform:uppercase; color:#94A3B8; margin:20px 0 10px;">Etiquetas</h4>
                         <div id="prof-tags" style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px;"></div>
-                        <button class="btn-outline" style="width:100%; padding:5px; font-size:12px;" onclick="openTagSelector()">Gestionar Etiquetas</button>
+                        <button class="btn-outline" style="width:100%; padding:8px; font-size:12px;" onclick="openTagSelector()">Gestionar Etiquetas</button>
 
-                        <h4 style="font-size:13px; text-transform:uppercase; color:#999; margin:20px 0 10px;">Acciones</h4>
+                        <h4 style="font-size:12px; font-weight:700; text-transform:uppercase; color:#94A3B8; margin:20px 0 10px;">Acciones</h4>
                         <div style="display:flex; gap:10px;">
                             <button class="btn-icon" onclick="callUser()" title="Llamar"><i class="fas fa-phone"></i></button>
                             <button class="btn-icon" onclick="cmAction('archive')" title="Archivar"><i class="fas fa-archive"></i></button>
-                            <button class="btn-icon" onclick="cmAction('delete')" style="color:red;" title="Eliminar"><i class="fas fa-trash"></i></button>
+                            <button class="btn-icon" onclick="cmAction('delete')" style="color:#EF4444;" title="Eliminar"><i class="fas fa-trash"></i></button>
                         </div>
                     </div>
                 </div>
@@ -458,14 +452,14 @@
             <div class="sandbox-layout">
                 <div class="card" style="display:flex; flex-direction:column;">
                     <h3>Simulador de Chat</h3>
-                    <div id="sand-chat" style="flex:1; background:#f9fafb; border:1px solid #eee; border-radius:8px; padding:15px; margin:10px 0; overflow-y:auto;"></div>
+                    <div id="sand-chat" style="flex:1; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:15px; margin:10px 0; overflow-y:auto;"></div>
                     <div style="display:flex; gap:10px;">
                         <input id="sand-in" class="form-control" style="margin:0;" placeholder="Escribe como si fueras un cliente..." onkeypress="if(event.key==='Enter') runTest()">
                         <button class="btn" onclick="runTest()">Enviar</button>
                     </div>
                 </div>
                 
-                <div class="card" style="background:#111; border:none; color:#eee;">
+                <div class="card" style="background:#0F172A; border:none; color:#eee;">
                     <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
                         <h3 style="color:#fff;"><i class="fas fa-terminal"></i> Terminal Logs</h3>
                         <button class="btn-outline" style="border-color:#333; color:#aaa; font-size:11px; padding:4px;" onclick="document.getElementById('sand-log').innerHTML=''">Clear</button>
@@ -477,7 +471,9 @@
             </div>
         </div>
 
-    </div> <div id="modal-edit-lead" class="modal-overlay">
+    </div>
+
+    <div id="modal-edit-lead" class="modal-overlay">
         <div class="modal">
             <h3>Editar Lead</h3>
             <input id="edit-lead-id" type="hidden">
@@ -511,11 +507,11 @@
         let mediaRecorder, audioChunks=[], isRecording=false;
         let contextMenuChatId = null;
 
-        /* --- INIT & NAVIGATION --- */
+        /* --- INIT --- */
         async function init() {
             await loadGlobalData();
             nav('dashboard');
-            setInterval(() => syncLoop(), 2500); // Sync loop
+            setInterval(() => syncLoop(), 2500); 
         }
 
         function nav(v) {
@@ -523,7 +519,6 @@
             document.getElementById('view-'+v).classList.add('active');
             document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
             document.getElementById('nav-'+v).classList.add('active');
-            
             if(v==='chat') syncLoop(true);
             if(v==='leads') loadLeads();
             if(v==='inventory') loadInventory();
@@ -532,7 +527,6 @@
 
         async function loadGlobalData() {
             try {
-                // Config
                 const data = await fetch('/api/data/config').then(r=>r.json());
                 if(data) {
                     document.getElementById('biz-name').value = data.biz_profile?.name||'';
@@ -544,15 +538,13 @@
                         document.getElementById('sidebar-logo-img').src = data.logo_url;
                     }
                 }
-                // Tags & Shortcuts
                 globalTags = await fetch('/api/data/tags').then(r=>r.json()) || [];
                 renderGlobalTags();
                 shortcuts = await fetch('/api/data/shortcuts').then(r=>r.json()) || [];
                 renderShortcuts();
-                // Prompt
                 const pData = await fetch('/api/config/prompt').then(r=>r.json());
                 document.getElementById('bot-prompt').value = pData.prompt || "";
-            } catch(e) { console.warn('Init Partial Error', e); }
+            } catch(e) { console.warn('Init Partial', e); }
         }
 
         /* --- CHAT SYSTEM --- */
@@ -561,22 +553,18 @@
                 const view = document.getElementById('view-selector').value;
                 const res = await fetch(`/api/chats-full?view=${view}`);
                 const data = await res.json();
-                
-                // Sorting Logic
                 data.sort((a,b) => (b.pinned - a.pinned) || (new Date(b.timestamp) - new Date(a.timestamp)));
 
-                // Update List only if changed
                 if(force || JSON.stringify(data) !== JSON.stringify(chats)) {
                     chats = data;
                     renderChatList();
                 }
                 
-                // Update Active Chat
                 if(selectedId) {
                     const current = chats.find(c => c.id === selectedId);
                     if(current) {
                         renderBotStatus(current.botActive);
-                        if(current.unreadCount > 0) await fetch(`/api/chat-history/${selectedId}`); // Mark read
+                        if(current.unreadCount > 0) await fetch(`/api/chat-history/${selectedId}`); 
                     }
                     const msgs = await fetch(`/api/chat-history/${selectedId}`).then(r=>r.json());
                     renderMsgs(msgs);
@@ -595,13 +583,11 @@
                 return matchTxt && matchTag;
             });
 
-            // Populate Filter
             const tagSet = new Set(); chats.forEach(c=>(c.labels||[]).forEach(l=>tagSet.add(l)));
             let opts = '<option value="">Filtrar Etiqueta</option>'; tagSet.forEach(t=>opts+=`<option value="${t}">${t}</option>`);
             if(document.getElementById('tag-filter').innerHTML !== opts) document.getElementById('tag-filter').innerHTML = opts;
             document.getElementById('tag-filter').value = f;
 
-            // Render Items
             list.innerHTML = filtered.map(c => {
                 const tagsHtml = (c.labels || []).map(l => `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${getTagColor(l)}; margin-right:4px;" title="${l}"></span>`).join('');
                 return `
@@ -626,33 +612,22 @@
             selectedId = id;
             const c = chats.find(x=>x.id===id);
             if(!c) return;
-            
-            // UI Toggle
             document.getElementById('chat-placeholder').style.display = 'none';
             document.getElementById('chat-interface').style.display = 'flex';
-            
-            // Populate Header & CRM
             document.getElementById('active-name').innerText = c.name;
             document.getElementById('active-phone').innerText = id;
             document.getElementById('header-avatar').style.backgroundImage = c.photoUrl ? `url('${c.photoUrl}')` : '';
-            
-            // Populate Profile Panel
             document.getElementById('prof-avatar').style.backgroundImage = c.photoUrl ? `url('${c.photoUrl}')` : '';
             document.getElementById('prof-name').innerText = c.name;
             document.getElementById('prof-phone').innerText = id;
-            
-            // Check for Lead info locally if available or fetch
             fetchLeadInfo(id);
-
             renderBotStatus(c.botActive);
             renderChatTags(c.labels||[]);
-            
             document.getElementById('msgs-box').innerHTML = '<div style="text-align:center; padding:20px; color:#999;">Cargando...</div>';
             syncLoop(true);
         }
 
         async function fetchLeadInfo(phone) {
-            // Simplified: we rely on what's in leads DB
             try {
                 const leads = await fetch('/api/data/leads').then(r=>r.json());
                 const l = leads.find(x => x.phone === phone);
@@ -664,19 +639,15 @@
         function renderMsgs(msgs) {
             const box = document.getElementById('msgs-box');
             if(!msgs || msgs.length === 0) { box.innerHTML = '<div style="text-align:center; padding:30px; color:#aaa;">Conversación nueva.</div>'; return; }
-            
             let html = '';
             msgs.forEach(m => {
                 let cls = 'b-user';
                 if (m.role === 'manual' || m.role === 'assistant') cls = 'b-manual';
                 if (m.role === 'bot') cls = 'b-bot';
-                
                 let txt = formatMedia(m.text);
                 const time = new Date(m.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-                
                 html += `<div class="bubble ${cls}">${txt}<div class="msg-time">${time}</div></div>`;
             });
-
             if(box.innerHTML !== html) { 
                 const isBottom = (box.scrollHeight - box.scrollTop - box.clientHeight) <= 100;
                 box.innerHTML = html;
@@ -684,30 +655,27 @@
             }
         }
 
+        // --- FIX AUDIO LAG ---
         function formatMedia(txt) {
-            // IMAGEN
             if(txt.includes('[MEDIA:IMAGE:')) {
                 const id = txt.match(/IMAGE:(.*?)\]/)[1];
                 return `<img src="/api/media-proxy/${id}" style="max-width:200px; border-radius:8px; cursor:pointer; box-shadow:0 2px 5px rgba(0,0,0,0.1);" onclick="window.open(this.src)">`;
-            } 
-            // AUDIO (CON DESCARGA Y PRELOAD)
-            else if(txt.includes('[MEDIA:AUDIO:')) {
+            } else if(txt.includes('[MEDIA:AUDIO:')) {
                 const id = txt.match(/AUDIO:(.*?)\]/)[1];
                 const url = `/api/media-proxy/${id}`;
+                // PRELOAD=METADATA: Clave para que no se congele la interfaz
                 return `
-                <div style="display:flex; align-items:center; gap:8px; background:#f1f1f1; padding:5px; border-radius:10px; width:fit-content;">
-                    <audio src="${url}" controls preload="auto" style="height:35px; max-width:220px;"></audio>
+                <div style="display:flex; align-items:center; gap:8px; background:#f1f5f9; padding:5px; border-radius:10px; width:fit-content;">
+                    <audio src="${url}" controls preload="metadata" style="height:35px; max-width:220px;"></audio>
                     <a href="${url}" download="audio-${id}.ogg" target="_blank" title="Descargar Audio" 
-                       style="background:#ddd; color:#555; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; text-decoration:none; transition:0.2s;">
+                       style="background:#cbd5e1; color:#475569; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; text-decoration:none; transition:0.2s;">
                         <i class="fas fa-download" style="font-size:12px;"></i>
                     </a>
                 </div>`;
-            } 
-            // DOCUMENTOS
-            else if(txt.includes('[MEDIA:DOC:')) {
+            } else if(txt.includes('[MEDIA:DOC:')) {
                  const id = txt.match(/DOC:(.*?)\]/)[1];
                  return `<a href="/api/media-proxy/${id}" target="_blank" style="display:flex; align-items:center; gap:10px; background:#f9f9f9; padding:10px; border-radius:8px; text-decoration:none; color:#333; border:1px solid #ddd;">
-                            <i class="fas fa-file-pdf" style="color:#E9511D; font-size:24px;"></i>
+                            <i class="fas fa-file-pdf" style="color:#0F52BA; font-size:24px;"></i>
                             <span style="font-weight:500;">Ver Documento</span>
                         </a>`;
             }
@@ -718,12 +686,9 @@
             const m = document.getElementById('msg-input').value; 
             if(!m || !selectedId) return;
             document.getElementById('msg-input').value = '';
-            
-            // Optimistic UI
             const box = document.getElementById('msgs-box');
             box.innerHTML += `<div class="bubble b-manual">${m}<div class="msg-time">...</div></div>`;
             box.scrollTop = box.scrollHeight;
-
             await fetch('/api/chat/send', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, message:m})});
             syncLoop(true);
         }
@@ -750,7 +715,7 @@
                         const blob = new Blob(audioChunks, { type: 'audio/webm' }); 
                         const fd = new FormData(); fd.append('file', blob, 'audio.ogg'); fd.append('phone', selectedId); fd.append('type', 'audio'); 
                         await fetch('/api/chat/upload-send', { method: 'POST', body: fd }); 
-                        document.getElementById('btn-mic').style.color = '#54656F';
+                        document.getElementById('btn-mic').style.color = '#64748B';
                         syncLoop(true); 
                     }; 
                     mediaRecorder.start(); isRecording = true; 
@@ -771,89 +736,23 @@
                 } else popup.style.display = 'none'; 
             } else popup.style.display = 'none'; 
         }
-        function useQuickReply(text) { 
-            document.getElementById('msg-input').value = text; 
-            document.getElementById('quick-replies').style.display = 'none'; 
-            document.getElementById('msg-input').focus(); 
-        }
-
-        /* --- SANDBOX & LOGIC --- */
+        function useQuickReply(text) { document.getElementById('msg-input').value = text; document.getElementById('quick-replies').style.display = 'none'; document.getElementById('msg-input').focus(); }
         async function runTest() {
-            const input = document.getElementById('sand-in');
-            const chatBox = document.getElementById('sand-chat');
-            const logBox = document.getElementById('sand-log');
-            const msg = input.value;
-            if(!msg) return;
-
-            // UI Chat Update
-            chatBox.innerHTML += `<div style="text-align:right; margin:5px;"><span style="background:#e5e7eb; padding:5px 10px; border-radius:10px;">${msg}</span></div>`;
-            input.value = '';
-
-            // LOG REQUEST
-            logBox.innerHTML += `<div class="log-entry log-req">> Enviando: "${msg}"</div>`;
-            logBox.scrollTop = logBox.scrollHeight;
-
+            const input = document.getElementById('sand-in'); const chatBox = document.getElementById('sand-chat'); const logBox = document.getElementById('sand-log'); const msg = input.value; if(!msg) return;
+            chatBox.innerHTML += `<div style="text-align:right; margin:5px;"><span style="background:#e2e8f0; padding:5px 10px; border-radius:10px;">${msg}</span></div>`; input.value = '';
+            logBox.innerHTML += `<div class="log-entry log-req">> Enviando: "${msg}"</div>`; logBox.scrollTop = logBox.scrollHeight;
             try {
-                // Call API
-                const startT = Date.now();
-                const res = await fetch('/api/test-ai', {
-                    method: 'POST', 
-                    headers: {'Content-Type':'application/json'}, 
-                    body: JSON.stringify({message: msg})
-                });
-                const data = await res.json();
-                const latency = Date.now() - startT;
-
-                // UI Chat Response
-                chatBox.innerHTML += `<div style="text-align:left; margin:5px;"><span style="background:var(--primary); color:white; padding:5px 10px; border-radius:10px;">${data.response}</span></div>`;
-                chatBox.scrollTop = chatBox.scrollHeight;
-
-                // LOG RESPONSE
-                logBox.innerHTML += `
-                <div class="log-entry log-res">
-                    <span style="color:#0f0;">✔ RESPONSE (${latency}ms):</span><br>
-                    ${JSON.stringify(data, null, 2).replace(/\n/g, '<br>').replace(/ /g, '&nbsp;')}
-                </div>`;
-                logBox.scrollTop = logBox.scrollHeight;
-
-            } catch(e) {
-                logBox.innerHTML += `<div class="log-entry" style="color:red;">❌ ERROR: ${e.message}</div>`;
-            }
+                const startT = Date.now(); const res = await fetch('/api/test-ai', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({message: msg})});
+                const data = await res.json(); const latency = Date.now() - startT;
+                chatBox.innerHTML += `<div style="text-align:left; margin:5px;"><span style="background:var(--primary); color:white; padding:5px 10px; border-radius:10px;">${data.response}</span></div>`; chatBox.scrollTop = chatBox.scrollHeight;
+                logBox.innerHTML += `<div class="log-entry log-res"><span style="color:#0f0;">✔ RESPONSE (${latency}ms):</span><br>${JSON.stringify(data, null, 2).replace(/\n/g, '<br>').replace(/ /g, '&nbsp;')}</div>`; logBox.scrollTop = logBox.scrollHeight;
+            } catch(e) { logBox.innerHTML += `<div class="log-entry" style="color:red;">❌ ERROR: ${e.message}</div>`; }
         }
 
-        /* --- LEADS, INVENTORY & OTHERS --- */
-        async function loadLeads() {
-            try {
-                allLeads = await fetch('/api/data/leads').then(r=>r.json());
-                document.getElementById('leads-body').innerHTML = allLeads.map(l => `
-                    <tr>
-                        <td>${l.fecha.split(',')[0]}</td>
-                        <td><a href="#" style="color:var(--primary); font-weight:600;" onclick="openEditLead(${l.id})">${l.nombre}</a></td>
-                        <td>${l.ciudad}</td>
-                        <td>${l.interes}</td>
-                        <td><span class="tag-pill" style="background:${getLeadColor(l.etiqueta)}">${l.etiqueta}</span></td>
-                        <td>
-                            <button class="btn-icon" onclick="openEditLead(${l.id})"><i class="fas fa-edit"></i></button>
-                            <button class="btn-icon" style="color:red;" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button>
-                        </td>
-                    </tr>
-                `).join('');
-            } catch(e) {}
-        }
-        function getLeadColor(s) { return s==='Vendido'?'#10B981':(s==='Lead'?'#3B82F6':(s==='Cotización'?'#F59E0B':'#6B7280')); }
-        async function downloadLeadsExcel() { 
-            try { 
-                const leadsRaw = await fetch('/api/data/leads').then(r=>r.json()); 
-                if(!leadsRaw.length) return alert("No hay datos"); 
-                const dataExport = leadsRaw.map(l => ({ Fecha: l.fecha, Nombre: l.nombre, Telefono: l.phone, Ciudad: l.ciudad, Interes: l.interes, Estado: l.etiqueta, Correo: l.correo })); 
-                const ws = XLSX.utils.json_to_sheet(dataExport); 
-                const wb = XLSX.utils.book_new(); 
-                XLSX.utils.book_append_sheet(wb, ws, "Leads"); 
-                XLSX.writeFile(wb, `Leads_${new Date().toISOString().slice(0,10)}.xlsx`); 
-            } catch(e) { alert("Error al exportar"); } 
-        }
-
-        /* --- HELPERS --- */
+        /* --- LEADS, INVENTORY & UTILS --- */
+        async function loadLeads() { try { allLeads = await fetch('/api/data/leads').then(r=>r.json()); document.getElementById('leads-body').innerHTML = allLeads.map(l => `<tr><td>${l.fecha.split(',')[0]}</td><td><a href="#" style="color:var(--primary); font-weight:600;" onclick="openEditLead(${l.id})">${l.nombre}</a></td><td>${l.ciudad}</td><td>${l.interes}</td><td><span class="tag-pill" style="background:${getLeadColor(l.etiqueta)}">${l.etiqueta}</span></td><td><button class="btn-icon" onclick="openEditLead(${l.id})"><i class="fas fa-edit"></i></button><button class="btn-icon" style="color:#EF4444;" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button></td></tr>`).join(''); } catch(e){} }
+        function getLeadColor(s) { return s==='Vendido'?'#10B981':(s==='Lead'?'#3B82F6':(s==='Cotización'?'#F59E0B':'#64748B')); }
+        async function downloadLeadsExcel() { try { const leadsRaw = await fetch('/api/data/leads').then(r=>r.json()); if(!leadsRaw.length) return alert("No hay datos"); const dataExport = leadsRaw.map(l => ({ Fecha: l.fecha, Nombre: l.nombre, Telefono: l.phone, Ciudad: l.ciudad, Interes: l.interes, Estado: l.etiqueta, Correo: l.correo })); const ws = XLSX.utils.json_to_sheet(dataExport); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Leads"); XLSX.writeFile(wb, `Leads_${new Date().toISOString().slice(0,10)}.xlsx`); } catch(e) { alert("Error al exportar"); } }
         function toggleCrmPanel() { document.getElementById('crm-panel').classList.toggle('closed'); }
         function getTagColor(name) { const t = globalTags.find(gt => gt.name === name); return t ? t.color : '#ccc'; }
         function copyToClip(txt) { navigator.clipboard.writeText(txt); alert("Copiado: "+txt); }
@@ -861,39 +760,14 @@
         function hideContextMenu() { document.getElementById('context-menu').style.display='none'; }
         function closeModal(id) { document.getElementById(id).style.display='none'; }
         function callUser() { if(selectedId) window.open(`tel:${selectedId}`); }
-        
-        // Leads Actions
-        function openEditLead(id) { 
-            const l = allLeads.find(x=>x.id===id); if(!l)return;
-            document.getElementById('edit-lead-id').value=id;
-            document.getElementById('edit-lead-name').value=l.nombre;
-            document.getElementById('edit-lead-city').value=l.ciudad;
-            document.getElementById('edit-lead-interest').value=l.interes;
-            document.getElementById('edit-lead-email').value=l.correo;
-            document.getElementById('edit-lead-tag').value=l.etiqueta;
-            document.getElementById('modal-edit-lead').style.display='flex';
-        }
-        async function saveLeadChanges() {
-            const id = document.getElementById('edit-lead-id').value;
-            const fields = ['nombre','ciudad','interes','correo','etiqueta'];
-            for(const f of fields) {
-                const val = document.getElementById('edit-lead-'+(f==='etiqueta'?'tag':f)).value; 
-                await fetch('/api/leads/update', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, field:f, value:val})});
-            }
-            closeModal('modal-edit-lead'); loadLeads();
-        }
-
-        // Tags & Config
+        function openEditLead(id) { const l = allLeads.find(x=>x.id===id); if(!l)return; document.getElementById('edit-lead-id').value=id; document.getElementById('edit-lead-name').value=l.nombre; document.getElementById('edit-lead-city').value=l.ciudad; document.getElementById('edit-lead-interest').value=l.interes; document.getElementById('edit-lead-email').value=l.correo; document.getElementById('edit-lead-tag').value=l.etiqueta; document.getElementById('modal-edit-lead').style.display='flex'; }
+        async function saveLeadChanges() { const id = document.getElementById('edit-lead-id').value; const fields = ['nombre','ciudad','interes','correo','etiqueta']; for(const f of fields) { const val = document.getElementById('edit-lead-'+(f==='etiqueta'?'tag':f)).value; await fetch('/api/leads/update', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, field:f, value:val})}); } closeModal('modal-edit-lead'); loadLeads(); }
         async function addGlobalTag() { const n=document.getElementById('new-tag-name').value; const c=document.getElementById('new-tag-color').value; await fetch('/api/tags/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:n, color:c})}); loadGlobalData(); }
         function renderGlobalTags() { document.getElementById('global-tags-list').innerHTML = globalTags.map(t=>`<span class="tag-pill" style="background:${t.color}; padding:4px 8px;">${t.name} <i class="fas fa-times" style="margin-left:5px; cursor:pointer;" onclick="deleteTag(${t.id})"></i></span>`).join(''); }
         async function deleteTag(id) { await fetch('/api/tags/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}); loadGlobalData(); }
-        
-        // Inventory
-        async function loadInventory() { try { const d = await fetch('/api/data/knowledge').then(r=>r.json()); document.getElementById('inv-body').innerHTML = d.map((p,i)=>`<tr><td>${p.searchable}</td><td style="text-align:right;"><i class="fas fa-trash" style="color:red; cursor:pointer;" onclick="deleteProduct(${i})"></i></td></tr>`).join(''); } catch(e){} }
+        async function loadInventory() { try { const d = await fetch('/api/data/knowledge').then(r=>r.json()); document.getElementById('inv-body').innerHTML = d.map((p,i)=>`<tr><td>${p.searchable}</td><td style="text-align:right;"><i class="fas fa-trash" style="color:#EF4444; cursor:pointer;" onclick="deleteProduct(${i})"></i></td></tr>`).join(''); } catch(e){} }
         async function deleteProduct(i) { if(confirm("¿Eliminar?")) await fetch('/api/knowledge/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:i})}); loadInventory(); }
         async function uploadCSV() { const f = document.getElementById('csv-file').files[0]; if(!f) return; const fd = new FormData(); fd.append('file',f); await fetch('/api/knowledge/csv', {method:'POST', body:fd}); loadInventory(); alert("Inventario actualizado"); }
-        
-        // Other Utils & Contacts
         async function savePrompt() { await fetch('/api/config/prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt: document.getElementById('bot-prompt').value})}); alert("Prompt Guardado"); }
         async function saveBizConfig() { await fetch('/api/config/biz/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:document.getElementById('biz-name').value, hours:document.getElementById('biz-hours').value, website_data:document.getElementById('biz-web').value})}); alert("Perfil Actualizado"); }
         async function toggleBot() { const c = chats.find(x=>x.id===selectedId); await fetch('/api/chat/toggle-bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedId, active:!c.botActive})}); syncLoop(true); }
@@ -903,27 +777,8 @@
         async function cmAction(a) { const id=contextMenuChatId||selectedId; if(!id)return; const c=chats.find(x=>x.id===id); if(a==='pin') await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'toggle_pin', value:!c.pinned})}); if(a==='archive') { await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'toggle_archive', value:!c.archived})}); if(selectedId===id) selectedId=null; } if(a==='delete' && confirm("¿Borrar Historial?")) { await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:id, action:'delete'})}); if(selectedId===id) selectedId=null; } if(a==='labels') openTagSelector(); syncLoop(true); }
         async function uploadLogo() { const f=document.getElementById('logo-upload').files[0]; if(!f) return; const fd=new FormData(); fd.append('file',f); const r=await fetch('/api/config/logo',{method:'POST',body:fd}).then(x=>x.json()); if(r.success) loadGlobalData(); }
         async function uploadPhoto(input) { if(!input.files[0] || !selectedId) return; const fd = new FormData(); fd.append('file', input.files[0]); fd.append('phone', selectedId); await fetch('/api/contacts/upload-photo', {method:'POST', body:fd}); syncLoop(true); }
-        
-        /* --- DASHBOARD --- */
-        async function loadDash() {
-            try {
-                const [l,c,s] = await Promise.all([ fetch('/api/data/leads').then(r=>r.json()), fetch('/api/chats-full').then(r=>r.json()), fetch('/api/data/knowledge').then(r=>r.json()) ]);
-                document.getElementById('kpi-leads').innerText = l.length;
-                document.getElementById('kpi-chats').innerText = c.length;
-                document.getElementById('kpi-stock').innerText = s.length;
-                document.getElementById('dash-leads-body').innerHTML = l.slice(0,5).map(x => `<tr><td style="font-weight:600;">${x.nombre}</td><td>${x.ciudad}</td><td>${x.interes}</td><td>${x.fecha.split(',')[0]}</td></tr>`).join('');
-            } catch(e){}
-        }
-
-        // Tags Logic
-        function openTagSelector() { 
-            const list = document.getElementById('tag-selector-list'); const c = chats.find(x=>x.id===selectedId); if(!c) return;
-            const cur = c.labels || [];
-            list.innerHTML = globalTags.map(t => `<div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #eee; cursor:pointer;" onclick="toggleChatTag('${t.name}')"><span><span class="tag-pill" style="background:${t.color}">${t.name}</span></span> ${cur.includes(t.name)?'<i class="fas fa-check" style="color:green;"></i>':''}</div>`).join('');
-            document.getElementById('modal-tag-selector').style.display='flex';
-        }
-        async function toggleChatTag(n) { const c=chats.find(x=>x.id===selectedId); let tags=c.labels||[]; if(tags.includes(n)) tags=tags.filter(x=>x!==n); else tags.push(n); await fetch('/api/chat/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:selectedId, action:'set_labels', value:tags})}); openTagSelector(); syncLoop(true); }
         async function addShortcut() { const k=document.getElementById('new-sc-key').value; const t=document.getElementById('new-sc-text').value; await fetch('/api/shortcuts/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({keyword:k, text:t})}); loadGlobalData(); }
+        async function loadDash() { try { const [l,c,s] = await Promise.all([ fetch('/api/data/leads').then(r=>r.json()), fetch('/api/chats-full').then(r=>r.json()), fetch('/api/data/knowledge').then(r=>r.json()) ]); document.getElementById('kpi-leads').innerText = l.length; document.getElementById('kpi-chats').innerText = c.length; document.getElementById('kpi-stock').innerText = s.length; document.getElementById('dash-leads-body').innerHTML = l.slice(0,5).map(x => `<tr><td style="font-weight:600;">${x.nombre}</td><td>${x.ciudad}</td><td>${x.interes}</td><td>${x.fecha.split(',')[0]}</td></tr>`).join(''); } catch(e){} }
 
         window.onload = init;
     </script>
