@@ -1,5 +1,5 @@
-/* ============================================================
- * SERVER BACKEND - VALENTINA v23.0 (MASTERPIECE EDITION)
+/*
+ * SERVER BACKEND - VALENTINA v23.0 (MASTERPIECE EDITION) - PATCHED
  * Cliente: Importadora Casa Colombia (ICC)
  * Estado: Estable, Seguro y Prioriza Configuración Frontend.
  * ============================================================
@@ -353,17 +353,29 @@ app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirna
 app.get('/api/config/prompt', proteger, async (req, res) => res.json({ prompt: await getCfg('bot_prompt', DEFAULT_PROMPT) }));
 app.post('/api/config/prompt', proteger, async (req, res) => { await setCfg('bot_prompt', req.body.prompt); res.json({success:true}); });
 
-// Chats API
+// ===============================================
+// [PATCHED] CHATS API CON VISTAS CORREGIDAS
+// ===============================================
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
         const view = req.query.view || 'active';
         const search = req.query.search ? `%${req.query.search}%` : null;
-        let whereClause = view === 'archived' ? 'm.archived = 1' : '(m.archived = 0 OR m.archived IS NULL)';
+        
+        // --- LOGICA DE VISTAS (Fix Unread/Archived) ---
+        let whereClause = '(m.archived = 0 OR m.archived IS NULL)'; // Default: Activos
+        
+        if (view === 'archived') {
+            whereClause = 'm.archived = 1';
+        } else if (view === 'unread') {
+            whereClause = 'm.unreadCount > 0 AND (m.archived = 0 OR m.archived IS NULL)';
+        }
+        
         let params = [];
         if (search) {
             whereClause += ` AND (m.contactName LIKE ? OR h.phone LIKE ? OR h.text LIKE ?)`;
             params.push(search, search, search);
         }
+        
         const query = `
             SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, 
             m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, b.active as botActive 
@@ -372,6 +384,7 @@ app.get('/api/chats-full', proteger, async (req, res) => {
             LEFT JOIN bot_status b ON h.phone = b.phone 
             WHERE ${whereClause}
             GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 50`;
+            
         const rows = await db.all(query, params);
         res.json(rows.map(r => ({ 
             id: r.id, name: r.contactName || r.id, lastMessage: { text: r.lastText, time: r.timestamp }, 
@@ -386,15 +399,22 @@ app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     res.json(await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]));
 });
 
-// Acciones de Chat
+// ===============================================
+// [PATCHED] ACCIONES DE CHAT (CLICK DERECHO)
+// ===============================================
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
+    
+    // --- LIMPIEZA DE NUMERO (CRITICO) ---
+    const cleanPhone = phone.replace(/\D/g, ''); 
+    
     if(action === 'delete') { 
-        for(const t of ['history','metadata','bot_status','leads']) await db.run(`DELETE FROM ${t} WHERE phone=?`,[phone]); 
+        for(const t of ['history','metadata','bot_status','leads']) await db.run(`DELETE FROM ${t} WHERE phone=?`,[cleanPhone]); 
     }
-    else if(action === 'set_labels') await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [phone, JSON.stringify(value)]);
-    else if(action === 'toggle_pin') await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET pinned=excluded.pinned", [phone, value?1:0]);
-    else if(action === 'toggle_archive') await db.run("INSERT INTO metadata (phone, archived) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET archived=excluded.archived", [phone, value?1:0]);
+    else if(action === 'set_labels') await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, JSON.stringify(value)]);
+    else if(action === 'toggle_pin') await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET pinned=excluded.pinned", [cleanPhone, value?1:0]);
+    else if(action === 'toggle_archive') await db.run("INSERT INTO metadata (phone, archived) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET archived=excluded.archived", [cleanPhone, value?1:0]);
+    
     res.json({success:true});
 });
 
