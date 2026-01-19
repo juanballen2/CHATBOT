@@ -1,7 +1,7 @@
 /*
- * SERVER BACKEND - VALENTINA v23.0 (MASTERPIECE EDITION) - PATCHED
+ * SERVER BACKEND - VALENTINA v24.0 (LOGIC OVERHAUL)
  * Cliente: Importadora Casa Colombia (ICC)
- * Estado: Estable, Seguro y Prioriza Configuración Frontend.
+ * Cambios: Debounce, Source Tracking, Cron Jobs, DB Sync.
  * ============================================================
  */
 
@@ -31,6 +31,11 @@ const upload = multer({
     limits: { fileSize: 100 * 1024 * 1024 } 
 });
 
+// --- [NUEVO] GESTIÓN DE COLA DE MENSAJES (DEBOUNCE) ---
+// Evita que el bot responda a cada frase suelta. Agrupa mensajes.
+const messageQueue = new Map(); // Estructura: { phone: { timer: null, text: [], name: "" } }
+const DEBOUNCE_TIME = 8000; // 8 Segundos de espera para agrupar mensajes
+
 // --- 2. VARIABLES DE ENTORNO ---
 const API_KEY = process.env.GEMINI_API_KEY; 
 const META_TOKEN = process.env.META_TOKEN;
@@ -39,18 +44,14 @@ const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = "icc-val-secure-v23"; 
 
-// --- 3. PROMPT DE RESPALDO (SOLO SI EL FRONT ESTÁ VACÍO) ---
-/* NOTA: Las comillas del JSON están escapadas (\) para evitar crash */
+// --- 3. PROMPT DE RESPALDO ---
 const DEFAULT_PROMPT = `ERES VALENTINA, ASISTENTE DE VENTAS DE IMPORTADORA CASA COLOMBIA (ICC).
-
 TU META: Vender repuestos de maquinaria amarilla.
 ESTILO: Profesional, técnico y amable.
-
 INSTRUCCIONES CLAVE:
 1. No des precios inventados.
 2. Pide Nombre y Ciudad para cotizar.
-3. Si el cliente pregunta por algo técnico, responde brevemente y pide datos.
-`;
+3. Si el cliente pregunta por algo técnico, responde brevemente y pide datos.`;
 
 // --- 4. SESIONES Y SEGURIDAD ---
 app.use(session({
@@ -63,7 +64,7 @@ app.use(session({
 
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
-// Protección de archivos de datos
+// Protección de archivos
 app.use((req, res, next) => {
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
         return res.status(403).send('🚫 Acceso Denegado');
@@ -84,30 +85,43 @@ let db, globalKnowledge = [], serverInstance;
             driver: sqlite3.Database 
         });
 
-        // Esquema de Base de Datos
+        // Esquema de Base de Datos (ACTUALIZADO CON NUEVAS COLUMNAS Y TABLAS)
         const tables = [
             `history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT)`,
-            `leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT)`,
-            `metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0, photoUrl TEXT, archived INTEGER DEFAULT 0, unreadCount INTEGER DEFAULT 0)`,
+            // [MODIFICADO] Leads ahora tiene 'source' (Fuente) y 'status_tag' (Etiqueta sincronizada), 'farewell_sent' (Despedida)
+            `leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT UNIQUE, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT, source TEXT DEFAULT 'Organico', status_tag TEXT, farewell_sent INTEGER DEFAULT 0)`,
+            `metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0, photoUrl TEXT, archived INTEGER DEFAULT 0, unreadCount INTEGER DEFAULT 0, last_interaction TEXT)`,
             `bot_status (phone TEXT PRIMARY KEY, active INTEGER DEFAULT 1)`,
             `inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, searchable TEXT UNIQUE, raw_data TEXT)`,
             `config (key TEXT PRIMARY KEY, value TEXT)`,
             `shortcuts (id INTEGER PRIMARY KEY AUTOINCREMENT, keyword TEXT UNIQUE, text TEXT)`,
-            `global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT)`
+            `global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT)`,
+            // [NUEVO] Tabla para guardar lo que lee de las webs
+            `knowledge_sources (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, url TEXT, summary TEXT, active INTEGER DEFAULT 1, date TEXT)`
         ];
 
         for (const t of tables) await db.exec(`CREATE TABLE IF NOT EXISTS ${t}`);
 
-        // Migraciones Automáticas (Anti-Borrado de datos viejos)
-        const migrations = ['photoUrl', 'archived', 'unreadCount'].map(c => `ALTER TABLE metadata ADD COLUMN ${c}`);
+        // Migraciones Automáticas (Para no perder datos viejos)
+        const migrations = [
+            'photoUrl', 'archived', 'unreadCount', 'last_interaction'
+        ].map(c => `ALTER TABLE metadata ADD COLUMN ${c}`);
+        
+        // Migraciones para Leads (Nuevas columnas)
+        migrations.push("ALTER TABLE leads ADD COLUMN source TEXT DEFAULT 'Organico'");
+        migrations.push("ALTER TABLE leads ADD COLUMN status_tag TEXT");
+        migrations.push("ALTER TABLE leads ADD COLUMN farewell_sent INTEGER DEFAULT 0");
         migrations.push('ALTER TABLE config ADD COLUMN logoUrl TEXT');
+
         for (const m of migrations) { try { await db.exec(m); } catch(e){} }
 
-        // Cargar Inventario a Memoria RAM para velocidad
         await refreshKnowledge();
 
+        // [NUEVO] Iniciar Cron Jobs (Tareas programadas)
+        iniciarCronJobs();
+
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v23.0 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v24.0 ONLINE (Port ${PORT})`));
         
         serverInstance.on('error', (e) => { 
             if(e.code === 'EADDRINUSE') {
@@ -138,6 +152,15 @@ async function setCfg(k, v) {
 }
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// --- [NUEVO] DETECTOR DE FUENTE ---
+function detectarFuente(mensaje) {
+    if (!mensaje) return 'Organico';
+    const msg = mensaje.toLowerCase();
+    if (msg.includes('importadoracasacolombia.com')) return 'Web';
+    if (msg.includes('storeicc.com') || msg.includes('deseo asesoría')) return 'Tienda Virtual';
+    return 'Organico'; // Por defecto
+}
 
 // --- 7. META API (WHATSAPP) ---
 async function uploadToMeta(buffer, mime, name) {
@@ -175,7 +198,6 @@ async function enviarWhatsApp(to, content, type = "text") {
     } catch (e) { console.error("Error Meta:", e.message); return false; }
 }
 
-// Proxy Multimedia (Para ver imágenes/audios en el dashboard)
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     try {
         const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
@@ -194,18 +216,19 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     } catch (e) { res.status(500).send("Error Media"); }
 });
 
-// --- 8. CEREBRO IA (LÓGICA BLINDADA) ---
+// --- 8. CEREBRO IA (LOGICA ACTUALIZADA) ---
 
 function limpiarRespuesta(txt) {
-    // Elimina bloques de código JSON para que el usuario solo vea el texto
     let clean = txt.replace(/```json([\s\S]*?)```|{([\s\S]*?)}/gi, "").trim(); 
     return clean.replace(/[\r\n]+/g, "\n").trim();
 }
 
+// [MODIFICADO] Ahora recibe el texto acumulado del buffer
 async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFile = false) {
     // 1. Registro Histórico
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', dbMsg, new Date().toISOString()]);
-    await db.run("INSERT INTO metadata (phone, archived, unreadCount) VALUES (?, 0, 1) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1", [phone]);
+    // Actualizamos last_interaction para el Cron de 24h
+    await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [phone, new Date().toISOString()]);
 
     // 2. Verificar Pausa
     const bot = await db.get("SELECT active FROM bot_status WHERE phone = ?", [phone]);
@@ -217,14 +240,14 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         return rFile;
     }
 
-    await sleep(2000); // Pausa humana
-
     // 3. Recopilación de Contexto
-    // AQUÍ ESTÁ LA CLAVE: Cargamos lo que Lorena configuró
     let personalidadLorena = await getCfg('bot_prompt');
     const configUsar = (personalidadLorena && personalidadLorena.length > 5) ? personalidadLorena : DEFAULT_PROMPT;
 
-    const webData = await getCfg('website_data', "Sin datos extra.");
+    // [MODIFICADO] Traer data de las paginas web escaneadas correctamente
+    const webSources = await db.all("SELECT summary FROM knowledge_sources WHERE active = 1");
+    const webContext = webSources.map(w => w.summary).join("\n\n");
+
     const techRules = await getCfg('tech_rules', []);
     const biz = await getCfg('biz_profile', {});
     
@@ -243,16 +266,18 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     }
 
     // Búsqueda Inteligente en Stock
-    const busqueda = aiMsg.toLowerCase().split(" ").slice(0,3).join(" "); // Primeras 3 palabras
+    const busqueda = aiMsg.toLowerCase().split(" ").slice(0,3).join(" ");
     const stock = globalKnowledge.filter(i => (i.searchable||"").toLowerCase().includes(busqueda)).slice(0,5);
 
     // 4. Construcción del Prompt Dinámico
-    // Mezcla la personalidad del Front con la lógica técnica del Back
     const promptFinal = `
-    === PERSONALIDAD Y REGLAS DE NEGOCIO (Configuración Prioritaria) ===
+    === PERSONALIDAD Y REGLAS DE NEGOCIO ===
     ${configUsar}
     
-    === CONTEXTO TÉCNICO ===
+    === CONTEXTO WEB (ICC) ===
+    ${webContext || "No hay datos web extra."}
+
+    === CONTEXTO TÉCNICO DEL CLIENTE ===
     ${memoriaDatos}
     
     === INVENTARIO DISPONIBLE (Referencia) ===
@@ -266,9 +291,10 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     ${JSON.stringify(history)}
     
     === INSTRUCCIÓN OBLIGATORIA DEL SISTEMA ===
-    Al final de tu respuesta, SIEMPRE analiza si tienes datos nuevos del cliente y genera este JSON oculto:
+    Al final de tu respuesta, SIEMPRE analiza si tienes datos nuevos del cliente y genera este JSON oculto.
+    Si ya tienes todos los datos (Nombre, Ciudad, Interes), pon "datos_completos": true.
     \`\`\`json
-    {"es_lead": boolean, "nombre":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead"}
+    {"es_lead": boolean, "nombre":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead", "datos_completos": boolean}
     \`\`\`
     `;
 
@@ -278,15 +304,13 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         });
         const raw = r.data.candidates[0].content.parts[0].text;
         
-        // 5. Procesamiento de Lead (Back-End Task)
+        // 5. Procesamiento de Lead
         const match = raw.match(/```json([\s\S]*?)```|{([\s\S]*?)}/);
         if (match) {
             try {
                 const info = JSON.parse((match[1]||match[0]).replace(/```json|```/g, "").trim());
-                // Solo guardamos si hay datos relevantes
-                if (info.es_lead || (info.nombre && info.nombre !== "Cliente") || info.ciudad) {
-                    await gestionarLead(phone, info, name, lead);
-                }
+                // Pasamos el mensaje original para detectar fuente si es lead nuevo
+                await gestionarLead(phone, info, name, lead, dbMsg); 
             } catch(e) {}
         }
 
@@ -302,40 +326,90 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     }
 }
 
-async function gestionarLead(phone, info, fbName, oldLead) {
+// [MODIFICADO] Gestiona creación de lead y fuente
+async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
     let name = (info.nombre && info.nombre !== "null" && info.nombre !== "Cliente") ? info.nombre : fbName;
     
+    // Detectar si el lead completó sus datos para el Cron de despedida
+    let datosCompletos = info.datos_completos === true;
+
     if (oldLead) {
-        // Actualizar Lead Existente
-        await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=? WHERE id=?`, 
-            [
-                name, 
-                info.interes || oldLead.interes, 
-                info.etiqueta || oldLead.etiqueta, 
-                new Date().toLocaleString(), 
-                info.ciudad || oldLead.ciudad, 
-                info.correo || oldLead.correo, 
-                oldLead.id
-            ]);
-        // Actualizar Metadata (Nombre en lista de chats)
+        // Actualizar Lead
+        // Si datosCompletos es true y antes no lo era, reseteamos el farewell_sent para que el cron lo evalue
+        let farewellReset = (datosCompletos && !oldLead.fecha) ? ", farewell_sent = 0" : ""; // Lógica simple: Si se actualiza fecha reciente
+
+        await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=? ${farewellReset} WHERE id=?`, 
+            [name, info.interes || oldLead.interes, info.etiqueta || oldLead.etiqueta, new Date().toISOString(), info.ciudad || oldLead.ciudad, info.correo || oldLead.correo, oldLead.id]);
+        
         await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [name, phone]);
     } else if (info.interes || info.ciudad || info.es_lead) {
-        // Crear Nuevo Lead
-        await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
-            [
-                phone, 
-                name, 
-                info.interes || "Consultando", 
-                "Pendiente", 
-                new Date().toLocaleString(), 
-                info.ciudad, 
-                info.correo
-            ]);
+        // Crear Lead NUEVO con Fuente
+        const fuente = detectarFuente(originalMsg);
+        await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo, source, farewell_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`, 
+            [phone, name, info.interes || "Consultando", "Pendiente", new Date().toISOString(), info.ciudad, info.correo, fuente]);
         await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [name, phone]);
     }
 }
 
-// --- 9. RUTAS API (ENDPOINTS) ---
+// --- [NUEVO] CRON JOBS (TAREAS AUTOMÁTICAS) ---
+function iniciarCronJobs() {
+    setInterval(async () => {
+        try {
+            const now = new Date();
+
+            // 1. Tarea de Despedida (1 Hora después de dar datos)
+            // Busca leads que se actualizaron hace > 1 hora, tienen datos completos (ciudad/nombre) y NO se les ha enviado despedida
+            const leadsTerminados = await db.all(`
+                SELECT * FROM leads 
+                WHERE farewell_sent = 0 
+                AND ciudad IS NOT NULL 
+                AND nombre IS NOT NULL 
+                AND fecha < datetime('now', '-1 hour')
+                AND fecha > datetime('now', '-24 hour') 
+            `);
+
+            for (const l of leadsTerminados) {
+                // Verificar que la ultima interacción fue hace rato, para no interrumpir
+                const meta = await db.get("SELECT last_interaction FROM metadata WHERE phone = ?", [l.phone]);
+                const lastMsgDate = new Date(meta?.last_interaction || 0);
+                
+                // Si la ultima interaccion tiene mas de 30 mins
+                if (now - lastMsgDate > 30 * 60 * 1000) {
+                    const msgDespedida = "Hasta pronto, uno de nuestros ejecutivos comerciales se contactará con usted 🤝";
+                    await enviarWhatsApp(l.phone, msgDespedida);
+                    await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [l.phone, 'bot', msgDespedida, now.toISOString()]);
+                    await db.run("UPDATE leads SET farewell_sent = 1 WHERE id = ?", [l.id]);
+                }
+            }
+
+            // 2. Tarea de Recuperación (24 Horas sin respuesta y SIN datos)
+            // Busca chats donde el ultimo mensaje fue del BOT, hace > 24h, y NO estan en leads
+            const olvidados = await db.all(`
+                SELECT m.phone FROM metadata m
+                LEFT JOIN leads l ON m.phone = l.phone
+                WHERE l.id IS NULL 
+                AND m.last_interaction < datetime('now', '-24 hour')
+                AND m.last_interaction > datetime('now', '-48 hour')
+                AND m.archived = 0
+            `);
+
+            for (const o of olvidados) {
+                // Doble check: Asegurarse que el ultimo mensaje en history fue rol 'bot'
+                const lastMsg = await db.get("SELECT role FROM history WHERE phone = ? ORDER BY id DESC LIMIT 1", [o.phone]);
+                if (lastMsg && lastMsg.role === 'bot') {
+                    const msgRecuerdo = "Hola 👋, noté que no terminamos nuestra consulta. ¿Sigues interesado en repuestos?";
+                    await enviarWhatsApp(o.phone, msgRecuerdo);
+                    await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [o.phone, 'bot', msgRecuerdo, now.toISOString()]);
+                    // Actualizamos fecha para que no se le vuelva a enviar
+                    await db.run("UPDATE metadata SET last_interaction = ? WHERE phone = ?", [now.toISOString(), o.phone]);
+                }
+            }
+
+        } catch (e) { console.error("Cron Error:", e); }
+    }, 60000 * 5); // Ejecutar cada 5 minutos
+}
+
+// --- 9. RUTAS API ---
 
 app.post('/auth', (req, res) => {
     if (req.body.user === ADMIN_USER && req.body.pass === ADMIN_PASS) { 
@@ -353,22 +427,28 @@ app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirna
 app.get('/api/config/prompt', proteger, async (req, res) => res.json({ prompt: await getCfg('bot_prompt', DEFAULT_PROMPT) }));
 app.post('/api/config/prompt', proteger, async (req, res) => { await setCfg('bot_prompt', req.body.prompt); res.json({success:true}); });
 
-// ===============================================
-// [PATCHED] CHATS API CON VISTAS CORREGIDAS
-// ===============================================
+// [MODIFICADO] Endpoint para traer Web Knowledge
+app.get('/api/data/web-knowledge', proteger, async (req, res) => {
+    res.json(await db.all("SELECT * FROM knowledge_sources ORDER BY id DESC"));
+});
+// [MODIFICADO] Endpoint para guardar web scrapeada (El frontend debe llamar a esto despues de leer)
+app.post('/api/data/web-knowledge', proteger, async (req, res) => {
+    await db.run("INSERT INTO knowledge_sources (type, url, summary, date) VALUES (?, ?, ?, ?)", ['web', req.body.url, req.body.summary, new Date().toLocaleString()]);
+    res.json({success:true});
+});
+app.post('/api/data/web-knowledge/delete', proteger, async (req, res) => {
+    await db.run("DELETE FROM knowledge_sources WHERE id = ?", [req.body.id]);
+    res.json({success:true});
+});
+
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
         const view = req.query.view || 'active';
         const search = req.query.search ? `%${req.query.search}%` : null;
         
-        // --- LOGICA DE VISTAS (Fix Unread/Archived) ---
-        let whereClause = '(m.archived = 0 OR m.archived IS NULL)'; // Default: Activos
-        
-        if (view === 'archived') {
-            whereClause = 'm.archived = 1';
-        } else if (view === 'unread') {
-            whereClause = 'm.unreadCount > 0 AND (m.archived = 0 OR m.archived IS NULL)';
-        }
+        let whereClause = '(m.archived = 0 OR m.archived IS NULL)';
+        if (view === 'archived') whereClause = 'm.archived = 1';
+        else if (view === 'unread') whereClause = 'm.unreadCount > 0 AND (m.archived = 0 OR m.archived IS NULL)';
         
         let params = [];
         if (search) {
@@ -378,10 +458,12 @@ app.get('/api/chats-full', proteger, async (req, res) => {
         
         const query = `
             SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, 
-            m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, b.active as botActive 
+            m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, b.active as botActive,
+            l.source, l.status_tag 
             FROM history h 
             LEFT JOIN metadata m ON h.phone = m.phone 
             LEFT JOIN bot_status b ON h.phone = b.phone 
+            LEFT JOIN leads l ON h.phone = l.phone
             WHERE ${whereClause}
             GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 50`;
             
@@ -389,7 +471,8 @@ app.get('/api/chats-full', proteger, async (req, res) => {
         res.json(rows.map(r => ({ 
             id: r.id, name: r.contactName || r.id, lastMessage: { text: r.lastText, time: r.timestamp }, 
             botActive: r.botActive !== 0, pinned: r.pinned === 1, archived: r.archived === 1, unreadCount: r.unreadCount || 0, 
-            labels: JSON.parse(r.labels || "[]"), photoUrl: r.photoUrl, timestamp: r.timestamp 
+            labels: JSON.parse(r.labels || "[]"), photoUrl: r.photoUrl, timestamp: r.timestamp,
+            source: r.source, statusTag: r.status_tag // [NUEVO] Datos extra para el front
         })));
     } catch(e) { res.status(500).json([]); }
 });
@@ -399,19 +482,23 @@ app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     res.json(await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]));
 });
 
-// ===============================================
-// [PATCHED] ACCIONES DE CHAT (CLICK DERECHO)
-// ===============================================
+// [MODIFICADO] ACCIONES CLICK DERECHO (Sincronización con Leads)
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
-    
-    // --- LIMPIEZA DE NUMERO (CRITICO) ---
     const cleanPhone = phone.replace(/\D/g, ''); 
     
     if(action === 'delete') { 
         for(const t of ['history','metadata','bot_status','leads']) await db.run(`DELETE FROM ${t} WHERE phone=?`,[cleanPhone]); 
     }
-    else if(action === 'set_labels') await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, JSON.stringify(value)]);
+    else if(action === 'set_labels') {
+        // [NUEVO] Guardar etiquetas en Metadata Y EN Leads (status_tag)
+        const etiquetasStr = JSON.stringify(value);
+        await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, etiquetasStr]);
+        
+        // Si hay etiquetas, tomamos la primera/más relevante para el status_tag del Excel
+        const tagPrincipal = value.length > 0 ? value[0].text : "Sin Etiqueta";
+        await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [tagPrincipal, cleanPhone]);
+    }
     else if(action === 'toggle_pin') await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET pinned=excluded.pinned", [cleanPhone, value?1:0]);
     else if(action === 'toggle_archive') await db.run("INSERT INTO metadata (phone, archived) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET archived=excluded.archived", [cleanPhone, value?1:0]);
     
@@ -463,13 +550,13 @@ app.post('/api/config/rules/delete', proteger, async (req, res) => { let r=await
 app.post('/api/leads/update', proteger, async(req,res)=>{ await db.run(`UPDATE leads SET ${req.body.field}=? WHERE id=?`,[req.body.value, req.body.id]); res.json({success:true}); });
 app.post('/api/leads/delete', proteger, async(req,res)=>{ await db.run("DELETE FROM leads WHERE id=?",[req.body.id]); res.json({success:true}); });
 
-// --- INVENTARIO (CON LIMPIEZA TOTAL) ---
+// --- INVENTARIO ---
 app.post('/api/knowledge/delete', proteger, async (req, res) => { 
     const i=await db.all("SELECT id FROM inventory"); 
     if(i[req.body.index]) await db.run("DELETE FROM inventory WHERE id=?",[i[req.body.index].id]); 
     await refreshKnowledge(); res.json({success:true}); 
 });
-app.post('/api/knowledge/clear', proteger, async (req, res) => { // Endpoint de Limpieza Masiva
+app.post('/api/knowledge/clear', proteger, async (req, res) => { 
     await db.run("DELETE FROM inventory"); 
     await refreshKnowledge(); 
     res.json({success:true}); 
@@ -489,6 +576,8 @@ app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, r
         if(mid) { 
             await enviarWhatsApp(req.body.phone, { id: mid }, req.body.type); 
             await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [req.body.phone, 'manual', `[MEDIA:${req.body.type.toUpperCase()}:${mid}]`, new Date().toISOString()]); 
+            // Update last_interaction
+            await db.run("UPDATE metadata SET last_interaction = ? WHERE phone = ?", [new Date().toISOString(), req.body.phone]);
             res.json({success: true}); 
         } else res.status(500).json({error: "Error Meta"}); 
     } catch(e) { res.status(500).json({error: e.message}); } 
@@ -501,9 +590,10 @@ app.post('/api/chat/send', proteger, async (req, res) => {
         const sent = await enviarWhatsApp(cleanPhone, message);
         if(sent) { 
             await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', message, new Date().toISOString()]); 
-            // Crear contacto si no existe
-            await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount) 
-                          VALUES (?, ?, 1, 0, 0) ON CONFLICT(phone) DO NOTHING`, [cleanPhone, cleanPhone]);
+            // Crear contacto si no existe + Update last_interaction
+            await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount, last_interaction) 
+                          VALUES (?, ?, 1, 0, 0, ?) 
+                          ON CONFLICT(phone) DO UPDATE SET last_interaction=excluded.last_interaction`, [cleanPhone, cleanPhone, new Date().toISOString()]);
             res.json({ success: true }); 
         } else res.status(500).json({ error: "Error enviando" }); 
     } catch(e) { res.status(500).json({ error: "Error interno" }); }
@@ -516,7 +606,7 @@ app.post('/api/test-ai', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({ error: e.message }); } 
 });
 
-// --- WEBHOOK ---
+// --- WEBHOOK (REINGENIERÍA TOTAL CON DEBOUNCE) ---
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
 app.post('/webhook', async (req, res) => { 
     res.sendStatus(200); 
@@ -527,12 +617,37 @@ app.post('/webhook', async (req, res) => {
         if (val?.contacts?.[0]) await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName WHERE addedManual=0", [val.contacts[0].wa_id, val.contacts[0].profile.name]); 
         
         if(msg) { 
-            let userMsg = msg.text?.body || "", isFile = false; 
-            if(msg.type !== 'text') { isFile = true; userMsg = `[MEDIA:${msg.type.toUpperCase()}:${msg[msg.type].id}]`; } 
+            const phone = msg.from;
+            let userMsg = msg.text?.body || "";
+            let isFile = false;
+
+            if(msg.type !== 'text') { 
+                isFile = true; 
+                userMsg = `[MEDIA:${msg.type.toUpperCase()}:${msg[msg.type].id}]`; 
+            } 
             
-            const reply = await procesarConValentina(userMsg, msg.type==='text'?userMsg:'[ARCHIVO]', msg.from, val?.contacts?.[0]?.profile.name || "Cliente", isFile); 
-            
-            if(reply) await enviarWhatsApp(msg.from, reply); 
+            // LOGICA ANTI-SPAM (DEBOUNCE)
+            // 1. Cancelamos el timer anterior si existe
+            if (messageQueue.has(phone)) {
+                clearTimeout(messageQueue.get(phone).timer);
+            }
+
+            // 2. Recuperamos mensajes previos o iniciamos array
+            const currentData = messageQueue.get(phone) || { text: [], name: val?.contacts?.[0]?.profile.name || "Cliente" };
+            currentData.text.push(userMsg); // Agregamos el nuevo mensaje
+
+            // 3. Configuramos nuevo timer
+            const timer = setTimeout(async () => {
+                // AQUI se ejecuta tras 8 segundos de silencio
+                const fullText = currentData.text.join("\n"); // Unimos todo lo que escribió
+                messageQueue.delete(phone); // Limpiamos la cola
+
+                await procesarConValentina(fullText, isFile ? '[ARCHIVO]' : fullText, phone, currentData.name, isFile); 
+            }, DEBOUNCE_TIME);
+
+            // 4. Guardamos el estado
+            currentData.timer = timer;
+            messageQueue.set(phone, currentData);
         } 
     } catch(e) { console.error("Webhook Error", e); } 
 });
