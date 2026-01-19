@@ -3,19 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v24.1 - Full Suite</title>
+    <title>Valentina v25.0 - Final Production</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
     <style>
         :root {
-            --primary: #25D366; /* WhatsApp Green */
-            --dark: #0f111a;
-            --panel: #1a1d29;
-            --border: #2f3445;
-            --text: #e1e3e8;
-            --text-muted: #8b949e;
-            --accent: #3b82f6;
+            --primary: #00a884; /* WhatsApp Green Nuevo */
+            --outgoing: #005c4b; /* Mensaje enviado (verde oscuro) */
+            --incoming: #202c33; /* Mensaje recibido (gris oscuro) */
+            --dark: #111b21;     /* Fondo general */
+            --panel: #202c33;    /* Paneles laterales */
+            --border: #37404a;   /* Bordes */
+            --text: #e9edef;     /* Texto principal */
+            --text-muted: #8696a0;
+            --accent: #53bdeb;   /* Azul acento */
             --danger: #ef4444;
         }
 
@@ -23,73 +25,95 @@
         
         body { background-color: var(--dark); color: var(--text); height: 100vh; display: flex; overflow: hidden; }
 
-        /* --- SIDEBAR --- */
+        /* --- SIDEBAR ICONS --- */
         .sidebar { width: 60px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 100; }
-        .nav-btn { width: 40px; height: 40px; border-radius: 10px; border: none; background: transparent; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; margin-bottom: 15px; transition: 0.2s; }
-        .nav-btn:hover, .nav-btn.active { background: var(--border); color: var(--primary); }
+        .nav-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: transparent; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; margin-bottom: 15px; transition: 0.2s; }
+        .nav-btn:hover, .nav-btn.active { background: #374248; color: var(--primary); }
         .nav-bottom { margin-top: auto; padding-bottom: 20px; }
 
-        /* --- LAYOUT PRINCIPAL --- */
+        /* --- LAYOUT GENERAL --- */
         .main-area { flex: 1; display: flex; position: relative; }
         .view-panel { display: none; width: 100%; height: 100%; }
         .view-panel.active { display: flex; }
 
-        /* --- CHAT LAYOUT --- */
-        .chat-list { width: 350px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--panel); }
-        .chat-header { padding: 15px; border-bottom: 1px solid var(--border); background: var(--panel); }
-        .search-bar { width: 100%; padding: 10px; background: var(--dark); border: 1px solid var(--border); color: var(--text); border-radius: 8px; outline: none; }
+        /* --- LISTA DE CHATS --- */
+        .chat-list { width: 380px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--dark); }
+        .chat-header { padding: 10px 15px; border-bottom: 1px solid var(--border); background: var(--panel); }
         
-        /* Filtros de Vistas */
-        .view-filters { display: flex; gap: 5px; margin-top: 10px; }
-        .filter-chip { font-size: 0.75rem; padding: 4px 8px; background: var(--border); border-radius: 12px; cursor: pointer; opacity: 0.7; }
-        .filter-chip.active { background: var(--accent); color: white; opacity: 1; }
+        .search-container { display: flex; gap: 8px; margin-bottom: 10px; }
+        .search-bar { flex: 1; padding: 8px 12px; background: var(--dark); border: 1px solid var(--border); color: var(--text); border-radius: 8px; outline: none; font-size: 0.9rem; }
+        .new-chat-btn { width: 36px; height: 36px; border-radius: 8px; border: none; background: var(--accent); color: #000; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+        /* Filtros */
+        .view-filters { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 5px; }
+        .filter-chip { font-size: 0.8rem; padding: 5px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 20px; cursor: pointer; white-space: nowrap; color: var(--text-muted); }
+        .filter-chip.active { background: #2a3942; color: var(--primary); border-color: var(--primary); }
 
         .chat-items { flex: 1; overflow-y: auto; }
-        .chat-item { padding: 15px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; gap: 10px; align-items: center; transition: 0.2s; position: relative; }
-        .chat-item:hover { background: #232736; }
-        .chat-item.active { background: #2a3042; border-left: 3px solid var(--primary); }
-        .chat-item.archived { opacity: 0.6; background: #151515; }
+        .chat-item { padding: 12px 15px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; gap: 12px; align-items: center; transition: 0.2s; }
+        .chat-item:hover { background: #202c33; }
+        .chat-item.active { background: #2a3942; }
+        .chat-item.archived { opacity: 0.6; }
         
-        .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--border); display: flex; align-items: center; justify-content: center; overflow: hidden; object-fit: cover; }
+        .avatar { width: 45px; height: 45px; border-radius: 50%; background: var(--border); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
         .chat-info { flex: 1; min-width: 0; }
-        .chat-name { font-weight: 600; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
-        .chat-meta { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; }
-        .badge { background: var(--primary); color: #000; font-size: 0.6rem; padding: 2px 6px; border-radius: 10px; font-weight: bold; }
-        .pin-icon { color: var(--text-muted); font-size: 0.7rem; transform: rotate(45deg); }
-
-        /* Conversation Area */
-        .chat-area { flex: 1; display: flex; flex-direction: column; background: #0b0d14; position: relative; }
-        .chat-top { padding: 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--panel); }
-        .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .chat-name { font-weight: 500; font-size: 1rem; color: #e9edef; display: flex; justify-content: space-between; }
+        .chat-date { font-size: 0.75rem; color: var(--text-muted); font-weight: 400; }
+        .chat-preview { display: flex; justify-content: space-between; align-items: center; margin-top: 3px; }
+        .chat-last-msg { font-size: 0.85rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
         
-        .msg { max-width: 70%; padding: 10px 15px; border-radius: 10px; font-size: 0.9rem; line-height: 1.4; position: relative; word-wrap: break-word; }
-        .msg.bot { background: var(--panel); align-self: flex-start; border-bottom-left-radius: 2px; border: 1px solid var(--border); }
-        .msg.user { background: #005c4b; align-self: flex-end; border-bottom-right-radius: 2px; color: white; }
-        .msg.manual { background: #202c33; align-self: flex-end; border-bottom-right-radius: 2px; border: 1px solid #005c4b; }
-        .msg-time { font-size: 0.65rem; opacity: 0.6; text-align: right; margin-top: 4px; }
+        .badge { background: var(--primary); color: #000; font-size: 0.7rem; padding: 2px 6px; border-radius: 10px; font-weight: bold; min-width: 18px; text-align: center; }
+        .pin-icon { color: var(--text-muted); font-size: 0.8rem; transform: rotate(45deg); margin-left: 5px; }
 
-        .input-area { padding: 15px; background: var(--panel); border-top: 1px solid var(--border); display: flex; gap: 10px; align-items: center; }
-        .input-box { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--dark); color: white; outline: none; resize: none; height: 50px; }
-        .send-btn { width: 45px; height: 45px; border-radius: 8px; border: none; background: var(--primary); color: #000; cursor: pointer; font-size: 1.1rem; }
-        .attach-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; }
+        /* Etiquetas en lista */
+        .mini-tags { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+        .mini-tag { font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; color: #000; font-weight: 600; }
+
+        /* --- AREA DE CONVERSACIÓN --- */
+        .chat-area { flex: 1; display: flex; flex-direction: column; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-color: #0b141a; position: relative; }
+        .chat-top { padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        
+        /* FIX: Mensajes alineados correctamente */
+        .messages { flex: 1; overflow-y: auto; padding: 20px 40px; display: flex; flex-direction: column; gap: 4px; }
+        
+        .msg { max-width: 65%; padding: 6px 10px; border-radius: 8px; font-size: 0.9rem; line-height: 1.4; position: relative; word-wrap: break-word; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); }
+        
+        /* CLIENTE (Izquierda - Gris) */
+        .msg.user { background: var(--incoming); align-self: flex-start; border-top-left-radius: 0; color: #fff; }
+        
+        /* NOSOTROS/BOT (Derecha - Verde) */
+        .msg.bot, .msg.manual { background: var(--outgoing); align-self: flex-end; border-top-right-radius: 0; color: #fff; }
+        .msg.manual { background: #005c4b; } /* Un poco más oscuro para diferenciar manual si quieres, sino igual */
+        
+        .msg-time { font-size: 0.65rem; opacity: 0.6; text-align: right; margin-top: 2px; margin-left: 10px; float: right; }
+
+        .input-area { padding: 10px 16px; background: var(--panel); display: flex; gap: 10px; align-items: center; }
+        .input-box { flex: 1; padding: 12px; border-radius: 8px; border: none; background: #2a3942; color: white; outline: none; resize: none; height: 42px; font-size: 0.95rem; }
+        .send-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: var(--primary); color: #fff; cursor: pointer; font-size: 1.1rem; }
+        .attach-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1.3rem; cursor: pointer; }
 
         /* --- CRM PANEL (Derecha) --- */
-        .crm-panel { width: 300px; border-left: 1px solid var(--border); background: var(--panel); padding: 20px; overflow-y: auto; display: none; }
+        .crm-panel { width: 320px; border-left: 1px solid var(--border); background: var(--dark); padding: 20px; overflow-y: auto; display: none; }
         .crm-panel.open { display: block; }
-        .crm-section { margin-bottom: 25px; }
-        .crm-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 10px; font-weight: 600; }
-        .tag-container { display: flex; flex-wrap: wrap; gap: 5px; }
-        .tag { padding: 4px 10px; border-radius: 15px; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border); opacity: 0.8; }
-        .tag.selected { border-color: var(--primary); background: rgba(37, 211, 102, 0.1); opacity: 1; }
+        .crm-section { margin-bottom: 30px; background: var(--panel); padding: 15px; border-radius: 8px; }
+        .crm-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 12px; font-weight: 600; }
         
-        .switch-container { display: flex; align-items: center; justify-content: space-between; background: var(--dark); padding: 10px; border-radius: 8px; border: 1px solid var(--border); }
-        .switch-label { font-size: 0.9rem; }
-        .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+        .crm-input { width: 100%; padding: 8px 10px; margin-bottom: 10px; background: var(--dark); border: 1px solid var(--border); color: white; border-radius: 4px; font-size: 0.9rem; }
+        .crm-input:focus { border-color: var(--primary); outline: none; }
+
+        .tag-container { display: flex; flex-wrap: wrap; gap: 6px; }
+        .tag { padding: 4px 10px; border-radius: 99px; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border); color: var(--text-muted); transition: 0.2s; }
+        .tag:hover { background: rgba(255,255,255,0.05); }
+        .tag.selected { border-color: var(--primary); background: rgba(0, 168, 132, 0.2); color: #fff; }
+        
+        /* Switch */
+        .switch-container { display: flex; align-items: center; justify-content: space-between; }
+        .switch { position: relative; display: inline-block; width: 36px; height: 20px; }
         .switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #37404a; transition: .4s; border-radius: 20px; }
         .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
         input:checked + .slider { background-color: var(--primary); }
-        input:checked + .slider:before { transform: translateX(20px); }
+        input:checked + .slider:before { transform: translateX(16px); }
 
         /* --- LEADS TABLE --- */
         .leads-container { padding: 30px; width: 100%; overflow: auto; }
@@ -97,41 +121,37 @@
         .data-table th, .data-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border); }
         .data-table th { color: var(--text-muted); font-weight: 500; }
         .data-table tr:hover { background: rgba(255,255,255,0.02); }
-        .lead-source-tag { padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; background: #2f3445; border: 1px solid #444; }
+        .lead-source-tag { padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; background: #2f3445; border: 1px solid #444; }
         .lead-source-web { color: #60a5fa; border-color: #1e3a8a; background: rgba(30, 58, 138, 0.2); }
         .lead-source-store { color: #f472b6; border-color: #831843; background: rgba(131, 24, 67, 0.2); }
 
-        /* --- CONFIG PANEL (RESTAURADO) --- */
-        .config-container { padding: 30px; max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+        /* --- CONFIG PANEL --- */
+        .config-container { padding: 30px; max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 30px; }
+        .config-header-main { font-size: 1.2rem; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 10px; color: var(--text-muted); }
         .config-row { display: flex; gap: 20px; flex-wrap: wrap; }
         .config-card { background: var(--panel); padding: 20px; border-radius: 10px; border: 1px solid var(--border); flex: 1; min-width: 300px; }
-        .config-header { font-size: 1.1rem; font-weight: 600; margin-bottom: 15px; color: var(--primary); display: flex; justify-content: space-between; align-items: center; }
+        .config-header { font-size: 1rem; font-weight: 600; margin-bottom: 15px; color: var(--primary); display: flex; justify-content: space-between; align-items: center; }
         
-        .code-editor { width: 100%; height: 150px; background: #000; color: #0f0; padding: 15px; border-radius: 5px; font-family: monospace; border: 1px solid var(--border); resize: vertical; }
+        .code-editor { width: 100%; height: 120px; background: #111b21; color: #25d366; padding: 10px; border-radius: 5px; font-family: monospace; border: 1px solid var(--border); resize: vertical; font-size: 0.85rem; }
         
-        /* Listas de Configuración */
         .item-list { list-style: none; margin-top: 10px; max-height: 200px; overflow-y: auto; }
         .config-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; background: var(--dark); border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-        .config-item:last-child { border-bottom: none; }
         
-        /* Inputs Genericos */
         .config-input-group { display: flex; gap: 10px; margin-bottom: 10px; }
         .cfg-input { flex: 1; padding: 8px; border-radius: 5px; border: 1px solid var(--border); background: var(--dark); color: white; }
-        .btn-small { padding: 8px 12px; border-radius: 5px; border: none; cursor: pointer; font-size: 0.8rem; font-weight: 600; }
-        .btn-green { background: var(--primary); color: #000; }
-        .btn-red { background: var(--danger); color: white; }
+        .btn-small { padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; font-size: 0.8rem; font-weight: 500; }
+        .btn-green { background: var(--outgoing); color: #fff; }
+        .btn-red { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; }
+        .btn-blue { background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid #3b82f6; }
 
         /* CONTEXT MENU */
-        #context-menu {
-            position: absolute; display: none; background: var(--panel); border: 1px solid var(--border); 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5); border-radius: 6px; width: 180px; z-index: 1000;
-        }
-        .ctx-item { padding: 10px 15px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 10px; color: var(--text); }
-        .ctx-item:hover { background: var(--primary); color: #000; }
-        .ctx-divider { height: 1px; background: var(--border); margin: 5px 0; }
+        #context-menu { position: absolute; display: none; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 4px 20px rgba(0,0,0,0.6); border-radius: 6px; width: 180px; z-index: 1000; overflow: hidden; }
+        .ctx-item { padding: 12px 15px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 10px; color: var(--text); transition: 0.2s; }
+        .ctx-item:hover { background: var(--dark); color: var(--primary); }
+        .ctx-divider { height: 1px; background: var(--border); margin: 0; }
 
         /* TOAST */
-        #toast { visibility: hidden; min-width: 250px; margin-left: -125px; background-color: #333; color: #fff; text-align: center; border-radius: 2px; padding: 16px; position: fixed; z-index: 2000; left: 50%; bottom: 30px; font-size: 17px; }
+        #toast { visibility: hidden; min-width: 250px; margin-left: -125px; background-color: var(--panel); color: #fff; text-align: center; border-radius: 4px; padding: 16px; position: fixed; z-index: 2000; left: 50%; bottom: 30px; font-size: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); border: 1px solid var(--primary); }
         #toast.show { visibility: visible; -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
         @-webkit-keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
         @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
@@ -145,7 +165,7 @@
         <div style="width: 40px; height: 40px; background: url('/api/data/config') no-repeat center/cover; border-radius: 50%; margin-bottom: 30px; background-color: #333;" id="logo-preview"></div>
         <button class="nav-btn active" onclick="switchTab('chat')" title="Chats"><i class="fas fa-comments"></i></button>
         <button class="nav-btn" onclick="switchTab('leads')" title="Base de Leads"><i class="fas fa-database"></i></button>
-        <button class="nav-btn" onclick="switchTab('config')" title="Configuración Completa"><i class="fas fa-sliders-h"></i></button>
+        <button class="nav-btn" onclick="switchTab('config')" title="Configuración"><i class="fas fa-sliders-h"></i></button>
         <div class="nav-bottom">
             <button class="nav-btn" onclick="location.href='/logout'" title="Salir"><i class="fas fa-sign-out-alt"></i></button>
         </div>
@@ -156,15 +176,17 @@
         <div id="tab-chat" class="view-panel active">
             <div class="chat-list">
                 <div class="chat-header">
-                    <input type="text" class="search-bar" placeholder="🔍 Buscar cliente..." onkeyup="filterChats(this.value)">
+                    <div class="search-container">
+                        <input type="text" class="search-bar" id="main-search" placeholder="🔍 Buscar..." onkeyup="debounceSearch(this.value)">
+                        <button class="new-chat-btn" onclick="startNewChat()" title="Nuevo Chat"><i class="fas fa-plus"></i></button>
+                    </div>
                     <div class="view-filters">
                         <span class="filter-chip active" onclick="setChatFilter('active', this)">Activos</span>
                         <span class="filter-chip" onclick="setChatFilter('unread', this)">No leídos</span>
                         <span class="filter-chip" onclick="setChatFilter('archived', this)">Archivados</span>
                     </div>
                 </div>
-                <div class="chat-items" id="chat-list-container">
-                    </div>
+                <div class="chat-items" id="chat-list-container"></div>
             </div>
 
             <div class="chat-area" id="conversation-view" style="display:none;">
@@ -172,8 +194,8 @@
                     <div style="display:flex; align-items:center; gap:10px;">
                         <img id="chat-header-img" class="avatar" src="">
                         <div>
-                            <div id="chat-header-name" style="font-weight:bold;">Selecciona un chat</div>
-                            <div id="chat-header-phone" style="font-size:0.8rem; color:gray;"></div>
+                            <div id="chat-header-name" style="font-weight:bold; font-size:1rem;">Selecciona un chat</div>
+                            <div id="chat-header-phone" style="font-size:0.8rem; color:var(--text-muted);"></div>
                         </div>
                     </div>
                     <button class="nav-btn" onclick="toggleCRM()"><i class="fas fa-columns"></i></button>
@@ -191,7 +213,7 @@
             
             <div class="crm-panel" id="crm-panel">
                 <div class="crm-section">
-                    <div class="crm-title">Estado del Bot</div>
+                    <div class="crm-title">🤖 Control IA</div>
                     <div class="switch-container">
                         <span class="switch-label">Valentina Responde</span>
                         <label class="switch">
@@ -202,16 +224,22 @@
                 </div>
 
                 <div class="crm-section">
-                    <div class="crm-title">Etiquetas (Comercial)</div>
-                    <div class="tag-container" id="tag-list">
-                        </div>
-                    <div style="margin-top:10px; font-size:0.75rem; color:gray;">* Gestionar en Configuración</div>
+                    <div class="crm-title">📝 Datos del Cliente</div>
+                    <input id="crm-name" class="crm-input" placeholder="Nombre">
+                    <input id="crm-city" class="crm-input" placeholder="Ciudad">
+                    <input id="crm-email" class="crm-input" placeholder="Correo">
+                    <input id="crm-interest" class="crm-input" placeholder="Interés">
+                    <button class="btn-small btn-green" style="width:100%" onclick="saveLeadManual()">Guardar Datos</button>
                 </div>
 
                 <div class="crm-section">
-                    <div class="crm-title">Atajos de Teclado</div>
-                    <div class="tag-container" id="shortcuts-list">
-                        </div>
+                    <div class="crm-title">🏷️ Etiquetar</div>
+                    <div class="tag-container" id="tag-list"></div>
+                </div>
+
+                <div class="crm-section">
+                    <div class="crm-title">⚡ Respuestas Rápidas</div>
+                    <div class="tag-container" id="shortcuts-list"></div>
                 </div>
             </div>
         </div>
@@ -219,8 +247,11 @@
         <div id="tab-leads" class="view-panel">
             <div class="leads-container">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <h2><i class="fas fa-database"></i> Base de Leads Unificada</h2>
-                    <button class="send-btn" style="width:auto; padding:0 15px; font-size:0.9rem;" onclick="refreshLeads()"><i class="fas fa-sync"></i> Actualizar</button>
+                    <h2>Base de Leads</h2>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn-small btn-green" onclick="downloadExcel()"><i class="fas fa-file-excel"></i> Descargar Excel</button>
+                        <button class="btn-small btn-blue" onclick="refreshLeads()"><i class="fas fa-sync"></i> Actualizar</button>
+                    </div>
                 </div>
                 <table class="data-table">
                     <thead>
@@ -231,7 +262,7 @@
                             <th>Teléfono</th>
                             <th>Interés</th>
                             <th>Etiqueta IA</th>
-                            <th>Status Comercial</th>
+                            <th>Etiqueta Comercial</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
@@ -243,65 +274,77 @@
         <div id="tab-config" class="view-panel" style="overflow-y:auto;">
             <div class="config-container">
                 
-                <div class="config-row">
-                    <div class="config-card">
-                        <div class="config-header">
-                            <span>🧠 Personalidad (Prompt)</span>
-                            <button class="btn-small btn-green" onclick="savePrompt()"><i class="fas fa-save"></i> Guardar</button>
+                <div>
+                    <div class="config-header-main">🧠 Cerebro Artificial (IA)</div>
+                    <div class="config-row">
+                        <div class="config-card">
+                            <div class="config-header">
+                                <span>Personalidad (Prompt)</span>
+                                <button class="btn-small btn-green" onclick="savePrompt()"><i class="fas fa-save"></i></button>
+                            </div>
+                            <textarea id="prompt-editor" class="code-editor"></textarea>
                         </div>
-                        <textarea id="prompt-editor" class="code-editor"></textarea>
+                        <div class="config-card">
+                            <div class="config-header">Conocimiento Web</div>
+                            <div class="config-input-group">
+                                <input type="text" id="web-url-input" class="cfg-input" placeholder="URL...">
+                                <button class="btn-small btn-blue" onclick="scanWeb()">+</button>
+                            </div>
+                            <ul class="item-list" id="web-knowledge-list"></ul>
+                        </div>
                     </div>
-
-                    <div class="config-card">
-                        <div class="config-header">📦 Inventario (CSV)</div>
-                        <div style="display:flex; flex-direction:column; gap:10px;">
-                            <input type="file" id="csv-upload" accept=".csv" style="color:white;">
-                            <button class="btn-small btn-green" onclick="uploadCSV()">📤 Cargar CSV Nuevo</button>
-                            <hr style="border-color:var(--border);">
-                            <button class="btn-small btn-red" onclick="clearInventory()">🗑️ Borrar Todo el Inventario</button>
+                    
+                    <div class="config-row" style="margin-top:20px;">
+                        <div class="config-card">
+                            <div class="config-header">Inventario (CSV)</div>
+                            <div style="display:flex; gap:10px;">
+                                <input type="file" id="csv-upload" accept=".csv" style="color:white; width:70%;">
+                                <button class="btn-small btn-green" onclick="uploadCSV()">Cargar</button>
+                                <button class="btn-small btn-red" onclick="clearInventory()">Borrar</button>
+                            </div>
+                        </div>
+                        <div class="config-card">
+                            <div class="config-header">Reglas de Negocio</div>
+                            <div class="config-input-group">
+                                <input type="text" id="rule-input" class="cfg-input" placeholder="Regla...">
+                                <button class="btn-small btn-blue" onclick="addRule()">+</button>
+                            </div>
+                            <ul class="item-list" id="rules-list"></ul>
                         </div>
                     </div>
                 </div>
 
-                <div class="config-row">
-                    <div class="config-card">
-                        <div class="config-header">🌐 Conocimiento Web</div>
-                        <div class="config-input-group">
-                            <input type="text" id="web-url-input" class="cfg-input" placeholder="https://...">
-                            <button class="btn-small btn-green" onclick="scanWeb()">Agregar</button>
+                <div>
+                    <div class="config-header-main">🛠️ Herramientas Comerciales</div>
+                    <div class="config-row">
+                        <div class="config-card">
+                            <div class="config-header">Etiquetas</div>
+                            <div class="config-input-group">
+                                <input type="text" id="tag-name" class="cfg-input" placeholder="Nombre">
+                                <input type="color" id="tag-color" value="#00a884" style="width:40px; border:none; background:transparent;">
+                                <button class="btn-small btn-green" onclick="addTag()">Crear</button>
+                            </div>
+                            <ul class="item-list" id="config-tags-list"></ul>
                         </div>
-                        <ul class="item-list" id="web-knowledge-list"></ul>
+                        <div class="config-card">
+                            <div class="config-header">Atajos (Respuestas Rápidas)</div>
+                            <div class="config-input-group">
+                                <input type="text" id="short-key" class="cfg-input" placeholder="/hola" style="width:30%;">
+                                <input type="text" id="short-text" class="cfg-input" placeholder="Texto...">
+                                <button class="btn-small btn-green" onclick="addShortcut()">+</button>
+                            </div>
+                            <ul class="item-list" id="config-shortcuts-list"></ul>
+                        </div>
                     </div>
-
-                    <div class="config-card">
-                        <div class="config-header">⚠️ Reglas de Negocio</div>
-                        <div class="config-input-group">
-                            <input type="text" id="rule-input" class="cfg-input" placeholder="Ej: No vendemos llantas...">
-                            <button class="btn-small btn-green" onclick="addRule()">+</button>
+                    
+                    <div class="config-card" style="margin-top:20px;">
+                        <div class="config-header">Perfil de Empresa</div>
+                        <div style="display:flex; gap:10px;">
+                            <input id="biz-name" class="cfg-input" placeholder="Nombre Empresa">
+                            <input id="biz-hours" class="cfg-input" placeholder="Horario">
+                            <button class="btn-small btn-green" onclick="saveBizConfig()">Guardar</button>
                         </div>
-                        <ul class="item-list" id="rules-list"></ul>
-                    </div>
-                </div>
-
-                <div class="config-row">
-                    <div class="config-card">
-                        <div class="config-header">🏷️ Gestión Etiquetas</div>
-                        <div class="config-input-group">
-                            <input type="text" id="tag-name" class="cfg-input" placeholder="Nombre">
-                            <input type="color" id="tag-color" value="#25d366" style="width:50px; border:none;">
-                            <button class="btn-small btn-green" onclick="addTag()">Crear</button>
-                        </div>
-                        <ul class="item-list" id="config-tags-list"></ul>
-                    </div>
-
-                    <div class="config-card">
-                        <div class="config-header">⚡ Atajos de Teclado</div>
-                        <div class="config-input-group">
-                            <input type="text" id="short-key" class="cfg-input" placeholder="/hola" style="width:30%;">
-                            <input type="text" id="short-text" class="cfg-input" placeholder="Texto respuesta...">
-                            <button class="btn-small btn-green" onclick="addShortcut()">Crear</button>
-                        </div>
-                        <ul class="item-list" id="config-shortcuts-list"></ul>
+                        <div style="margin-top:10px; font-size:0.8rem;">Logo: <input type="file" onchange="uploadLogo(this)"></div>
                     </div>
                 </div>
 
@@ -311,28 +354,26 @@
     </div>
 
     <div id="context-menu">
-        <div class="ctx-item" onclick="contextAction('toggle_pin')"><i class="fas fa-thumbtack"></i> Fijar/Desfijar</div>
+        <div class="ctx-item" id="ctx-pin" onclick="togglePinContext()"><i class="fas fa-thumbtack"></i> <span>Fijar</span></div>
+        <div class="ctx-item" onclick="quickLabel()"><i class="fas fa-tag"></i> Etiquetar</div>
         <div class="ctx-item" onclick="contextAction('toggle_archive')"><i class="fas fa-archive"></i> Archivar/Desarchivar</div>
         <div class="ctx-divider"></div>
-        <div class="ctx-item" onclick="contextAction('delete')" style="color:#ff4444;"><i class="fas fa-trash"></i> Eliminar Chat</div>
+        <div class="ctx-item" onclick="contextAction('delete')" style="color:#ff4444;"><i class="fas fa-trash"></i> Eliminar</div>
     </div>
 
     <div id="toast">Notificación</div>
 
     <script>
-        // --- ESTADO GLOBAL ---
         let currentChat = null;
         let currentFilter = 'active';
         let chatsData = [];
         let contextPhone = null;
+        let searchTimeout = null;
 
-        // --- INICIO ---
         window.onload = function() {
             startSyncLoop();
             refreshLeads();
-            loadAllConfig(); // Cargar todas las configuraciones al inicio
-            
-            // Cerrar menú context
+            loadAllConfig();
             document.addEventListener('click', () => document.getElementById('context-menu').style.display = 'none');
         };
 
@@ -343,18 +384,33 @@
             setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
         }
 
-        // --- NAVEGACIÓN ---
         function switchTab(tab) {
             document.querySelectorAll('.view-panel').forEach(el => el.classList.remove('active'));
             document.getElementById('tab-' + tab).classList.add('active');
             document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
             event.currentTarget.classList.add('active');
-            
             if(tab === 'leads') refreshLeads();
-            if(tab === 'config') loadAllConfig();
+        }
+        function toggleCRM() { document.getElementById('crm-panel').classList.toggle('open'); }
+
+        // --- BUSCADOR Y NUEVO CHAT ---
+        function debounceSearch(val) {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => syncChats(), 300);
         }
 
-        function toggleCRM() { document.getElementById('crm-panel').classList.toggle('open'); }
+        function startNewChat() {
+            const phone = prompt("Ingresa el número (con código de país, ej: 57300...):");
+            if (!phone) return;
+            const name = prompt("Nombre del Cliente:") || phone;
+            // Abrimos el chat visualmente
+            currentChat = phone.replace(/\D/g, '');
+            document.getElementById('conversation-view').style.display = 'flex';
+            document.getElementById('chat-header-name').innerText = name;
+            document.getElementById('chat-header-phone').innerText = currentChat;
+            document.getElementById('messages-container').innerHTML = `<div style="text-align:center; color:gray; font-size:0.8rem; margin-top:20px;">Iniciando chat con ${name}</div>`;
+            // Al enviar el primer mensaje, el backend creará el contacto
+        }
 
         // --- CORE CHAT LOOP ---
         function startSyncLoop() {
@@ -365,9 +421,14 @@
 
         async function syncChats() {
             try {
-                const search = document.querySelector('.search-bar').value;
+                const search = document.getElementById('main-search').value;
                 const res = await fetch(`/api/chats-full?view=${currentFilter}&search=${search}`);
                 chatsData = await res.json();
+                
+                // Ordenar: Fijados > Fecha Reciente
+                chatsData.sort((a, b) => new Date(b.lastMessage.time) - new Date(a.lastMessage.time));
+                chatsData.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+
                 renderChatList();
             } catch(e) {}
         }
@@ -383,56 +444,78 @@
             const container = document.getElementById('chat-list-container');
             const scroll = container.scrollTop;
             
-            container.innerHTML = chatsData.map(c => `
+            container.innerHTML = chatsData.map(c => {
+                // Renderizar etiquetas comerciales (Badge Labels)
+                let labelsHtml = '';
+                if(c.labels && Array.isArray(c.labels)) {
+                    labelsHtml = c.labels.map(l => 
+                        `<span class="mini-tag" style="background:${l.color}20; color:${l.color}; border:1px solid ${l.color}">${l.text}</span>`
+                    ).join('');
+                }
+
+                return `
                 <div class="chat-item ${currentChat === c.id ? 'active' : ''} ${c.archived ? 'archived' : ''}" 
                      onclick="openChat('${c.id}', '${c.name}', '${c.photoUrl || ''}')"
-                     oncontextmenu="showContextMenu(event, '${c.id}')">
+                     oncontextmenu="showContextMenu(event, '${c.id}', ${c.pinned})">
                     <div class="avatar">
                         ${c.photoUrl ? `<img src="${c.photoUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fas fa-user"></i>'}
                     </div>
                     <div class="chat-info">
                         <div class="chat-name">
-                            ${c.name} 
-                            ${c.pinned ? '<i class="fas fa-thumbtack pin-icon"></i>' : ''}
+                            <span>${c.name} ${c.pinned ? '<i class="fas fa-thumbtack pin-icon"></i>' : ''}</span>
+                            <span class="chat-date">${new Date(c.lastMessage.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                         </div>
-                        <div class="chat-meta">
-                            <span style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                                ${c.lastMessage.text || 'Multimedia'}
-                            </span>
-                            <span>${new Date(c.lastMessage.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        <div class="chat-preview">
+                            <span class="chat-last-msg">${c.lastMessage.text || 'Multimedia'}</span>
+                            <div style="display:flex; gap:3px;">
+                                ${c.unreadCount > 0 ? `<span class="badge">${c.unreadCount}</span>` : ''}
+                                ${c.source === 'Web' ? `<span class="badge" style="background:#1e3a8a; color:#fff;">WEB</span>` : ''}
+                                ${c.source === 'Tienda Virtual' ? `<span class="badge" style="background:#a21caf; color:#fff;">TIENDA</span>` : ''}
+                            </div>
                         </div>
-                        <div style="display:flex; gap:5px; margin-top:5px;">
-                            ${c.unreadCount > 0 ? `<span class="badge">${c.unreadCount}</span>` : ''}
-                            ${c.source === 'Web' ? `<span class="badge" style="background:#1e3a8a; color:#fff;">WEB</span>` : ''}
-                            ${c.source === 'Tienda Virtual' ? `<span class="badge" style="background:#831843; color:#fff;">TIENDA</span>` : ''}
-                        </div>
+                        <div class="mini-tags">${labelsHtml}</div>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
             
             container.scrollTop = scroll;
         }
 
-        // --- CONTEXT MENU ---
-        function showContextMenu(e, phone) {
+        // --- CONTEXT MENU CORREGIDO ---
+        function showContextMenu(e, phone, isPinned) {
             e.preventDefault();
             contextPhone = phone;
             const menu = document.getElementById('context-menu');
+            
+            // Ajustar texto Pin/Unpin
+            const pinBtn = document.getElementById('ctx-pin');
+            pinBtn.innerHTML = isPinned ? '<i class="fas fa-thumbtack" style="opacity:0.5"></i> <span>Desfijar</span>' : '<i class="fas fa-thumbtack"></i> <span>Fijar</span>';
+            pinBtn.onclick = () => contextAction('toggle_pin', !isPinned);
+
             menu.style.display = 'block';
             menu.style.left = e.pageX + 'px';
             menu.style.top = e.pageY + 'px';
         }
 
-        async function contextAction(action) {
+        async function contextAction(action, valueOverride = true) {
             if(!contextPhone) return;
             if(action === 'delete' && !confirm("¿ELIMINAR CHAT?")) return;
-
+            
             await fetch('/api/chat/action', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ phone: contextPhone, action: action, value: true })
+                body: JSON.stringify({ phone: contextPhone, action: action, value: valueOverride })
             });
             syncChats();
+        }
+
+        function quickLabel() {
+            if(!contextPhone) return;
+            // Abrimos el chat y luego el panel CRM
+            const chat = chatsData.find(c => c.id === contextPhone);
+            if(chat) openChat(chat.id, chat.name, chat.photoUrl);
+            document.getElementById('crm-panel').classList.add('open');
+            document.getElementById('context-menu').style.display = 'none';
         }
 
         // --- CONVERSACIÓN ---
@@ -446,6 +529,7 @@
             const chatInfo = chatsData.find(c => c.id === phone);
             document.getElementById('bot-switch').checked = chatInfo ? chatInfo.botActive : true;
             
+            loadLeadDataToCRM(phone);
             await loadMessages(phone, true);
             loadTags(phone);
         }
@@ -465,94 +549,157 @@
                     else if(type === 'AUDIO') text = `<audio controls src="/api/media-proxy/${id}"></audio>`;
                     else text = `📁 Archivo adjunto (${type})`;
                 }
-                return `<div class="msg ${m.role}">${text}<div class="msg-time">${new Date(m.time).toLocaleTimeString()}</div></div>`;
+                // CSS Clases asignan izquierda/derecha
+                return `<div class="msg ${m.role}">${text}<div class="msg-time">${new Date(m.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div></div>`;
             }).join('');
 
-            if(scrollDown) container.scrollTop = container.scrollHeight;
+            if(scrollDown) setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
         }
 
         async function sendMessage() {
             const txt = document.getElementById('msg-input').value;
             if(!txt) return;
-            
             document.getElementById('msg-input').value = '';
-            document.getElementById('messages-container').innerHTML += `<div class="msg manual">${txt} <i class="fas fa-clock"></i></div>`;
-            document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;
+            const container = document.getElementById('messages-container');
+            container.innerHTML += `<div class="msg manual">${txt} <div class="msg-time">...</div></div>`;
+            container.scrollTop = container.scrollHeight; 
 
-            await fetch('/api/chat/send', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ phone: currentChat, message: txt })
-            });
+            await fetch('/api/chat/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, message: txt }) });
             loadMessages(currentChat, true);
         }
-        
         function checkEnter(e) { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
 
         async function toggleBotActive() {
             const active = document.getElementById('bot-switch').checked;
-            await fetch('/api/chat/toggle-bot', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ phone: currentChat, active })
-            });
+            await fetch('/api/chat/toggle-bot', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, active }) });
             showToast(active ? "🤖 Bot Activado" : "⏸️ Bot Pausado");
         }
 
-        // --- GESTIÓN DE CONFIGURACIÓN COMPLETA (API Calls RESTAURADAS) ---
-        
+        // --- CRM Y LEADS ---
+        async function loadLeadDataToCRM(phone) {
+            // Limpiar
+            document.getElementById('crm-name').value = "";
+            document.getElementById('crm-city').value = "";
+            document.getElementById('crm-email').value = "";
+            document.getElementById('crm-interest').value = "";
+
+            const res = await fetch('/api/data/leads');
+            const leads = await res.json();
+            const lead = leads.find(l => l.phone === phone);
+            
+            if(lead) {
+                document.getElementById('crm-name').value = lead.nombre || "";
+                document.getElementById('crm-city').value = lead.ciudad || "";
+                document.getElementById('crm-email').value = lead.correo || "";
+                document.getElementById('crm-interest').value = lead.interes || "";
+            }
+        }
+
+        async function saveLeadManual() {
+            if(!currentChat) return;
+            const res = await fetch('/api/data/leads');
+            const leads = await res.json();
+            const lead = leads.find(l => l.phone === currentChat);
+            const id = lead ? lead.id : null;
+
+            if(id) {
+                await fetch('/api/leads/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id, field: 'nombre', value: document.getElementById('crm-name').value }) });
+                await fetch('/api/leads/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id, field: 'ciudad', value: document.getElementById('crm-city').value }) });
+                await fetch('/api/leads/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id, field: 'correo', value: document.getElementById('crm-email').value }) });
+                await fetch('/api/leads/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id, field: 'interes', value: document.getElementById('crm-interest').value }) });
+                showToast("✅ Datos Guardados");
+                refreshLeads(); // Refrescar tabla también
+            } else {
+                showToast("⚠️ Espera a que el bot cree el lead o envía un mensaje primero.");
+            }
+        }
+
+        function downloadExcel() {
+            // Genera CSV
+            const rows = [['Fecha', 'Fuente', 'Nombre', 'Telefono', 'Interes', 'Etiqueta IA', 'Etiqueta Comercial']];
+            const table = document.getElementById('leads-body');
+            for (let tr of table.rows) {
+                const cells = Array.from(tr.cells).slice(0, 7).map(c => c.innerText);
+                rows.push(cells);
+            }
+            let csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "leads_icc.csv");
+            document.body.appendChild(link);
+            link.click();
+        }
+
+        // --- CONFIGURACIÓN ---
         async function loadAllConfig() {
             const res = await fetch('/api/data/config');
             const cfg = await res.json();
             document.getElementById('prompt-editor').value = cfg.prompt || '';
+            document.getElementById('biz-name').value = cfg.biz_profile?.name || '';
+            document.getElementById('biz-hours').value = cfg.biz_profile?.hours || '';
+            
             renderWebList();
             renderRulesList(cfg.tech_rules);
-
-            // Tags y Atajos
-            const resT = await fetch('/api/data/tags');
-            const tags = await resT.json();
-            renderConfigTags(tags);
             
-            const resS = await fetch('/api/data/shortcuts');
-            const sh = await resS.json();
-            renderConfigShortcuts(sh);
+            fetch('/api/data/tags').then(r=>r.json()).then(t => renderConfigTags(t));
+            fetch('/api/data/shortcuts').then(r=>r.json()).then(s => renderConfigShortcuts(s));
+            
+            if(cfg.logo_url) document.getElementById('logo-preview').style.backgroundImage = `url('${cfg.logo_url}')`;
         }
 
-        // 1. Prompt
+        async function saveBizConfig() {
+            const name = document.getElementById('biz-name').value;
+            const hours = document.getElementById('biz-hours').value;
+            await fetch('/api/config/biz/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name, hours }) });
+            showToast("Perfil Actualizado");
+        }
+
         async function savePrompt() {
             await fetch('/api/config/prompt', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ prompt: document.getElementById('prompt-editor').value }) });
-            showToast("✅ Personalidad Guardada");
+            showToast("Personalidad Guardada");
+        }
+        async function uploadLogo(input) {
+            const fd = new FormData();
+            fd.append('file', input.files[0]);
+            await fetch('/api/config/logo', { method: 'POST', body: fd });
+            showToast("Logo Actualizado");
+            loadAllConfig();
         }
 
-        // 2. CSV
+        // CSV
         async function uploadCSV() {
             const input = document.getElementById('csv-upload');
-            if(!input.files[0]) return alert("Selecciona un archivo .csv");
+            if(!input.files[0]) return alert("Selecciona CSV");
             const fd = new FormData();
             fd.append('file', input.files[0]);
             await fetch('/api/knowledge/csv', { method: 'POST', body: fd });
-            showToast("✅ Inventario Cargado");
+            showToast("Inventario Cargado");
         }
         async function clearInventory() {
-            if(!confirm("¿Borrar TODO el inventario?")) return;
+            if(!confirm("¿Borrar TODO?")) return;
             await fetch('/api/knowledge/clear', { method: 'POST' });
-            showToast("🗑️ Inventario Borrado");
+            showToast("Inventario Borrado");
         }
 
-        // 3. Web
+        // WEB INFO VISIBLE
         async function renderWebList() {
             const res = await fetch('/api/data/web-knowledge');
             const list = await res.json();
             document.getElementById('web-knowledge-list').innerHTML = list.map(i => `
                 <li class="config-item">
-                    <span>${i.url}</span>
-                    <button class="btn-small btn-red" onclick="deleteWeb('${i.id}')"><i class="fas fa-trash"></i></button>
-                </li>
-            `).join('');
+                    <span style="max-width:200px; overflow:hidden; text-overflow:ellipsis;">${i.url}</span>
+                    <div style="display:flex; gap:5px;">
+                        <button class="btn-small btn-blue" onclick="showWebInfo('${encodeURIComponent(i.summary)}')"><i class="fas fa-eye"></i></button>
+                        <button class="btn-small btn-red" onclick="deleteWeb('${i.id}')"><i class="fas fa-trash"></i></button>
+                    </div>
+                </li>`).join('');
         }
+        function showWebInfo(summary) { alert(decodeURIComponent(summary)); }
+        
         async function scanWeb() {
             const url = document.getElementById('web-url-input').value;
-            const summary = prompt("Pega el texto clave de esta página:");
+            const summary = prompt("Como no tengo navegador real, pega el texto de la página aquí:");
             if(summary) {
                 await fetch('/api/data/web-knowledge', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url, summary }) });
                 document.getElementById('web-url-input').value = "";
@@ -564,14 +711,9 @@
             renderWebList();
         }
 
-        // 4. Reglas
+        // REGLAS
         function renderRulesList(rules) {
-            document.getElementById('rules-list').innerHTML = (rules || []).map((r, i) => `
-                <li class="config-item">
-                    <span>${r}</span>
-                    <button class="btn-small btn-red" onclick="deleteRule(${i})"><i class="fas fa-trash"></i></button>
-                </li>
-            `).join('');
+            document.getElementById('rules-list').innerHTML = (rules || []).map((r, i) => `<li class="config-item"><span>${r}</span><button class="btn-small btn-red" onclick="deleteRule(${i})"><i class="fas fa-trash"></i></button></li>`).join('');
         }
         async function addRule() {
             const r = document.getElementById('rule-input').value;
@@ -587,20 +729,12 @@
             renderRulesList(data.rules);
         }
 
-        // 5. Tags (Configuración y CRM)
+        // TAGS (Actualizan también lista de chats)
         function renderConfigTags(tags) {
-            document.getElementById('config-tags-list').innerHTML = tags.map(t => `
-                <li class="config-item">
-                    <span style="color:${t.color}; font-weight:bold;">${t.name}</span>
-                    <button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button>
-                </li>
-            `).join('');
-            
-            // También actualizar lista CRM
+            document.getElementById('config-tags-list').innerHTML = tags.map(t => `<li class="config-item"><span style="color:${t.color};font-weight:bold;">${t.name}</span><button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button></li>`).join('');
             renderCRMTags(tags);
         }
         function renderCRMTags(tags) {
-            // Renderiza en el panel derecho del chat
             const activeTags = chatsData.find(c => c.id === currentChat)?.labels || [];
             document.getElementById('tag-list').innerHTML = tags.map(t => {
                 const isActive = activeTags.some(at => at.text === t.name);
@@ -609,13 +743,12 @@
                         onclick="toggleChatTag('${t.name}', '${t.color}')">${t.name}</span>`;
             }).join('');
         }
-
         async function addTag() {
             const name = document.getElementById('tag-name').value;
             const color = document.getElementById('tag-color').value;
             if(!name) return;
             await fetch('/api/tags/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name, color }) });
-            loadAllConfig(); // Recargar listas
+            loadAllConfig();
             document.getElementById('tag-name').value = "";
         }
         async function deleteTag(id) {
@@ -627,27 +760,18 @@
             const chat = chatsData.find(c => c.id === currentChat);
             let labels = chat.labels || [];
             if(labels.find(l => l.text === name)) labels = labels.filter(l => l.text !== name);
-            else labels = [{text: name, color}]; // Single tag mode for status
+            else labels.push({text: name, color}); // Permitir múltiples
             
             await fetch('/api/chat/action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, action: 'set_labels', value: labels }) });
             syncChats();
-            setTimeout(() => loadAllConfig(), 500); // Hack para refrescar UI
+            setTimeout(() => loadAllConfig(), 500);
         }
 
-        // 6. Shortcuts
+        // ATAJOS
         function renderConfigShortcuts(shortcuts) {
-            const list = shortcuts.map(s => `
-                <li class="config-item">
-                    <span><b>${s.keyword}</b>: ${s.text.substring(0,30)}...</span>
-                    <button class="btn-small btn-red" onclick="deleteShortcut(${s.id})"><i class="fas fa-trash"></i></button>
-                </li>
-            `).join('');
+            const list = shortcuts.map(s => `<li class="config-item"><span><b>${s.keyword}</b></span><button class="btn-small btn-red" onclick="deleteShortcut(${s.id})"><i class="fas fa-trash"></i></button></li>`).join('');
             document.getElementById('config-shortcuts-list').innerHTML = list;
-            
-            // CRM Panel
-            document.getElementById('shortcuts-list').innerHTML = shortcuts.map(s => `
-                <span class="tag" onclick="insertShortcut('${s.text}')">${s.keyword}</span>
-            `).join('');
+            document.getElementById('shortcuts-list').innerHTML = shortcuts.map(s => `<span class="tag" onclick="insertShortcut('${s.text}')">${s.keyword}</span>`).join('');
         }
         async function addShortcut() {
             const keyword = document.getElementById('short-key').value;
@@ -655,18 +779,15 @@
             if(!keyword || !text) return;
             await fetch('/api/shortcuts/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ keyword, text }) });
             loadAllConfig();
-            document.getElementById('short-key').value = "";
-            document.getElementById('short-text').value = "";
+            document.getElementById('short-key').value = ""; document.getElementById('short-text').value = "";
         }
         async function deleteShortcut(id) {
             await fetch('/api/shortcuts/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) });
             loadAllConfig();
         }
-        function insertShortcut(text) {
-            document.getElementById('msg-input').value += text;
-        }
+        function insertShortcut(text) { document.getElementById('msg-input').value += text; }
 
-        // --- LEADS ---
+        // LEADS REFRESH
         async function refreshLeads() {
             const res = await fetch('/api/data/leads');
             const leads = await res.json();
@@ -675,23 +796,17 @@
                 return `<tr>
                     <td>${new Date(l.fecha).toLocaleDateString()}</td>
                     <td><span class="lead-source-tag ${sClass}">${l.source || 'Orgánico'}</span></td>
-                    <td>${l.nombre}</td>
+                    <td>${l.nombre || '-'}</td>
                     <td>${l.phone}</td>
-                    <td>${l.interes}</td>
+                    <td>${l.interes || '-'}</td>
                     <td>${l.etiqueta}</td>
-                    <td><strong>${l.status_tag || '-'}</strong></td>
+                    <td><strong>${l.status_tag || ''}</strong></td>
                     <td><button class="nav-btn" style="height:30px;" onclick="openChat('${l.phone}', '${l.nombre}', '')"><i class="fas fa-comment"></i></button></td>
                 </tr>`;
             }).join('');
         }
-
-        // --- LOAD INITIAL DATA ---
-        function loadTags(phone) {
-             // Esta funcion se llama al abrir chat, usa datos globales ya cargados en loadAllConfig
-             // La logica de render esta en renderCRMTags
-             fetch('/api/data/tags').then(r=>r.json()).then(t => renderCRMTags(t));
-        }
-
+        
+        function loadTags(phone) { fetch('/api/data/tags').then(r=>r.json()).then(t => renderCRMTags(t)); }
     </script>
 </body>
 </html>
