@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v24.0 - Dashboard</title>
+    <title>Valentina v24.1 - Full Suite</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
@@ -16,6 +16,7 @@
             --text: #e1e3e8;
             --text-muted: #8b949e;
             --accent: #3b82f6;
+            --danger: #ef4444;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
@@ -100,7 +101,27 @@
         .lead-source-web { color: #60a5fa; border-color: #1e3a8a; background: rgba(30, 58, 138, 0.2); }
         .lead-source-store { color: #f472b6; border-color: #831843; background: rgba(131, 24, 67, 0.2); }
 
-        /* --- CONTEXT MENU (Click Derecho) --- */
+        /* --- CONFIG PANEL (RESTAURADO) --- */
+        .config-container { padding: 30px; max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+        .config-row { display: flex; gap: 20px; flex-wrap: wrap; }
+        .config-card { background: var(--panel); padding: 20px; border-radius: 10px; border: 1px solid var(--border); flex: 1; min-width: 300px; }
+        .config-header { font-size: 1.1rem; font-weight: 600; margin-bottom: 15px; color: var(--primary); display: flex; justify-content: space-between; align-items: center; }
+        
+        .code-editor { width: 100%; height: 150px; background: #000; color: #0f0; padding: 15px; border-radius: 5px; font-family: monospace; border: 1px solid var(--border); resize: vertical; }
+        
+        /* Listas de Configuración */
+        .item-list { list-style: none; margin-top: 10px; max-height: 200px; overflow-y: auto; }
+        .config-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; background: var(--dark); border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        .config-item:last-child { border-bottom: none; }
+        
+        /* Inputs Genericos */
+        .config-input-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        .cfg-input { flex: 1; padding: 8px; border-radius: 5px; border: 1px solid var(--border); background: var(--dark); color: white; }
+        .btn-small { padding: 8px 12px; border-radius: 5px; border: none; cursor: pointer; font-size: 0.8rem; font-weight: 600; }
+        .btn-green { background: var(--primary); color: #000; }
+        .btn-red { background: var(--danger); color: white; }
+
+        /* CONTEXT MENU */
         #context-menu {
             position: absolute; display: none; background: var(--panel); border: 1px solid var(--border); 
             box-shadow: 0 4px 15px rgba(0,0,0,0.5); border-radius: 6px; width: 180px; z-index: 1000;
@@ -108,21 +129,9 @@
         .ctx-item { padding: 10px 15px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 10px; color: var(--text); }
         .ctx-item:hover { background: var(--primary); color: #000; }
         .ctx-divider { height: 1px; background: var(--border); margin: 5px 0; }
-        
-        /* --- CONFIG PANEL --- */
-        .config-container { padding: 30px; max-width: 900px; margin: 0 auto; }
-        .config-card { background: var(--panel); padding: 20px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 20px; }
-        .config-header { font-size: 1.1rem; font-weight: 600; margin-bottom: 15px; color: var(--primary); display: flex; justify-content: space-between; }
-        .code-editor { width: 100%; height: 200px; background: #000; color: #0f0; padding: 15px; border-radius: 5px; font-family: monospace; border: 1px solid var(--border); resize: vertical; }
-        
-        /* Web Sources List */
-        .web-list { list-style: none; margin-top: 10px; }
-        .web-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: var(--dark); border-bottom: 1px solid var(--border); }
-        .web-url { font-size: 0.85rem; color: var(--accent); max-width: 70%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .web-actions { display: flex; gap: 10px; }
 
-        /* TOAST NOTIFICATION */
-        #toast { visibility: hidden; min-width: 250px; margin-left: -125px; background-color: #333; color: #fff; text-align: center; border-radius: 2px; padding: 16px; position: fixed; z-index: 1; left: 50%; bottom: 30px; font-size: 17px; }
+        /* TOAST */
+        #toast { visibility: hidden; min-width: 250px; margin-left: -125px; background-color: #333; color: #fff; text-align: center; border-radius: 2px; padding: 16px; position: fixed; z-index: 2000; left: 50%; bottom: 30px; font-size: 17px; }
         #toast.show { visibility: visible; -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
         @-webkit-keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
         @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
@@ -136,7 +145,7 @@
         <div style="width: 40px; height: 40px; background: url('/api/data/config') no-repeat center/cover; border-radius: 50%; margin-bottom: 30px; background-color: #333;" id="logo-preview"></div>
         <button class="nav-btn active" onclick="switchTab('chat')" title="Chats"><i class="fas fa-comments"></i></button>
         <button class="nav-btn" onclick="switchTab('leads')" title="Base de Leads"><i class="fas fa-database"></i></button>
-        <button class="nav-btn" onclick="switchTab('config')" title="Configuración"><i class="fas fa-cog"></i></button>
+        <button class="nav-btn" onclick="switchTab('config')" title="Configuración Completa"><i class="fas fa-sliders-h"></i></button>
         <div class="nav-bottom">
             <button class="nav-btn" onclick="location.href='/logout'" title="Salir"><i class="fas fa-sign-out-alt"></i></button>
         </div>
@@ -196,11 +205,13 @@
                     <div class="crm-title">Etiquetas (Comercial)</div>
                     <div class="tag-container" id="tag-list">
                         </div>
+                    <div style="margin-top:10px; font-size:0.75rem; color:gray;">* Gestionar en Configuración</div>
                 </div>
 
                 <div class="crm-section">
-                    <div class="crm-title">Notas Rápidas (Atajos)</div>
-                    <div class="tag-container" id="shortcuts-list"></div>
+                    <div class="crm-title">Atajos de Teclado</div>
+                    <div class="tag-container" id="shortcuts-list">
+                        </div>
                 </div>
             </div>
         </div>
@@ -215,12 +226,12 @@
                     <thead>
                         <tr>
                             <th>Fecha</th>
-                            <th>Fuente (Origen)</th>
+                            <th>Fuente</th>
                             <th>Nombre</th>
                             <th>Teléfono</th>
                             <th>Interés</th>
                             <th>Etiqueta IA</th>
-                            <th>Etiqueta Comercial</th>
+                            <th>Status Comercial</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
@@ -232,29 +243,66 @@
         <div id="tab-config" class="view-panel" style="overflow-y:auto;">
             <div class="config-container">
                 
-                <div class="config-card">
-                    <div class="config-header">
-                        <span>🧠 Personalidad de Valentina</span>
-                        <button class="nav-btn" style="height:30px; width:30px;" onclick="savePrompt()"><i class="fas fa-save"></i></button>
+                <div class="config-row">
+                    <div class="config-card">
+                        <div class="config-header">
+                            <span>🧠 Personalidad (Prompt)</span>
+                            <button class="btn-small btn-green" onclick="savePrompt()"><i class="fas fa-save"></i> Guardar</button>
+                        </div>
+                        <textarea id="prompt-editor" class="code-editor"></textarea>
                     </div>
-                    <textarea id="prompt-editor" class="code-editor"></textarea>
+
+                    <div class="config-card">
+                        <div class="config-header">📦 Inventario (CSV)</div>
+                        <div style="display:flex; flex-direction:column; gap:10px;">
+                            <input type="file" id="csv-upload" accept=".csv" style="color:white;">
+                            <button class="btn-small btn-green" onclick="uploadCSV()">📤 Cargar CSV Nuevo</button>
+                            <hr style="border-color:var(--border);">
+                            <button class="btn-small btn-red" onclick="clearInventory()">🗑️ Borrar Todo el Inventario</button>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="config-card">
-                    <div class="config-header">
-                        <span>🌐 Fuentes de Conocimiento (Web)</span>
+                <div class="config-row">
+                    <div class="config-card">
+                        <div class="config-header">🌐 Conocimiento Web</div>
+                        <div class="config-input-group">
+                            <input type="text" id="web-url-input" class="cfg-input" placeholder="https://...">
+                            <button class="btn-small btn-green" onclick="scanWeb()">Agregar</button>
+                        </div>
+                        <ul class="item-list" id="web-knowledge-list"></ul>
                     </div>
-                    <div style="display:flex; gap:10px; margin-bottom:10px;">
-                        <input type="text" id="web-url-input" class="search-bar" placeholder="https://importadoracasacolombia.com/producto...">
-                        <button class="nav-btn" style="background:var(--primary); color:#000;" onclick="scanWeb()">Escanear</button>
+
+                    <div class="config-card">
+                        <div class="config-header">⚠️ Reglas de Negocio</div>
+                        <div class="config-input-group">
+                            <input type="text" id="rule-input" class="cfg-input" placeholder="Ej: No vendemos llantas...">
+                            <button class="btn-small btn-green" onclick="addRule()">+</button>
+                        </div>
+                        <ul class="item-list" id="rules-list"></ul>
                     </div>
-                    <p style="font-size:0.8rem; color:#888; margin-bottom:10px;">Valentina leerá estas páginas para responder preguntas.</p>
-                    <ul class="web-list" id="web-knowledge-list"></ul>
                 </div>
 
-                <div class="config-card">
-                    <div class="config-header">📸 Logo de Empresa</div>
-                    <input type="file" onchange="uploadLogo(this)">
+                <div class="config-row">
+                    <div class="config-card">
+                        <div class="config-header">🏷️ Gestión Etiquetas</div>
+                        <div class="config-input-group">
+                            <input type="text" id="tag-name" class="cfg-input" placeholder="Nombre">
+                            <input type="color" id="tag-color" value="#25d366" style="width:50px; border:none;">
+                            <button class="btn-small btn-green" onclick="addTag()">Crear</button>
+                        </div>
+                        <ul class="item-list" id="config-tags-list"></ul>
+                    </div>
+
+                    <div class="config-card">
+                        <div class="config-header">⚡ Atajos de Teclado</div>
+                        <div class="config-input-group">
+                            <input type="text" id="short-key" class="cfg-input" placeholder="/hola" style="width:30%;">
+                            <input type="text" id="short-text" class="cfg-input" placeholder="Texto respuesta...">
+                            <button class="btn-small btn-green" onclick="addShortcut()">Crear</button>
+                        </div>
+                        <ul class="item-list" id="config-shortcuts-list"></ul>
+                    </div>
                 </div>
 
             </div>
@@ -281,10 +329,10 @@
         // --- INICIO ---
         window.onload = function() {
             startSyncLoop();
-            loadConfig();
             refreshLeads();
+            loadAllConfig(); // Cargar todas las configuraciones al inicio
             
-            // Cerrar menú context al clickear fuera
+            // Cerrar menú context
             document.addEventListener('click', () => document.getElementById('context-menu').style.display = 'none');
         };
 
@@ -303,17 +351,15 @@
             event.currentTarget.classList.add('active');
             
             if(tab === 'leads') refreshLeads();
-            if(tab === 'config') loadWebKnowledge();
+            if(tab === 'config') loadAllConfig();
         }
 
-        function toggleCRM() {
-            document.getElementById('crm-panel').classList.toggle('open');
-        }
+        function toggleCRM() { document.getElementById('crm-panel').classList.toggle('open'); }
 
         // --- CORE CHAT LOOP ---
         function startSyncLoop() {
             syncChats();
-            setInterval(syncChats, 3000); // Polling cada 3s
+            setInterval(syncChats, 3000); 
             setInterval(() => { if(currentChat) loadMessages(currentChat, false); }, 3000);
         }
 
@@ -323,7 +369,7 @@
                 const res = await fetch(`/api/chats-full?view=${currentFilter}&search=${search}`);
                 chatsData = await res.json();
                 renderChatList();
-            } catch(e) { console.error("Sync error", e); }
+            } catch(e) {}
         }
 
         function setChatFilter(filter, el) {
@@ -335,7 +381,6 @@
 
         function renderChatList() {
             const container = document.getElementById('chat-list-container');
-            // Guardamos posición scroll
             const scroll = container.scrollTop;
             
             container.innerHTML = chatsData.map(c => `
@@ -352,7 +397,7 @@
                         </div>
                         <div class="chat-meta">
                             <span style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                                ${c.lastMessage.text || 'Imagen/Audio'}
+                                ${c.lastMessage.text || 'Multimedia'}
                             </span>
                             <span>${new Date(c.lastMessage.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                         </div>
@@ -368,7 +413,7 @@
             container.scrollTop = scroll;
         }
 
-        // --- CONTEXT MENU (REPARADO) ---
+        // --- CONTEXT MENU ---
         function showContextMenu(e, phone) {
             e.preventDefault();
             contextPhone = phone;
@@ -380,21 +425,14 @@
 
         async function contextAction(action) {
             if(!contextPhone) return;
-            try {
-                // Si es eliminar, pedir confirmación
-                if(action === 'delete' && !confirm("¿Estás seguro de ELIMINAR todo el historial y datos de este cliente?")) return;
+            if(action === 'delete' && !confirm("¿ELIMINAR CHAT?")) return;
 
-                const res = await fetch('/api/chat/action', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ phone: contextPhone, action: action, value: true })
-                });
-                
-                if(action === 'toggle_archive') showToast("Chat archivado/desarchivado");
-                if(action === 'toggle_pin') showToast("Chat fijado/desfijado");
-                
-                syncChats(); // Refrescar lista inmediata
-            } catch(e) { alert("Error en acción"); }
+            await fetch('/api/chat/action', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ phone: contextPhone, action: action, value: true })
+            });
+            syncChats();
         }
 
         // --- CONVERSACIÓN ---
@@ -405,7 +443,6 @@
             document.getElementById('chat-header-phone').innerText = phone;
             document.getElementById('chat-header-img').src = photo || ''; 
             
-            // Cargar estado del bot
             const chatInfo = chatsData.find(c => c.id === phone);
             document.getElementById('bot-switch').checked = chatInfo ? chatInfo.botActive : true;
             
@@ -418,11 +455,10 @@
             const msgs = await res.json();
             const container = document.getElementById('messages-container');
             
-            // Solo renderizar si hay cambios para no parpadear (simplificado: renderizamos siempre por ahora)
             container.innerHTML = msgs.map(m => {
                 let text = m.text;
                 if(text.includes('[MEDIA:')) {
-                    const parts = text.split(':'); // [MEDIA, TYPE, ID]
+                    const parts = text.split(':'); 
                     const type = parts[1];
                     const id = parts[2].replace(']', '');
                     if(type === 'IMAGE') text = `<img src="/api/media-proxy/${id}" style="max-width:200px; border-radius:8px;">`;
@@ -439,7 +475,6 @@
             const txt = document.getElementById('msg-input').value;
             if(!txt) return;
             
-            // UI Optimista
             document.getElementById('msg-input').value = '';
             document.getElementById('messages-container').innerHTML += `<div class="msg manual">${txt} <i class="fas fa-clock"></i></div>`;
             document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;
@@ -464,139 +499,197 @@
             showToast(active ? "🤖 Bot Activado" : "⏸️ Bot Pausado");
         }
 
-        // --- ETIQUETAS COMERCIALES (Sincronizadas con Leads) ---
-        async function loadTags(phone) {
-            // Cargar etiquetas globales y marcar las activas
-            const resG = await fetch('/api/data/tags');
-            const tags = await resG.json();
-            
-            // Obtener etiquetas actuales del chat
-            const chat = chatsData.find(c => c.id === phone);
-            const activeTags = chat ? chat.labels : [];
-
-            const container = document.getElementById('tag-list');
-            container.innerHTML = tags.map(t => {
-                const isActive = activeTags.some(at => at.text === t.name);
-                return `<span class="tag ${isActive ? 'selected' : ''}" 
-                        style="border-color:${t.color}; color:${isActive?'#fff':t.color}; background:${isActive?t.color:'transparent'}"
-                        onclick="toggleTag('${t.name}', '${t.color}')">${t.name}</span>`;
-            }).join('');
-        }
-
-        async function toggleTag(name, color) {
-            if(!currentChat) return;
-            // Lógica simple: Reemplaza las etiquetas (Single Select preferiblemente para status)
-            // O Multi-select. Haremos array.
-            const chat = chatsData.find(c => c.id === currentChat);
-            let labels = chat.labels || [];
-            
-            const exists = labels.find(l => l.text === name);
-            if(exists) labels = labels.filter(l => l.text !== name);
-            else labels = [{text: name, color: color}]; // FORZAR UNA SOLA ETIQUETA COMERCIAL PRINCIPAL (Para Excel limpio)
-
-            await fetch('/api/chat/action', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ phone: currentChat, action: 'set_labels', value: labels })
-            });
-            
-            loadTags(currentChat);
-            showToast("Etiqueta actualizada");
-        }
-
-        // --- LEADS TABLE (REPARADA) ---
-        async function refreshLeads() {
-            const res = await fetch('/api/data/leads');
-            const leads = await res.json();
-            const tbody = document.getElementById('leads-body');
-            
-            tbody.innerHTML = leads.map(l => {
-                // Determinar estilo de Fuente
-                let sourceClass = 'lead-source-tag';
-                if(l.source === 'Web') sourceClass += ' lead-source-web';
-                if(l.source === 'Tienda Virtual') sourceClass += ' lead-source-store';
-
-                return `
-                <tr>
-                    <td>${new Date(l.fecha).toLocaleDateString()}</td>
-                    <td><span class="${sourceClass}">${l.source || 'Orgánico'}</span></td>
-                    <td>${l.nombre || 'Desconocido'}</td>
-                    <td>${l.phone}</td>
-                    <td>${l.interes}</td>
-                    <td>${l.etiqueta}</td>
-                    <td><strong>${l.status_tag || '-'}</strong></td> <td>
-                        <button class="nav-btn" style="height:30px;" onclick="openChat('${l.phone}', '${l.nombre}', '')"><i class="fas fa-comment"></i></button>
-                    </td>
-                </tr>
-            `}).join('');
-        }
-
-        // --- CONFIGURACIÓN Y WEB SCRAPER (NUEVO) ---
-        async function loadConfig() {
+        // --- GESTIÓN DE CONFIGURACIÓN COMPLETA (API Calls RESTAURADAS) ---
+        
+        async function loadAllConfig() {
             const res = await fetch('/api/data/config');
             const cfg = await res.json();
             document.getElementById('prompt-editor').value = cfg.prompt || '';
-            loadWebKnowledge();
+            renderWebList();
+            renderRulesList(cfg.tech_rules);
+
+            // Tags y Atajos
+            const resT = await fetch('/api/data/tags');
+            const tags = await resT.json();
+            renderConfigTags(tags);
+            
+            const resS = await fetch('/api/data/shortcuts');
+            const sh = await resS.json();
+            renderConfigShortcuts(sh);
         }
 
+        // 1. Prompt
         async function savePrompt() {
-            await fetch('/api/config/prompt', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ prompt: document.getElementById('prompt-editor').value })
-            });
+            await fetch('/api/config/prompt', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ prompt: document.getElementById('prompt-editor').value }) });
             showToast("✅ Personalidad Guardada");
         }
 
-        async function loadWebKnowledge() {
+        // 2. CSV
+        async function uploadCSV() {
+            const input = document.getElementById('csv-upload');
+            if(!input.files[0]) return alert("Selecciona un archivo .csv");
+            const fd = new FormData();
+            fd.append('file', input.files[0]);
+            await fetch('/api/knowledge/csv', { method: 'POST', body: fd });
+            showToast("✅ Inventario Cargado");
+        }
+        async function clearInventory() {
+            if(!confirm("¿Borrar TODO el inventario?")) return;
+            await fetch('/api/knowledge/clear', { method: 'POST' });
+            showToast("🗑️ Inventario Borrado");
+        }
+
+        // 3. Web
+        async function renderWebList() {
             const res = await fetch('/api/data/web-knowledge');
             const list = await res.json();
-            document.getElementById('web-knowledge-list').innerHTML = list.map(item => `
-                <li class="web-item">
-                    <div>
-                        <div class="web-url"><a href="${item.url}" target="_blank" style="color:#3b82f6;">${item.url}</a></div>
-                        <div style="font-size:0.75rem; color:#888; margin-top:5px;">${item.summary.substring(0, 100)}...</div>
-                    </div>
-                    <button class="nav-btn" style="color:#ff4444;" onclick="deleteWeb('${item.id}')"><i class="fas fa-trash"></i></button>
+            document.getElementById('web-knowledge-list').innerHTML = list.map(i => `
+                <li class="config-item">
+                    <span>${i.url}</span>
+                    <button class="btn-small btn-red" onclick="deleteWeb('${i.id}')"><i class="fas fa-trash"></i></button>
                 </li>
             `).join('');
         }
-
         async function scanWeb() {
             const url = document.getElementById('web-url-input').value;
-            if(!url) return alert("Escribe una URL");
-            
-            showToast("⏳ Escaneando sitio... esto puede tardar.");
-            
-            // Simulación de Scraper (En un entorno real, el backend haría el request HTTP y limpieza HTML)
-            // Como Valentina v24 es IA, usaremos un truco: Enviamos la URL a Gemini en el backend para que intente resumirla si es texto plano,
-            // pero como Gemini Flash no navega, aquí simularemos que guardamos la intención para que el usuario pegue el contenido o el backend use un scraper real si está instalado.
-            // Para este caso, asumiremos que el usuario quiere registrar la URL.
-            
-            // NOTA: Para escanear de verdad necesitas Puppeteer en el backend. 
-            // Aquí haremos un "Mock" inteligente: Le pediremos al usuario que pegue el texto O guardaremos la URL como referencia.
-            
-            const summary = prompt("Como esta versión no tiene navegador headless integrado, por favor pega aquí el texto clave de esa página para que yo lo aprenda:");
+            const summary = prompt("Pega el texto clave de esta página:");
             if(summary) {
-                await fetch('/api/data/web-knowledge', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ url, summary })
-                });
+                await fetch('/api/data/web-knowledge', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url, summary }) });
                 document.getElementById('web-url-input').value = "";
-                loadWebKnowledge();
-                showToast("✅ Conocimiento Web Agregado");
+                renderWebList();
             }
         }
-
         async function deleteWeb(id) {
-            if(!confirm("¿Borrar esta fuente de conocimiento?")) return;
-            await fetch('/api/data/web-knowledge/delete', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ id })
-            });
-            loadWebKnowledge();
+            await fetch('/api/data/web-knowledge/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) });
+            renderWebList();
+        }
+
+        // 4. Reglas
+        function renderRulesList(rules) {
+            document.getElementById('rules-list').innerHTML = (rules || []).map((r, i) => `
+                <li class="config-item">
+                    <span>${r}</span>
+                    <button class="btn-small btn-red" onclick="deleteRule(${i})"><i class="fas fa-trash"></i></button>
+                </li>
+            `).join('');
+        }
+        async function addRule() {
+            const r = document.getElementById('rule-input').value;
+            if(!r) return;
+            const res = await fetch('/api/config/rules/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ rule: r }) });
+            const data = await res.json();
+            renderRulesList(data.rules);
+            document.getElementById('rule-input').value = "";
+        }
+        async function deleteRule(i) {
+            const res = await fetch('/api/config/rules/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ index: i }) });
+            const data = await res.json();
+            renderRulesList(data.rules);
+        }
+
+        // 5. Tags (Configuración y CRM)
+        function renderConfigTags(tags) {
+            document.getElementById('config-tags-list').innerHTML = tags.map(t => `
+                <li class="config-item">
+                    <span style="color:${t.color}; font-weight:bold;">${t.name}</span>
+                    <button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button>
+                </li>
+            `).join('');
+            
+            // También actualizar lista CRM
+            renderCRMTags(tags);
+        }
+        function renderCRMTags(tags) {
+            // Renderiza en el panel derecho del chat
+            const activeTags = chatsData.find(c => c.id === currentChat)?.labels || [];
+            document.getElementById('tag-list').innerHTML = tags.map(t => {
+                const isActive = activeTags.some(at => at.text === t.name);
+                return `<span class="tag ${isActive ? 'selected' : ''}" 
+                        style="border-color:${t.color}; color:${isActive?'#fff':t.color}; background:${isActive?t.color:'transparent'}"
+                        onclick="toggleChatTag('${t.name}', '${t.color}')">${t.name}</span>`;
+            }).join('');
+        }
+
+        async function addTag() {
+            const name = document.getElementById('tag-name').value;
+            const color = document.getElementById('tag-color').value;
+            if(!name) return;
+            await fetch('/api/tags/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name, color }) });
+            loadAllConfig(); // Recargar listas
+            document.getElementById('tag-name').value = "";
+        }
+        async function deleteTag(id) {
+            await fetch('/api/tags/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) });
+            loadAllConfig();
+        }
+        async function toggleChatTag(name, color) {
+            if(!currentChat) return;
+            const chat = chatsData.find(c => c.id === currentChat);
+            let labels = chat.labels || [];
+            if(labels.find(l => l.text === name)) labels = labels.filter(l => l.text !== name);
+            else labels = [{text: name, color}]; // Single tag mode for status
+            
+            await fetch('/api/chat/action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, action: 'set_labels', value: labels }) });
+            syncChats();
+            setTimeout(() => loadAllConfig(), 500); // Hack para refrescar UI
+        }
+
+        // 6. Shortcuts
+        function renderConfigShortcuts(shortcuts) {
+            const list = shortcuts.map(s => `
+                <li class="config-item">
+                    <span><b>${s.keyword}</b>: ${s.text.substring(0,30)}...</span>
+                    <button class="btn-small btn-red" onclick="deleteShortcut(${s.id})"><i class="fas fa-trash"></i></button>
+                </li>
+            `).join('');
+            document.getElementById('config-shortcuts-list').innerHTML = list;
+            
+            // CRM Panel
+            document.getElementById('shortcuts-list').innerHTML = shortcuts.map(s => `
+                <span class="tag" onclick="insertShortcut('${s.text}')">${s.keyword}</span>
+            `).join('');
+        }
+        async function addShortcut() {
+            const keyword = document.getElementById('short-key').value;
+            const text = document.getElementById('short-text').value;
+            if(!keyword || !text) return;
+            await fetch('/api/shortcuts/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ keyword, text }) });
+            loadAllConfig();
+            document.getElementById('short-key').value = "";
+            document.getElementById('short-text').value = "";
+        }
+        async function deleteShortcut(id) {
+            await fetch('/api/shortcuts/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) });
+            loadAllConfig();
+        }
+        function insertShortcut(text) {
+            document.getElementById('msg-input').value += text;
+        }
+
+        // --- LEADS ---
+        async function refreshLeads() {
+            const res = await fetch('/api/data/leads');
+            const leads = await res.json();
+            document.getElementById('leads-body').innerHTML = leads.map(l => {
+                let sClass = l.source === 'Web' ? 'lead-source-web' : (l.source === 'Tienda Virtual' ? 'lead-source-store' : '');
+                return `<tr>
+                    <td>${new Date(l.fecha).toLocaleDateString()}</td>
+                    <td><span class="lead-source-tag ${sClass}">${l.source || 'Orgánico'}</span></td>
+                    <td>${l.nombre}</td>
+                    <td>${l.phone}</td>
+                    <td>${l.interes}</td>
+                    <td>${l.etiqueta}</td>
+                    <td><strong>${l.status_tag || '-'}</strong></td>
+                    <td><button class="nav-btn" style="height:30px;" onclick="openChat('${l.phone}', '${l.nombre}', '')"><i class="fas fa-comment"></i></button></td>
+                </tr>`;
+            }).join('');
+        }
+
+        // --- LOAD INITIAL DATA ---
+        function loadTags(phone) {
+             // Esta funcion se llama al abrir chat, usa datos globales ya cargados en loadAllConfig
+             // La logica de render esta en renderCRMTags
+             fetch('/api/data/tags').then(r=>r.json()).then(t => renderCRMTags(t));
         }
 
     </script>
