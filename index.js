@@ -1,11 +1,10 @@
 /*
- * SERVER BACKEND - VALENTINA v25.4 (STABLE + STREAMING FIX)
+ * SERVER BACKEND - VALENTINA v25.5 (MOBILE READY + AUDIO BUFFER FIX)
  * Cliente: Importadora Casa Colombia (ICC)
  * ============================================================
- * CORRECCIONES ACUMULADAS:
- * 1. Debounce: Fix para enviar mensaje después de la espera.
- * 2. Data Sanitization: Filtro para evitar "unknown" en la DB.
- * 3. Media Streaming: Solución definitiva para Fotos y Audios (Pipe).
+ * 1. Audio Fix: Cambiado de Stream a Buffer para máxima compatibilidad con WhatsApp.
+ * 2. Mobile Ready: Backend listo para servir assets responsivos.
+ * 3. Hotfix Critical: Debounce y Sanitización de datos "unknown".
  * ============================================================
  */
 
@@ -105,7 +104,7 @@ let db, globalKnowledge = [], serverInstance;
         iniciarCronJobs();
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.4 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.5 ONLINE (Port ${PORT})`));
         
         serverInstance.on('error', (e) => { 
             if(e.code === 'EADDRINUSE') {
@@ -176,31 +175,34 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- PROXY DE MEDIOS (STREAMING - SOLUCIÓN FOTOS Y AUDIO) ---
+// --- PROXY DE MEDIOS (FUERZA BRUTA - FIX AUDIO DEFINITIVO) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     try {
-        // 1. Obtener la URL de descarga de Meta
+        // 1. Obtener URL firmada de Meta
         const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
         
-        // 2. Iniciar el Stream (Tubería) Directo
-        const response = await axios({
-            method: 'GET',
-            url: urlData.url,
-            responseType: 'stream', // CLAVE: No cargar en memoria, usar stream
-            headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
+        // 2. Descargar a Memoria (ArrayBuffer)
+        // NOTA: NO enviar headers de autorización aquí, o AWS bloqueará la descarga.
+        const response = await axios.get(urlData.url, { 
+            responseType: 'arraybuffer' 
         });
+        
+        const buffer = Buffer.from(response.data);
 
-        // 3. Configurar cabeceras correctas para el navegador
-        let contentType = response.headers['content-type'];
-        if (contentType && (contentType.includes('audio') || contentType.includes('ogg'))) {
-            contentType = 'audio/ogg'; // Forzar compatibilidad
+        // 3. Forzar MIME TYPE para Audio
+        let contentType = urlData.mime_type || 'application/octet-stream';
+        // Si parece audio, le decimos al navegador que es OGG para que Chrome lo entienda
+        if (contentType.includes('audio') || contentType.includes('ogg') || contentType.includes('opus')) {
+            contentType = 'audio/ogg';
         }
 
-        res.setHeader('Content-Type', contentType || 'application/octet-stream');
-        if(response.headers['content-length']) res.setHeader('Content-Length', response.headers['content-length']);
-
-        // 4. Conectar la tubería: Lo que entra de Meta -> sale al Navegador
-        response.data.pipe(res);
+        // 4. Enviar con caché para mejorar rendimiento
+        res.writeHead(200, { 
+            'Content-Type': contentType,
+            'Content-Length': buffer.length,
+            'Cache-Control': 'public, max-age=31536000'
+        });
+        res.end(buffer);
 
     } catch (e) { 
         console.error("Media Proxy Error:", e.message);
