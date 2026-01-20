@@ -1,7 +1,9 @@
 /*
- * SERVER BACKEND - VALENTINA v25.3 (HOTFIX CRÍTICO)
+ * SERVER BACKEND - VALENTINA v25.3 (HOTFIX "UNKNOWN" + DEBOUNCE)
  * Cliente: Importadora Casa Colombia (ICC)
- * Corrección: El bot no respondía porque faltaba la llamada a enviarWhatsApp dentro del Debounce.
+ * Correcciones: 
+ * 1. Debounce fix (enviarWhatsApp).
+ * 2. Data Sanitization (evitar que "unknown" se guarde como ciudad válida).
  * ============================================================
  */
 
@@ -268,29 +270,39 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     }
 }
 
+// --- GESTIÓN DE LEADS (CORREGIDO PARA EVITAR 'UNKNOWN') ---
 async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
-    let name = (info.nombre && info.nombre !== "null" && info.nombre !== "Cliente") ? info.nombre : fbName;
-    let datosCompletos = info.datos_completos === true;
+    // FUNCIÓN DE LIMPIEZA: Convierte basura de IA en NULL real
+    const limpiarDato = (d) => (!d || /^(unknown|null|n\/a|no menciona|cliente|pend)$/i.test(d.toString().trim())) ? null : d.trim();
+
+    let name = limpiarDato(info.nombre) || fbName;
+    let ciudadLimpia = limpiarDato(info.ciudad); // Usamos este valor limpio para la DB
+    let interesLimpio = limpiarDato(info.interes) || (oldLead ? oldLead.interes : "Consultando");
+
+    // Recalcular si los datos están completos usando los valores limpios
+    let datosCompletos = (name !== fbName && ciudadLimpia !== null);
     let farewellReset = (datosCompletos && oldLead && !oldLead.fecha) ? ", farewell_sent = 0" : "";
 
     if (oldLead) {
         await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=? ${farewellReset} WHERE id=?`, 
-            [name, info.interes || oldLead.interes, info.etiqueta || oldLead.etiqueta, new Date().toISOString(), info.ciudad || oldLead.ciudad, info.correo || oldLead.correo, oldLead.id]);
+            [name, interesLimpio, info.etiqueta || oldLead.etiqueta, new Date().toISOString(), ciudadLimpia || oldLead.ciudad, info.correo || oldLead.correo, oldLead.id]);
         await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [name, phone]);
-    } else if (info.interes || info.ciudad || info.es_lead) {
+    } else if (interesLimpio || ciudadLimpia || info.es_lead) {
         const fuente = detectarFuente(originalMsg);
         await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo, source, farewell_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`, 
-            [phone, name, info.interes || "Consultando", "Pendiente", new Date().toISOString(), info.ciudad, info.correo, fuente]);
+            [phone, name, interesLimpio, "Pendiente", new Date().toISOString(), ciudadLimpia, info.correo, fuente]);
         await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [name, phone]);
     }
 }
 
-// --- 8. CRON JOBS ---
+// --- 8. CRON JOBS (CORREGIDO PARA FILTRAR 'UNKNOWN' EN SQL) ---
 function iniciarCronJobs() {
     setInterval(async () => {
         try {
             const now = new Date();
-            const leadsTerminados = await db.all(`SELECT * FROM leads WHERE farewell_sent = 0 AND ciudad IS NOT NULL AND nombre IS NOT NULL AND fecha < datetime('now', '-1 hour') AND fecha > datetime('now', '-24 hour')`);
+            // CORRECCIÓN SQL: Excluir explícitamente 'unknown' y 'null' como texto
+            const leadsTerminados = await db.all(`SELECT * FROM leads WHERE farewell_sent = 0 AND ciudad IS NOT NULL AND LOWER(ciudad) NOT IN ('unknown', 'null', 'n/a') AND nombre IS NOT NULL AND fecha < datetime('now', '-1 hour') AND fecha > datetime('now', '-24 hour')`);
+            
             for (const l of leadsTerminados) {
                 const meta = await db.get("SELECT last_interaction FROM metadata WHERE phone = ?", [l.phone]);
                 const lastMsgDate = new Date(meta?.last_interaction || 0);
@@ -392,7 +404,7 @@ app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res)
 app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => { try { const mid = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname); if(mid) { await enviarWhatsApp(req.body.phone, { id: mid }, req.body.type); await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [req.body.phone, 'manual', `[MEDIA:${req.body.type.toUpperCase()}:${mid}]`, new Date().toISOString()]); await db.run("UPDATE metadata SET last_interaction = ? WHERE phone = ?", [new Date().toISOString(), req.body.phone]); res.json({success: true}); } else res.status(500).json({error: "Error Meta"}); } catch(e) { res.status(500).json({error: e.message}); } });
 app.post('/api/chat/send', proteger, async (req, res) => { const { phone, message } = req.body; const cleanPhone = phone.replace(/\D/g, ''); try { const sent = await enviarWhatsApp(cleanPhone, message); if(sent) { await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', message, new Date().toISOString()]); await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount, last_interaction) VALUES (?, ?, 1, 0, 0, ?) ON CONFLICT(phone) DO UPDATE SET last_interaction=excluded.last_interaction`, [cleanPhone, cleanPhone, new Date().toISOString()]); res.json({ success: true }); } else res.status(500).json({ error: "Error enviando" }); } catch(e) { res.status(500).json({ error: "Error interno" }); } });
 
-// --- WEBHOOK (AQUÍ ESTABA EL ERROR CORREGIDO) ---
+// --- WEBHOOK ---
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
 
 app.post('/webhook', async (req, res) => { 
@@ -415,15 +427,13 @@ app.post('/webhook', async (req, res) => {
             const currentData = messageQueue.get(phone) || { text: [], name: val?.contacts?.[0]?.profile.name || "Cliente" };
             currentData.text.push(userMsg); 
 
-            // TIMER CORREGIDO: AHORA SI ENVIA EL MENSAJE A WHATSAPP
+            // DEBOUNCE TIMER
             const timer = setTimeout(async () => {
                 const fullText = currentData.text.join("\n"); 
                 messageQueue.delete(phone); 
 
-                // 1. OBTENEMOS LA RESPUESTA DE GEMINI
                 const reply = await procesarConValentina(fullText, isFile ? '[ARCHIVO]' : fullText, phone, currentData.name, isFile); 
                 
-                // 2. [CRITICO] ¡LA ENVIAMOS A WHATSAPP! (Esto faltaba antes)
                 if (reply) {
                     await enviarWhatsApp(phone, reply);
                 }
