@@ -12,12 +12,12 @@
             --primary: #00a884; 
             --outgoing: #005c4b; 
             --incoming: #202c33; 
-            --dark: #111b21;     
-            --panel: #202c33;    
-            --border: #37404a;   
-            --text: #e9edef;     
+            --dark: #111b21;      
+            --panel: #202c33;     
+            --border: #37404a;    
+            --text: #e9edef;      
             --text-muted: #8696a0;
-            --accent: #53bdeb;   
+            --accent: #53bdeb;    
             --danger: #ef4444;
         }
 
@@ -127,8 +127,8 @@
         .btn-blue { background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid #3b82f6; }
 
         /* CONTEXT MENU & TOAST */
-        #context-menu { position: absolute; display: none; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 4px 20px rgba(0,0,0,0.6); border-radius: 6px; width: 180px; z-index: 1000; overflow: hidden; }
         .ctx-item { padding: 12px 15px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 10px; color: var(--text); transition: 0.2s; }
+        #context-menu { position: absolute; display: none; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 4px 20px rgba(0,0,0,0.6); border-radius: 6px; width: 180px; z-index: 1000; overflow: hidden; }
         .ctx-item:hover { background: var(--dark); color: var(--primary); }
         .ctx-divider { height: 1px; background: var(--border); margin: 0; }
         #toast { visibility: hidden; min-width: 250px; margin-left: -125px; background-color: var(--panel); color: #fff; text-align: center; border-radius: 4px; padding: 16px; position: fixed; z-index: 2000; left: 50%; bottom: 30px; font-size: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); border: 1px solid var(--primary); }
@@ -498,41 +498,76 @@
             document.getElementById('context-menu').style.display = 'none';
         }
 
-        // --- CONVERSACIÓN ---
+        // --- CONVERSACIÓN (UPDATED: LOADER + LIMPIEZA) ---
         async function openChat(phone, name, photo) {
+            // Actualización inmediata de UI
             currentChat = phone;
             document.getElementById('conversation-view').style.display = 'flex';
             document.getElementById('chat-header-name').innerText = name;
             document.getElementById('chat-header-phone').innerText = phone;
             document.getElementById('chat-header-img').src = photo || ''; 
             
+            // LIMPIEZA PREVENTIVA: Mostrar Loader y borrar chat viejo
+            const container = document.getElementById('messages-container');
+            container.innerHTML = `
+                <div style="display:flex; justify-content:center; align-items:center; height:100%; color:#8696a0; flex-direction:column; gap:10px;">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <span style="font-size:0.9rem;">Cargando historial...</span>
+                </div>`;
+
             const chatInfo = chatsData.find(c => c.id === phone);
             document.getElementById('bot-switch').checked = chatInfo ? chatInfo.botActive : true;
             
             loadLeadDataToCRM(phone);
-            await loadMessages(phone, true);
             loadTags(phone);
+            
+            // Cargar mensajes reales
+            await loadMessages(phone, true);
         }
 
+        // --- CARGA MENSAJES (UPDATED: CONCURRENCIA + AUDIO FIX) ---
         async function loadMessages(phone, scrollDown) {
-            const res = await fetch(`/api/chat-history/${phone}`);
-            const msgs = await res.json();
-            const container = document.getElementById('messages-container');
-            
-            container.innerHTML = msgs.map(m => {
-                let text = m.text;
-                if(text.includes('[MEDIA:')) {
-                    const parts = text.split(':'); 
-                    const type = parts[1];
-                    const id = parts[2].replace(']', '');
-                    if(type === 'IMAGE') text = `<img src="/api/media-proxy/${id}" style="max-width:200px; border-radius:8px;">`;
-                    else if(type === 'AUDIO') text = `<audio controls src="/api/media-proxy/${id}"></audio>`;
-                    else text = `📁 Archivo adjunto (${type})`;
-                }
-                return `<div class="msg ${m.role}">${text}<div class="msg-time">${new Date(m.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div></div>`;
-            }).join('');
+            try {
+                const res = await fetch(`/api/chat-history/${phone}`);
+                const msgs = await res.json();
+                
+                // PROTECCIÓN DE CONCURRENCIA: Si ya cambiamos de chat, cancelar renderizado
+                if(currentChat !== phone) return;
 
-            if(scrollDown) setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
+                const container = document.getElementById('messages-container');
+                
+                container.innerHTML = msgs.map(m => {
+                    let text = m.text;
+                    
+                    if(text.includes('[MEDIA:')) {
+                        const parts = text.split(':'); 
+                        const type = parts[1];
+                        const id = parts[2].replace(']', '');
+                        
+                        if(type === 'IMAGE') {
+                            // Mejor UX en imagenes
+                            text = `<img src="/api/media-proxy/${id}" style="max-width:250px; border-radius:8px; cursor:pointer;" onclick="window.open(this.src)">`;
+                        }
+                        else if(type === 'AUDIO') {
+                            // FIX AUDIO: Estructura HTML correcta para OGG
+                            text = `
+                                <audio controls controlsList="nodownload" preload="metadata" style="width: 240px; margin-top:5px;">
+                                    <source src="/api/media-proxy/${id}" type="audio/ogg">
+                                    Tu navegador no soporta el audio.
+                                </audio>`;
+                        }
+                        else {
+                            text = `<a href="/api/media-proxy/${id}" target="_blank" style="color:white; text-decoration:underline; display:flex; align-items:center; gap:5px;">
+                                    <i class="fas fa-file-download"></i> Archivo adjunto (${type})
+                                   </a>`;
+                        }
+                    }
+                    return `<div class="msg ${m.role}">${text}<div class="msg-time">${new Date(m.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div></div>`;
+                }).join('');
+
+                if(scrollDown) setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
+
+            } catch(e) { console.error("Error cargando mensajes", e); }
         }
 
         async function sendMessage() {
@@ -738,13 +773,13 @@
         async function addRule() {
             const r = document.getElementById('rule-input').value;
             if(!r) return;
-            const res = await fetch('/api/config/rules/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ rule: r }) });
+            await fetch('/api/config/rules/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ rule: r }) });
             const data = await res.json();
             renderRulesList(data.rules);
             document.getElementById('rule-input').value = "";
         }
         async function deleteRule(i) {
-            const res = await fetch('/api/config/rules/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ index: i }) });
+            await fetch('/api/config/rules/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ index: i }) });
             const data = await res.json();
             renderRulesList(data.rules);
         }
