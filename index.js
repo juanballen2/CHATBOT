@@ -1,10 +1,11 @@
 /*
- * SERVER BACKEND - VALENTINA v25.3 (STABLE + MEDIA FIX)
+ * SERVER BACKEND - VALENTINA v25.4 (STABLE + STREAMING FIX)
  * Cliente: Importadora Casa Colombia (ICC)
- * Correcciones: 
- * 1. Debounce fix (enviarWhatsApp).
- * 2. Data Sanitization (evitar "unknown").
- * 3. Media Proxy Fix (Reproducción de audios OGG corregida).
+ * ============================================================
+ * CORRECCIONES ACUMULADAS:
+ * 1. Debounce: Fix para enviar mensaje después de la espera.
+ * 2. Data Sanitization: Filtro para evitar "unknown" en la DB.
+ * 3. Media Streaming: Solución definitiva para Fotos y Audios (Pipe).
  * ============================================================
  */
 
@@ -104,7 +105,7 @@ let db, globalKnowledge = [], serverInstance;
         iniciarCronJobs();
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.3 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.4 ONLINE (Port ${PORT})`));
         
         serverInstance.on('error', (e) => { 
             if(e.code === 'EADDRINUSE') {
@@ -175,25 +176,32 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- CORRECCIÓN CRÍTICA: PROXY DE MEDIOS ---
+// --- PROXY DE MEDIOS (STREAMING - SOLUCIÓN FOTOS Y AUDIO) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     try {
-        // 1. Obtener la URL de descarga (Aquí SI enviamos Token para que Meta nos dé el link)
+        // 1. Obtener la URL de descarga de Meta
         const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
         
-        // 2. Descargar el binario (Aquí NO enviamos Token, la URL ya viene firmada)
-        // Si enviamos el header Authorization aquí, el CDN de AWS rechaza la petición.
-        const { data: buffer } = await axios.get(urlData.url, { 
-            responseType: 'arraybuffer' 
+        // 2. Iniciar el Stream (Tubería) Directo
+        const response = await axios({
+            method: 'GET',
+            url: urlData.url,
+            responseType: 'stream', // CLAVE: No cargar en memoria, usar stream
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
 
-        // 3. Forzar el tipo de contenido correcto para que el navegador reproduzca
-        let contentType = urlData.mime_type || 'application/octet-stream';
-        if (contentType.includes('audio') || contentType.includes('ogg')) contentType = 'audio/ogg'; 
+        // 3. Configurar cabeceras correctas para el navegador
+        let contentType = response.headers['content-type'];
+        if (contentType && (contentType.includes('audio') || contentType.includes('ogg'))) {
+            contentType = 'audio/ogg'; // Forzar compatibilidad
+        }
 
-        // 4. Enviar
-        res.writeHead(200, { 'Content-Length': buffer.byteLength, 'Content-Type': contentType });
-        res.end(Buffer.from(buffer)); // Importante: Convertir ArrayBuffer a Buffer de Node
+        res.setHeader('Content-Type', contentType || 'application/octet-stream');
+        if(response.headers['content-length']) res.setHeader('Content-Length', response.headers['content-length']);
+
+        // 4. Conectar la tubería: Lo que entra de Meta -> sale al Navegador
+        response.data.pipe(res);
+
     } catch (e) { 
         console.error("Media Proxy Error:", e.message);
         res.status(500).send("Error Media"); 
@@ -285,7 +293,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     }
 }
 
-// --- GESTIÓN DE LEADS (CORREGIDO PARA EVITAR 'UNKNOWN') ---
+// --- GESTIÓN DE LEADS (ANTI-UNKNOWN) ---
 async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
     const limpiarDato = (d) => (!d || /^(unknown|null|n\/a|no menciona|cliente|pend)$/i.test(d.toString().trim())) ? null : d.trim();
 
@@ -308,7 +316,7 @@ async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
     }
 }
 
-// --- 8. CRON JOBS (CORREGIDO PARA FILTRAR 'UNKNOWN' EN SQL) ---
+// --- 8. CRON JOBS (ANTI-UNKNOWN SQL) ---
 function iniciarCronJobs() {
     setInterval(async () => {
         try {
