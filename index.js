@@ -1,9 +1,10 @@
 /*
- * SERVER BACKEND - VALENTINA v25.3 (HOTFIX "UNKNOWN" + DEBOUNCE)
+ * SERVER BACKEND - VALENTINA v25.3 (STABLE + MEDIA FIX)
  * Cliente: Importadora Casa Colombia (ICC)
  * Correcciones: 
  * 1. Debounce fix (enviarWhatsApp).
- * 2. Data Sanitization (evitar que "unknown" se guarde como ciudad válida).
+ * 2. Data Sanitization (evitar "unknown").
+ * 3. Media Proxy Fix (Reproducción de audios OGG corregida).
  * ============================================================
  */
 
@@ -174,15 +175,29 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
+// --- CORRECCIÓN CRÍTICA: PROXY DE MEDIOS ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     try {
+        // 1. Obtener la URL de descarga (Aquí SI enviamos Token para que Meta nos dé el link)
         const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
-        const { data: buffer } = await axios.get(urlData.url, { headers: { 'Authorization': `Bearer ${META_TOKEN}` }, responseType: 'arraybuffer' });
+        
+        // 2. Descargar el binario (Aquí NO enviamos Token, la URL ya viene firmada)
+        // Si enviamos el header Authorization aquí, el CDN de AWS rechaza la petición.
+        const { data: buffer } = await axios.get(urlData.url, { 
+            responseType: 'arraybuffer' 
+        });
+
+        // 3. Forzar el tipo de contenido correcto para que el navegador reproduzca
         let contentType = urlData.mime_type || 'application/octet-stream';
         if (contentType.includes('audio') || contentType.includes('ogg')) contentType = 'audio/ogg'; 
-        res.writeHead(200, { 'Content-Length': buffer.length, 'Content-Type': contentType });
-        res.end(buffer);
-    } catch (e) { res.status(500).send("Error Media"); }
+
+        // 4. Enviar
+        res.writeHead(200, { 'Content-Length': buffer.byteLength, 'Content-Type': contentType });
+        res.end(Buffer.from(buffer)); // Importante: Convertir ArrayBuffer a Buffer de Node
+    } catch (e) { 
+        console.error("Media Proxy Error:", e.message);
+        res.status(500).send("Error Media"); 
+    }
 });
 
 // --- 7. CEREBRO IA ---
@@ -272,14 +287,12 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
 
 // --- GESTIÓN DE LEADS (CORREGIDO PARA EVITAR 'UNKNOWN') ---
 async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
-    // FUNCIÓN DE LIMPIEZA: Convierte basura de IA en NULL real
     const limpiarDato = (d) => (!d || /^(unknown|null|n\/a|no menciona|cliente|pend)$/i.test(d.toString().trim())) ? null : d.trim();
 
     let name = limpiarDato(info.nombre) || fbName;
-    let ciudadLimpia = limpiarDato(info.ciudad); // Usamos este valor limpio para la DB
+    let ciudadLimpia = limpiarDato(info.ciudad); 
     let interesLimpio = limpiarDato(info.interes) || (oldLead ? oldLead.interes : "Consultando");
 
-    // Recalcular si los datos están completos usando los valores limpios
     let datosCompletos = (name !== fbName && ciudadLimpia !== null);
     let farewellReset = (datosCompletos && oldLead && !oldLead.fecha) ? ", farewell_sent = 0" : "";
 
@@ -300,7 +313,6 @@ function iniciarCronJobs() {
     setInterval(async () => {
         try {
             const now = new Date();
-            // CORRECCIÓN SQL: Excluir explícitamente 'unknown' y 'null' como texto
             const leadsTerminados = await db.all(`SELECT * FROM leads WHERE farewell_sent = 0 AND ciudad IS NOT NULL AND LOWER(ciudad) NOT IN ('unknown', 'null', 'n/a') AND nombre IS NOT NULL AND fecha < datetime('now', '-1 hour') AND fecha > datetime('now', '-24 hour')`);
             
             for (const l of leadsTerminados) {
