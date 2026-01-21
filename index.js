@@ -1,12 +1,12 @@
 /*
- * SERVER BACKEND - VALENTINA v25.15 (MEDIA AUTH RESTORED)
+ * SERVER BACKEND - VALENTINA v25.17 (MASTER PRODUCTION)
  * Cliente: Importadora Casa Colombia (ICC)
  * ============================================================
- * FIX FINAL IMÁGENES:
- * Se restaura el Header 'Authorization' en la descarga del Proxy.
- * Explicación: La API v21 de Meta exige el Token para descargar el binario.
- * Al combinar esto con el 'Cache Buster' del Frontend (?t=...),
- * las imágenes cargarán correctamente.
+ * CARACTERÍSTICAS TÉCNICAS:
+ * 1. Media Proxy: Lógica v2 (Obtener URL con Auth -> Descargar binario SIN Auth).
+ * 2. Toggle Actions: SQL CASE WHEN (Soluciona el botón Desarchivar/Fijar).
+ * 3. Seguridad: Debounce (8s), Anti-Unknown, Sanitización de Leads.
+ * 4. Integridad: Código completo, sin minificar.
  * ============================================================
  */
 
@@ -24,20 +24,22 @@ const { open } = require('sqlite');
 
 // --- 1. CONFIGURACIÓN DEL SERVIDOR ---
 const app = express();
-app.set('trust proxy', 1);
+app.set('trust proxy', 1); // Necesario para despliegues en la nube (Render, Railway, etc.)
 
+// Aumentamos límites para manejar archivos grandes en base64 si es necesario
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors());
 
+// Configuración de carga de archivos (Memoria RAM)
 const upload = multer({ 
     storage: multer.memoryStorage(),
-    limits: { fileSize: 100 * 1024 * 1024 } 
+    limits: { fileSize: 100 * 1024 * 1024 } // 100MB Límite
 });
 
-// COLA DE MENSAJES (DEBOUNCE)
+// --- SISTEMA DE COLA DE MENSAJES (DEBOUNCE) ---
 const messageQueue = new Map(); 
-const DEBOUNCE_TIME = 8000; 
+const DEBOUNCE_TIME = 8000; // 8 Segundos de espera para agrupar mensajes
 
 // --- 2. VARIABLES DE ENTORNO ---
 const API_KEY = process.env.GEMINI_API_KEY; 
@@ -55,11 +57,13 @@ app.use(session({
     secret: SESSION_SECRET, 
     resave: false, 
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 86400000 } 
+    cookie: { secure: false, maxAge: 86400000 } // 24 Horas
 }));
 
+// Middleware de Seguridad (Login)
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
+// Protección de archivos JSON directos
 app.use((req, res, next) => {
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
         return res.status(403).send('🚫 Acceso Denegado');
@@ -80,6 +84,7 @@ let db, globalKnowledge = [], serverInstance;
             driver: sqlite3.Database 
         });
 
+        // Definición de Tablas (Esquema Completo)
         const tables = [
             `history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT)`,
             `leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT UNIQUE, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT, source TEXT DEFAULT 'Organico', status_tag TEXT, farewell_sent INTEGER DEFAULT 0)`,
@@ -94,6 +99,7 @@ let db, globalKnowledge = [], serverInstance;
 
         for (const t of tables) await db.exec(`CREATE TABLE IF NOT EXISTS ${t}`);
 
+        // Migraciones de compatibilidad
         const migrations = ['photoUrl', 'archived', 'unreadCount', 'last_interaction'].map(c => `ALTER TABLE metadata ADD COLUMN ${c}`);
         migrations.push("ALTER TABLE leads ADD COLUMN source TEXT DEFAULT 'Organico'");
         migrations.push("ALTER TABLE leads ADD COLUMN status_tag TEXT");
@@ -106,7 +112,7 @@ let db, globalKnowledge = [], serverInstance;
         iniciarCronJobs();
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.15 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.17 ONLINE (Port ${PORT})`));
         
         serverInstance.on('error', (e) => { 
             if(e.code === 'EADDRINUSE') {
@@ -144,7 +150,7 @@ function detectarFuente(mensaje) {
     return 'Organico';
 }
 
-// --- 6. META API ---
+// --- 6. META API (WHATSAPP) ---
 async function uploadToMeta(buffer, mime, name) {
     try {
         const form = new FormData();
@@ -177,23 +183,21 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- 7. PROXY DE MEDIOS (FIXED: AUTH RESTORED) ---
+// --- 7. PROXY DE MEDIOS (FIX DEFINITIVO) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     try {
-        // 1. Obtener URL firmada
+        // PASO 1: Obtener URL firmada (Con Token)
         const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
         
-        // 2. Descargar Binario (CON AUTH - REQUERIDO)
+        // PASO 2: Descargar Binario (SIN TOKEN - Porque la URL ya es de Amazon firmada)
         const response = await axios.get(urlData.url, { 
-            headers: { 'Authorization': `Bearer ${META_TOKEN}` }, 
             responseType: 'arraybuffer' 
         });
         
-        // 3. Servir
+        // PASO 3: Servir con tipo MIME original
         let contentType = urlData.mime_type || 'application/octet-stream';
-        // Ajuste solo para audios (para que descarguen bien)
         if (contentType.includes('audio') || contentType.includes('ogg')) contentType = 'audio/ogg'; 
         
         res.writeHead(200, { 
@@ -208,7 +212,7 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     }
 });
 
-// --- 8. CEREBRO IA ---
+// --- 8. CEREBRO IA (GEMINI) ---
 function limpiarRespuesta(txt) {
     let clean = txt.replace(/```json([\s\S]*?)```|{([\s\S]*?)}/gi, "").trim(); 
     return clean.replace(/[\r\n]+/g, "\n").trim();
@@ -293,7 +297,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     }
 }
 
-// --- 9. GESTIÓN DE LEADS ---
+// --- 9. GESTIÓN DE LEADS (SANITIZACIÓN) ---
 async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
     const limpiarDato = (d) => (!d || /^(unknown|null|n\/a|no menciona|cliente|pend)$/i.test(d.toString().trim())) ? null : d.trim();
 
@@ -381,6 +385,7 @@ app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     res.json(await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]));
 });
 
+// --- ACCIONES DE CHAT (TOGGLE FIX) ---
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
     const cleanPhone = phone.replace(/\D/g, ''); 
@@ -391,6 +396,7 @@ app.post('/api/chat/action', proteger, async (req, res) => {
         const tagPrincipal = value.length > 0 ? value[0].text : "Sin Etiqueta";
         await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [tagPrincipal, cleanPhone]);
     }
+    // SQL CASE WHEN para alternar estado
     else if(action === 'toggle_pin') await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET pinned = CASE WHEN pinned = 1 THEN 0 ELSE 1 END", [cleanPhone]);
     else if(action === 'toggle_archive') await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET archived = CASE WHEN archived = 1 THEN 0 ELSE 1 END", [cleanPhone]);
     res.json({success:true});
@@ -448,7 +454,6 @@ app.post('/webhook', async (req, res) => {
             const currentData = messageQueue.get(phone) || { text: [], name: val?.contacts?.[0]?.profile.name || "Cliente" };
             currentData.text.push(userMsg); 
 
-            // DEBOUNCE TIMER
             const timer = setTimeout(async () => {
                 const fullText = currentData.text.join("\n"); 
                 messageQueue.delete(phone); 
