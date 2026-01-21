@@ -1,11 +1,12 @@
 /*
- * SERVER BACKEND - VALENTINA v25.8 (RESPONSIVE BACKEND + AUDIO FIX RESTORED)
+ * SERVER BACKEND - VALENTINA v25.9 (FULL PRODUCTION STABLE)
  * Cliente: Importadora Casa Colombia (ICC)
  * ============================================================
- * 1. Audio Fix: Restaurada la lógica de confiar en urlData.mime_type (evita corte al 1er seg).
- * 2. Foto Fix: Mantiene Auth headers y ArrayBuffer (fotos cargan HD).
- * 3. Mobile Ready: Estructura lista.
- * 4. Logic Fixes: Debounce & Anti-Unknown activos.
+ * CHANGELOG:
+ * 1. FIXED: Media Proxy (Fotos y Audios) usando Auth Headers + ArrayBuffer.
+ * 2. FIXED: Data Sanitization (Evita guardar "unknown" en la DB).
+ * 3. FIXED: Debounce (Cola de mensajes para evitar respuestas dobles).
+ * 4. FEATURE: Todas las rutas API restauradas y verificadas.
  * ============================================================
  */
 
@@ -23,20 +24,23 @@ const { open } = require('sqlite');
 
 // --- 1. CONFIGURACIÓN DEL SERVIDOR ---
 const app = express();
-app.set('trust proxy', 1);
+app.set('trust proxy', 1); // Necesario para despliegues en la nube (Render, Heroku, etc.)
 
+// Aumentamos el límite para recibir imágenes/archivos grandes en base64 si fuera necesario
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors());
 
+// Configuración de Multer para subida de archivos (CSV, Logos, Adjuntos)
 const upload = multer({ 
     storage: multer.memoryStorage(),
-    limits: { fileSize: 100 * 1024 * 1024 } 
+    limits: { fileSize: 100 * 1024 * 1024 } // 100MB Límite
 });
 
-// COLA DE MENSAJES (DEBOUNCE)
+// --- SISTEMA DE COLA DE MENSAJES (DEBOUNCE) ---
+// Evita que el bot responda 3 veces si el usuario manda 3 mensajes seguidos en 1 segundo.
 const messageQueue = new Map(); 
-const DEBOUNCE_TIME = 8000; 
+const DEBOUNCE_TIME = 8000; // 8 Segundos de espera para agrupar mensajes
 
 // --- 2. VARIABLES DE ENTORNO ---
 const API_KEY = process.env.GEMINI_API_KEY; 
@@ -54,11 +58,13 @@ app.use(session({
     secret: SESSION_SECRET, 
     resave: false, 
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 86400000 } 
+    cookie: { secure: false, maxAge: 86400000 } // 24 Horas
 }));
 
+// Middleware de Protección de Rutas
 const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
 
+// Middleware de Seguridad para archivos JSON/Data directos
 app.use((req, res, next) => {
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
         return res.status(403).send('🚫 Acceso Denegado');
@@ -66,19 +72,22 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- 4. BASE DE DATOS ---
+// --- 4. BASE DE DATOS E INICIALIZACIÓN ---
 let db, globalKnowledge = [], serverInstance;
 
 (async () => {
     try {
+        // Asegurar que existe el directorio de datos
         const DATA_DIR = path.resolve(__dirname, 'data');
         if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
         
+        // Conexión a SQLite
         db = await open({ 
             filename: path.join(DATA_DIR, 'database.db'), 
             driver: sqlite3.Database 
         });
 
+        // Definición de Tablas
         const tables = [
             `history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT)`,
             `leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT UNIQUE, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT, source TEXT DEFAULT 'Organico', status_tag TEXT, farewell_sent INTEGER DEFAULT 0)`,
@@ -93,6 +102,7 @@ let db, globalKnowledge = [], serverInstance;
 
         for (const t of tables) await db.exec(`CREATE TABLE IF NOT EXISTS ${t}`);
 
+        // Migraciones (Actualización de estructura DB para versiones viejas)
         const migrations = ['photoUrl', 'archived', 'unreadCount', 'last_interaction'].map(c => `ALTER TABLE metadata ADD COLUMN ${c}`);
         migrations.push("ALTER TABLE leads ADD COLUMN source TEXT DEFAULT 'Organico'");
         migrations.push("ALTER TABLE leads ADD COLUMN status_tag TEXT");
@@ -101,14 +111,19 @@ let db, globalKnowledge = [], serverInstance;
 
         for (const m of migrations) { try { await db.exec(m); } catch(e){} }
 
+        // Cargar inventario en memoria RAM para búsqueda rápida
         await refreshKnowledge();
+        
+        // Iniciar tareas programadas (Cron)
         iniciarCronJobs();
 
+        // Iniciar Servidor
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.8 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.9 ONLINE (Port ${PORT})`));
         
         serverInstance.on('error', (e) => { 
             if(e.code === 'EADDRINUSE') {
+                console.log("Puerto ocupado, reintentando...");
                 setTimeout(() => { serverInstance.close(); serverInstance.listen(PORT); }, 1000); 
             }
         });
@@ -123,6 +138,7 @@ async function refreshKnowledge() {
             searchable: r.searchable, 
             data: JSON.parse(r.raw_data) 
         })); 
+        console.log("Inventario recargado en memoria.");
     } catch(e) { globalKnowledge = []; }
 }
 
@@ -143,7 +159,7 @@ function detectarFuente(mensaje) {
     return 'Organico';
 }
 
-// --- 6. META API ---
+// --- 6. META API (CONEXIÓN CON WHATSAPP) ---
 async function uploadToMeta(buffer, mime, name) {
     try {
         const form = new FormData();
@@ -151,9 +167,15 @@ async function uploadToMeta(buffer, mime, name) {
         form.append('file', buffer, { filename: name, contentType: mime });
         form.append('type', type); 
         form.append('messaging_product', 'whatsapp');
-        const r = await axios.post(`https://graph.facebook.com/v21.0/${PHONE_ID}/media`, form, { headers: { 'Authorization': `Bearer ${META_TOKEN}`, ...form.getHeaders() } });
+        
+        const r = await axios.post(`https://graph.facebook.com/v21.0/${PHONE_ID}/media`, form, { 
+            headers: { 'Authorization': `Bearer ${META_TOKEN}`, ...form.getHeaders() } 
+        });
         return r.data.id;
-    } catch (e) { return null; }
+    } catch (e) { 
+        console.error("Upload Error:", e.message);
+        return null; 
+    }
 }
 
 async function enviarWhatsApp(to, content, type = "text") {
@@ -167,7 +189,9 @@ async function enviarWhatsApp(to, content, type = "text") {
         } else {
             payload[type] = { link: content };
         }
-        await axios.post(`https://graph.facebook.com/v21.0/${PHONE_ID}/messages`, payload, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
+        await axios.post(`https://graph.facebook.com/v21.0/${PHONE_ID}/messages`, payload, { 
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
+        });
         console.log(`✅ Mensaje enviado a ${to}`);
         return true;
     } catch (e) { 
@@ -176,52 +200,66 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- PROXY DE MEDIOS (LÓGICA ORIGINAL RESTAURADA + BUFFER FIX) ---
+// --- 7. PROXY DE MEDIOS (FIX CRÍTICO V25.9) ---
+// Este endpoint permite al frontend ver fotos y escuchar audios sin tener el Token de Meta.
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     try {
-        // 1. Obtener datos del archivo (Tipo MIME correcto está AQUÍ)
-        const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
+        // PASO 1: Obtener la URL de descarga y el tipo de archivo real desde Meta
+        // Aquí SÍ enviamos el Token.
+        const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
+        });
         
-        // 2. Descargar con Auth (necesario para v21) y ArrayBuffer (para no corromper)
+        // PASO 2: Descargar el archivo binario (Buffer)
+        // Aquí TAMBIÉN enviamos el Token (necesario para API v21+).
+        // Usamos 'arraybuffer' para evitar que Node corrompa los bytes de la imagen/audio.
         const response = await axios.get(urlData.url, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` },
             responseType: 'arraybuffer' 
         });
         
-        // Convertir a Buffer de Node (Crucial para que Express lo envíe bien)
+        // Convertimos a Buffer de Node para poder enviarlo
         const buffer = Buffer.from(response.data);
 
-        // 3. USAR EL MIME TYPE DE LA PRIMERA LLAMADA (urlData)
-        // Esta es la clave: AWS puede decir "octet-stream", pero Meta sabía que era "audio/ogg".
+        // PASO 3: Determinar el Content-Type correcto
+        // Priorizamos lo que nos dijo Meta en el Paso 1 (urlData.mime_type)
         let contentType = urlData.mime_type || 'application/octet-stream';
         
-        // Refuerzo para Chrome/Edge
-        if (contentType.includes('audio') || contentType.includes('ogg')) contentType = 'audio/ogg'; 
-        
+        // Fix específico para audios de WhatsApp en Chrome: Forzar audio/ogg
+        if (contentType.includes('audio') || contentType.includes('ogg') || contentType.includes('opus')) {
+            contentType = 'audio/ogg'; 
+        }
+
+        // PASO 4: Enviar al navegador
         res.writeHead(200, { 
-            'Content-Length': buffer.length, 
-            'Content-Type': contentType 
+            'Content-Type': contentType,
+            'Content-Length': buffer.length,
+            'Cache-Control': 'public, max-age=31536000' // Cachear por 1 año
         });
         res.end(buffer);
 
     } catch (e) { 
-        console.error("Media Error:", e.message);
-        res.status(500).send("Error"); 
+        console.error("Media Proxy Error:", e.message);
+        res.status(500).send("Error recuperando archivo multimedia"); 
     }
 });
 
-// --- 7. CEREBRO IA ---
+// --- 8. CEREBRO IA ---
 function limpiarRespuesta(txt) {
+    // Elimina bloques de código JSON para dejar solo el texto limpio para el usuario
     let clean = txt.replace(/```json([\s\S]*?)```|{([\s\S]*?)}/gi, "").trim(); 
     return clean.replace(/[\r\n]+/g, "\n").trim();
 }
 
 async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFile = false) {
+    // Registrar mensaje del usuario
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', dbMsg, new Date().toISOString()]);
+    // Actualizar metadatos (no leído, hora)
     await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [phone, new Date().toISOString()]);
 
+    // Verificar si el bot está activo para este usuario
     const bot = await db.get("SELECT active FROM bot_status WHERE phone = ?", [phone]);
-    if (bot && bot.active === 0) return null;
+    if (bot && bot.active === 0) return null; // Bot apagado manualmente
 
     if (isFile) {
         const rFile = "¡Recibido! 📁 Lo reviso enseguida.";
@@ -229,6 +267,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         return rFile;
     }
 
+    // Preparar Contexto IA
     let personalidadLorena = await getCfg('bot_prompt');
     const configUsar = (personalidadLorena && personalidadLorena.length > 5) ? personalidadLorena : DEFAULT_PROMPT;
     const webSources = await db.all("SELECT summary FROM knowledge_sources WHERE active = 1");
@@ -238,6 +277,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const history = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [phone])).reverse();
     const lead = await db.get("SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
     
+    // Construir memoria del Lead
     let memoriaDatos = `DATOS CAPTURADOS:\n- Teléfono: ${phone}\n`;
     if (lead) {
         if (lead.nombre && lead.nombre !== "Cliente" && lead.nombre !== "null") memoriaDatos += `- Nombre: ${lead.nombre}\n`;
@@ -247,6 +287,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         memoriaDatos += "- ESTADO: Cliente Nuevo (Falta Nombre y Ciudad).";
     }
 
+    // Búsqueda simple en inventario
     const busqueda = aiMsg.toLowerCase().split(" ").slice(0,3).join(" ");
     const stock = globalKnowledge.filter(i => (i.searchable||"").toLowerCase().includes(busqueda)).slice(0,5);
 
@@ -262,7 +303,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     === REGLAS TÉCNICAS ADICIONALES ===
     ${techRules.join("\n")}
     Horario: ${biz.hours || '8am-6pm'}
-    === HISTORIAL ===
+    === HISTORIAL RECIENTE ===
     ${JSON.stringify(history)}
     === INSTRUCCIÓN OBLIGATORIA DEL SISTEMA ===
     Al final de tu respuesta, SIEMPRE analiza si tienes datos nuevos del cliente y genera este JSON oculto.
@@ -275,6 +316,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: promptFinal }] }] });
         const raw = r.data.candidates[0].content.parts[0].text;
         
+        // Extraer JSON oculto
         const match = raw.match(/```json([\s\S]*?)```|{([\s\S]*?)}/);
         if (match) {
             try {
@@ -295,15 +337,18 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     }
 }
 
-// --- GESTIÓN DE LEADS (ANTI-UNKNOWN) ---
+// --- 9. GESTIÓN DE LEADS (SANITIZACIÓN DE DATOS) ---
 async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
+    // Función para convertir "unknown", "null", "n/a" en NULL real de base de datos
     const limpiarDato = (d) => (!d || /^(unknown|null|n\/a|no menciona|cliente|pend)$/i.test(d.toString().trim())) ? null : d.trim();
 
     let name = limpiarDato(info.nombre) || fbName;
     let ciudadLimpia = limpiarDato(info.ciudad); 
     let interesLimpio = limpiarDato(info.interes) || (oldLead ? oldLead.interes : "Consultando");
 
+    // Verificar completitud real
     let datosCompletos = (name !== fbName && ciudadLimpia !== null);
+    // Solo resetear el mensaje de despedida si los datos están realmente completos
     let farewellReset = (datosCompletos && oldLead && !oldLead.fecha) ? ", farewell_sent = 0" : "";
 
     if (oldLead) {
@@ -318,23 +363,25 @@ async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
     }
 }
 
-// --- 8. CRON JOBS (ANTI-UNKNOWN SQL) ---
+// --- 10. CRON JOBS ---
 function iniciarCronJobs() {
     setInterval(async () => {
         try {
             const now = new Date();
+            // Despedida automática: Solo si hay ciudad válida (evita "unknown")
             const leadsTerminados = await db.all(`SELECT * FROM leads WHERE farewell_sent = 0 AND ciudad IS NOT NULL AND LOWER(ciudad) NOT IN ('unknown', 'null', 'n/a') AND nombre IS NOT NULL AND fecha < datetime('now', '-1 hour') AND fecha > datetime('now', '-24 hour')`);
             
             for (const l of leadsTerminados) {
                 const meta = await db.get("SELECT last_interaction FROM metadata WHERE phone = ?", [l.phone]);
                 const lastMsgDate = new Date(meta?.last_interaction || 0);
-                if (now - lastMsgDate > 30 * 60 * 1000) {
+                if (now - lastMsgDate > 30 * 60 * 1000) { // 30 mins inactividad
                     const msgDespedida = "Hasta pronto, uno de nuestros ejecutivos comerciales se contactará con usted 🤝";
                     await enviarWhatsApp(l.phone, msgDespedida);
                     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [l.phone, 'bot', msgDespedida, now.toISOString()]);
                     await db.run("UPDATE leads SET farewell_sent = 1 WHERE id = ?", [l.id]);
                 }
             }
+            // Recuperación de Carrito (Usuarios olvidados)
             const olvidados = await db.all(`SELECT m.phone FROM metadata m LEFT JOIN leads l ON m.phone = l.phone WHERE l.id IS NULL AND m.last_interaction < datetime('now', '-24 hour') AND m.last_interaction > datetime('now', '-48 hour') AND m.archived = 0`);
             for (const o of olvidados) {
                 const lastMsg = await db.get("SELECT role FROM history WHERE phone = ? ORDER BY id DESC LIMIT 1", [o.phone]);
@@ -346,22 +393,25 @@ function iniciarCronJobs() {
                 }
             }
         } catch (e) { console.error("Cron Error:", e); }
-    }, 60000 * 5); 
+    }, 60000 * 5); // Cada 5 minutos
 }
 
-// --- 9. RUTAS API ---
+// --- 11. RUTAS API ---
 app.post('/auth', (req, res) => {
     if (req.body.user === ADMIN_USER && req.body.pass === ADMIN_PASS) { req.session.isLogged = true; res.json({success:true}); } else { res.status(401).json({success:false}); }
 });
 app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
+
+// Configuración
 app.get('/api/config/prompt', proteger, async (req, res) => res.json({ prompt: await getCfg('bot_prompt', DEFAULT_PROMPT) }));
 app.post('/api/config/prompt', proteger, async (req, res) => { await setCfg('bot_prompt', req.body.prompt); res.json({success:true}); });
 app.get('/api/data/web-knowledge', proteger, async (req, res) => { res.json(await db.all("SELECT * FROM knowledge_sources ORDER BY id DESC")); });
 app.post('/api/data/web-knowledge', proteger, async (req, res) => { await db.run("INSERT INTO knowledge_sources (type, url, summary, date) VALUES (?, ?, ?, ?)", ['web', req.body.url, req.body.summary, new Date().toLocaleString()]); res.json({success:true}); });
 app.post('/api/data/web-knowledge/delete', proteger, async (req, res) => { await db.run("DELETE FROM knowledge_sources WHERE id = ?", [req.body.id]); res.json({success:true}); });
 
+// Chats y Mensajes
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
         const view = req.query.view || 'active';
@@ -369,8 +419,10 @@ app.get('/api/chats-full', proteger, async (req, res) => {
         let whereClause = '(m.archived = 0 OR m.archived IS NULL)';
         if (view === 'archived') whereClause = 'm.archived = 1';
         else if (view === 'unread') whereClause = 'm.unreadCount > 0 AND (m.archived = 0 OR m.archived IS NULL)';
+        
         let params = [];
         if (search) { whereClause += ` AND (m.contactName LIKE ? OR h.phone LIKE ? OR h.text LIKE ?)`; params.push(search, search, search); }
+        
         const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, b.active as botActive, l.source, l.status_tag FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN leads l ON h.phone = l.phone WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 50`;
         const rows = await db.all(query, params);
         res.json(rows.map(r => ({ id: r.id, name: r.contactName || r.id, lastMessage: { text: r.lastText, time: r.timestamp }, botActive: r.botActive !== 0, pinned: r.pinned === 1, archived: r.archived === 1, unreadCount: r.unreadCount || 0, labels: JSON.parse(r.labels || "[]"), photoUrl: r.photoUrl, timestamp: r.timestamp, source: r.source, statusTag: r.status_tag })));
@@ -382,6 +434,7 @@ app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     res.json(await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]));
 });
 
+// Acciones de Chat (Pin, Archivar, Etiquetas)
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
     const cleanPhone = phone.replace(/\D/g, ''); 
@@ -397,6 +450,7 @@ app.post('/api/chat/action', proteger, async (req, res) => {
     res.json({success:true});
 });
 
+// Datos generales
 app.get('/api/data/:type', proteger, async (req, res) => {
     const t = req.params.type;
     if (t === 'leads') res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
@@ -407,6 +461,7 @@ app.get('/api/data/:type', proteger, async (req, res) => {
     else res.json([]);
 });
 
+// Uploads y Configuración
 app.post('/api/config/logo', proteger, upload.single('file'), async (req, res) => { await setCfg('logo_url', `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`); res.json({success:true}); });
 app.post('/api/config/biz/save', proteger, async (req, res) => { await setCfg('biz_profile', {name:req.body.name, hours:req.body.hours}); if(req.body.website_data) await setCfg('website_data', req.body.website_data); res.json({success:true}); });
 app.post('/api/tags/add', proteger, async (req, res) => { await db.run("INSERT INTO global_tags (name, color) VALUES (?, ?)", [req.body.name, req.body.color]); res.json({success:true}); });
@@ -423,18 +478,21 @@ app.post('/api/knowledge/delete', proteger, async (req, res) => { const i=await 
 app.post('/api/knowledge/clear', proteger, async (req, res) => { await db.run("DELETE FROM inventory"); await refreshKnowledge(); res.json({success:true}); });
 app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res) => { try { const rows = parse(req.file.buffer.toString('utf-8'), { columns: true }); for (const row of rows) await db.run("INSERT OR IGNORE INTO inventory (searchable, raw_data) VALUES (?, ?)", [Object.values(row).join(" "), JSON.stringify(row)]); await refreshKnowledge(); res.json({ success: true }); } catch(e) { res.status(500).json({ error: "CSV Error" }); } });
 
+// Envío de Archivos manual
 app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => { try { const mid = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname); if(mid) { await enviarWhatsApp(req.body.phone, { id: mid }, req.body.type); await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [req.body.phone, 'manual', `[MEDIA:${req.body.type.toUpperCase()}:${mid}]`, new Date().toISOString()]); await db.run("UPDATE metadata SET last_interaction = ? WHERE phone = ?", [new Date().toISOString(), req.body.phone]); res.json({success: true}); } else res.status(500).json({error: "Error Meta"}); } catch(e) { res.status(500).json({error: e.message}); } });
+// Envío de Texto manual
 app.post('/api/chat/send', proteger, async (req, res) => { const { phone, message } = req.body; const cleanPhone = phone.replace(/\D/g, ''); try { const sent = await enviarWhatsApp(cleanPhone, message); if(sent) { await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', message, new Date().toISOString()]); await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount, last_interaction) VALUES (?, ?, 1, 0, 0, ?) ON CONFLICT(phone) DO UPDATE SET last_interaction=excluded.last_interaction`, [cleanPhone, cleanPhone, new Date().toISOString()]); res.json({ success: true }); } else res.status(500).json({ error: "Error enviando" }); } catch(e) { res.status(500).json({ error: "Error interno" }); } });
 
-// --- WEBHOOK ---
+// --- WEBHOOK (RECEPCIÓN DE MENSAJES) ---
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
 
 app.post('/webhook', async (req, res) => { 
-    res.sendStatus(200); 
+    res.sendStatus(200); // Responder OK inmediatamente a Meta
     try { 
         const val = req.body.entry?.[0]?.changes?.[0]?.value; 
         const msg = val?.messages?.[0]; 
         
+        // Guardar nombre del contacto si existe
         if (val?.contacts?.[0]) await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName WHERE addedManual=0", [val.contacts[0].wa_id, val.contacts[0].profile.name]); 
         
         if(msg) { 
@@ -442,20 +500,24 @@ app.post('/webhook', async (req, res) => {
             let userMsg = msg.text?.body || "";
             let isFile = false;
 
+            // Manejo de Multimedia entrante
             if(msg.type !== 'text') { isFile = true; userMsg = `[MEDIA:${msg.type.toUpperCase()}:${msg[msg.type].id}]`; } 
             
+            // --- LÓGICA DEBOUNCE (Esperar mensajes consecutivos) ---
             if (messageQueue.has(phone)) { clearTimeout(messageQueue.get(phone).timer); }
 
             const currentData = messageQueue.get(phone) || { text: [], name: val?.contacts?.[0]?.profile.name || "Cliente" };
             currentData.text.push(userMsg); 
 
-            // DEBOUNCE TIMER
+            // Timer: Espera 8 segundos antes de enviar al AI
             const timer = setTimeout(async () => {
                 const fullText = currentData.text.join("\n"); 
                 messageQueue.delete(phone); 
 
+                // Procesar con Gemini
                 const reply = await procesarConValentina(fullText, isFile ? '[ARCHIVO]' : fullText, phone, currentData.name, isFile); 
                 
+                // Enviar respuesta a WhatsApp
                 if (reply) {
                     await enviarWhatsApp(phone, reply);
                 }
