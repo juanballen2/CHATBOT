@@ -3,20 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v25.14 - Dashboard Final</title>
+    <title>Valentina v25.15 - Dashboard Final</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
     <style>
         :root {
-            --primary: #00a884; --outgoing: #005c4b; --incoming: #202c33; 
-            --dark: #111b21; --panel: #202c33; --border: #37404a; 
-            --text: #e9edef; --text-muted: #8696a0; --accent: #53bdeb; --danger: #ef4444;
+            --primary: #00a884; 
+            --outgoing: #005c4b; 
+            --incoming: #202c33; 
+            --dark: #111b21;      
+            --panel: #202c33;     
+            --border: #37404a;    
+            --text: #e9edef;      
+            --text-muted: #8696a0;
+            --accent: #53bdeb;    
+            --danger: #ef4444;
         }
+
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        
         body { background-color: var(--dark); color: var(--text); height: 100vh; display: flex; overflow: hidden; }
 
-        /* --- LAYOUT & SIDEBAR --- */
+        /* --- LAYOUT --- */
         .sidebar { width: 60px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 100; flex-shrink: 0; }
         .nav-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: transparent; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; margin-bottom: 15px; transition: 0.2s; }
         .nav-btn:hover, .nav-btn.active { background: #374248; color: var(--primary); }
@@ -123,7 +132,6 @@
         .btn-red { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; }
         .btn-blue { background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid #3b82f6; }
 
-        /* CONTEXT MENU & TOAST */
         #context-menu { position: absolute; display: none; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 4px 20px rgba(0,0,0,0.6); border-radius: 6px; width: 180px; z-index: 1000; overflow: hidden; }
         .ctx-item { padding: 12px 15px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 10px; color: var(--text); transition: 0.2s; }
         .ctx-item:hover { background: var(--dark); color: var(--primary); }
@@ -255,6 +263,7 @@
 
         <div id="tab-config" class="view-panel" style="overflow-y:auto;">
             <div class="config-container">
+                
                 <div>
                     <div class="config-header-main">🧠 Cerebro Artificial (IA)</div>
                     <div class="config-row">
@@ -274,6 +283,7 @@
                             <ul class="item-list" id="web-knowledge-list"></ul>
                         </div>
                     </div>
+                    
                     <div class="config-row" style="margin-top:20px;">
                         <div class="config-card">
                             <div class="config-header">Inventario (CSV)</div>
@@ -293,6 +303,7 @@
                         </div>
                     </div>
                 </div>
+
                 <div>
                     <div class="config-header-main">🛠️ Herramientas Comerciales</div>
                     <div class="config-row">
@@ -315,6 +326,7 @@
                             <ul class="item-list" id="config-shortcuts-list"></ul>
                         </div>
                     </div>
+                    
                      <div class="config-card" style="margin-top:20px;">
                         <div class="config-header">Perfil de Empresa</div>
                         <div style="display:flex; gap:10px;">
@@ -325,6 +337,7 @@
                         <div style="margin-top:10px; font-size:0.8rem;">Logo: <input type="file" onchange="uploadLogo(this)"></div>
                     </div>
                 </div>
+
             </div>
         </div>
 
@@ -351,7 +364,7 @@
             startSyncLoop();
             refreshLeads();
             loadAllConfig();
-            loadTagFilterOptions(); 
+            loadTagFilterOptions();
             document.addEventListener('click', () => document.getElementById('context-menu').style.display = 'none');
         };
 
@@ -477,11 +490,11 @@
             e.preventDefault();
             contextPhone = phone;
             const menu = document.getElementById('context-menu');
+            
             const pinBtn = document.getElementById('ctx-pin');
             pinBtn.innerHTML = isPinned ? '<i class="fas fa-thumbtack" style="opacity:0.5"></i> <span>Desfijar</span>' : '<i class="fas fa-thumbtack"></i> <span>Fijar</span>';
             pinBtn.onclick = () => contextAction('toggle_pin');
 
-            // Lógica de Archivar/Desarchivar Visual
             const archBtn = document.getElementById('ctx-archive');
             archBtn.innerHTML = isArchived ? '<i class="fas fa-box-open"></i> <span>Desarchivar</span>' : '<i class="fas fa-archive"></i> <span>Archivar</span>';
             archBtn.onclick = () => contextAction('toggle_archive');
@@ -551,13 +564,22 @@
                         const parts = text.split(':'); 
                         const type = parts[1];
                         const id = parts[2].replace(']', '');
-                        const mediaUrl = `/api/media-proxy/${id}`;
+                        const mediaUrl = `/api/media-proxy/${id}?t=${new Date().getTime()}`;
 
                         if(type === 'IMAGE') {
-                            text = `<div style="display:flex; flex-direction:column; gap:5px;"><img src="${mediaUrl}" style="max-width:250px; border-radius:8px; cursor:pointer;" onclick="window.open(this.src)"></div>`;
+                            text = `
+                                <div style="display:flex; flex-direction:column; gap:5px;">
+                                    <img src="${mediaUrl}" 
+                                         style="max-width:250px; border-radius:8px; cursor:pointer; min-height: 100px; background-color: #0b141a; border: 1px solid #333;" 
+                                         onclick="window.open(this.src)"
+                                         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                                    <div style="display:none; color:#ef4444; font-size:0.8rem; padding:10px; border:1px dashed #ef4444; border-radius:8px;">
+                                        ⚠️ No cargó imagen.
+                                        <a href="${mediaUrl}" target="_blank" style="color:#53bdeb; display:block; margin-top:5px;">Abrir enlace directo</a>
+                                    </div>
+                                </div>`;
                         }
                         else if(type === 'AUDIO') {
-                            // MODO SEGURO: Botón de descarga
                             text = `
                                 <a href="${mediaUrl}" download="nota_voz_${id}.ogg" style="display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:10px 15px; border-radius:8px; text-decoration:none; color:white; width:fit-content; border:1px solid var(--border);">
                                     <i class="fas fa-play-circle" style="font-size:1.8rem; color:#53bdeb;"></i>
