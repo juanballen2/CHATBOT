@@ -3,29 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v25.17 - Dashboard Final</title>
+    <title>Valentina v25.20 - Audio Player Pro</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
     <style>
         :root {
-            --primary: #00a884; 
-            --outgoing: #005c4b; 
-            --incoming: #202c33; 
-            --dark: #111b21;      
-            --panel: #202c33;     
-            --border: #37404a;    
-            --text: #e9edef;      
-            --text-muted: #8696a0;
-            --accent: #53bdeb;    
-            --danger: #ef4444;
+            --primary: #00a884; --outgoing: #005c4b; --incoming: #202c33; 
+            --dark: #111b21; --panel: #202c33; --border: #37404a; 
+            --text: #e9edef; --text-muted: #8696a0; --accent: #53bdeb; --danger: #ef4444;
         }
-
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-        
         body { background-color: var(--dark); color: var(--text); height: 100vh; display: flex; overflow: hidden; }
 
-        /* --- LAYOUT & SIDEBAR --- */
+        /* --- LAYOUT --- */
         .sidebar { width: 60px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 100; flex-shrink: 0; }
         .nav-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: transparent; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; margin-bottom: 15px; transition: 0.2s; }
         .nav-btn:hover, .nav-btn.active { background: #374248; color: var(--primary); }
@@ -73,6 +64,14 @@
         .msg.manual { background: #005c4b; }
         .msg-time { font-size: 0.65rem; opacity: 0.6; text-align: right; margin-top: 2px; margin-left: 10px; float: right; }
 
+        /* --- AUDIO PLAYER STYLE --- */
+        .audio-player { display: flex; align-items: center; gap: 12px; width: 260px; padding: 5px; }
+        .play-btn { width: 34px; height: 34px; background: #53bdeb; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; flex-shrink: 0; }
+        .audio-progress { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+        .progress-bar-bg { width: 100%; height: 4px; background: rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; position: relative; }
+        .progress-fill { height: 100%; width: 0%; background: #53bdeb; transition: width 0.1s linear; }
+        .audio-time { font-size: 0.7rem; color: #ccc; font-family: monospace; }
+
         .input-area { padding: 10px 16px; background: var(--panel); display: flex; gap: 10px; align-items: center; }
         .input-box { flex: 1; padding: 12px; border-radius: 8px; border: none; background: #2a3942; color: white; outline: none; resize: none; height: 42px; font-size: 0.95rem; }
         .send-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: var(--primary); color: #fff; cursor: pointer; font-size: 1.1rem; }
@@ -116,20 +115,6 @@
         .lead-source-tag { padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; background: #2f3445; border: 1px solid #444; }
         .lead-source-web { color: #60a5fa; border-color: #1e3a8a; background: rgba(30, 58, 138, 0.2); }
         .lead-source-store { color: #f472b6; border-color: #831843; background: rgba(131, 24, 67, 0.2); }
-
-        .config-header-main { font-size: 1.2rem; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 10px; color: var(--text-muted); }
-        .config-row { display: flex; gap: 20px; flex-wrap: wrap; }
-        .config-card { background: var(--panel); padding: 20px; border-radius: 10px; border: 1px solid var(--border); flex: 1; min-width: 300px; margin-bottom: 20px; }
-        .config-header { font-size: 1rem; font-weight: 600; margin-bottom: 15px; color: var(--primary); display: flex; justify-content: space-between; align-items: center; }
-        .code-editor { width: 100%; height: 120px; background: #111b21; color: #25d366; padding: 10px; border-radius: 5px; font-family: monospace; border: 1px solid var(--border); resize: vertical; font-size: 0.85rem; }
-        .item-list { list-style: none; margin-top: 10px; max-height: 200px; overflow-y: auto; }
-        .config-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; background: var(--dark); border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-        .config-input-group { display: flex; gap: 10px; margin-bottom: 10px; }
-        .cfg-input { flex: 1; padding: 8px; border-radius: 5px; border: 1px solid var(--border); background: var(--dark); color: white; }
-        .btn-small { padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; font-size: 0.8rem; font-weight: 500; }
-        .btn-green { background: var(--outgoing); color: #fff; }
-        .btn-red { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; }
-        .btn-blue { background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid #3b82f6; }
 
         #context-menu { position: absolute; display: none; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 4px 20px rgba(0,0,0,0.6); border-radius: 6px; width: 180px; z-index: 1000; overflow: hidden; }
         .ctx-item { padding: 12px 15px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 10px; color: var(--text); transition: 0.2s; }
@@ -280,6 +265,8 @@
         let chatsData = [];
         let contextPhone = null;
         let searchTimeout = null;
+        // VARIABLE NUEVA: Controla que solo suene un audio a la vez
+        let currentlyPlaying = null; 
 
         window.onload = function() {
             startSyncLoop();
@@ -308,6 +295,8 @@
         function closeChat() {
             document.body.classList.remove('mobile-chat-open');
             currentChat = null;
+            // Detener audio si cierras el chat
+            if(currentlyPlaying) { currentlyPlaying.pause(); currentlyPlaying = null; }
         }
 
         function debounceSearch(val) {
@@ -469,6 +458,7 @@
             await loadMessages(phone, true);
         }
 
+        // --- CARGA MENSAJES (PLAYER HÍBRIDO) ---
         async function loadMessages(phone, scrollDown) {
             try {
                 const res = await fetch(`/api/chat-history/${phone}`);
@@ -477,7 +467,8 @@
                 if(currentChat !== phone) return;
 
                 const container = document.getElementById('messages-container');
-                
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent); // Detectar iPhone
+
                 container.innerHTML = msgs.map(m => {
                     let text = m.text;
                     
@@ -485,10 +476,7 @@
                         const parts = text.split(':'); 
                         const type = parts[1];
                         const id = parts[2].replace(']', '');
-                        
-                        // FIX: Cache Buster ESTÁTICO (?v=3)
-                        // Esto rompe la caché vieja (rota) pero evita el parpadeo infinito.
-                        const mediaUrl = `/api/media-proxy/${id}?v=3`;
+                        const mediaUrl = `/api/media-proxy/${id}?v=final`; // Imagen estática
 
                         if(type === 'IMAGE') {
                             text = `
@@ -504,14 +492,37 @@
                                 </div>`;
                         }
                         else if(type === 'AUDIO') {
-                            text = `
-                                <a href="${mediaUrl}" download="nota_voz_${id}.ogg" style="display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:10px 15px; border-radius:8px; text-decoration:none; color:white; width:fit-content; border:1px solid var(--border);">
-                                    <i class="fas fa-play-circle" style="font-size:1.8rem; color:#53bdeb;"></i>
-                                    <div style="display:flex; flex-direction:column;">
-                                        <span style="font-weight:600; font-size:0.9rem;">Nota de Voz</span>
-                                        <span style="font-size:0.75rem; color:var(--text-muted);">Clic para descargar y oír 🎵</span>
-                                    </div>
-                                </a>`;
+                            if(isIOS) {
+                                // MODO SEGURO PARA IPHONE
+                                text = `
+                                    <a href="${mediaUrl}" download="nota_voz_${id}.ogg" style="display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:10px 15px; border-radius:8px; text-decoration:none; color:white; width:fit-content; border:1px solid var(--border);">
+                                        <i class="fas fa-download" style="font-size:1.5rem; color:#53bdeb;"></i>
+                                        <div style="display:flex; flex-direction:column;">
+                                            <span style="font-weight:600; font-size:0.9rem;">Nota de Voz</span>
+                                            <span style="font-size:0.75rem; color:var(--text-muted);">Descargar para oír (iPhone)</span>
+                                        </div>
+                                    </a>`;
+                            } else {
+                                // MODO PLAYER PRO (PC/ANDROID)
+                                text = `
+                                    <div class="audio-player">
+                                        <button class="play-btn" id="btn-${id}" onclick="togglePlay('${id}')">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                        <div class="audio-progress">
+                                            <div class="progress-bar-bg">
+                                                <div id="prog-${id}" class="progress-fill"></div>
+                                            </div>
+                                            <div id="time-${id}" class="audio-time">0:00</div>
+                                        </div>
+                                        <audio id="audio-${id}" src="${mediaUrl}" 
+                                               ontimeupdate="updateProgress('${id}')" 
+                                               onended="resetPlayer('${id}')"
+                                               onplaying="onAudioStart('${id}')"
+                                               onerror="playerError('${id}')"
+                                               style="display:none;"></audio>
+                                    </div>`;
+                            }
                         }
                         else {
                             text = `
@@ -532,6 +543,69 @@
             } catch(e) { console.error("Error cargando mensajes", e); }
         }
 
+        // --- FUNCIONES DEL REPRODUCTOR (LOGICA) ---
+        function togglePlay(id) {
+            const audio = document.getElementById(`audio-${id}`);
+            const btn = document.getElementById(`btn-${id}`);
+            
+            if (audio.paused) {
+                // Detener otros audios
+                if (currentlyPlaying && currentlyPlaying !== audio) {
+                    currentlyPlaying.pause();
+                    // Resetear icono del anterior
+                    const oldId = currentlyPlaying.id.replace('audio-', '');
+                    resetPlayer(oldId);
+                }
+                
+                // Mostrar spinner de carga
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                audio.play();
+                currentlyPlaying = audio;
+            } else {
+                audio.pause();
+                btn.innerHTML = '<i class="fas fa-play"></i>';
+            }
+        }
+
+        function onAudioStart(id) {
+            // Cuando ya empieza a sonar de verdad
+            const btn = document.getElementById(`btn-${id}`);
+            if(btn) btn.innerHTML = '<i class="fas fa-pause"></i>';
+        }
+
+        function updateProgress(id) {
+            const audio = document.getElementById(`audio-${id}`);
+            const bar = document.getElementById(`prog-${id}`);
+            const time = document.getElementById(`time-${id}`);
+            
+            if (audio && audio.duration) {
+                const percent = (audio.currentTime / audio.duration) * 100;
+                bar.style.width = percent + '%';
+                
+                // Formato tiempo 0:00
+                const mins = Math.floor(audio.currentTime / 60);
+                const secs = Math.floor(audio.currentTime % 60);
+                time.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+            }
+        }
+
+        function resetPlayer(id) {
+            const btn = document.getElementById(`btn-${id}`);
+            const bar = document.getElementById(`prog-${id}`);
+            if(btn) btn.innerHTML = '<i class="fas fa-play"></i>';
+            if(bar) bar.style.width = '0%';
+        }
+
+        function playerError(id) {
+            const btn = document.getElementById(`btn-${id}`);
+            if(btn) {
+                btn.style.background = '#ef4444';
+                btn.innerHTML = '<i class="fas fa-exclamation"></i>';
+                alert("Error al reproducir. Intenta descargar el archivo.");
+            }
+        }
+
+        // ... RESTO DE FUNCIONES (Send, Config, Leads) ...
         async function sendMessage() {
             const txt = document.getElementById('msg-input').value;
             if(!txt) return;
