@@ -3,29 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v25.15 - Dashboard Final</title>
+    <title>Valentina v25.16 - Dashboard Final</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
     <style>
         :root {
-            --primary: #00a884; 
-            --outgoing: #005c4b; 
-            --incoming: #202c33; 
-            --dark: #111b21;      
-            --panel: #202c33;     
-            --border: #37404a;    
-            --text: #e9edef;      
-            --text-muted: #8696a0;
-            --accent: #53bdeb;    
-            --danger: #ef4444;
+            --primary: #00a884; --outgoing: #005c4b; --incoming: #202c33; 
+            --dark: #111b21; --panel: #202c33; --border: #37404a; 
+            --text: #e9edef; --text-muted: #8696a0; --accent: #53bdeb; --danger: #ef4444;
         }
-
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-        
         body { background-color: var(--dark); color: var(--text); height: 100vh; display: flex; overflow: hidden; }
 
-        /* --- LAYOUT --- */
+        /* --- LAYOUT & SIDEBAR --- */
         .sidebar { width: 60px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 100; flex-shrink: 0; }
         .nav-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: transparent; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; margin-bottom: 15px; transition: 0.2s; }
         .nav-btn:hover, .nav-btn.active { background: #374248; color: var(--primary); }
@@ -59,7 +50,6 @@
         .chat-preview { display: flex; justify-content: space-between; align-items: center; margin-top: 3px; }
         .chat-last-msg { font-size: 0.85rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
         .badge { background: var(--primary); color: #000; font-size: 0.7rem; padding: 2px 6px; border-radius: 10px; font-weight: bold; min-width: 18px; text-align: center; }
-        .pin-icon { color: var(--text-muted); font-size: 0.8rem; transform: rotate(45deg); margin-left: 5px; }
         .mini-tags { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
         .mini-tag { font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; color: #000; font-weight: 600; }
 
@@ -79,7 +69,7 @@
         .send-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: var(--primary); color: #fff; cursor: pointer; font-size: 1.1rem; }
         .attach-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1.3rem; cursor: pointer; }
 
-        /* --- MOBILE RESPONSIVE --- */
+        /* --- MOBILE --- */
         @media (max-width: 768px) {
             .sidebar { display: none; } 
             .chat-list { width: 100%; position: absolute; z-index: 10; height: 100%; }
@@ -89,11 +79,11 @@
         }
         #back-btn { display: none; }
 
-        /* --- CRM & CONFIG --- */
+        /* --- CRM --- */
         .crm-panel { width: 320px; border-left: 1px solid var(--border); background: var(--dark); padding: 20px; overflow-y: auto; display: none; }
         .crm-panel.open { display: block; position: absolute; right: 0; height: 100%; z-index: 30; border-left: 1px solid var(--primary); background: var(--dark); box-shadow: -5px 0 15px rgba(0,0,0,0.5); }
         .crm-section { margin-bottom: 30px; background: var(--panel); padding: 15px; border-radius: 8px; }
-        .crm-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 12px; font-weight: 600; }
+        .crm-title { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; font-weight: 600; }
         .crm-input { width: 100%; padding: 8px 10px; margin-bottom: 10px; background: var(--dark); border: 1px solid var(--border); color: white; border-radius: 4px; font-size: 0.9rem; }
         .crm-input:focus { border-color: var(--primary); outline: none; }
         .tag-container { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -157,7 +147,6 @@
     </div>
 
     <div class="main-area">
-        
         <div id="tab-chat" class="view-panel active">
             <div class="chat-list">
                 <div class="chat-header">
@@ -212,7 +201,6 @@
                         </label>
                     </div>
                 </div>
-
                 <div class="crm-section">
                     <div class="crm-title">📝 Datos del Cliente</div>
                     <input id="crm-name" class="crm-input" placeholder="Nombre">
@@ -221,16 +209,8 @@
                     <input id="crm-interest" class="crm-input" placeholder="Interés">
                     <button class="btn-small btn-green" style="width:100%" onclick="saveLeadManual()">Guardar Datos</button>
                 </div>
-
-                <div class="crm-section">
-                    <div class="crm-title">🏷️ Etiquetar</div>
-                    <div class="tag-container" id="tag-list"></div>
-                </div>
-
-                <div class="crm-section">
-                    <div class="crm-title">⚡ Respuestas Rápidas</div>
-                    <div class="tag-container" id="shortcuts-list"></div>
-                </div>
+                <div class="crm-section"><div class="crm-title">🏷️ Etiquetar</div><div class="tag-container" id="tag-list"></div></div>
+                <div class="crm-section"><div class="crm-title">⚡ Respuestas Rápidas</div><div class="tag-container" id="shortcuts-list"></div></div>
             </div>
         </div>
 
@@ -244,18 +224,7 @@
                     </div>
                 </div>
                 <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Fecha</th>
-                            <th>Fuente</th>
-                            <th>Nombre</th>
-                            <th>Teléfono</th>
-                            <th>Interés</th>
-                            <th>Etiqueta IA</th>
-                            <th>Etiqueta Comercial</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>Fecha</th><th>Fuente</th><th>Nombre</th><th>Teléfono</th><th>Interés</th><th>Etiqueta IA</th><th>Etiqueta Comercial</th><th>Acciones</th></tr></thead>
                     <tbody id="leads-body"></tbody>
                 </table>
             </div>
@@ -263,84 +232,27 @@
 
         <div id="tab-config" class="view-panel" style="overflow-y:auto;">
             <div class="config-container">
-                
                 <div>
                     <div class="config-header-main">🧠 Cerebro Artificial (IA)</div>
                     <div class="config-row">
-                        <div class="config-card">
-                            <div class="config-header">
-                                <span>Personalidad (Prompt)</span>
-                                <button class="btn-small btn-green" onclick="savePrompt()"><i class="fas fa-save"></i></button>
-                            </div>
-                            <textarea id="prompt-editor" class="code-editor"></textarea>
-                        </div>
-                        <div class="config-card">
-                            <div class="config-header">Conocimiento Web</div>
-                            <div class="config-input-group">
-                                <input type="text" id="web-url-input" class="cfg-input" placeholder="URL...">
-                                <button class="btn-small btn-blue" onclick="scanWeb()">+</button>
-                            </div>
-                            <ul class="item-list" id="web-knowledge-list"></ul>
-                        </div>
+                        <div class="config-card"><div class="config-header"><span>Personalidad (Prompt)</span><button class="btn-small btn-green" onclick="savePrompt()"><i class="fas fa-save"></i></button></div><textarea id="prompt-editor" class="code-editor"></textarea></div>
+                        <div class="config-card"><div class="config-header">Conocimiento Web</div><div class="config-input-group"><input type="text" id="web-url-input" class="cfg-input" placeholder="URL..."><button class="btn-small btn-blue" onclick="scanWeb()">+</button></div><ul class="item-list" id="web-knowledge-list"></ul></div>
                     </div>
-                    
                     <div class="config-row" style="margin-top:20px;">
-                        <div class="config-card">
-                            <div class="config-header">Inventario (CSV)</div>
-                            <div style="display:flex; gap:10px;">
-                                <input type="file" id="csv-upload" accept=".csv" style="color:white; width:70%;">
-                                <button class="btn-small btn-green" onclick="uploadCSV()">Cargar</button>
-                                <button class="btn-small btn-red" onclick="clearInventory()">Borrar</button>
-                            </div>
-                        </div>
-                        <div class="config-card">
-                            <div class="config-header">Reglas de Negocio</div>
-                            <div class="config-input-group">
-                                <input type="text" id="rule-input" class="cfg-input" placeholder="Regla...">
-                                <button class="btn-small btn-blue" onclick="addRule()">+</button>
-                            </div>
-                            <ul class="item-list" id="rules-list"></ul>
-                        </div>
+                        <div class="config-card"><div class="config-header">Inventario (CSV)</div><div style="display:flex; gap:10px;"><input type="file" id="csv-upload" accept=".csv" style="color:white; width:70%;"><button class="btn-small btn-green" onclick="uploadCSV()">Cargar</button><button class="btn-small btn-red" onclick="clearInventory()">Borrar</button></div></div>
+                        <div class="config-card"><div class="config-header">Reglas de Negocio</div><div class="config-input-group"><input type="text" id="rule-input" class="cfg-input" placeholder="Regla..."><button class="btn-small btn-blue" onclick="addRule()">+</button></div><ul class="item-list" id="rules-list"></ul></div>
                     </div>
                 </div>
-
                 <div>
                     <div class="config-header-main">🛠️ Herramientas Comerciales</div>
                     <div class="config-row">
-                        <div class="config-card">
-                            <div class="config-header">Etiquetas</div>
-                            <div class="config-input-group">
-                                <input type="text" id="tag-name" class="cfg-input" placeholder="Nombre">
-                                <input type="color" id="tag-color" value="#00a884" style="width:40px; border:none; background:transparent;">
-                                <button class="btn-small btn-green" onclick="addTag()">Crear</button>
-                            </div>
-                            <ul class="item-list" id="config-tags-list"></ul>
-                        </div>
-                        <div class="config-card">
-                            <div class="config-header">Atajos (Respuestas Rápidas)</div>
-                            <div class="config-input-group">
-                                <input type="text" id="short-key" class="cfg-input" placeholder="/hola" style="width:30%;">
-                                <input type="text" id="short-text" class="cfg-input" placeholder="Texto...">
-                                <button class="btn-small btn-green" onclick="addShortcut()">+</button>
-                            </div>
-                            <ul class="item-list" id="config-shortcuts-list"></ul>
-                        </div>
+                        <div class="config-card"><div class="config-header">Etiquetas</div><div class="config-input-group"><input type="text" id="tag-name" class="cfg-input" placeholder="Nombre"><input type="color" id="tag-color" value="#00a884" style="width:40px; border:none; background:transparent;"><button class="btn-small btn-green" onclick="addTag()">Crear</button></div><ul class="item-list" id="config-tags-list"></ul></div>
+                        <div class="config-card"><div class="config-header">Atajos (Respuestas Rápidas)</div><div class="config-input-group"><input type="text" id="short-key" class="cfg-input" placeholder="/hola" style="width:30%;"><input type="text" id="short-text" class="cfg-input" placeholder="Texto..."><button class="btn-small btn-green" onclick="addShortcut()">+</button></div><ul class="item-list" id="config-shortcuts-list"></ul></div>
                     </div>
-                    
-                     <div class="config-card" style="margin-top:20px;">
-                        <div class="config-header">Perfil de Empresa</div>
-                        <div style="display:flex; gap:10px;">
-                            <input id="biz-name" class="cfg-input" placeholder="Nombre Empresa">
-                            <input id="biz-hours" class="cfg-input" placeholder="Horario">
-                            <button class="btn-small btn-green" onclick="saveBizConfig()">Guardar</button>
-                        </div>
-                        <div style="margin-top:10px; font-size:0.8rem;">Logo: <input type="file" onchange="uploadLogo(this)"></div>
-                    </div>
+                     <div class="config-card" style="margin-top:20px;"><div class="config-header">Perfil de Empresa</div><div style="display:flex; gap:10px;"><input id="biz-name" class="cfg-input" placeholder="Nombre Empresa"><input id="biz-hours" class="cfg-input" placeholder="Horario"><button class="btn-small btn-green" onclick="saveBizConfig()">Guardar</button></div><div style="margin-top:10px; font-size:0.8rem;">Logo: <input type="file" onchange="uploadLogo(this)"></div></div>
                 </div>
-
             </div>
         </div>
-
     </div>
 
     <div id="context-menu">
@@ -548,6 +460,7 @@
             await loadMessages(phone, true);
         }
 
+        // --- CARGA MENSAJES (CORRECCIÓN ANTI-TITILEO) ---
         async function loadMessages(phone, scrollDown) {
             try {
                 const res = await fetch(`/api/chat-history/${phone}`);
@@ -564,7 +477,10 @@
                         const parts = text.split(':'); 
                         const type = parts[1];
                         const id = parts[2].replace(']', '');
-                        const mediaUrl = `/api/media-proxy/${id}?t=${new Date().getTime()}`;
+                        
+                        // FIX: Cache Buster ESTÁTICO (?v=2)
+                        // Esto rompe la caché vieja (rota) pero evita el parpadeo infinito.
+                        const mediaUrl = `/api/media-proxy/${id}?v=2`;
 
                         if(type === 'IMAGE') {
                             text = `
