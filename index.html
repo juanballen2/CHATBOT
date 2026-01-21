@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v25.20 - Audio Player Pro</title>
+    <title>Valentina v25.26 - Final Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
@@ -16,18 +16,24 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
         body { background-color: var(--dark); color: var(--text); height: 100vh; display: flex; overflow: hidden; }
 
-        /* --- LAYOUT --- */
+        /* --- SIDEBAR --- */
         .sidebar { width: 60px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 100; flex-shrink: 0; }
         .nav-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: transparent; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; margin-bottom: 15px; transition: 0.2s; }
         .nav-btn:hover, .nav-btn.active { background: #374248; color: var(--primary); }
         .nav-bottom { margin-top: auto; padding-bottom: 20px; }
 
-        .main-area { flex: 1; display: flex; position: relative; overflow: hidden; }
+        /* --- MAIN AREA & TABS (FIXED) --- */
+        .main-area { flex: 1; display: flex; position: relative; overflow: hidden; background: var(--dark); }
         .view-panel { display: none; width: 100%; height: 100%; }
-        .view-panel.active { display: flex; }
         
+        /* CHAT: Horizontal (Lista | Conversación) */
+        #tab-chat.active { display: flex; flex-direction: row; }
+        
+        /* LEADS & CONFIG: Vertical con Scroll (Corrección Visual) */
+        #tab-leads.active, #tab-config.active { display: flex; flex-direction: column; overflow-y: auto; }
+
         /* --- CHAT LIST --- */
-        .chat-list { width: 380px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--dark); flex-shrink: 0; transition: transform 0.3s ease; }
+        .chat-list { width: 380px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--dark); flex-shrink: 0; }
         .chat-header { padding: 10px 15px; border-bottom: 1px solid var(--border); background: var(--panel); }
         .search-container { display: flex; gap: 8px; margin-bottom: 10px; }
         .search-bar { flex: 1; padding: 8px 12px; background: var(--dark); border: 1px solid var(--border); color: var(--text); border-radius: 8px; outline: none; font-size: 0.9rem; }
@@ -64,39 +70,30 @@
         .msg.manual { background: #005c4b; }
         .msg-time { font-size: 0.65rem; opacity: 0.6; text-align: right; margin-top: 2px; margin-left: 10px; float: right; }
 
-        /* --- AUDIO PLAYER STYLE --- */
-        .audio-player { display: flex; align-items: center; gap: 12px; width: 260px; padding: 5px; }
+        /* --- AUDIO PLAYER (COMBO VISUAL) --- */
+        .audio-wrapper { display: flex; align-items: center; gap: 8px; }
+        .audio-player { display: flex; align-items: center; gap: 12px; width: 220px; padding: 5px; background: rgba(0,0,0,0.1); border-radius: 8px; }
         .play-btn { width: 34px; height: 34px; background: #53bdeb; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; flex-shrink: 0; }
         .audio-progress { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
-        .progress-bar-bg { width: 100%; height: 4px; background: rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; position: relative; }
+        .progress-bar-bg { width: 100%; height: 4px; background: rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; }
         .progress-fill { height: 100%; width: 0%; background: #53bdeb; transition: width 0.1s linear; }
         .audio-time { font-size: 0.7rem; color: #ccc; font-family: monospace; }
+        .btn-download-audio { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--text-muted); text-decoration: none; transition: 0.2s; background: rgba(0,0,0,0.2); }
+        .btn-download-audio:hover { background: rgba(255,255,255,0.1); color: white; }
 
         .input-area { padding: 10px 16px; background: var(--panel); display: flex; gap: 10px; align-items: center; }
         .input-box { flex: 1; padding: 12px; border-radius: 8px; border: none; background: #2a3942; color: white; outline: none; resize: none; height: 42px; font-size: 0.95rem; }
         .send-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: var(--primary); color: #fff; cursor: pointer; font-size: 1.1rem; }
         .attach-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1.3rem; cursor: pointer; }
 
-        /* --- MOBILE --- */
-        @media (max-width: 768px) {
-            .sidebar { display: none; } 
-            .chat-list { width: 100%; position: absolute; z-index: 10; height: 100%; }
-            .chat-area { width: 100%; position: absolute; z-index: 20; transform: translateX(100%); transition: transform 0.3s ease; background-color: var(--dark); }
-            body.mobile-chat-open .chat-area { transform: translateX(0); }
-            #back-btn { display: block !important; margin-right: 15px; font-size: 1.2rem; cursor: pointer; color: var(--text-muted); }
-        }
-        #back-btn { display: none; }
-
         /* --- CRM & CONFIG --- */
-        .crm-panel { width: 320px; border-left: 1px solid var(--border); background: var(--dark); padding: 20px; overflow-y: auto; display: none; }
+        .crm-panel { width: 320px; border-left: 1px solid var(--border); background: var(--dark); padding: 20px; overflow-y: auto; display: none; flex-shrink: 0; }
         .crm-panel.open { display: block; position: absolute; right: 0; height: 100%; z-index: 30; border-left: 1px solid var(--primary); background: var(--dark); box-shadow: -5px 0 15px rgba(0,0,0,0.5); }
         .crm-section { margin-bottom: 30px; background: var(--panel); padding: 15px; border-radius: 8px; }
         .crm-title { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; font-weight: 600; }
         .crm-input { width: 100%; padding: 8px 10px; margin-bottom: 10px; background: var(--dark); border: 1px solid var(--border); color: white; border-radius: 4px; font-size: 0.9rem; }
-        .crm-input:focus { border-color: var(--primary); outline: none; }
         .tag-container { display: flex; flex-wrap: wrap; gap: 6px; }
         .tag { padding: 4px 10px; border-radius: 99px; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border); color: var(--text-muted); transition: 0.2s; }
-        .tag:hover { background: rgba(255,255,255,0.05); }
         .tag.selected { border-color: var(--primary); background: rgba(0, 168, 132, 0.2); color: #fff; }
         
         .switch-container { display: flex; align-items: center; justify-content: space-between; }
@@ -107,25 +104,45 @@
         input:checked + .slider { background-color: var(--primary); }
         input:checked + .slider:before { transform: translateX(16px); }
 
-        .leads-container, .config-container { padding: 30px; width: 100%; overflow: auto; }
+        .leads-container, .config-container { padding: 30px; width: 100%; box-sizing: border-box; }
         .data-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9rem; }
         .data-table th, .data-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border); }
         .data-table th { color: var(--text-muted); font-weight: 500; }
         .data-table tr:hover { background: rgba(255,255,255,0.02); }
-        .lead-source-tag { padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; background: #2f3445; border: 1px solid #444; }
-        .lead-source-web { color: #60a5fa; border-color: #1e3a8a; background: rgba(30, 58, 138, 0.2); }
-        .lead-source-store { color: #f472b6; border-color: #831843; background: rgba(131, 24, 67, 0.2); }
+        
+        .config-header-main { font-size: 1.2rem; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 10px; color: var(--text-muted); }
+        .config-row { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
+        .config-card { background: var(--panel); padding: 20px; border-radius: 10px; border: 1px solid var(--border); flex: 1; min-width: 300px; margin-bottom: 20px; }
+        .config-header { font-size: 1rem; font-weight: 600; margin-bottom: 15px; color: var(--primary); display: flex; justify-content: space-between; align-items: center; }
+        .code-editor { width: 100%; height: 120px; background: #111b21; color: #25d366; padding: 10px; border-radius: 5px; font-family: monospace; border: 1px solid var(--border); resize: vertical; font-size: 0.85rem; }
+        .config-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; background: var(--dark); border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        .config-input-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        .cfg-input { flex: 1; padding: 8px; border-radius: 5px; border: 1px solid var(--border); background: var(--dark); color: white; }
+        .btn-small { padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; font-size: 0.8rem; font-weight: 500; }
+        .btn-green { background: var(--outgoing); color: #fff; }
+        .btn-red { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; }
+        .btn-blue { background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid #3b82f6; }
 
         #context-menu { position: absolute; display: none; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 4px 20px rgba(0,0,0,0.6); border-radius: 6px; width: 180px; z-index: 1000; overflow: hidden; }
         .ctx-item { padding: 12px 15px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 10px; color: var(--text); transition: 0.2s; }
         .ctx-item:hover { background: var(--dark); color: var(--primary); }
         .ctx-divider { height: 1px; background: var(--border); margin: 0; }
+        
         #toast { visibility: hidden; min-width: 250px; margin-left: -125px; background-color: var(--panel); color: #fff; text-align: center; border-radius: 4px; padding: 16px; position: fixed; z-index: 2000; left: 50%; bottom: 30px; font-size: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); border: 1px solid var(--primary); }
         #toast.show { visibility: visible; -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
         @-webkit-keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
         @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
         @-webkit-keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
         @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+        
+        @media (max-width: 768px) {
+            .sidebar { display: none; } 
+            .chat-list { width: 100%; position: absolute; z-index: 10; height: 100%; }
+            .chat-area { width: 100%; position: absolute; z-index: 20; transform: translateX(100%); transition: transform 0.3s ease; background-color: var(--dark); }
+            body.mobile-chat-open .chat-area { transform: translateX(0); }
+            #back-btn { display: block !important; margin-right: 15px; font-size: 1.2rem; cursor: pointer; color: var(--text-muted); }
+        }
+        #back-btn { display: none; }
     </style>
 </head>
 <body>
@@ -141,6 +158,7 @@
     </div>
 
     <div class="main-area">
+        
         <div id="tab-chat" class="view-panel active">
             <div class="chat-list">
                 <div class="chat-header">
@@ -224,7 +242,7 @@
             </div>
         </div>
 
-        <div id="tab-config" class="view-panel" style="overflow-y:auto;">
+        <div id="tab-config" class="view-panel">
             <div class="config-container">
                 <div>
                     <div class="config-header-main">🧠 Cerebro Artificial (IA)</div>
@@ -260,29 +278,11 @@
     <div id="toast">Notificación</div>
 
     <script>
-        let currentChat = null;
-        let currentFilter = 'active';
-        let chatsData = [];
-        let contextPhone = null;
-        let searchTimeout = null;
-        // VARIABLE NUEVA: Controla que solo suene un audio a la vez
-        let currentlyPlaying = null; 
+        let currentChat = null, currentFilter = 'active', chatsData = [], contextPhone = null, searchTimeout = null;
+        let currentlyPlaying = null;
 
-        window.onload = function() {
-            startSyncLoop();
-            refreshLeads();
-            loadAllConfig();
-            loadTagFilterOptions();
-            document.addEventListener('click', () => document.getElementById('context-menu').style.display = 'none');
-        };
-
-        function showToast(msg) {
-            const x = document.getElementById("toast");
-            x.innerText = msg;
-            x.className = "show";
-            setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
-        }
-
+        window.onload = function() { startSyncLoop(); refreshLeads(); loadAllConfig(); loadTagFilterOptions(); document.addEventListener('click', () => document.getElementById('context-menu').style.display = 'none'); };
+        function showToast(msg) { const x = document.getElementById("toast"); x.innerText = msg; x.className = "show"; setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000); }
         function switchTab(tab) {
             document.querySelectorAll('.view-panel').forEach(el => el.classList.remove('active'));
             document.getElementById('tab-' + tab).classList.add('active');
@@ -291,574 +291,111 @@
             if(tab === 'leads') refreshLeads();
         }
         function toggleCRM() { document.getElementById('crm-panel').classList.toggle('open'); }
-
-        function closeChat() {
-            document.body.classList.remove('mobile-chat-open');
-            currentChat = null;
-            // Detener audio si cierras el chat
+        function closeChat() { 
+            document.body.classList.remove('mobile-chat-open'); 
+            currentChat = null; 
             if(currentlyPlaying) { currentlyPlaying.pause(); currentlyPlaying = null; }
         }
-
-        function debounceSearch(val) {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => syncChats(), 300);
-        }
-
-        function startNewChat() {
-            const phone = prompt("Ingresa el número (con código de país, ej: 57300...):");
-            if (!phone) return;
-            const name = prompt("Nombre del Cliente:") || phone;
-            openChat(phone.replace(/\D/g, ''), name, '');
-        }
-
-        function startSyncLoop() {
-            syncChats();
-            setInterval(syncChats, 3000); 
-            setInterval(() => { if(currentChat) loadMessages(currentChat, false); }, 3000);
-        }
-
-        async function loadTagFilterOptions() {
-            try {
-                const tags = await (await fetch('/api/data/tags')).json();
-                const select = document.getElementById('tag-filter');
-                select.innerHTML = '<option value="">Todas</option>' + tags.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
-            } catch(e) {}
-        }
-
-        async function syncChats() {
-            try {
-                const search = document.getElementById('main-search').value;
-                const res = await fetch(`/api/chats-full?view=${currentFilter}&search=${search}`);
-                chatsData = await res.json();
-                
-                const tagFilter = document.getElementById('tag-filter').value;
-                if(tagFilter) {
-                    chatsData = chatsData.filter(c => c.labels && c.labels.some(l => (l.text || l) === tagFilter));
-                }
-
-                chatsData.sort((a, b) => new Date(b.lastMessage.time) - new Date(a.lastMessage.time));
-                chatsData.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-
-                renderChatList();
-            } catch(e) {}
-        }
-
-        function setChatFilter(filter, el) {
-            currentFilter = filter;
-            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-            el.classList.add('active');
-            syncChats();
-        }
-
-        function normalizeTag(tag) {
-            if (typeof tag === 'string') return { text: tag, color: '#555' };
-            return tag;
-        }
-
+        function debounceSearch(val) { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => syncChats(), 300); }
+        function startNewChat() { const phone = prompt("Ingresa el número:"); if (!phone) return; const name = prompt("Nombre:") || phone; openChat(phone.replace(/\D/g, ''), name, ''); }
+        function startSyncLoop() { syncChats(); setInterval(syncChats, 3000); setInterval(() => { if(currentChat) loadMessages(currentChat, false); }, 3000); }
+        
+        async function loadTagFilterOptions() { try { const tags = await (await fetch('/api/data/tags')).json(); document.getElementById('tag-filter').innerHTML = '<option value="">Todas</option>' + tags.map(t => `<option value="${t.name}">${t.name}</option>`).join(''); } catch(e) {} }
+        async function syncChats() { try { const search = document.getElementById('main-search').value; const res = await fetch(`/api/chats-full?view=${currentFilter}&search=${search}`); chatsData = await res.json(); const tagFilter = document.getElementById('tag-filter').value; if(tagFilter) chatsData = chatsData.filter(c => c.labels && c.labels.some(l => (l.text || l) === tagFilter)); chatsData.sort((a, b) => new Date(b.lastMessage.time) - new Date(a.lastMessage.time)); chatsData.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)); renderChatList(); } catch(e) {} }
+        function setChatFilter(filter, el) { currentFilter = filter; document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active')); el.classList.add('active'); syncChats(); }
+        function normalizeTag(tag) { return typeof tag === 'string' ? { text: tag, color: '#555' } : tag; }
         function renderChatList() {
-            const container = document.getElementById('chat-list-container');
-            const scroll = container.scrollTop;
-            
+            const container = document.getElementById('chat-list-container'); const scroll = container.scrollTop;
             container.innerHTML = chatsData.map(c => {
-                let labelsHtml = '';
-                if(c.labels && Array.isArray(c.labels)) {
-                    labelsHtml = c.labels.map(l => {
-                        const tag = normalizeTag(l); 
-                        return `<span class="mini-tag" style="background:${tag.color}30; color:${tag.color}; border:1px solid ${tag.color}">${tag.text}</span>`
-                    }).join('');
-                }
-
-                return `
-                <div class="chat-item ${currentChat === c.id ? 'active' : ''} ${c.archived ? 'archived' : ''}" 
-                     onclick="openChat('${c.id}', '${c.name}', '${c.photoUrl || ''}')"
-                     oncontextmenu="showContextMenu(event, '${c.id}', ${c.pinned}, ${c.archived})">
-                    <div class="avatar">
-                        ${c.photoUrl ? `<img src="${c.photoUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fas fa-user"></i>'}
-                    </div>
-                    <div class="chat-info">
-                        <div class="chat-name">
-                            <span>${c.name} ${c.pinned ? '<i class="fas fa-thumbtack pin-icon"></i>' : ''}</span>
-                            <span class="chat-date">${new Date(c.lastMessage.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                        </div>
-                        <div class="chat-preview">
-                            <span class="chat-last-msg">${c.lastMessage.text || 'Multimedia'}</span>
-                            <div style="display:flex; gap:3px;">
-                                ${c.unreadCount > 0 ? `<span class="badge">${c.unreadCount}</span>` : ''}
-                                ${c.source === 'Web' ? `<span class="badge" style="background:#1e3a8a; color:#fff;">WEB</span>` : ''}
-                                ${c.source === 'Tienda Virtual' ? `<span class="badge" style="background:#a21caf; color:#fff;">TIENDA</span>` : ''}
-                            </div>
-                        </div>
-                        <div class="mini-tags">${labelsHtml}</div>
-                    </div>
-                </div>
-            `}).join('');
-            
-            container.scrollTop = scroll;
+                let labelsHtml = ''; if(c.labels && Array.isArray(c.labels)) labelsHtml = c.labels.map(l => { const tag = normalizeTag(l); return `<span class="mini-tag" style="background:${tag.color}30; color:${tag.color}; border:1px solid ${tag.color}">${tag.text}</span>` }).join('');
+                return `<div class="chat-item ${currentChat === c.id ? 'active' : ''} ${c.archived ? 'archived' : ''}" onclick="openChat('${c.id}', '${c.name}', '${c.photoUrl || ''}')" oncontextmenu="showContextMenu(event, '${c.id}', ${c.pinned}, ${c.archived})"><div class="avatar">${c.photoUrl ? `<img src="${c.photoUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fas fa-user"></i>'}</div><div class="chat-info"><div class="chat-name"><span>${c.name} ${c.pinned ? '<i class="fas fa-thumbtack pin-icon"></i>' : ''}</span><span class="chat-date">${new Date(c.lastMessage.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span></div><div class="chat-preview"><span class="chat-last-msg">${c.lastMessage.text || 'Multimedia'}</span><div style="display:flex; gap:3px;">${c.unreadCount > 0 ? `<span class="badge">${c.unreadCount}</span>` : ''}${c.source === 'Web' ? `<span class="badge" style="background:#1e3a8a; color:#fff;">WEB</span>` : ''}${c.source === 'Tienda Virtual' ? `<span class="badge" style="background:#a21caf; color:#fff;">TIENDA</span>` : ''}</div></div><div class="mini-tags">${labelsHtml}</div></div></div>`;
+            }).join(''); container.scrollTop = scroll;
         }
-
-        function showContextMenu(e, phone, isPinned, isArchived) {
-            e.preventDefault();
-            contextPhone = phone;
-            const menu = document.getElementById('context-menu');
-            
-            const pinBtn = document.getElementById('ctx-pin');
-            pinBtn.innerHTML = isPinned ? '<i class="fas fa-thumbtack" style="opacity:0.5"></i> <span>Desfijar</span>' : '<i class="fas fa-thumbtack"></i> <span>Fijar</span>';
-            pinBtn.onclick = () => contextAction('toggle_pin');
-
-            const archBtn = document.getElementById('ctx-archive');
-            archBtn.innerHTML = isArchived ? '<i class="fas fa-box-open"></i> <span>Desarchivar</span>' : '<i class="fas fa-archive"></i> <span>Archivar</span>';
-            archBtn.onclick = () => contextAction('toggle_archive');
-
-            menu.style.display = 'block';
-            menu.style.left = e.pageX + 'px';
-            menu.style.top = e.pageY + 'px';
-        }
-
-        async function contextAction(action, valueOverride = true) {
-            if(!contextPhone) return;
-            if(action === 'delete' && !confirm("¿ELIMINAR CHAT?")) return;
-            
-            await fetch('/api/chat/action', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ phone: contextPhone, action: action, value: valueOverride })
-            });
-            syncChats();
-            document.getElementById('context-menu').style.display = 'none';
-        }
-
-        function quickLabel() {
-            if(!contextPhone) return;
-            const chat = chatsData.find(c => c.id === contextPhone);
-            if(chat) openChat(chat.id, chat.name, chat.photoUrl);
-            document.getElementById('crm-panel').classList.add('open');
-            document.getElementById('context-menu').style.display = 'none';
-        }
-
-        async function openChat(phone, name, photo) {
-            currentChat = phone;
-            document.body.classList.add('mobile-chat-open');
-            document.getElementById('conversation-view').style.display = 'flex';
-            document.getElementById('chat-header-name').innerText = name;
-            document.getElementById('chat-header-phone').innerText = phone;
-            document.getElementById('chat-header-img').src = photo || ''; 
-            
-            const container = document.getElementById('messages-container');
-            container.innerHTML = `
-                <div style="display:flex; justify-content:center; align-items:center; height:100%; color:#8696a0; flex-direction:column; gap:10px;">
-                    <i class="fas fa-spinner fa-spin fa-2x"></i>
-                    <span style="font-size:0.9rem;">Cargando historial...</span>
-                </div>`;
-
-            const chatInfo = chatsData.find(c => c.id === phone);
-            document.getElementById('bot-switch').checked = chatInfo ? chatInfo.botActive : true;
-            
-            loadLeadDataToCRM(phone);
-            loadTags(phone);
-            await loadMessages(phone, true);
-        }
-
-        // --- CARGA MENSAJES (PLAYER HÍBRIDO) ---
+        function showContextMenu(e, phone, isPinned, isArchived) { e.preventDefault(); contextPhone = phone; const menu = document.getElementById('context-menu'); const pinBtn = document.getElementById('ctx-pin'); pinBtn.innerHTML = isPinned ? '<i class="fas fa-thumbtack" style="opacity:0.5"></i> <span>Desfijar</span>' : '<i class="fas fa-thumbtack"></i> <span>Fijar</span>'; pinBtn.onclick = () => contextAction('toggle_pin'); const archBtn = document.getElementById('ctx-archive'); archBtn.innerHTML = isArchived ? '<i class="fas fa-box-open"></i> <span>Desarchivar</span>' : '<i class="fas fa-archive"></i> <span>Archivar</span>'; archBtn.onclick = () => contextAction('toggle_archive'); menu.style.display = 'block'; menu.style.left = e.pageX + 'px'; menu.style.top = e.pageY + 'px'; }
+        async function contextAction(action, valueOverride = true) { if(!contextPhone) return; if(action === 'delete' && !confirm("¿ELIMINAR CHAT?")) return; await fetch('/api/chat/action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: contextPhone, action: action, value: valueOverride }) }); syncChats(); document.getElementById('context-menu').style.display = 'none'; }
+        function quickLabel() { if(!contextPhone) return; const chat = chatsData.find(c => c.id === contextPhone); if(chat) openChat(chat.id, chat.name, chat.photoUrl); document.getElementById('crm-panel').classList.add('open'); document.getElementById('context-menu').style.display = 'none'; }
+        async function openChat(phone, name, photo) { currentChat = phone; document.body.classList.add('mobile-chat-open'); document.getElementById('conversation-view').style.display = 'flex'; document.getElementById('chat-header-name').innerText = name; document.getElementById('chat-header-phone').innerText = phone; document.getElementById('chat-header-img').src = photo || ''; document.getElementById('messages-container').innerHTML = `<div style="display:flex; justify-content:center; align-items:center; height:100%; color:#8696a0; flex-direction:column; gap:10px;"><i class="fas fa-spinner fa-spin fa-2x"></i><span style="font-size:0.9rem;">Cargando historial...</span></div>`; const chatInfo = chatsData.find(c => c.id === phone); document.getElementById('bot-switch').checked = chatInfo ? chatInfo.botActive : true; loadLeadDataToCRM(phone); loadTags(phone); await loadMessages(phone, true); }
+        
+        // --- PLAYER LOGIC + DOWNLOAD COMBO ---
         async function loadMessages(phone, scrollDown) {
-            try {
-                const res = await fetch(`/api/chat-history/${phone}`);
-                const msgs = await res.json();
-                
-                if(currentChat !== phone) return;
-
-                const container = document.getElementById('messages-container');
-                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent); // Detectar iPhone
-
-                container.innerHTML = msgs.map(m => {
-                    let text = m.text;
-                    
-                    if(text.includes('[MEDIA:')) {
-                        const parts = text.split(':'); 
-                        const type = parts[1];
-                        const id = parts[2].replace(']', '');
-                        const mediaUrl = `/api/media-proxy/${id}?v=final`; // Imagen estática
-
-                        if(type === 'IMAGE') {
-                            text = `
-                                <div style="display:flex; flex-direction:column; gap:5px;">
-                                    <img src="${mediaUrl}" 
-                                         style="max-width:250px; border-radius:8px; cursor:pointer; min-height: 100px; background-color: #0b141a; border: 1px solid #333;" 
-                                         onclick="window.open(this.src)"
-                                         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                                    <div style="display:none; color:#ef4444; font-size:0.8rem; padding:10px; border:1px dashed #ef4444; border-radius:8px;">
-                                        ⚠️ No cargó imagen.
-                                        <a href="${mediaUrl}" target="_blank" style="color:#53bdeb; display:block; margin-top:5px;">Abrir enlace directo</a>
-                                    </div>
-                                </div>`;
-                        }
+            try { const res = await fetch(`/api/chat-history/${phone}`); const msgs = await res.json(); if(currentChat !== phone) return; const container = document.getElementById('messages-container');
+                container.innerHTML = msgs.map(m => { let text = m.text;
+                    if(text.includes('[MEDIA:')) { const parts = text.split(':'); const type = parts[1]; const id = parts[2].replace(']', ''); const mediaUrl = `/api/media-proxy/${id}?v=final`; 
+                        if(type === 'IMAGE') { text = `<div style="display:flex; flex-direction:column; gap:5px;"><img src="${mediaUrl}" style="max-width:250px; border-radius:8px; cursor:pointer; min-height:100px; background:#0b141a;" onclick="window.open(this.src)" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none; color:#ef4444; font-size:0.8rem; padding:10px; border:1px dashed #ef4444; border-radius:8px;">⚠️ Error de imagen.</div></div>`; }
                         else if(type === 'AUDIO') {
-                            if(isIOS) {
-                                // MODO SEGURO PARA IPHONE
-                                text = `
-                                    <a href="${mediaUrl}" download="nota_voz_${id}.ogg" style="display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:10px 15px; border-radius:8px; text-decoration:none; color:white; width:fit-content; border:1px solid var(--border);">
-                                        <i class="fas fa-download" style="font-size:1.5rem; color:#53bdeb;"></i>
-                                        <div style="display:flex; flex-direction:column;">
-                                            <span style="font-weight:600; font-size:0.9rem;">Nota de Voz</span>
-                                            <span style="font-size:0.75rem; color:var(--text-muted);">Descargar para oír (iPhone)</span>
+                            text = `<div class="audio-wrapper">
+                                        <div class="audio-player">
+                                            <button class="play-btn" id="btn-${id}" onclick="togglePlay('${id}')"><i class="fas fa-play"></i></button>
+                                            <div class="audio-progress"><div class="progress-bar-bg"><div id="prog-${id}" class="progress-fill"></div></div><div id="time-${id}" class="audio-time">0:00</div></div>
+                                            <audio id="audio-${id}" src="${mediaUrl}" ontimeupdate="updateProgress('${id}')" onended="resetPlayer('${id}')" onplaying="onAudioStart('${id}')" style="display:none;"></audio>
                                         </div>
-                                    </a>`;
-                            } else {
-                                // MODO PLAYER PRO (PC/ANDROID)
-                                text = `
-                                    <div class="audio-player">
-                                        <button class="play-btn" id="btn-${id}" onclick="togglePlay('${id}')">
-                                            <i class="fas fa-play"></i>
-                                        </button>
-                                        <div class="audio-progress">
-                                            <div class="progress-bar-bg">
-                                                <div id="prog-${id}" class="progress-fill"></div>
-                                            </div>
-                                            <div id="time-${id}" class="audio-time">0:00</div>
-                                        </div>
-                                        <audio id="audio-${id}" src="${mediaUrl}" 
-                                               ontimeupdate="updateProgress('${id}')" 
-                                               onended="resetPlayer('${id}')"
-                                               onplaying="onAudioStart('${id}')"
-                                               onerror="playerError('${id}')"
-                                               style="display:none;"></audio>
+                                        <a href="${mediaUrl}" download="nota_voz.ogg" class="btn-download-audio" title="Descargar"><i class="fas fa-download"></i></a>
                                     </div>`;
-                            }
-                        }
-                        else {
-                            text = `
-                                <a href="${mediaUrl}" target="_blank" style="color:white; text-decoration:none; display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:10px; border-radius:6px;">
-                                    <i class="fas fa-file-download" style="font-size:1.5rem;"></i> 
-                                    <div style="display:flex; flex-direction:column;">
-                                        <span>Archivo Adjunto (${type})</span>
-                                        <span style="font-size:0.75rem; color:var(--primary);">Clic para descargar</span>
-                                    </div>
-                                </a>`;
-                        }
-                    }
-                    return `<div class="msg ${m.role}">${text}<div class="msg-time">${new Date(m.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div></div>`;
-                }).join('');
-
-                if(scrollDown) setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
-
-            } catch(e) { console.error("Error cargando mensajes", e); }
+                        } else { text = `<a href="${mediaUrl}" target="_blank" style="color:white; text-decoration:none; display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:10px; border-radius:6px;"><i class="fas fa-file-download" style="font-size:1.5rem;"></i><div style="display:flex; flex-direction:column;"><span>Archivo Adjunto (${type})</span><span style="font-size:0.75rem; color:var(--primary);">Clic para descargar</span></div></a>`; }
+                    } return `<div class="msg ${m.role}">${text}<div class="msg-time">${new Date(m.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div></div>`;
+                }).join(''); if(scrollDown) setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
+            } catch(e) {}
         }
 
-        // --- FUNCIONES DEL REPRODUCTOR (LOGICA) ---
-        function togglePlay(id) {
-            const audio = document.getElementById(`audio-${id}`);
-            const btn = document.getElementById(`btn-${id}`);
+        function togglePlay(id) { const audio = document.getElementById(`audio-${id}`); const btn = document.getElementById(`btn-${id}`); if(audio.paused) { if(currentlyPlaying && currentlyPlaying !== audio) { currentlyPlaying.pause(); resetPlayer(currentlyPlaying.id.replace('audio-', '')); } btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; audio.play(); currentlyPlaying = audio; } else { audio.pause(); btn.innerHTML = '<i class="fas fa-play"></i>'; } }
+        function onAudioStart(id) { document.getElementById(`btn-${id}`).innerHTML = '<i class="fas fa-pause"></i>'; }
+        function updateProgress(id) { const audio = document.getElementById(`audio-${id}`); const bar = document.getElementById(`prog-${id}`); const time = document.getElementById(`time-${id}`); if(audio && audio.duration) { const percent = (audio.currentTime / audio.duration) * 100; bar.style.width = percent + '%'; const mins = Math.floor(audio.currentTime / 60); const secs = Math.floor(audio.currentTime % 60); time.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`; } }
+        function resetPlayer(id) { document.getElementById(`btn-${id}`).innerHTML = '<i class="fas fa-play"></i>'; document.getElementById(`prog-${id}`).style.width = '0%'; }
+
+        // --- SUBIDA DE ARCHIVOS (FUNCIÓN RESTAURADA) ---
+        async function uploadFile() {
+            const input = document.getElementById('file-upload');
+            if(!input.files[0]) return;
             
-            if (audio.paused) {
-                // Detener otros audios
-                if (currentlyPlaying && currentlyPlaying !== audio) {
-                    currentlyPlaying.pause();
-                    // Resetear icono del anterior
-                    const oldId = currentlyPlaying.id.replace('audio-', '');
-                    resetPlayer(oldId);
-                }
-                
-                // Mostrar spinner de carga
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-                audio.play();
-                currentlyPlaying = audio;
-            } else {
-                audio.pause();
-                btn.innerHTML = '<i class="fas fa-play"></i>';
-            }
-        }
+            const formData = new FormData();
+            formData.append('file', input.files[0]);
+            formData.append('phone', currentChat);
+            // Detectar tipo (simple)
+            const type = input.files[0].type.startsWith('image/') ? 'image' : 
+                         (input.files[0].type.startsWith('audio/') ? 'audio' : 'document');
+            formData.append('type', type);
 
-        function onAudioStart(id) {
-            // Cuando ya empieza a sonar de verdad
-            const btn = document.getElementById(`btn-${id}`);
-            if(btn) btn.innerHTML = '<i class="fas fa-pause"></i>';
-        }
-
-        function updateProgress(id) {
-            const audio = document.getElementById(`audio-${id}`);
-            const bar = document.getElementById(`prog-${id}`);
-            const time = document.getElementById(`time-${id}`);
-            
-            if (audio && audio.duration) {
-                const percent = (audio.currentTime / audio.duration) * 100;
-                bar.style.width = percent + '%';
-                
-                // Formato tiempo 0:00
-                const mins = Math.floor(audio.currentTime / 60);
-                const secs = Math.floor(audio.currentTime % 60);
-                time.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-            }
-        }
-
-        function resetPlayer(id) {
-            const btn = document.getElementById(`btn-${id}`);
-            const bar = document.getElementById(`prog-${id}`);
-            if(btn) btn.innerHTML = '<i class="fas fa-play"></i>';
-            if(bar) bar.style.width = '0%';
-        }
-
-        function playerError(id) {
-            const btn = document.getElementById(`btn-${id}`);
-            if(btn) {
-                btn.style.background = '#ef4444';
-                btn.innerHTML = '<i class="fas fa-exclamation"></i>';
-                alert("Error al reproducir. Intenta descargar el archivo.");
-            }
-        }
-
-        // ... RESTO DE FUNCIONES (Send, Config, Leads) ...
-        async function sendMessage() {
-            const txt = document.getElementById('msg-input').value;
-            if(!txt) return;
-            document.getElementById('msg-input').value = '';
+            // Mostrar mensaje local "Enviando..."
             const container = document.getElementById('messages-container');
-            container.innerHTML += `<div class="msg manual">${txt} <div class="msg-time">...</div></div>`;
-            container.scrollTop = container.scrollHeight; 
+            container.innerHTML += `<div class="msg manual">📁 Enviando archivo...<div class="msg-time">...</div></div>`;
+            container.scrollTop = container.scrollHeight;
 
-            await fetch('/api/chat/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, message: txt }) });
+            await fetch('/api/chat/upload-send', { method: 'POST', body: formData });
+            input.value = ''; // Limpiar input
             loadMessages(currentChat, true);
         }
+
+        async function sendMessage() { const txt = document.getElementById('msg-input').value; if(!txt) return; document.getElementById('msg-input').value = ''; const container = document.getElementById('messages-container'); container.innerHTML += `<div class="msg manual">${txt} <div class="msg-time">...</div></div>`; container.scrollTop = container.scrollHeight; await fetch('/api/chat/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, message: txt }) }); loadMessages(currentChat, true); }
         function checkEnter(e) { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
-
-        async function toggleBotActive() {
-            const active = document.getElementById('bot-switch').checked;
-            await fetch('/api/chat/toggle-bot', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, active }) });
-            showToast(active ? "🤖 Bot Activado" : "⏸️ Bot Pausado");
-        }
-
-        async function loadLeadDataToCRM(phone) {
-            document.getElementById('crm-name').value = "";
-            document.getElementById('crm-city').value = "";
-            document.getElementById('crm-email').value = "";
-            document.getElementById('crm-interest').value = "";
-
-            const res = await fetch('/api/data/leads');
-            const leads = await res.json();
-            const lead = leads.find(l => l.phone === phone);
-            
-            if(lead) {
-                document.getElementById('crm-name').value = lead.nombre || "";
-                document.getElementById('crm-city').value = lead.ciudad || "";
-                document.getElementById('crm-email').value = lead.correo || "";
-                document.getElementById('crm-interest').value = lead.interes || "";
-            }
-        }
-
-        async function saveLeadManual() {
-            if(!currentChat) return;
-            const res = await fetch('/api/data/leads');
-            const leads = await res.json();
-            const lead = leads.find(l => l.phone === currentChat);
-            const id = lead ? lead.id : null;
-
-            if(id) {
-                const updates = [
-                    {field: 'nombre', value: document.getElementById('crm-name').value},
-                    {field: 'ciudad', value: document.getElementById('crm-city').value},
-                    {field: 'correo', value: document.getElementById('crm-email').value},
-                    {field: 'interes', value: document.getElementById('crm-interest').value}
-                ];
-                for(let u of updates) {
-                    await fetch('/api/leads/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id, field: u.field, value: u.value }) });
-                }
-                showToast("✅ Datos Guardados");
-                refreshLeads();
-            } else {
-                showToast("⚠️ El sistema aún no ha creado este Lead. Espera un mensaje.");
-            }
-        }
-
-        function downloadExcel() {
-            const rows = [['Fecha', 'Fuente', 'Nombre', 'Telefono', 'Interes', 'Etiqueta IA', 'Etiqueta Comercial']];
-            const table = document.getElementById('leads-body');
-            for (let tr of table.rows) {
-                const cells = Array.from(tr.cells).slice(0, 7).map(c => c.innerText);
-                rows.push(cells);
-            }
-            let csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
-            const link = document.createElement("a");
-            link.setAttribute("href", encodeURI(csvContent));
-            link.setAttribute("download", "leads_icc.csv");
-            document.body.appendChild(link);
-            link.click();
-        }
-
+        async function toggleBotActive() { const active = document.getElementById('bot-switch').checked; await fetch('/api/chat/toggle-bot', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, active }) }); showToast(active ? "🤖 Bot Activado" : "⏸️ Bot Pausado"); }
+        async function loadLeadDataToCRM(phone) { document.getElementById('crm-name').value=""; document.getElementById('crm-city').value=""; document.getElementById('crm-email').value=""; document.getElementById('crm-interest').value=""; const res = await fetch('/api/data/leads'); const leads = await res.json(); const lead = leads.find(l => l.phone === phone); if(lead) { document.getElementById('crm-name').value = lead.nombre||""; document.getElementById('crm-city').value = lead.ciudad||""; document.getElementById('crm-email').value = lead.correo||""; document.getElementById('crm-interest').value = lead.interes||""; } }
+        async function saveLeadManual() { if(!currentChat) return; const res = await fetch('/api/data/leads'); const leads = await res.json(); const lead = leads.find(l => l.phone === currentChat); const id = lead ? lead.id : null; if(id) { const updates = [{field:'nombre',value:document.getElementById('crm-name').value},{field:'ciudad',value:document.getElementById('crm-city').value},{field:'correo',value:document.getElementById('crm-email').value},{field:'interes',value:document.getElementById('crm-interest').value}]; for(let u of updates) await fetch('/api/leads/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id, field: u.field, value: u.value }) }); showToast("✅ Datos Guardados"); refreshLeads(); } else { showToast("⚠️ Espera un mensaje."); } }
+        function downloadExcel() { const rows = [['Fecha', 'Fuente', 'Nombre', 'Telefono', 'Interes', 'Etiqueta IA', 'Etiqueta Comercial']]; const table = document.getElementById('leads-body'); for (let tr of table.rows) { const cells = Array.from(tr.cells).slice(0, 7).map(c => c.innerText); rows.push(cells); } let csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n"); const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", "leads_icc.csv"); document.body.appendChild(link); link.click(); }
         function loadTags(phone) { fetch('/api/data/tags').then(r=>r.json()).then(t => renderCRMTags(t)); }
-        
-        function renderCRMTags(tags) {
-            const chat = chatsData.find(c => c.id === currentChat);
-            const activeTags = chat ? chat.labels : [];
-            
-            document.getElementById('tag-list').innerHTML = tags.map(t => {
-                const isActive = activeTags && activeTags.some(at => normalizeTag(at).text === t.name);
-                return `<span class="tag ${isActive ? 'selected' : ''}" 
-                        style="border-color:${t.color}; color:${isActive?'#fff':t.color}; background:${isActive?t.color:'transparent'}"
-                        onclick="toggleChatTag('${t.name}', '${t.color}')">${t.name}</span>`;
-            }).join('');
-        }
-
-        async function toggleChatTag(name, color) {
-            if(!currentChat) return;
-            const chat = chatsData.find(c => c.id === currentChat);
-            let labels = chat.labels || [];
-            
-            const exists = labels.some(l => normalizeTag(l).text === name);
-            if(exists) {
-                labels = labels.filter(l => normalizeTag(l).text !== name);
-            } else {
-                labels.push({text: name, color});
-            }
-            
-            await fetch('/api/chat/action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, action: 'set_labels', value: labels }) });
-            
-            const res = await fetch('/api/data/leads');
-            const leads = await res.json();
-            const lead = leads.find(l => l.phone === currentChat);
-            if(lead) {
-                const newStatus = exists ? (labels.length > 0 ? labels[0].text : "Sin Etiqueta") : name;
-                await fetch('/api/leads/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id: lead.id, field: 'status_tag', value: newStatus }) });
-            }
-
-            syncChats();
-            setTimeout(() => { loadTags(currentChat); refreshLeads(); }, 300);
-        }
-
-        async function loadAllConfig() {
-            const res = await fetch('/api/data/config');
-            const cfg = await res.json();
-            document.getElementById('prompt-editor').value = cfg.prompt || '';
-            document.getElementById('biz-name').value = cfg.biz_profile?.name || '';
-            document.getElementById('biz-hours').value = cfg.biz_profile?.hours || '';
-            renderWebList();
-            renderRulesList(cfg.tech_rules);
-            fetch('/api/data/tags').then(r=>r.json()).then(t => renderConfigTags(t));
-            fetch('/api/data/shortcuts').then(r=>r.json()).then(s => renderConfigShortcuts(s));
-            if(cfg.logo_url) document.getElementById('logo-preview').style.backgroundImage = `url('${cfg.logo_url}')`;
-        }
-        async function saveBizConfig() {
-            const name = document.getElementById('biz-name').value;
-            const hours = document.getElementById('biz-hours').value;
-            await fetch('/api/config/biz/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name, hours }) });
-            showToast("Perfil Actualizado");
-        }
-        async function savePrompt() {
-            await fetch('/api/config/prompt', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ prompt: document.getElementById('prompt-editor').value }) });
-            showToast("Personalidad Guardada");
-        }
-        async function uploadLogo(input) {
-            const fd = new FormData();
-            fd.append('file', input.files[0]);
-            await fetch('/api/config/logo', { method: 'POST', body: fd });
-            showToast("Logo Actualizado");
-            loadAllConfig();
-        }
-        async function uploadCSV() {
-            const input = document.getElementById('csv-upload');
-            if(!input.files[0]) return alert("Selecciona CSV");
-            const fd = new FormData();
-            fd.append('file', input.files[0]);
-            await fetch('/api/knowledge/csv', { method: 'POST', body: fd });
-            showToast("Inventario Cargado");
-        }
-        async function clearInventory() {
-            if(!confirm("¿Borrar TODO?")) return;
-            await fetch('/api/knowledge/clear', { method: 'POST' });
-            showToast("Inventario Borrado");
-        }
-        async function renderWebList() {
-            const res = await fetch('/api/data/web-knowledge');
-            const list = await res.json();
-            document.getElementById('web-knowledge-list').innerHTML = list.map(i => `
-                <li class="config-item">
-                    <span style="max-width:200px; overflow:hidden; text-overflow:ellipsis;">${i.url}</span>
-                    <div style="display:flex; gap:5px;">
-                        <button class="btn-small btn-blue" onclick="showWebInfo('${encodeURIComponent(i.summary)}')"><i class="fas fa-eye"></i></button>
-                        <button class="btn-small btn-red" onclick="deleteWeb('${i.id}')"><i class="fas fa-trash"></i></button>
-                    </div>
-                </li>`).join('');
-        }
+        function renderCRMTags(tags) { const chat = chatsData.find(c => c.id === currentChat); const activeTags = chat ? chat.labels : []; document.getElementById('tag-list').innerHTML = tags.map(t => { const isActive = activeTags && activeTags.some(at => normalizeTag(at).text === t.name); return `<span class="tag ${isActive ? 'selected' : ''}" style="border-color:${t.color}; color:${isActive?'#fff':t.color}; background:${isActive?t.color:'transparent'}" onclick="toggleChatTag('${t.name}', '${t.color}')">${t.name}</span>`; }).join(''); }
+        async function toggleChatTag(name, color) { if(!currentChat) return; const chat = chatsData.find(c => c.id === currentChat); let labels = chat.labels || []; const exists = labels.some(l => normalizeTag(l).text === name); if(exists) labels = labels.filter(l => normalizeTag(l).text !== name); else labels.push({text: name, color}); await fetch('/api/chat/action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, action: 'set_labels', value: labels }) }); const res = await fetch('/api/data/leads'); const leads = await res.json(); const lead = leads.find(l => l.phone === currentChat); if(lead) { const newStatus = exists ? (labels.length > 0 ? labels[0].text : "Sin Etiqueta") : name; await fetch('/api/leads/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id: lead.id, field: 'status_tag', value: newStatus }) }); } syncChats(); setTimeout(() => { loadTags(currentChat); refreshLeads(); }, 300); }
+        async function loadAllConfig() { const res = await fetch('/api/data/config'); const cfg = await res.json(); document.getElementById('prompt-editor').value = cfg.prompt || ''; document.getElementById('biz-name').value = cfg.biz_profile?.name || ''; document.getElementById('biz-hours').value = cfg.biz_profile?.hours || ''; renderWebList(); renderRulesList(cfg.tech_rules); fetch('/api/data/tags').then(r=>r.json()).then(t => renderConfigTags(t)); fetch('/api/data/shortcuts').then(r=>r.json()).then(s => renderConfigShortcuts(s)); if(cfg.logo_url) document.getElementById('logo-preview').style.backgroundImage = `url('${cfg.logo_url}')`; }
+        async function saveBizConfig() { await fetch('/api/config/biz/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: document.getElementById('biz-name').value, hours: document.getElementById('biz-hours').value }) }); showToast("Perfil Actualizado"); }
+        async function savePrompt() { await fetch('/api/config/prompt', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ prompt: document.getElementById('prompt-editor').value }) }); showToast("Personalidad Guardada"); }
+        async function uploadLogo(input) { const fd = new FormData(); fd.append('file', input.files[0]); await fetch('/api/config/logo', { method: 'POST', body: fd }); showToast("Logo Actualizado"); loadAllConfig(); }
+        async function uploadCSV() { const input = document.getElementById('csv-upload'); if(!input.files[0]) return alert("Selecciona CSV"); const fd = new FormData(); fd.append('file', input.files[0]); await fetch('/api/knowledge/csv', { method: 'POST', body: fd }); showToast("Inventario Cargado"); }
+        async function clearInventory() { if(!confirm("¿Borrar TODO?")) return; await fetch('/api/knowledge/clear', { method: 'POST' }); showToast("Inventario Borrado"); }
+        async function renderWebList() { const res = await fetch('/api/data/web-knowledge'); const list = await res.json(); document.getElementById('web-knowledge-list').innerHTML = list.map(i => `<li class="config-item"><span style="max-width:200px; overflow:hidden; text-overflow:ellipsis;">${i.url}</span><div style="display:flex; gap:5px;"><button class="btn-small btn-blue" onclick="showWebInfo('${encodeURIComponent(i.summary)}')"><i class="fas fa-eye"></i></button><button class="btn-small btn-red" onclick="deleteWeb('${i.id}')"><i class="fas fa-trash"></i></button></div></li>`).join(''); }
         function showWebInfo(summary) { alert(decodeURIComponent(summary)); }
-        async function scanWeb() {
-            const url = document.getElementById('web-url-input').value;
-            const summary = prompt("Como no tengo navegador real, pega el texto de la página aquí:");
-            if(summary) {
-                await fetch('/api/data/web-knowledge', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url, summary }) });
-                document.getElementById('web-url-input').value = "";
-                renderWebList();
-            }
-        }
-        async function deleteWeb(id) {
-            await fetch('/api/data/web-knowledge/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) });
-            renderWebList();
-        }
-        function renderRulesList(rules) {
-            document.getElementById('rules-list').innerHTML = (rules || []).map((r, i) => `<li class="config-item"><span>${r}</span><button class="btn-small btn-red" onclick="deleteRule(${i})"><i class="fas fa-trash"></i></button></li>`).join('');
-        }
-        async function addRule() {
-            const r = document.getElementById('rule-input').value;
-            if(!r) return;
-            await fetch('/api/config/rules/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ rule: r }) });
-            const data = await res.json();
-            renderRulesList(data.rules);
-            document.getElementById('rule-input').value = "";
-        }
-        async function deleteRule(i) {
-            await fetch('/api/config/rules/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ index: i }) });
-            const data = await res.json();
-            renderRulesList(data.rules);
-        }
-        function renderConfigTags(tags) {
-            document.getElementById('config-tags-list').innerHTML = tags.map(t => `<li class="config-item"><span style="color:${t.color};font-weight:bold;">${t.name}</span><button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button></li>`).join('');
-            renderCRMTags(tags);
-        }
-        async function addTag() {
-            const name = document.getElementById('tag-name').value;
-            const color = document.getElementById('tag-color').value;
-            if(!name) return;
-            await fetch('/api/tags/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name, color }) });
-            loadAllConfig();
-            document.getElementById('tag-name').value = "";
-        }
-        async function deleteTag(id) {
-            await fetch('/api/tags/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) });
-            loadAllConfig();
-        }
-        function renderConfigShortcuts(shortcuts) {
-            const list = shortcuts.map(s => `<li class="config-item"><span><b>${s.keyword}</b></span><button class="btn-small btn-red" onclick="deleteShortcut(${s.id})"><i class="fas fa-trash"></i></button></li>`).join('');
-            document.getElementById('config-shortcuts-list').innerHTML = list;
-            document.getElementById('shortcuts-list').innerHTML = shortcuts.map(s => `<span class="tag" onclick="insertShortcut('${s.text}')">${s.keyword}</span>`).join('');
-        }
-        async function addShortcut() {
-            const keyword = document.getElementById('short-key').value;
-            const text = document.getElementById('short-text').value;
-            if(!keyword || !text) return;
-            await fetch('/api/shortcuts/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ keyword, text }) });
-            loadAllConfig();
-            document.getElementById('short-key').value = ""; document.getElementById('short-text').value = "";
-        }
-        async function deleteShortcut(id) {
-            await fetch('/api/shortcuts/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) });
-            loadAllConfig();
-        }
+        async function scanWeb() { const url = document.getElementById('web-url-input').value; const summary = prompt("Resumen página:"); if(summary) { await fetch('/api/data/web-knowledge', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url, summary }) }); document.getElementById('web-url-input').value = ""; renderWebList(); } }
+        async function deleteWeb(id) { await fetch('/api/data/web-knowledge/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) }); renderWebList(); }
+        function renderRulesList(rules) { document.getElementById('rules-list').innerHTML = (rules || []).map((r, i) => `<li class="config-item"><span>${r}</span><button class="btn-small btn-red" onclick="deleteRule(${i})"><i class="fas fa-trash"></i></button></li>`).join(''); }
+        async function addRule() { const r = document.getElementById('rule-input').value; if(!r) return; await fetch('/api/config/rules/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ rule: r }) }); const data = await res.json(); renderRulesList(data.rules); document.getElementById('rule-input').value = ""; }
+        async function deleteRule(i) { const res = await fetch('/api/config/rules/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ index: i }) }); const data = await res.json(); renderRulesList(data.rules); }
+        function renderConfigTags(tags) { document.getElementById('config-tags-list').innerHTML = tags.map(t => `<li class="config-item"><span style="color:${t.color};font-weight:bold;">${t.name}</span><button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button></li>`).join(''); renderCRMTags(tags); }
+        async function addTag() { const name = document.getElementById('tag-name').value; const color = document.getElementById('tag-color').value; if(!name) return; await fetch('/api/tags/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name, color }) }); loadAllConfig(); document.getElementById('tag-name').value = ""; }
+        async function deleteTag(id) { await fetch('/api/tags/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) }); loadAllConfig(); }
+        function renderConfigShortcuts(shortcuts) { const list = shortcuts.map(s => `<li class="config-item"><span><b>${s.keyword}</b></span><button class="btn-small btn-red" onclick="deleteShortcut(${s.id})"><i class="fas fa-trash"></i></button></li>`).join(''); document.getElementById('config-shortcuts-list').innerHTML = list; document.getElementById('shortcuts-list').innerHTML = shortcuts.map(s => `<span class="tag" onclick="insertShortcut('${s.text}')">${s.keyword}</span>`).join(''); }
+        async function addShortcut() { const k = document.getElementById('short-key').value; const t = document.getElementById('short-text').value; if(!k || !t) return; await fetch('/api/shortcuts/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ keyword: k, text: t }) }); loadAllConfig(); document.getElementById('short-key').value = ""; document.getElementById('short-text').value = ""; }
+        async function deleteShortcut(id) { await fetch('/api/shortcuts/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) }); loadAllConfig(); }
         function insertShortcut(text) { document.getElementById('msg-input').value += text; }
         
-        // LEADS
-        async function refreshLeads() {
-            const res = await fetch('/api/data/leads');
-            const leads = await res.json();
-            document.getElementById('leads-body').innerHTML = leads.map(l => {
-                let sClass = l.source === 'Web' ? 'lead-source-web' : (l.source === 'Tienda Virtual' ? 'lead-source-store' : '');
-                return `<tr>
-                    <td>${new Date(l.fecha).toLocaleDateString()}</td>
-                    <td><span class="lead-source-tag ${sClass}">${l.source || 'Orgánico'}</span></td>
-                    <td>${l.nombre || '-'}</td>
-                    <td>${l.phone}</td>
-                    <td>${l.interes || '-'}</td>
-                    <td>${l.etiqueta}</td>
-                    <td><strong>${l.status_tag || '-'}</strong></td>
-                    <td><button class="nav-btn" style="height:30px;" onclick="openChat('${l.phone}', '${l.nombre}', '')"><i class="fas fa-comment"></i></button></td>
-                </tr>`;
-            }).join('');
-        }
+        async function refreshLeads() { const res = await fetch('/api/data/leads'); const leads = await res.json(); document.getElementById('leads-body').innerHTML = leads.map(l => `<tr><td>${new Date(l.fecha).toLocaleDateString()}</td><td><span class="lead-source-tag ${l.source==='Web'?'lead-source-web':(l.source==='Tienda Virtual'?'lead-source-store':'')}">${l.source||'Orgánico'}</span></td><td>${l.nombre||'-'}</td><td>${l.phone}</td><td>${l.interes||'-'}</td><td>${l.etiqueta}</td><td><strong>${l.status_tag||'-'}</strong></td><td><button class="nav-btn" style="height:30px;" onclick="openChat('${l.phone}', '${l.nombre}', '')"><i class="fas fa-comment"></i></button></td></tr>`).join(''); }
     </script>
 </body>
 </html>
