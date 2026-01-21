@@ -1,10 +1,12 @@
 /*
- * SERVER BACKEND - VALENTINA v25.14 (FINAL PRODUCTION)
+ * SERVER BACKEND - VALENTINA v25.15 (MEDIA AUTH RESTORED)
+ * Cliente: Importadora Casa Colombia (ICC)
  * ============================================================
- * ESTADO: INTEGRIDAD TOTAL
- * 1. Media Proxy: Logic v2 (Get URL with Auth -> Download without Auth).
- * 2. Toggle Actions: SQL CASE WHEN (Arregla Desarchivar).
- * 3. Seguridad: Debounce, Anti-Unknown, Auth.
+ * FIX FINAL IMÁGENES:
+ * Se restaura el Header 'Authorization' en la descarga del Proxy.
+ * Explicación: La API v21 de Meta exige el Token para descargar el binario.
+ * Al combinar esto con el 'Cache Buster' del Frontend (?t=...),
+ * las imágenes cargarán correctamente.
  * ============================================================
  */
 
@@ -104,7 +106,7 @@ let db, globalKnowledge = [], serverInstance;
         iniciarCronJobs();
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.14 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.15 ONLINE (Port ${PORT})`));
         
         serverInstance.on('error', (e) => { 
             if(e.code === 'EADDRINUSE') {
@@ -175,23 +177,23 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- 7. PROXY DE MEDIOS (FIX DEFINITIVO IMAGENES) ---
+// --- 7. PROXY DE MEDIOS (FIXED: AUTH RESTORED) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     try {
-        // 1. Obtener URL firmada (SÍ lleva Token)
+        // 1. Obtener URL firmada
         const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
         
-        // 2. Descargar Binario (NO lleva Token, porque la URL ya viene firmada por Amazon/Meta)
-        // Si le mandas Token aquí, Amazon rechaza la firma -> Error 403 -> Imagen Rota.
+        // 2. Descargar Binario (CON AUTH - REQUERIDO)
         const response = await axios.get(urlData.url, { 
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` }, 
             responseType: 'arraybuffer' 
         });
         
         // 3. Servir
         let contentType = urlData.mime_type || 'application/octet-stream';
-        // Ajuste para audios (para que Chrome no se confunda)
+        // Ajuste solo para audios (para que descarguen bien)
         if (contentType.includes('audio') || contentType.includes('ogg')) contentType = 'audio/ogg'; 
         
         res.writeHead(200, { 
@@ -201,7 +203,7 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
         res.end(response.data);
 
     } catch (e) { 
-        console.error("Media Proxy Error:", e.message);
+        console.error("Media Error:", e.message);
         res.status(500).send("Error Media"); 
     }
 });
@@ -379,12 +381,16 @@ app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     res.json(await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]));
 });
 
-// --- ACCIONES CHAT (TOGGLE FIX) ---
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
     const cleanPhone = phone.replace(/\D/g, ''); 
     if(action === 'delete') { for(const t of ['history','metadata','bot_status','leads']) await db.run(`DELETE FROM ${t} WHERE phone=?`,[cleanPhone]); }
-    else if(action === 'set_labels') { await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, JSON.stringify(value)]); await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [value.length > 0 ? value[0].text : "Sin Etiqueta", cleanPhone]); }
+    else if(action === 'set_labels') {
+        const etiquetasStr = JSON.stringify(value);
+        await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, etiquetasStr]);
+        const tagPrincipal = value.length > 0 ? value[0].text : "Sin Etiqueta";
+        await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [tagPrincipal, cleanPhone]);
+    }
     else if(action === 'toggle_pin') await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET pinned = CASE WHEN pinned = 1 THEN 0 ELSE 1 END", [cleanPhone]);
     else if(action === 'toggle_archive') await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET archived = CASE WHEN archived = 1 THEN 0 ELSE 1 END", [cleanPhone]);
     res.json({success:true});
