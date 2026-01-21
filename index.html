@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v25.7 - Stable Dashboard</title>
+    <title>Valentina v25.8 - Dashboard Comercial</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
@@ -356,7 +356,7 @@
             startSyncLoop();
             refreshLeads();
             loadAllConfig();
-            loadTagFilterOptions(); // NUEVO
+            loadTagFilterOptions(); // NUEVO: Cargar opciones del filtro
             document.addEventListener('click', () => document.getElementById('context-menu').style.display = 'none');
         };
 
@@ -402,6 +402,7 @@
             setInterval(() => { if(currentChat) loadMessages(currentChat, false); }, 3000);
         }
 
+        // NUEVO: Carga opciones en el Select
         async function loadTagFilterOptions() {
             try {
                 const tags = await (await fetch('/api/data/tags')).json();
@@ -416,7 +417,7 @@
                 const res = await fetch(`/api/chats-full?view=${currentFilter}&search=${search}`);
                 chatsData = await res.json();
                 
-                // NUEVO: Filtro
+                // NUEVO: Lógica de Filtrado por Etiqueta
                 const tagFilter = document.getElementById('tag-filter').value;
                 if(tagFilter) {
                     chatsData = chatsData.filter(c => c.labels && c.labels.some(l => (l.text || l) === tagFilter));
@@ -436,6 +437,7 @@
             syncChats();
         }
 
+        // FUNCIÓN AUXILIAR PARA NORMALIZAR ETIQUETAS VIEJAS (TEXTO) A NUEVAS (OBJETOS)
         function normalizeTag(tag) {
             if (typeof tag === 'string') return { text: tag, color: '#555' };
             return tag;
@@ -542,7 +544,7 @@
             await loadMessages(phone, true);
         }
 
-        // --- CARGA MENSAJES (AUDIO FIX - RESTAURADO SIMPLE) ---
+        // --- CARGA MENSAJES (FALLBACK DOWNLOAD BTN) ---
         async function loadMessages(phone, scrollDown) {
             try {
                 const res = await fetch(`/api/chat-history/${phone}`);
@@ -560,17 +562,43 @@
                         const type = parts[1];
                         const id = parts[2].replace(']', '');
                         
+                        // URL base para el archivo
+                        const mediaUrl = `/api/media-proxy/${id}`;
+
                         if(type === 'IMAGE') {
-                            text = `<img src="/api/media-proxy/${id}" style="max-width:250px; border-radius:8px; cursor:pointer;" onclick="window.open(this.src)">`;
+                            // Imagen + Enlace de Descarga
+                            text = `
+                                <div style="display:flex; flex-direction:column; gap:5px;">
+                                    <img src="${mediaUrl}" style="max-width:250px; border-radius:8px; cursor:pointer;" onclick="window.open(this.src)">
+                                    <a href="${mediaUrl}" download="imagen_${id}.jpg" style="font-size:0.75rem; color:var(--text-muted); text-decoration:none; text-align:right;">
+                                        <i class="fas fa-download"></i> Descargar
+                                    </a>
+                                </div>`;
                         }
                         else if(type === 'AUDIO') {
-                            // LÓGICA ORIGINAL RESTAURADA: Etiqueta simple
-                            text = `<audio controls src="/api/media-proxy/${id}" style="width: 240px; margin-top:5px;"></audio>`;
+                            // Audio + Enlace de Descarga (Fallback)
+                            text = `
+                                <div style="display:flex; flex-direction:column; gap:5px;">
+                                    <audio controls>
+                                        <source src="${mediaUrl}" type="audio/ogg">
+                                        <source src="${mediaUrl}" type="audio/mpeg">
+                                        Tu navegador no soporta el audio.
+                                    </audio>
+                                    <a href="${mediaUrl}" download="audio_${id}.ogg" style="font-size:0.85rem; color:#53bdeb; text-decoration:underline; font-weight:500;">
+                                        ⬇️ Descargar Audio
+                                    </a>
+                                </div>`;
                         }
                         else {
-                            text = `<a href="/api/media-proxy/${id}" target="_blank" style="color:white; text-decoration:underline; display:flex; align-items:center; gap:5px;">
-                                    <i class="fas fa-file-download"></i> Archivo adjunto (${type})
-                                   </a>`;
+                            // Documentos
+                            text = `
+                                <a href="${mediaUrl}" target="_blank" style="color:white; text-decoration:none; display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:10px; border-radius:6px;">
+                                    <i class="fas fa-file-download" style="font-size:1.5rem;"></i> 
+                                    <div style="display:flex; flex-direction:column;">
+                                        <span>Archivo Adjunto (${type})</span>
+                                        <span style="font-size:0.75rem; color:var(--primary);">Clic para descargar</span>
+                                    </div>
+                                </a>`;
                         }
                     }
                     return `<div class="msg ${m.role}">${text}<div class="msg-time">${new Date(m.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div></div>`;
