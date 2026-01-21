@@ -1,11 +1,10 @@
 /*
- * SERVER BACKEND - VALENTINA v25.11 (FULL INTEGRITY RESTORE)
+ * SERVER BACKEND - VALENTINA v25.12 (LOGIC FIX: UNARCHIVE)
  * Cliente: Importadora Casa Colombia (ICC)
  * ============================================================
- * ESTADO:
- * - Media Proxy: Restaurado a lógica completa (Auth + Buffer).
- * - Logic: Debounce, Sanitización, CronJobs y todas las APIs incluidas.
- * - NO SE HA SIMPLIFICADO NADA.
+ * 1. FIX: "Toggle" de Archivar/Fijar ahora se hace por SQL (CASE WHEN).
+ * Esto soluciona que no dejaba desarchivar chats.
+ * 2. Mantiene: Media Proxy (Auth+Buffer), Debounce, Anti-Unknown.
  * ============================================================
  */
 
@@ -105,7 +104,7 @@ let db, globalKnowledge = [], serverInstance;
         iniciarCronJobs();
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.11 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.12 ONLINE (Port ${PORT})`));
         
         serverInstance.on('error', (e) => { 
             if(e.code === 'EADDRINUSE') {
@@ -176,43 +175,23 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- 7. PROXY DE MEDIOS (LÓGICA COMPLETAMENTE RESTAURADA) ---
-// Esta función es crítica: Usa Auth para bajar el archivo y Buffer para servirlo.
+// --- 7. PROXY DE MEDIOS (Final Logic: Auth + ArrayBuffer + MimeType Original) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     try {
-        // 1. Obtener Metadatos (URL y MIME TYPE REAL)
-        const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
-            headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
-        });
+        const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
         
-        // 2. Descargar el archivo binario
-        // IMPORTANTE: Se envía el Token (Auth) porque la API v21 lo exige.
-        // IMPORTANTE: Se usa 'arraybuffer' para no corromper fotos ni audios.
+        // Descarga con Auth y Buffer
         const { data: buffer } = await axios.get(urlData.url, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` }, 
             responseType: 'arraybuffer' 
         });
         
-        // 3. Preparar Headers de Respuesta
-        // Usamos el mime_type que nos dio Meta en el paso 1.
         let contentType = urlData.mime_type || 'application/octet-stream';
+        if (contentType.includes('audio') || contentType.includes('ogg')) contentType = 'audio/ogg'; 
         
-        // Pequeño ajuste solo para que Chrome entienda los audios de WhatsApp, sin tocar imágenes.
-        if (contentType.includes('audio') || contentType.includes('ogg')) {
-            contentType = 'audio/ogg'; 
-        }
-        
-        // 4. Enviar
-        res.writeHead(200, { 
-            'Content-Length': buffer.length, 
-            'Content-Type': contentType 
-        });
-        res.end(Buffer.from(buffer)); // Convertir a Buffer de Node por seguridad
-
-    } catch (e) { 
-        console.error("Media Proxy Error:", e.message);
-        res.status(500).send("Error Media"); 
-    }
+        res.writeHead(200, { 'Content-Length': buffer.length, 'Content-Type': contentType });
+        res.end(Buffer.from(buffer));
+    } catch (e) { res.status(500).send("Error Media"); }
 });
 
 // --- 8. CEREBRO IA ---
@@ -300,7 +279,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     }
 }
 
-// --- 9. GESTIÓN DE LEADS (CON SANITIZACIÓN) ---
+// --- 9. GESTIÓN DE LEADS (ANTI-UNKNOWN) ---
 async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
     const limpiarDato = (d) => (!d || /^(unknown|null|n\/a|no menciona|cliente|pend)$/i.test(d.toString().trim())) ? null : d.trim();
 
@@ -328,7 +307,6 @@ function iniciarCronJobs() {
     setInterval(async () => {
         try {
             const now = new Date();
-            // Query blindada contra "unknown"
             const leadsTerminados = await db.all(`SELECT * FROM leads WHERE farewell_sent = 0 AND ciudad IS NOT NULL AND LOWER(ciudad) NOT IN ('unknown', 'null', 'n/a') AND nombre IS NOT NULL AND fecha < datetime('now', '-1 hour') AND fecha > datetime('now', '-24 hour')`);
             
             for (const l of leadsTerminados) {
@@ -391,18 +369,28 @@ app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     res.json(await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]));
 });
 
+// --- ACCIONES DE CHAT (FIX: TOGGLE INTELIGENTE) ---
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
     const cleanPhone = phone.replace(/\D/g, ''); 
-    if(action === 'delete') { for(const t of ['history','metadata','bot_status','leads']) await db.run(`DELETE FROM ${t} WHERE phone=?`,[cleanPhone]); }
+    
+    if(action === 'delete') { 
+        for(const t of ['history','metadata','bot_status','leads']) await db.run(`DELETE FROM ${t} WHERE phone=?`,[cleanPhone]); 
+    }
     else if(action === 'set_labels') {
         const etiquetasStr = JSON.stringify(value);
         await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, etiquetasStr]);
         const tagPrincipal = value.length > 0 ? value[0].text : "Sin Etiqueta";
         await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [tagPrincipal, cleanPhone]);
     }
-    else if(action === 'toggle_pin') await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET pinned=excluded.pinned", [cleanPhone, value?1:0]);
-    else if(action === 'toggle_archive') await db.run("INSERT INTO metadata (phone, archived) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET archived=excluded.archived", [cleanPhone, value?1:0]);
+    // FIX: Usamos "CASE WHEN" para invertir el valor sin depender del Frontend
+    else if(action === 'toggle_pin') {
+        await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET pinned = CASE WHEN pinned = 1 THEN 0 ELSE 1 END", [cleanPhone]);
+    }
+    // FIX: Igual aquí, invierte el estado de archivado automáticamente
+    else if(action === 'toggle_archive') {
+        await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET archived = CASE WHEN archived = 1 THEN 0 ELSE 1 END", [cleanPhone]);
+    }
     res.json({success:true});
 });
 
@@ -417,7 +405,7 @@ app.get('/api/data/:type', proteger, async (req, res) => {
 });
 
 app.post('/api/config/logo', proteger, upload.single('file'), async (req, res) => { await setCfg('logo_url', `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`); res.json({success:true}); });
-app.post('/api/config/biz/save', proteger, async (req, res) => { await setCfg('biz_profile', {name:req.body.name, hours:req.body.hours}); if(req.body.website_data) await setCfg('website_data', req.body.website_data); res.json({success:true}); });
+app.post('/api/config/biz/save', proteger, async (req, res) => { await setCfg('biz_profile', {name:req.body.name, hours:req.body.hours}); res.json({success:true}); });
 app.post('/api/tags/add', proteger, async (req, res) => { await db.run("INSERT INTO global_tags (name, color) VALUES (?, ?)", [req.body.name, req.body.color]); res.json({success:true}); });
 app.post('/api/tags/delete', proteger, async (req, res) => { await db.run("DELETE FROM global_tags WHERE id = ?", [req.body.id]); res.json({success:true}); });
 app.post('/api/shortcuts/add', proteger, async (req, res) => { await db.run("INSERT INTO shortcuts (keyword, text) VALUES (?, ?)", [req.body.keyword, req.body.text]); res.json({success:true}); });
@@ -435,7 +423,7 @@ app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res)
 app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => { try { const mid = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname); if(mid) { await enviarWhatsApp(req.body.phone, { id: mid }, req.body.type); await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [req.body.phone, 'manual', `[MEDIA:${req.body.type.toUpperCase()}:${mid}]`, new Date().toISOString()]); await db.run("UPDATE metadata SET last_interaction = ? WHERE phone = ?", [new Date().toISOString(), req.body.phone]); res.json({success: true}); } else res.status(500).json({error: "Error Meta"}); } catch(e) { res.status(500).json({error: e.message}); } });
 app.post('/api/chat/send', proteger, async (req, res) => { const { phone, message } = req.body; const cleanPhone = phone.replace(/\D/g, ''); try { const sent = await enviarWhatsApp(cleanPhone, message); if(sent) { await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', message, new Date().toISOString()]); await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount, last_interaction) VALUES (?, ?, 1, 0, 0, ?) ON CONFLICT(phone) DO UPDATE SET last_interaction=excluded.last_interaction`, [cleanPhone, cleanPhone, new Date().toISOString()]); res.json({ success: true }); } else res.status(500).json({ error: "Error enviando" }); } catch(e) { res.status(500).json({ error: "Error interno" }); } });
 
-// --- WEBHOOK (RECEPCIÓN DE MENSAJES) ---
+// --- WEBHOOK ---
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
 
 app.post('/webhook', async (req, res) => { 
@@ -453,13 +441,12 @@ app.post('/webhook', async (req, res) => {
 
             if(msg.type !== 'text') { isFile = true; userMsg = `[MEDIA:${msg.type.toUpperCase()}:${msg[msg.type].id}]`; } 
             
-            // --- DEBOUNCE (ANTI-DIVERGENCIA) ---
             if (messageQueue.has(phone)) { clearTimeout(messageQueue.get(phone).timer); }
 
             const currentData = messageQueue.get(phone) || { text: [], name: val?.contacts?.[0]?.profile.name || "Cliente" };
             currentData.text.push(userMsg); 
 
-            // Timer: Espera 8 segundos antes de responder
+            // DEBOUNCE TIMER
             const timer = setTimeout(async () => {
                 const fullText = currentData.text.join("\n"); 
                 messageQueue.delete(phone); 
