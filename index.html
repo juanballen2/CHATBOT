@@ -3,17 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v25.16 - Dashboard Final</title>
+    <title>Valentina v25.17 - Dashboard Final</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
     <style>
         :root {
-            --primary: #00a884; --outgoing: #005c4b; --incoming: #202c33; 
-            --dark: #111b21; --panel: #202c33; --border: #37404a; 
-            --text: #e9edef; --text-muted: #8696a0; --accent: #53bdeb; --danger: #ef4444;
+            --primary: #00a884; 
+            --outgoing: #005c4b; 
+            --incoming: #202c33; 
+            --dark: #111b21;      
+            --panel: #202c33;     
+            --border: #37404a;    
+            --text: #e9edef;      
+            --text-muted: #8696a0;
+            --accent: #53bdeb;    
+            --danger: #ef4444;
         }
+
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        
         body { background-color: var(--dark); color: var(--text); height: 100vh; display: flex; overflow: hidden; }
 
         /* --- LAYOUT & SIDEBAR --- */
@@ -79,7 +88,7 @@
         }
         #back-btn { display: none; }
 
-        /* --- CRM --- */
+        /* --- CRM & CONFIG --- */
         .crm-panel { width: 320px; border-left: 1px solid var(--border); background: var(--dark); padding: 20px; overflow-y: auto; display: none; }
         .crm-panel.open { display: block; position: absolute; right: 0; height: 100%; z-index: 30; border-left: 1px solid var(--primary); background: var(--dark); box-shadow: -5px 0 15px rgba(0,0,0,0.5); }
         .crm-section { margin-bottom: 30px; background: var(--panel); padding: 15px; border-radius: 8px; }
@@ -460,7 +469,6 @@
             await loadMessages(phone, true);
         }
 
-        // --- CARGA MENSAJES (CORRECCIÓN ANTI-TITILEO) ---
         async function loadMessages(phone, scrollDown) {
             try {
                 const res = await fetch(`/api/chat-history/${phone}`);
@@ -478,9 +486,9 @@
                         const type = parts[1];
                         const id = parts[2].replace(']', '');
                         
-                        // FIX: Cache Buster ESTÁTICO (?v=2)
+                        // FIX: Cache Buster ESTÁTICO (?v=3)
                         // Esto rompe la caché vieja (rota) pero evita el parpadeo infinito.
-                        const mediaUrl = `/api/media-proxy/${id}?v=2`;
+                        const mediaUrl = `/api/media-proxy/${id}?v=3`;
 
                         if(type === 'IMAGE') {
                             text = `
