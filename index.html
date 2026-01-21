@@ -3,17 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v25.8 - Dashboard Comercial</title>
+    <title>Valentina v25.9 - Dashboard Comercial</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
     <style>
         :root {
-            --primary: #00a884; --outgoing: #005c4b; --incoming: #202c33; 
-            --dark: #111b21; --panel: #202c33; --border: #37404a; 
-            --text: #e9edef; --text-muted: #8696a0; --accent: #53bdeb; --danger: #ef4444;
+            --primary: #00a884; 
+            --outgoing: #005c4b; 
+            --incoming: #202c33; 
+            --dark: #111b21;      
+            --panel: #202c33;     
+            --border: #37404a;    
+            --text: #e9edef;      
+            --text-muted: #8696a0;
+            --accent: #53bdeb;    
+            --danger: #ef4444;
         }
+
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        
         body { background-color: var(--dark); color: var(--text); height: 100vh; display: flex; overflow: hidden; }
 
         /* --- LAYOUT & RESPONSIVE --- */
@@ -25,12 +34,14 @@
         .chat-list { width: 380px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--dark); flex-shrink: 0; transition: transform 0.3s ease; }
         .chat-area { flex: 1; display: flex; flex-direction: column; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-color: #0b141a; position: relative; }
         
-        /* MOBILE TWEAKS */
+        /* MOBILE TWEAKS (< 768px) */
         @media (max-width: 768px) {
             .sidebar { display: none; } 
             .chat-list { width: 100%; position: absolute; z-index: 10; height: 100%; }
             .chat-area { width: 100%; position: absolute; z-index: 20; transform: translateX(100%); transition: transform 0.3s ease; background-color: var(--dark); }
+            
             body.mobile-chat-open .chat-area { transform: translateX(0); }
+            
             #back-btn { display: block !important; margin-right: 15px; font-size: 1.2rem; cursor: pointer; color: var(--text-muted); }
         }
         #back-btn { display: none; }
@@ -48,13 +59,16 @@
         .view-filters { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 5px; align-items: center; }
         .filter-chip { font-size: 0.8rem; padding: 5px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 20px; cursor: pointer; white-space: nowrap; color: var(--text-muted); }
         .filter-chip.active { background: #2a3942; color: var(--primary); border-color: var(--primary); }
-        .tag-filter-select { background: var(--dark); color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; padding: 4px; font-size: 0.8rem; outline: none; max-width: 120px; }
+        
+        /* Dropdown de Etiquetas */
+        .tag-filter-select { background: var(--dark); color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; padding: 4px; font-size: 0.8rem; outline: none; max-width: 120px; cursor: pointer; }
 
         .chat-items { flex: 1; overflow-y: auto; }
         .chat-item { padding: 12px 15px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; gap: 12px; align-items: center; transition: 0.2s; }
         .chat-item:hover { background: #202c33; }
         .chat-item.active { background: #2a3942; }
         .chat-item.archived { opacity: 0.6; }
+        
         .avatar { width: 45px; height: 45px; border-radius: 50%; background: var(--border); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
         .chat-info { flex: 1; min-width: 0; }
         .chat-name { font-weight: 500; font-size: 1rem; color: #e9edef; display: flex; justify-content: space-between; }
@@ -68,9 +82,11 @@
 
         .chat-top { padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
         .messages { flex: 1; overflow-y: auto; padding: 20px 40px; display: flex; flex-direction: column; gap: 4px; }
+        
+        /* BURBUJAS DE CHAT */
         .msg { max-width: 65%; padding: 6px 10px; border-radius: 8px; font-size: 0.9rem; line-height: 1.4; position: relative; word-wrap: break-word; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); }
-        .msg.user { background: var(--incoming); align-self: flex-start; border-top-left-radius: 0; color: #fff; }
-        .msg.bot, .msg.manual { background: var(--outgoing); align-self: flex-end; border-top-right-radius: 0; color: #fff; }
+        .msg.user { background: var(--incoming); align-self: flex-start; border-top-left-radius: 0; color: #fff; } /* Izquierda */
+        .msg.bot, .msg.manual { background: var(--outgoing); align-self: flex-end; border-top-right-radius: 0; color: #fff; } /* Derecha */
         .msg.manual { background: #005c4b; }
         .msg-time { font-size: 0.65rem; opacity: 0.6; text-align: right; margin-top: 2px; margin-left: 10px; float: right; }
 
@@ -356,7 +372,7 @@
             startSyncLoop();
             refreshLeads();
             loadAllConfig();
-            loadTagFilterOptions(); // NUEVO: Cargar opciones del filtro
+            loadTagFilterOptions(); // Carga las etiquetas en el filtro
             document.addEventListener('click', () => document.getElementById('context-menu').style.display = 'none');
         };
 
@@ -392,7 +408,7 @@
             const phone = prompt("Ingresa el número (con código de país, ej: 57300...):");
             if (!phone) return;
             const name = prompt("Nombre del Cliente:") || phone;
-            openChat(phone.replace(/\D/g, ''), name, ''); // Reuse function
+            openChat(phone.replace(/\D/g, ''), name, '');
         }
 
         // --- CORE CHAT LOOP ---
@@ -402,7 +418,7 @@
             setInterval(() => { if(currentChat) loadMessages(currentChat, false); }, 3000);
         }
 
-        // NUEVO: Carga opciones en el Select
+        // LÓGICA DE FILTRO DE ETIQUETAS
         async function loadTagFilterOptions() {
             try {
                 const tags = await (await fetch('/api/data/tags')).json();
@@ -417,7 +433,7 @@
                 const res = await fetch(`/api/chats-full?view=${currentFilter}&search=${search}`);
                 chatsData = await res.json();
                 
-                // NUEVO: Lógica de Filtrado por Etiqueta
+                // Aplicar Filtro de Etiquetas en Frontend
                 const tagFilter = document.getElementById('tag-filter').value;
                 if(tagFilter) {
                     chatsData = chatsData.filter(c => c.labels && c.labels.some(l => (l.text || l) === tagFilter));
@@ -437,7 +453,6 @@
             syncChats();
         }
 
-        // FUNCIÓN AUXILIAR PARA NORMALIZAR ETIQUETAS VIEJAS (TEXTO) A NUEVAS (OBJETOS)
         function normalizeTag(tag) {
             if (typeof tag === 'string') return { text: tag, color: '#555' };
             return tag;
@@ -529,6 +544,7 @@
             document.getElementById('chat-header-phone').innerText = phone;
             document.getElementById('chat-header-img').src = photo || ''; 
             
+            // Loader visual
             const container = document.getElementById('messages-container');
             container.innerHTML = `
                 <div style="display:flex; justify-content:center; align-items:center; height:100%; color:#8696a0; flex-direction:column; gap:10px;">
@@ -544,7 +560,7 @@
             await loadMessages(phone, true);
         }
 
-        // --- CARGA MENSAJES (FALLBACK DOWNLOAD BTN) ---
+        // --- CARGA MENSAJES (MODO SEGURO: FOTO OK, AUDIO DESCARGABLE) ---
         async function loadMessages(phone, scrollDown) {
             try {
                 const res = await fetch(`/api/chat-history/${phone}`);
@@ -562,32 +578,24 @@
                         const type = parts[1];
                         const id = parts[2].replace(']', '');
                         
-                        // URL base para el archivo
+                        // URL base para el archivo (Proxy del Backend)
                         const mediaUrl = `/api/media-proxy/${id}`;
 
                         if(type === 'IMAGE') {
-                            // Imagen + Enlace de Descarga
-                            text = `
-                                <div style="display:flex; flex-direction:column; gap:5px;">
-                                    <img src="${mediaUrl}" style="max-width:250px; border-radius:8px; cursor:pointer;" onclick="window.open(this.src)">
-                                    <a href="${mediaUrl}" download="imagen_${id}.jpg" style="font-size:0.75rem; color:var(--text-muted); text-decoration:none; text-align:right;">
-                                        <i class="fas fa-download"></i> Descargar
-                                    </a>
-                                </div>`;
+                            // IMAGEN: Se muestra normal
+                            text = `<img src="${mediaUrl}" style="max-width:250px; border-radius:8px; cursor:pointer;" onclick="window.open(this.src)">`;
                         }
                         else if(type === 'AUDIO') {
-                            // Audio + Enlace de Descarga (Fallback)
+                            // AUDIO: SOLO BOTÓN DE DESCARGA (SOLICITADO)
+                            // Esto evita cualquier error de codec del navegador
                             text = `
-                                <div style="display:flex; flex-direction:column; gap:5px;">
-                                    <audio controls>
-                                        <source src="${mediaUrl}" type="audio/ogg">
-                                        <source src="${mediaUrl}" type="audio/mpeg">
-                                        Tu navegador no soporta el audio.
-                                    </audio>
-                                    <a href="${mediaUrl}" download="audio_${id}.ogg" style="font-size:0.85rem; color:#53bdeb; text-decoration:underline; font-weight:500;">
-                                        ⬇️ Descargar Audio
-                                    </a>
-                                </div>`;
+                                <a href="${mediaUrl}" download="nota_voz_${id}.ogg" style="display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:10px 15px; border-radius:8px; text-decoration:none; color:white; width:fit-content; border:1px solid var(--border);">
+                                    <i class="fas fa-play-circle" style="font-size:1.8rem; color:#53bdeb;"></i>
+                                    <div style="display:flex; flex-direction:column;">
+                                        <span style="font-weight:600; font-size:0.9rem;">Nota de Voz</span>
+                                        <span style="font-size:0.75rem; color:var(--text-muted);">Clic para descargar y oír 🎵</span>
+                                    </div>
+                                </a>`;
                         }
                         else {
                             // Documentos
