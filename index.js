@@ -1,10 +1,10 @@
 /*
- * SERVER BACKEND - VALENTINA v25.5 (MOBILE READY + AUDIO BUFFER FIX)
+ * SERVER BACKEND - VALENTINA v25.7 (ORIGINAL MEDIA LOGIC RESTORED)
  * Cliente: Importadora Casa Colombia (ICC)
  * ============================================================
- * 1. Audio Fix: Cambiado de Stream a Buffer para máxima compatibilidad con WhatsApp.
- * 2. Mobile Ready: Backend listo para servir assets responsivos.
- * 3. Hotfix Critical: Debounce y Sanitización de datos "unknown".
+ * 1. Audio/Image Fix: RESTAURADA la lógica original que sí funcionaba (Auth Header en descarga).
+ * 2. Mobile Ready: Mantiene la estructura para app móvil.
+ * 3. Hotfix Critical: Mantiene Debounce y Anti-Unknown.
  * ============================================================
  */
 
@@ -104,7 +104,7 @@ let db, globalKnowledge = [], serverInstance;
         iniciarCronJobs();
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.5 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.7 ONLINE (Port ${PORT})`));
         
         serverInstance.on('error', (e) => { 
             if(e.code === 'EADDRINUSE') {
@@ -175,39 +175,19 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- PROXY DE MEDIOS (FUERZA BRUTA - FIX AUDIO DEFINITIVO) ---
+// --- PROXY DE MEDIOS RESTAURADO (LÓGICA ORIGINAL) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     try {
-        // 1. Obtener URL firmada de Meta
         const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
+        // LÓGICA ORIGINAL RESTAURADA: Se envía el TOKEN en la descarga
+        const { data: buffer } = await axios.get(urlData.url, { headers: { 'Authorization': `Bearer ${META_TOKEN}` }, responseType: 'arraybuffer' });
         
-        // 2. Descargar a Memoria (ArrayBuffer)
-        // NOTA: NO enviar headers de autorización aquí, o AWS bloqueará la descarga.
-        const response = await axios.get(urlData.url, { 
-            responseType: 'arraybuffer' 
-        });
-        
-        const buffer = Buffer.from(response.data);
-
-        // 3. Forzar MIME TYPE para Audio
         let contentType = urlData.mime_type || 'application/octet-stream';
-        // Si parece audio, le decimos al navegador que es OGG para que Chrome lo entienda
-        if (contentType.includes('audio') || contentType.includes('ogg') || contentType.includes('opus')) {
-            contentType = 'audio/ogg';
-        }
-
-        // 4. Enviar con caché para mejorar rendimiento
-        res.writeHead(200, { 
-            'Content-Type': contentType,
-            'Content-Length': buffer.length,
-            'Cache-Control': 'public, max-age=31536000'
-        });
+        if (contentType.includes('audio') || contentType.includes('ogg')) contentType = 'audio/ogg'; 
+        
+        res.writeHead(200, { 'Content-Length': buffer.length, 'Content-Type': contentType });
         res.end(buffer);
-
-    } catch (e) { 
-        console.error("Media Proxy Error:", e.message);
-        res.status(500).send("Error Media"); 
-    }
+    } catch (e) { res.status(500).send("Error Media"); }
 });
 
 // --- 7. CEREBRO IA ---
