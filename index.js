@@ -1,11 +1,10 @@
 /*
- * SERVER BACKEND - VALENTINA v25.19 (FIX: AUTH 401 RESTORED)
- * Cliente: Importadora Casa Colombia (ICC)
+ * SERVER BACKEND - v25.26 (LOGIC FREE & STABLE)
  * ============================================================
- * FIX CRÍTICO:
- * Se restaura el envío del Token en la descarga del archivo (Media Proxy).
- * El error 401 en los logs de Railway confirmó que Meta/AWS requiere
- * la credencial incluso para descargar el binario desde la URL firmada.
+ * CARACTERÍSTICAS TÉCNICAS:
+ * 1. Agnostic Logic: No contiene reglas de negocio. Todo se lee de la DB.
+ * 2. Media Proxy V3: Headers completos (Auth + UserAgent) para descarga.
+ * 3. Base de Datos: Esquema completo con autorecuperación.
  * ============================================================
  */
 
@@ -25,16 +24,18 @@ const { open } = require('sqlite');
 const app = express();
 app.set('trust proxy', 1);
 
+// Límites aumentados para archivos grandes
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors());
 
+// Configuración de Carga (Memoria)
 const upload = multer({ 
     storage: multer.memoryStorage(),
     limits: { fileSize: 100 * 1024 * 1024 } 
 });
 
-// COLA DE MENSAJES (DEBOUNCE)
+// Sistema de Cola (Debounce)
 const messageQueue = new Map(); 
 const DEBOUNCE_TIME = 8000; 
 
@@ -44,21 +45,30 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-val-secure-v23"; 
+const SESSION_SECRET = "icc-val-secure-final"; 
 
-const DEFAULT_PROMPT = `ERES VALENTINA, ASISTENTE DE VENTAS DE IMPORTADORA CASA COLOMBIA (ICC).`;
+// PROMPT GENÉRICO (El negocio se define en el Frontend)
+const DEFAULT_PROMPT = `Eres un asistente virtual inteligente. Tu comportamiento, nombre y reglas están definidos en la configuración del sistema. Si no hay configuración, responde amablemente que estás esperando instrucciones del administrador.`;
 
 // --- 3. SESIONES ---
 app.use(session({
-    name: 'icc_session', 
+    name: 'session_id', 
     secret: SESSION_SECRET, 
     resave: false, 
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 86400000 } 
+    cookie: { secure: false, maxAge: 86400000 } // 24h
 }));
 
-const proteger = (req, res, next) => req.session.isLogged ? next() : res.status(401).send("No autorizado");
+// Middleware de Seguridad
+const proteger = (req, res, next) => {
+    if (req.session.isLogged) {
+        next();
+    } else {
+        res.status(401).send("Acceso no autorizado.");
+    }
+};
 
+// Protección de archivos directos
 app.use((req, res, next) => {
     if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
         return res.status(403).send('🚫 Acceso Denegado');
@@ -79,6 +89,9 @@ let db, globalKnowledge = [], serverInstance;
             driver: sqlite3.Database 
         });
 
+        console.log("📂 Base de Datos Cargada.");
+
+        // Definición de Tablas
         const tables = [
             `history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT)`,
             `leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT UNIQUE, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT, source TEXT DEFAULT 'Organico', status_tag TEXT, farewell_sent INTEGER DEFAULT 0)`,
@@ -93,11 +106,17 @@ let db, globalKnowledge = [], serverInstance;
 
         for (const t of tables) await db.exec(`CREATE TABLE IF NOT EXISTS ${t}`);
 
-        const migrations = ['photoUrl', 'archived', 'unreadCount', 'last_interaction'].map(c => `ALTER TABLE metadata ADD COLUMN ${c}`);
-        migrations.push("ALTER TABLE leads ADD COLUMN source TEXT DEFAULT 'Organico'");
-        migrations.push("ALTER TABLE leads ADD COLUMN status_tag TEXT");
-        migrations.push("ALTER TABLE leads ADD COLUMN farewell_sent INTEGER DEFAULT 0");
-        migrations.push('ALTER TABLE config ADD COLUMN logoUrl TEXT');
+        // Migraciones de compatibilidad
+        const migrations = [
+            "ALTER TABLE metadata ADD COLUMN photoUrl TEXT",
+            "ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0",
+            "ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0",
+            "ALTER TABLE metadata ADD COLUMN last_interaction TEXT",
+            "ALTER TABLE leads ADD COLUMN source TEXT DEFAULT 'Organico'",
+            "ALTER TABLE leads ADD COLUMN status_tag TEXT",
+            "ALTER TABLE leads ADD COLUMN farewell_sent INTEGER DEFAULT 0",
+            "ALTER TABLE config ADD COLUMN logoUrl TEXT"
+        ];
 
         for (const m of migrations) { try { await db.exec(m); } catch(e){} }
 
@@ -105,7 +124,7 @@ let db, globalKnowledge = [], serverInstance;
         iniciarCronJobs();
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.19 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER ONLINE v25.26 (Port ${PORT})`));
         
         serverInstance.on('error', (e) => { 
             if(e.code === 'EADDRINUSE') {
@@ -113,10 +132,10 @@ let db, globalKnowledge = [], serverInstance;
             }
         });
 
-    } catch (e) { console.error("❌ DB ERROR:", e); }
+    } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
 
-// --- 5. UTILIDADES ---
+// --- 5. UTILIDADES DEL SISTEMA ---
 async function refreshKnowledge() {
     try { 
         globalKnowledge = (await db.all("SELECT * FROM inventory")).map(r => ({ 
@@ -130,20 +149,19 @@ async function getCfg(k, fb=null) {
     const r = await db.get("SELECT value FROM config WHERE key = ?", [k]); 
     return r ? JSON.parse(r.value) : fb; 
 }
+
 async function setCfg(k, v) { 
     await db.run("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", [k, JSON.stringify(v)]); 
 }
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 function detectarFuente(mensaje) {
     if (!mensaje) return 'Organico';
     const msg = mensaje.toLowerCase();
-    if (msg.includes('importadoracasacolombia.com')) return 'Web';
-    if (msg.includes('storeicc.com') || msg.includes('deseo asesoría')) return 'Tienda Virtual';
+    if (msg.includes('http')) return 'Web/Link';
     return 'Organico';
 }
 
-// --- 6. META API ---
+// --- 6. META API (CONEXIÓN WHATSAPP) ---
 async function uploadToMeta(buffer, mime, name) {
     try {
         const form = new FormData();
@@ -151,7 +169,10 @@ async function uploadToMeta(buffer, mime, name) {
         form.append('file', buffer, { filename: name, contentType: mime });
         form.append('type', type); 
         form.append('messaging_product', 'whatsapp');
-        const r = await axios.post(`https://graph.facebook.com/v21.0/${PHONE_ID}/media`, form, { headers: { 'Authorization': `Bearer ${META_TOKEN}`, ...form.getHeaders() } });
+        
+        const r = await axios.post(`https://graph.facebook.com/v21.0/${PHONE_ID}/media`, form, { 
+            headers: { 'Authorization': `Bearer ${META_TOKEN}`, ...form.getHeaders() } 
+        });
         return r.data.id;
     } catch (e) { return null; }
 }
@@ -168,23 +189,24 @@ async function enviarWhatsApp(to, content, type = "text") {
             payload[type] = { link: content };
         }
         await axios.post(`https://graph.facebook.com/v21.0/${PHONE_ID}/messages`, payload, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
-        console.log(`✅ Mensaje enviado a ${to}`);
         return true;
-    } catch (e) { 
-        console.error("❌ ERROR META:", e.response ? JSON.stringify(e.response.data) : e.message); 
-        return false; 
-    }
+    } catch (e) { return false; }
 }
 
-// --- 7. PROXY DE MEDIOS (FIX 401: AUTH RESTORED) ---
+// --- 7. MEDIA PROXY (FIXED: AUTH REQUIRED) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     try {
-        // 1. Obtener URL (Con Token)
-        const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
+        // Paso 1: Obtener URL firmada
+        const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
+        });
         
-        // 2. Descargar Binario (CON TOKEN RESTAURADO)
+        // Paso 2: Descargar Binario (CON AUTH HEADERS)
         const response = await axios.get(urlData.url, { 
-            headers: { 'Authorization': `Bearer ${META_TOKEN}` }, // <-- Aquí estaba el problema, se restauró.
+            headers: { 
+                'Authorization': `Bearer ${META_TOKEN}`,
+                'User-Agent': 'Mozilla/5.0 (compatible; Bot/1.0)' 
+            }, 
             responseType: 'arraybuffer' 
         });
         
@@ -193,19 +215,21 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
         
         res.writeHead(200, { 'Content-Length': response.data.length, 'Content-Type': contentType });
         res.end(Buffer.from(response.data));
+
     } catch (e) { 
-        console.error("Media Error:", e.response ? e.response.status : e.message); 
-        res.status(500).send("Error Media"); 
+        console.error("Proxy Error:", e.message); 
+        res.status(500).send("Error descargando media"); 
     }
 });
 
-// --- 8. CEREBRO IA ---
+// --- 8. LÓGICA IA (AGNOSTICA) ---
 function limpiarRespuesta(txt) {
     let clean = txt.replace(/```json([\s\S]*?)```|{([\s\S]*?)}/gi, "").trim(); 
     return clean.replace(/[\r\n]+/g, "\n").trim();
 }
 
 async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFile = false) {
+    // Registro Histórico
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', dbMsg, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [phone, new Date().toISOString()]);
 
@@ -218,45 +242,56 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         return rFile;
     }
 
-    let personalidadLorena = await getCfg('bot_prompt');
-    const configUsar = (personalidadLorena && personalidadLorena.length > 5) ? personalidadLorena : DEFAULT_PROMPT;
+    // --- CARGA DE CONTEXTO (DB) ---
+    // Aquí es donde el backend se vuelve agnóstico. Solo lee lo que hay en la DB.
+    let promptUsuario = await getCfg('bot_prompt');
+    const configUsar = (promptUsuario && promptUsuario.length > 5) ? promptUsuario : DEFAULT_PROMPT;
+    
     const webSources = await db.all("SELECT summary FROM knowledge_sources WHERE active = 1");
     const webContext = webSources.map(w => w.summary).join("\n\n");
+    
     const techRules = await getCfg('tech_rules', []);
     const biz = await getCfg('biz_profile', {});
+    
     const history = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [phone])).reverse();
     const lead = await db.get("SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
     
-    let memoriaDatos = `DATOS CAPTURADOS:\n- Teléfono: ${phone}\n`;
+    let memoriaDatos = `DATOS CLIENTE ID: ${phone}\n`;
     if (lead) {
-        if (lead.nombre && lead.nombre !== "Cliente" && lead.nombre !== "null") memoriaDatos += `- Nombre: ${lead.nombre}\n`;
-        if (lead.ciudad && lead.ciudad !== "null") memoriaDatos += `- Ciudad: ${lead.ciudad}\n`;
-        if (lead.interes) memoriaDatos += `- Interés previo: ${lead.interes}\n`;
-    } else {
-        memoriaDatos += "- ESTADO: Cliente Nuevo (Falta Nombre y Ciudad).";
+        if (lead.nombre) memoriaDatos += `Nombre: ${lead.nombre}\n`;
+        if (lead.ciudad) memoriaDatos += `Ciudad: ${lead.ciudad}\n`;
+        if (lead.interes) memoriaDatos += `Interés: ${lead.interes}\n`;
     }
 
+    // RAG Simple (Búsqueda en Inventario)
     const busqueda = aiMsg.toLowerCase().split(" ").slice(0,3).join(" ");
     const stock = globalKnowledge.filter(i => (i.searchable||"").toLowerCase().includes(busqueda)).slice(0,5);
 
+    // Construcción del Prompt Dinámico
     const promptFinal = `
-    === PERSONALIDAD Y REGLAS DE NEGOCIO ===
+    === INSTRUCCIONES PRINCIPALES ===
     ${configUsar}
-    === CONTEXTO WEB (ICC) ===
-    ${webContext || "No hay datos web extra."}
-    === CONTEXTO TÉCNICO DEL CLIENTE ===
-    ${memoriaDatos}
-    === INVENTARIO DISPONIBLE (Referencia) ===
-    ${JSON.stringify(stock)}
-    === REGLAS TÉCNICAS ADICIONALES ===
+    
+    === REGLAS OPERATIVAS ===
     ${techRules.join("\n")}
-    Horario: ${biz.hours || '8am-6pm'}
-    === HISTORIAL ===
+    Horario de atención: ${biz.hours || 'No definido'}
+    
+    === CONTEXTO EXTERNO (WEB) ===
+    ${webContext || "Sin información adicional."}
+    
+    === MEMORIA DEL CLIENTE ===
+    ${memoriaDatos}
+    
+    === DATOS DE INVENTARIO RELACIONADOS ===
+    ${JSON.stringify(stock)}
+    
+    === CONVERSACIÓN RECIENTE ===
     ${JSON.stringify(history)}
-    === INSTRUCCIÓN OBLIGATORIA DEL SISTEMA ===
-    Al final de tu respuesta, SIEMPRE analiza si tienes datos nuevos del cliente y genera este JSON oculto.
+    
+    === SALIDA JSON OBLIGATORIA ===
+    Si detectas datos nuevos del cliente (Nombre, Ciudad, Interés, Correo), genera AL FINAL de tu respuesta este bloque JSON:
     \`\`\`json
-    {"es_lead": boolean, "nombre":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead", "datos_completos": boolean}
+    {"es_lead": boolean, "nombre":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead"}
     \`\`\`
     `;
 
@@ -264,6 +299,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: promptFinal }] }] });
         const raw = r.data.candidates[0].content.parts[0].text;
         
+        // Extracción de Lead Data
         const match = raw.match(/```json([\s\S]*?)```|{([\s\S]*?)}/);
         if (match) {
             try {
@@ -273,27 +309,25 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         }
 
         let reply = limpiarRespuesta(raw);
-        if (!reply || reply.length < 2) reply = "¿En qué más te puedo ayudar?";
+        if (!reply) reply = "Disculpa, no pude procesar eso.";
         
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', reply, new Date().toISOString()]);
         return reply;
 
     } catch (e) { 
         console.error("AI Error:", e);
-        return "Un momento, estoy validando esa información... 🔧"; 
+        return "El sistema está ocupado momentáneamente."; 
     }
 }
 
-// --- 9. GESTIÓN DE LEADS (ANTI-UNKNOWN) ---
+// --- 9. GESTIÓN DE LEADS (DB OPERATIONS) ---
 async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
     const limpiarDato = (d) => (!d || /^(unknown|null|n\/a|no menciona|cliente|pend)$/i.test(d.toString().trim())) ? null : d.trim();
 
     let name = limpiarDato(info.nombre) || fbName;
     let ciudadLimpia = limpiarDato(info.ciudad); 
     let interesLimpio = limpiarDato(info.interes) || (oldLead ? oldLead.interes : "Consultando");
-
-    let datosCompletos = (name !== fbName && ciudadLimpia !== null);
-    let farewellReset = (datosCompletos && oldLead && !oldLead.fecha) ? ", farewell_sent = 0" : "";
+    let farewellReset = (oldLead && !oldLead.fecha) ? ", farewell_sent = 0" : "";
 
     if (oldLead) {
         await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=? ${farewellReset} WHERE id=?`, 
@@ -307,28 +341,31 @@ async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
     }
 }
 
-// --- 10. CRON JOBS ---
+// --- 10. CRON JOBS (TAREAS AUTOMÁTICAS) ---
 function iniciarCronJobs() {
     setInterval(async () => {
         try {
             const now = new Date();
+            // Despedida automática si ya se capturaron datos
             const leadsTerminados = await db.all(`SELECT * FROM leads WHERE farewell_sent = 0 AND ciudad IS NOT NULL AND LOWER(ciudad) NOT IN ('unknown', 'null', 'n/a') AND nombre IS NOT NULL AND fecha < datetime('now', '-1 hour') AND fecha > datetime('now', '-24 hour')`);
             
             for (const l of leadsTerminados) {
                 const meta = await db.get("SELECT last_interaction FROM metadata WHERE phone = ?", [l.phone]);
                 const lastMsgDate = new Date(meta?.last_interaction || 0);
                 if (now - lastMsgDate > 30 * 60 * 1000) {
-                    const msgDespedida = "Hasta pronto, uno de nuestros ejecutivos comerciales se contactará con usted 🤝";
+                    const msgDespedida = "Hasta pronto, un asesor validará tu información y te contactará. 🤝";
                     await enviarWhatsApp(l.phone, msgDespedida);
                     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [l.phone, 'bot', msgDespedida, now.toISOString()]);
                     await db.run("UPDATE leads SET farewell_sent = 1 WHERE id = ?", [l.id]);
                 }
             }
+            // Recuperación de carritos (gente que dejó de hablar)
             const olvidados = await db.all(`SELECT m.phone FROM metadata m LEFT JOIN leads l ON m.phone = l.phone WHERE l.id IS NULL AND m.last_interaction < datetime('now', '-24 hour') AND m.last_interaction > datetime('now', '-48 hour') AND m.archived = 0`);
+            
             for (const o of olvidados) {
                 const lastMsg = await db.get("SELECT role FROM history WHERE phone = ? ORDER BY id DESC LIMIT 1", [o.phone]);
                 if (lastMsg && lastMsg.role === 'bot') {
-                    const msgRecuerdo = "Hola 👋, noté que no terminamos nuestra consulta. ¿Sigues interesado en repuestos?";
+                    const msgRecuerdo = "Hola, ¿aún necesitas ayuda con tu consulta?";
                     await enviarWhatsApp(o.phone, msgRecuerdo);
                     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [o.phone, 'bot', msgRecuerdo, now.toISOString()]);
                     await db.run("UPDATE metadata SET last_interaction = ? WHERE phone = ?", [now.toISOString(), o.phone]);
@@ -338,7 +375,7 @@ function iniciarCronJobs() {
     }, 60000 * 5); 
 }
 
-// --- 11. RUTAS API ---
+// --- 11. RUTAS API (ENDPOINTS) ---
 app.post('/auth', (req, res) => {
     if (req.body.user === ADMIN_USER && req.body.pass === ADMIN_PASS) { req.session.isLogged = true; res.json({success:true}); } else { res.status(401).json({success:false}); }
 });
@@ -348,6 +385,7 @@ app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirna
 
 app.get('/api/config/prompt', proteger, async (req, res) => res.json({ prompt: await getCfg('bot_prompt', DEFAULT_PROMPT) }));
 app.post('/api/config/prompt', proteger, async (req, res) => { await setCfg('bot_prompt', req.body.prompt); res.json({success:true}); });
+
 app.get('/api/data/web-knowledge', proteger, async (req, res) => { res.json(await db.all("SELECT * FROM knowledge_sources ORDER BY id DESC")); });
 app.post('/api/data/web-knowledge', proteger, async (req, res) => { await db.run("INSERT INTO knowledge_sources (type, url, summary, date) VALUES (?, ?, ?, ?)", ['web', req.body.url, req.body.summary, new Date().toLocaleString()]); res.json({success:true}); });
 app.post('/api/data/web-knowledge/delete', proteger, async (req, res) => { await db.run("DELETE FROM knowledge_sources WHERE id = ?", [req.body.id]); res.json({success:true}); });
@@ -374,7 +412,7 @@ app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     res.json(await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]));
 });
 
-// --- ACCIONES DE CHAT ---
+// Acciones de Chat (Toggle corregido)
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
     const cleanPhone = phone.replace(/\D/g, ''); 
@@ -449,7 +487,7 @@ app.post('/webhook', async (req, res) => {
             const currentData = messageQueue.get(phone) || { text: [], name: val?.contacts?.[0]?.profile.name || "Cliente" };
             currentData.text.push(userMsg); 
 
-            // DEBOUNCE TIMER
+            // DEBOUNCE
             const timer = setTimeout(async () => {
                 const fullText = currentData.text.join("\n"); 
                 messageQueue.delete(phone); 
