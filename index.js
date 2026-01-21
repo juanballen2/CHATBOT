@@ -1,10 +1,10 @@
 /*
- * SERVER BACKEND - VALENTINA v25.12 (LOGIC FIX: UNARCHIVE)
- * Cliente: Importadora Casa Colombia (ICC)
+ * SERVER BACKEND - VALENTINA v25.14 (FINAL PRODUCTION)
  * ============================================================
- * 1. FIX: "Toggle" de Archivar/Fijar ahora se hace por SQL (CASE WHEN).
- * Esto soluciona que no dejaba desarchivar chats.
- * 2. Mantiene: Media Proxy (Auth+Buffer), Debounce, Anti-Unknown.
+ * ESTADO: INTEGRIDAD TOTAL
+ * 1. Media Proxy: Logic v2 (Get URL with Auth -> Download without Auth).
+ * 2. Toggle Actions: SQL CASE WHEN (Arregla Desarchivar).
+ * 3. Seguridad: Debounce, Anti-Unknown, Auth.
  * ============================================================
  */
 
@@ -104,7 +104,7 @@ let db, globalKnowledge = [], serverInstance;
         iniciarCronJobs();
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.12 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.14 ONLINE (Port ${PORT})`));
         
         serverInstance.on('error', (e) => { 
             if(e.code === 'EADDRINUSE') {
@@ -175,23 +175,35 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- 7. PROXY DE MEDIOS (Final Logic: Auth + ArrayBuffer + MimeType Original) ---
+// --- 7. PROXY DE MEDIOS (FIX DEFINITIVO IMAGENES) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     try {
-        const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
+        // 1. Obtener URL firmada (SÍ lleva Token)
+        const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
+        });
         
-        // Descarga con Auth y Buffer
-        const { data: buffer } = await axios.get(urlData.url, { 
-            headers: { 'Authorization': `Bearer ${META_TOKEN}` }, 
+        // 2. Descargar Binario (NO lleva Token, porque la URL ya viene firmada por Amazon/Meta)
+        // Si le mandas Token aquí, Amazon rechaza la firma -> Error 403 -> Imagen Rota.
+        const response = await axios.get(urlData.url, { 
             responseType: 'arraybuffer' 
         });
         
+        // 3. Servir
         let contentType = urlData.mime_type || 'application/octet-stream';
+        // Ajuste para audios (para que Chrome no se confunda)
         if (contentType.includes('audio') || contentType.includes('ogg')) contentType = 'audio/ogg'; 
         
-        res.writeHead(200, { 'Content-Length': buffer.length, 'Content-Type': contentType });
-        res.end(Buffer.from(buffer));
-    } catch (e) { res.status(500).send("Error Media"); }
+        res.writeHead(200, { 
+            'Content-Length': response.data.length, 
+            'Content-Type': contentType 
+        });
+        res.end(response.data);
+
+    } catch (e) { 
+        console.error("Media Proxy Error:", e.message);
+        res.status(500).send("Error Media"); 
+    }
 });
 
 // --- 8. CEREBRO IA ---
@@ -279,7 +291,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     }
 }
 
-// --- 9. GESTIÓN DE LEADS (ANTI-UNKNOWN) ---
+// --- 9. GESTIÓN DE LEADS ---
 async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
     const limpiarDato = (d) => (!d || /^(unknown|null|n\/a|no menciona|cliente|pend)$/i.test(d.toString().trim())) ? null : d.trim();
 
@@ -354,10 +366,8 @@ app.get('/api/chats-full', proteger, async (req, res) => {
         let whereClause = '(m.archived = 0 OR m.archived IS NULL)';
         if (view === 'archived') whereClause = 'm.archived = 1';
         else if (view === 'unread') whereClause = 'm.unreadCount > 0 AND (m.archived = 0 OR m.archived IS NULL)';
-        
         let params = [];
         if (search) { whereClause += ` AND (m.contactName LIKE ? OR h.phone LIKE ? OR h.text LIKE ?)`; params.push(search, search, search); }
-        
         const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, b.active as botActive, l.source, l.status_tag FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN leads l ON h.phone = l.phone WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 50`;
         const rows = await db.all(query, params);
         res.json(rows.map(r => ({ id: r.id, name: r.contactName || r.id, lastMessage: { text: r.lastText, time: r.timestamp }, botActive: r.botActive !== 0, pinned: r.pinned === 1, archived: r.archived === 1, unreadCount: r.unreadCount || 0, labels: JSON.parse(r.labels || "[]"), photoUrl: r.photoUrl, timestamp: r.timestamp, source: r.source, statusTag: r.status_tag })));
@@ -369,28 +379,14 @@ app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     res.json(await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]));
 });
 
-// --- ACCIONES DE CHAT (FIX: TOGGLE INTELIGENTE) ---
+// --- ACCIONES CHAT (TOGGLE FIX) ---
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
     const cleanPhone = phone.replace(/\D/g, ''); 
-    
-    if(action === 'delete') { 
-        for(const t of ['history','metadata','bot_status','leads']) await db.run(`DELETE FROM ${t} WHERE phone=?`,[cleanPhone]); 
-    }
-    else if(action === 'set_labels') {
-        const etiquetasStr = JSON.stringify(value);
-        await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, etiquetasStr]);
-        const tagPrincipal = value.length > 0 ? value[0].text : "Sin Etiqueta";
-        await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [tagPrincipal, cleanPhone]);
-    }
-    // FIX: Usamos "CASE WHEN" para invertir el valor sin depender del Frontend
-    else if(action === 'toggle_pin') {
-        await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET pinned = CASE WHEN pinned = 1 THEN 0 ELSE 1 END", [cleanPhone]);
-    }
-    // FIX: Igual aquí, invierte el estado de archivado automáticamente
-    else if(action === 'toggle_archive') {
-        await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET archived = CASE WHEN archived = 1 THEN 0 ELSE 1 END", [cleanPhone]);
-    }
+    if(action === 'delete') { for(const t of ['history','metadata','bot_status','leads']) await db.run(`DELETE FROM ${t} WHERE phone=?`,[cleanPhone]); }
+    else if(action === 'set_labels') { await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, JSON.stringify(value)]); await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [value.length > 0 ? value[0].text : "Sin Etiqueta", cleanPhone]); }
+    else if(action === 'toggle_pin') await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET pinned = CASE WHEN pinned = 1 THEN 0 ELSE 1 END", [cleanPhone]);
+    else if(action === 'toggle_archive') await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET archived = CASE WHEN archived = 1 THEN 0 ELSE 1 END", [cleanPhone]);
     res.json({success:true});
 });
 
