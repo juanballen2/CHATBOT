@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v25.5 - Mobile Ready</title>
+    <title>Valentina v25.7 - Stable Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
@@ -30,9 +30,7 @@
             .sidebar { display: none; } 
             .chat-list { width: 100%; position: absolute; z-index: 10; height: 100%; }
             .chat-area { width: 100%; position: absolute; z-index: 20; transform: translateX(100%); transition: transform 0.3s ease; background-color: var(--dark); }
-            
             body.mobile-chat-open .chat-area { transform: translateX(0); }
-            
             #back-btn { display: block !important; margin-right: 15px; font-size: 1.2rem; cursor: pointer; color: var(--text-muted); }
         }
         #back-btn { display: none; }
@@ -544,7 +542,7 @@
             await loadMessages(phone, true);
         }
 
-        // --- CARGA MENSAJES (AUDIO FIX) ---
+        // --- CARGA MENSAJES (AUDIO FIX - RESTAURADO SIMPLE) ---
         async function loadMessages(phone, scrollDown) {
             try {
                 const res = await fetch(`/api/chat-history/${phone}`);
@@ -566,12 +564,8 @@
                             text = `<img src="/api/media-proxy/${id}" style="max-width:250px; border-radius:8px; cursor:pointer;" onclick="window.open(this.src)">`;
                         }
                         else if(type === 'AUDIO') {
-                            // HTML5 Audio Standard
-                            text = `
-                                <audio controls style="width: 240px; margin-top:5px;">
-                                    <source src="/api/media-proxy/${id}" type="audio/ogg">
-                                    Tu navegador no soporta el audio.
-                                </audio>`;
+                            // LÓGICA ORIGINAL RESTAURADA: Etiqueta simple
+                            text = `<audio controls src="/api/media-proxy/${id}" style="width: 240px; margin-top:5px;"></audio>`;
                         }
                         else {
                             text = `<a href="/api/media-proxy/${id}" target="_blank" style="color:white; text-decoration:underline; display:flex; align-items:center; gap:5px;">
