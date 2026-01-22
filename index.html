@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v25.26 - Final Dashboard</title>
+    <title>Valentina v25.29 - Final Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
@@ -22,14 +22,11 @@
         .nav-btn:hover, .nav-btn.active { background: #374248; color: var(--primary); }
         .nav-bottom { margin-top: auto; padding-bottom: 20px; }
 
-        /* --- MAIN AREA & TABS (FIXED) --- */
+        /* --- MAIN AREA & TABS --- */
         .main-area { flex: 1; display: flex; position: relative; overflow: hidden; background: var(--dark); }
         .view-panel { display: none; width: 100%; height: 100%; }
         
-        /* CHAT: Horizontal (Lista | Conversación) */
         #tab-chat.active { display: flex; flex-direction: row; }
-        
-        /* LEADS & CONFIG: Vertical con Scroll (Corrección Visual) */
         #tab-leads.active, #tab-config.active { display: flex; flex-direction: column; overflow-y: auto; }
 
         /* --- CHAT LIST --- */
@@ -70,7 +67,7 @@
         .msg.manual { background: #005c4b; }
         .msg-time { font-size: 0.65rem; opacity: 0.6; text-align: right; margin-top: 2px; margin-left: 10px; float: right; }
 
-        /* --- AUDIO PLAYER (COMBO VISUAL) --- */
+        /* --- AUDIO PLAYER --- */
         .audio-wrapper { display: flex; align-items: center; gap: 8px; }
         .audio-player { display: flex; align-items: center; gap: 12px; width: 220px; padding: 5px; background: rgba(0,0,0,0.1); border-radius: 8px; }
         .play-btn { width: 34px; height: 34px; background: #53bdeb; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; flex-shrink: 0; }
@@ -109,6 +106,11 @@
         .data-table th, .data-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border); }
         .data-table th { color: var(--text-muted); font-weight: 500; }
         .data-table tr:hover { background: rgba(255,255,255,0.02); }
+        
+        /* ESTILOS NUEVOS PARA FUENTES (WEB/STORE) */
+        .lead-source-tag { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .lead-source-web { background: rgba(30, 64, 175, 0.3); color: #93c5fd; border: 1px solid #1e40af; }
+        .lead-source-store { background: rgba(134, 25, 143, 0.3); color: #f0abfc; border: 1px solid #a21caf; }
         
         .config-header-main { font-size: 1.2rem; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 10px; color: var(--text-muted); }
         .config-row { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
@@ -324,12 +326,12 @@
                         if(type === 'IMAGE') { text = `<div style="display:flex; flex-direction:column; gap:5px;"><img src="${mediaUrl}" style="max-width:250px; border-radius:8px; cursor:pointer; min-height:100px; background:#0b141a;" onclick="window.open(this.src)" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none; color:#ef4444; font-size:0.8rem; padding:10px; border:1px dashed #ef4444; border-radius:8px;">⚠️ Error de imagen.</div></div>`; }
                         else if(type === 'AUDIO') {
                             text = `<div class="audio-wrapper">
-                                        <div class="audio-player">
-                                            <button class="play-btn" id="btn-${id}" onclick="togglePlay('${id}')"><i class="fas fa-play"></i></button>
-                                            <div class="audio-progress"><div class="progress-bar-bg"><div id="prog-${id}" class="progress-fill"></div></div><div id="time-${id}" class="audio-time">0:00</div></div>
-                                            <audio id="audio-${id}" src="${mediaUrl}" ontimeupdate="updateProgress('${id}')" onended="resetPlayer('${id}')" onplaying="onAudioStart('${id}')" style="display:none;"></audio>
-                                        </div>
-                                        <a href="${mediaUrl}" download="nota_voz.ogg" class="btn-download-audio" title="Descargar"><i class="fas fa-download"></i></a>
+                                            <div class="audio-player">
+                                                <button class="play-btn" id="btn-${id}" onclick="togglePlay('${id}')"><i class="fas fa-play"></i></button>
+                                                <div class="audio-progress"><div class="progress-bar-bg"><div id="prog-${id}" class="progress-fill"></div></div><div id="time-${id}" class="audio-time">0:00</div></div>
+                                                <audio id="audio-${id}" src="${mediaUrl}" preload="metadata" ontimeupdate="updateProgress('${id}')" onended="resetPlayer('${id}')" onplaying="onAudioStart('${id}')" style="display:none;"></audio>
+                                            </div>
+                                            <a href="${mediaUrl}" download="nota_voz.ogg" class="btn-download-audio" title="Descargar"><i class="fas fa-download"></i></a>
                                     </div>`;
                         } else { text = `<a href="${mediaUrl}" target="_blank" style="color:white; text-decoration:none; display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:10px; border-radius:6px;"><i class="fas fa-file-download" style="font-size:1.5rem;"></i><div style="display:flex; flex-direction:column;"><span>Archivo Adjunto (${type})</span><span style="font-size:0.75rem; color:var(--primary);">Clic para descargar</span></div></a>`; }
                     } return `<div class="msg ${m.role}">${text}<div class="msg-time">${new Date(m.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div></div>`;
@@ -342,7 +344,7 @@
         function updateProgress(id) { const audio = document.getElementById(`audio-${id}`); const bar = document.getElementById(`prog-${id}`); const time = document.getElementById(`time-${id}`); if(audio && audio.duration) { const percent = (audio.currentTime / audio.duration) * 100; bar.style.width = percent + '%'; const mins = Math.floor(audio.currentTime / 60); const secs = Math.floor(audio.currentTime % 60); time.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`; } }
         function resetPlayer(id) { document.getElementById(`btn-${id}`).innerHTML = '<i class="fas fa-play"></i>'; document.getElementById(`prog-${id}`).style.width = '0%'; }
 
-        // --- SUBIDA DE ARCHIVOS (FUNCIÓN RESTAURADA) ---
+        // --- SUBIDA DE ARCHIVOS ---
         async function uploadFile() {
             const input = document.getElementById('file-upload');
             if(!input.files[0]) return;
@@ -385,7 +387,9 @@
         async function scanWeb() { const url = document.getElementById('web-url-input').value; const summary = prompt("Resumen página:"); if(summary) { await fetch('/api/data/web-knowledge', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url, summary }) }); document.getElementById('web-url-input').value = ""; renderWebList(); } }
         async function deleteWeb(id) { await fetch('/api/data/web-knowledge/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) }); renderWebList(); }
         function renderRulesList(rules) { document.getElementById('rules-list').innerHTML = (rules || []).map((r, i) => `<li class="config-item"><span>${r}</span><button class="btn-small btn-red" onclick="deleteRule(${i})"><i class="fas fa-trash"></i></button></li>`).join(''); }
-        async function addRule() { const r = document.getElementById('rule-input').value; if(!r) return; await fetch('/api/config/rules/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ rule: r }) }); const data = await res.json(); renderRulesList(data.rules); document.getElementById('rule-input').value = ""; }
+        // FIX: Se agregó 'const res' y 'const data' que faltaban en la versión anterior
+        async function addRule() { const r = document.getElementById('rule-input').value; if(!r) return; const res = await fetch('/api/config/rules/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ rule: r }) }); const data = await res.json(); renderRulesList(data.rules); document.getElementById('rule-input').value = ""; }
+        // FIX: Se agregó 'const res' que faltaba
         async function deleteRule(i) { const res = await fetch('/api/config/rules/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ index: i }) }); const data = await res.json(); renderRulesList(data.rules); }
         function renderConfigTags(tags) { document.getElementById('config-tags-list').innerHTML = tags.map(t => `<li class="config-item"><span style="color:${t.color};font-weight:bold;">${t.name}</span><button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button></li>`).join(''); renderCRMTags(tags); }
         async function addTag() { const name = document.getElementById('tag-name').value; const color = document.getElementById('tag-color').value; if(!name) return; await fetch('/api/tags/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name, color }) }); loadAllConfig(); document.getElementById('tag-name').value = ""; }
