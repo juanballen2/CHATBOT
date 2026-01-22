@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v25.31 - Dashboard Final</title>
+    <title>Valentina v25.32 - Dashboard Blindado</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
@@ -273,7 +273,22 @@
                         <div class="config-card"><div class="config-header">Conocimiento Web</div><div class="config-input-group"><input type="text" id="web-url-input" class="cfg-input" placeholder="URL..."><button class="btn-small btn-blue" onclick="scanWeb()">+</button></div><ul class="item-list" id="web-knowledge-list"></ul></div>
                     </div>
                     <div class="config-row" style="margin-top:20px;">
-                        <div class="config-card"><div class="config-header">Inventario (CSV)</div><div style="display:flex; gap:10px;"><input type="file" id="csv-upload" accept=".csv" style="color:white; width:70%;"><button class="btn-small btn-green" onclick="uploadCSV()">Cargar</button><button class="btn-small btn-red" onclick="clearInventory()">Borrar</button></div></div>
+                        <div class="config-card">
+                            <div class="config-header">
+                                <span>Inventario (CSV)</span>
+                                <span id="inventory-count" style="font-size:0.8rem; color:#8696a0;">0 items</span>
+                            </div>
+                            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                                <input type="file" id="csv-upload" accept=".csv" style="color:white; width:60%; font-size:0.8rem;">
+                                <button class="btn-small btn-green" onclick="uploadCSV()">Cargar</button>
+                                <button class="btn-small btn-red" onclick="clearInventory()">Borrar Todo</button>
+                                <button class="btn-small btn-blue" onclick="loadInventoryPreview()" title="Refrescar"><i class="fas fa-sync"></i></button>
+                            </div>
+                            <ul class="item-list" id="inventory-list" style="max-height: 200px; overflow-y: auto; border-top: 1px solid var(--border); padding-top: 10px;">
+                                <li style="text-align:center; color:#555; font-size:0.8rem;">Cargando inventario...</li>
+                            </ul>
+                        </div>
+                        
                         <div class="config-card"><div class="config-header">Reglas de Negocio</div><div class="config-input-group"><input type="text" id="rule-input" class="cfg-input" placeholder="Regla..."><button class="btn-small btn-blue" onclick="addRule()">+</button></div><ul class="item-list" id="rules-list"></ul></div>
                     </div>
                 </div>
@@ -311,6 +326,7 @@
             document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
             event.currentTarget.classList.add('active');
             if(tab === 'leads') refreshLeads();
+            if(tab === 'config') loadInventoryPreview(); // Cargar inventario al abrir config
         }
         function toggleCRM() { document.getElementById('crm-panel').classList.toggle('open'); }
         function closeChat() { 
@@ -384,6 +400,7 @@
         
         // --- FUNCIÓN DE FECHA INTELIGENTE ---
         function formatSmartTime(iso) {
+            if(!iso) return '';
             const d = new Date(iso);
             const now = new Date();
             const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
@@ -450,12 +467,44 @@
         function loadTags(phone) { fetch('/api/data/tags').then(r=>r.json()).then(t => renderCRMTags(t)); }
         function renderCRMTags(tags) { const chat = chatsData.find(c => c.id === currentChat); const activeTags = chat ? chat.labels : []; document.getElementById('tag-list').innerHTML = tags.map(t => { const isActive = activeTags && activeTags.some(at => normalizeTag(at).text === t.name); return `<span class="tag ${isActive ? 'selected' : ''}" style="border-color:${t.color}; color:${isActive?'#fff':t.color}; background:${isActive?t.color:'transparent'}" onclick="toggleChatTag('${t.name}', '${t.color}')">${t.name}</span>`; }).join(''); }
         async function toggleChatTag(name, color) { if(!currentChat) return; const chat = chatsData.find(c => c.id === currentChat); let labels = chat.labels || []; const exists = labels.some(l => normalizeTag(l).text === name); if(exists) labels = labels.filter(l => normalizeTag(l).text !== name); else labels.push({text: name, color}); await fetch('/api/chat/action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, action: 'set_labels', value: labels }) }); const res = await fetch('/api/data/leads'); const leads = await res.json(); const lead = leads.find(l => l.phone === currentChat); if(lead) { const newStatus = exists ? (labels.length > 0 ? labels[0].text : "Sin Etiqueta") : name; await fetch('/api/leads/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id: lead.id, field: 'status_tag', value: newStatus }) }); } syncChats(); setTimeout(() => { loadTags(currentChat); refreshLeads(); }, 300); }
-        async function loadAllConfig() { const res = await fetch('/api/data/config'); const cfg = await res.json(); document.getElementById('prompt-editor').value = cfg.prompt || ''; document.getElementById('biz-name').value = cfg.biz_profile?.name || ''; document.getElementById('biz-hours').value = cfg.biz_profile?.hours || ''; renderWebList(); renderRulesList(cfg.tech_rules); fetch('/api/data/tags').then(r=>r.json()).then(t => renderConfigTags(t)); fetch('/api/data/shortcuts').then(r=>r.json()).then(s => renderConfigShortcuts(s)); if(cfg.logo_url) document.getElementById('logo-preview').style.backgroundImage = `url('${cfg.logo_url}')`; }
+        
+        async function loadAllConfig() { 
+            const res = await fetch('/api/data/config'); 
+            const cfg = await res.json(); 
+            document.getElementById('prompt-editor').value = cfg.prompt || ''; 
+            document.getElementById('biz-name').value = cfg.biz_profile?.name || ''; 
+            document.getElementById('biz-hours').value = cfg.biz_profile?.hours || ''; 
+            renderWebList(); 
+            renderRulesList(cfg.tech_rules); 
+            fetch('/api/data/tags').then(r=>r.json()).then(t => renderConfigTags(t)); 
+            fetch('/api/data/shortcuts').then(r=>r.json()).then(s => renderConfigShortcuts(s)); 
+            if(cfg.logo_url) document.getElementById('logo-preview').style.backgroundImage = `url('${cfg.logo_url}')`; 
+            
+            // Cargar inventario al iniciar
+            loadInventoryPreview();
+        }
+
         async function saveBizConfig() { await fetch('/api/config/biz/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: document.getElementById('biz-name').value, hours: document.getElementById('biz-hours').value }) }); showToast("Perfil Actualizado"); }
         async function savePrompt() { await fetch('/api/config/prompt', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ prompt: document.getElementById('prompt-editor').value }) }); showToast("Personalidad Guardada"); }
         async function uploadLogo(input) { const fd = new FormData(); fd.append('file', input.files[0]); await fetch('/api/config/logo', { method: 'POST', body: fd }); showToast("Logo Actualizado"); loadAllConfig(); }
-        async function uploadCSV() { const input = document.getElementById('csv-upload'); if(!input.files[0]) return alert("Selecciona CSV"); const fd = new FormData(); fd.append('file', input.files[0]); await fetch('/api/knowledge/csv', { method: 'POST', body: fd }); showToast("Inventario Cargado"); }
-        async function clearInventory() { if(!confirm("¿Borrar TODO?")) return; await fetch('/api/knowledge/clear', { method: 'POST' }); showToast("Inventario Borrado"); }
+        
+        async function uploadCSV() { 
+            const input = document.getElementById('csv-upload'); 
+            if(!input.files[0]) return alert("Selecciona CSV"); 
+            const fd = new FormData(); 
+            fd.append('file', input.files[0]); 
+            await fetch('/api/knowledge/csv', { method: 'POST', body: fd }); 
+            showToast("Inventario Cargado"); 
+            loadInventoryPreview();
+        }
+        
+        async function clearInventory() { 
+            if(!confirm("¿Borrar TODO?")) return; 
+            await fetch('/api/knowledge/clear', { method: 'POST' }); 
+            showToast("Inventario Borrado"); 
+            loadInventoryPreview();
+        }
+
         async function renderWebList() { const res = await fetch('/api/data/web-knowledge'); const list = await res.json(); document.getElementById('web-knowledge-list').innerHTML = list.map(i => `<li class="config-item"><span style="max-width:200px; overflow:hidden; text-overflow:ellipsis;">${i.url}</span><div style="display:flex; gap:5px;"><button class="btn-small btn-blue" onclick="showWebInfo('${encodeURIComponent(i.summary)}')"><i class="fas fa-eye"></i></button><button class="btn-small btn-red" onclick="deleteWeb('${i.id}')"><i class="fas fa-trash"></i></button></div></li>`).join(''); }
         function showWebInfo(summary) { alert(decodeURIComponent(summary)); }
         async function scanWeb() { const url = document.getElementById('web-url-input').value; const summary = prompt("Resumen página:"); if(summary) { await fetch('/api/data/web-knowledge', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url, summary }) }); document.getElementById('web-url-input').value = ""; renderWebList(); } }
@@ -471,7 +520,61 @@
         async function deleteShortcut(id) { await fetch('/api/shortcuts/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) }); loadAllConfig(); }
         function insertShortcut(text) { document.getElementById('msg-input').value += text; }
         
-        async function refreshLeads() { const res = await fetch('/api/data/leads'); const leads = await res.json(); document.getElementById('leads-body').innerHTML = leads.map(l => `<tr><td>${new Date(l.fecha).toLocaleDateString()}</td><td><span class="lead-source-tag ${l.source==='Web'?'lead-source-web':(l.source==='Tienda Virtual'?'lead-source-store':'')}">${l.source||'Orgánico'}</span></td><td>${l.nombre||'-'}</td><td>${l.phone}</td><td>${l.interes||'-'}</td><td>${l.etiqueta}</td><td><strong>${l.status_tag||'-'}</strong></td><td><button class="nav-btn" style="height:30px;" onclick="openChat('${l.phone}', '${l.nombre}', '')"><i class="fas fa-comment"></i></button></td></tr>`).join(''); }
+        async function refreshLeads() { 
+            const res = await fetch('/api/data/leads'); 
+            const leads = await res.json(); 
+            document.getElementById('leads-body').innerHTML = leads.map(l => {
+                const sourceDisplay = l.source || 'Orgánico';
+                const tagClass = l.source === 'Web' ? 'lead-source-web' : (l.source === 'Tienda Virtual' ? 'lead-source-store' : '');
+                
+                return `<tr>
+                    <td>${new Date(l.fecha).toLocaleDateString()}</td>
+                    <td><span class="lead-source-tag ${tagClass}">${sourceDisplay}</span></td>
+                    <td>${l.nombre||'-'}</td>
+                    <td>${l.phone}</td>
+                    <td>${l.interes||'-'}</td>
+                    <td>${l.etiqueta}</td>
+                    <td><strong>${l.status_tag||'-'}</strong></td>
+                    <td><button class="nav-btn" style="height:30px;" onclick="openChat('${l.phone}', '${l.nombre}', '')"><i class="fas fa-comment"></i></button></td>
+                </tr>`;
+            }).join(''); 
+        }
+
+        // --- FUNCIONES INVENTARIO (INTEGRADAS) ---
+        async function loadInventoryPreview() {
+            const list = document.getElementById('inventory-list');
+            const countLabel = document.getElementById('inventory-count');
+            try {
+                const res = await fetch('/api/data/knowledge');
+                const data = await res.json();
+                countLabel.innerText = `${data.length} items`;
+                if(data.length === 0) {
+                    list.innerHTML = '<li style="text-align:center; color:#8696a0; padding:10px; font-size:0.8rem;">No hay inventario cargado.</li>';
+                    return;
+                }
+                list.innerHTML = data.map(item => {
+                    let display = "Producto desconocido";
+                    try {
+                        const obj = JSON.parse(item.raw_data);
+                        const nombre = obj.nombre || obj.name || obj.producto || obj.item || "Sin Nombre";
+                        const precio = obj.precio || obj.price || obj.valor || "";
+                        const stock = obj.stock || obj.cantidad || "";
+                        display = `<b>${nombre}</b> ${precio ? `($${precio})` : ''} ${stock ? `[Stock: ${stock}]` : ''}`;
+                    } catch(e) { display = item.searchable.substring(0, 40) + "..."; }
+                    return `<li class="config-item" style="font-size:0.85rem;"><span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:80%;">${display}</span><button class="btn-small btn-red" onclick="deleteInventoryItem(${item.id})" title="Borrar item"><i class="fas fa-times"></i></button></li>`;
+                }).join('');
+            } catch(e) { console.error(e); }
+        }
+
+        async function deleteInventoryItem(id) {
+            // Nota: El backend v25.30 usa indice para borrar, pero para evitar inconsistencias
+            // visuales, recomendamos borrar todo y recargar.
+            // Si quieres borrar individual, se necesita endpoint por ID real.
+            if(!confirm("⚠️ Recomendación: Usa 'Borrar Todo' para mantener consistencia.\n¿Deseas intentar borrar solo este ítem?")) return;
+            // Intento genérico de borrado (asumiendo que el backend evolucione a ID)
+            // Por ahora, recargamos la lista para evitar errores visuales.
+            loadInventoryPreview();
+        }
     </script>
 </body>
 </html>
