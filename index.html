@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v25.30 - Dashboard UX</title>
+    <title>Valentina v25.31 - Dashboard Final</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
@@ -18,11 +18,8 @@
         body { background-color: var(--dark); color: var(--text); height: 100vh; display: flex; overflow: hidden; }
 
         /* --- ANIMACIONES UX --- */
-        /* Efecto de presionar botón */
         button:active, .chat-item:active { transform: scale(0.98); }
         button, .chat-item { transition: all 0.1s ease-in-out; }
-
-        /* Scrollbar bonita */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #37404a; border-radius: 3px; }
@@ -59,7 +56,6 @@
         .chat-items { flex: 1; overflow-y: auto; }
         .chat-item { padding: 12px 15px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; gap: 12px; align-items: center; }
         .chat-item:hover { background: var(--hover-item); }
-        /* ESTADO ACTIVO MEJORADO */
         .chat-item.active { background: var(--active-item); border-left: 4px solid var(--primary); padding-left: 11px; } 
         .chat-item.archived { opacity: 0.6; }
         
@@ -129,7 +125,6 @@
         .data-table th { color: var(--text-muted); font-weight: 500; }
         .data-table tr:hover { background: rgba(255,255,255,0.02); }
         
-        /* ESTILOS NUEVOS PARA FUENTES (WEB/STORE) */
         .lead-source-tag { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
         .lead-source-web { background: rgba(30, 64, 175, 0.3); color: #93c5fd; border: 1px solid #1e40af; }
         .lead-source-store { background: rgba(134, 25, 143, 0.3); color: #f0abfc; border: 1px solid #a21caf; }
@@ -348,13 +343,11 @@
         
         function renderChatList() {
             const container = document.getElementById('chat-list-container'); 
-            // Guardamos el scroll solo si ya hay contenido
             const scroll = container.children.length > 0 ? container.scrollTop : 0;
             
             container.innerHTML = chatsData.map(c => {
                 let labelsHtml = ''; if(c.labels && Array.isArray(c.labels)) labelsHtml = c.labels.map(l => { const tag = normalizeTag(l); return `<span class="mini-tag" style="background:${tag.color}30; color:${tag.color}; border:1px solid ${tag.color}">${tag.text}</span>` }).join('');
                 
-                // Badges de Fuente
                 let sourceBadge = '';
                 if(c.source === 'Web') sourceBadge = `<span class="badge" style="background:#1e3a8a; color:#fff;">WEB</span>`;
                 if(c.source === 'Tienda Virtual') sourceBadge = `<span class="badge" style="background:#a21caf; color:#fff;">TIENDA</span>`;
@@ -370,7 +363,6 @@
         function quickLabel() { if(!contextPhone) return; const chat = chatsData.find(c => c.id === contextPhone); if(chat) openChat(chat.id, chat.name, chat.photoUrl); document.getElementById('crm-panel').classList.add('open'); document.getElementById('context-menu').style.display = 'none'; }
         
         async function openChat(phone, name, photo) { 
-            // UX: Seleccion Inmediata (Feedback Instantaneo)
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
             const clickedItem = document.getElementById(`chat-${phone}`);
             if(clickedItem) clickedItem.classList.add('active');
@@ -390,7 +382,19 @@
             await loadMessages(phone, true); 
         }
         
-        // --- PLAYER LOGIC + DOWNLOAD COMBO ---
+        // --- FUNCIÓN DE FECHA INTELIGENTE ---
+        function formatSmartTime(iso) {
+            const d = new Date(iso);
+            const now = new Date();
+            const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+            
+            const timeStr = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            if (isToday) return timeStr;
+            
+            const dateStr = d.toLocaleDateString([], {day: '2-digit', month: '2-digit', year:'2-digit'});
+            return `${dateStr} ${timeStr}`;
+        }
+
         async function loadMessages(phone, scrollDown) {
             try { const res = await fetch(`/api/chat-history/${phone}`); const msgs = await res.json(); if(currentChat !== phone) return; const container = document.getElementById('messages-container');
                 container.innerHTML = msgs.map(m => { let text = m.text;
@@ -406,7 +410,7 @@
                                             <a href="${mediaUrl}" download="nota_voz.ogg" class="btn-download-audio" title="Descargar"><i class="fas fa-download"></i></a>
                                     </div>`;
                         } else { text = `<a href="${mediaUrl}" target="_blank" style="color:white; text-decoration:none; display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:10px; border-radius:6px;"><i class="fas fa-file-download" style="font-size:1.5rem;"></i><div style="display:flex; flex-direction:column;"><span>Archivo Adjunto (${type})</span><span style="font-size:0.75rem; color:var(--primary);">Clic para descargar</span></div></a>`; }
-                    } return `<div class="msg ${m.role}">${text}<div class="msg-time">${new Date(m.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div></div>`;
+                    } return `<div class="msg ${m.role}">${text}<div class="msg-time">${formatSmartTime(m.time)}</div></div>`;
                 }).join(''); if(scrollDown) setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
             } catch(e) {}
         }
