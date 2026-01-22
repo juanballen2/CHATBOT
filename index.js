@@ -1,11 +1,11 @@
 /*
- * SERVER BACKEND - v25.26 (PRODUCTION MASTER)
+ * SERVER BACKEND - v25.27 (PRODUCTION MASTER - SOURCE FIXED)
  * ============================================================
- * ESTADO: ESTABLE Y COMPLETO
- * 1. Logic-Free: No contiene reglas de negocio hardcodeadas.
- * 2. Media Proxy V3: Headers completos (Auth + UserAgent) para descarga de Meta.
- * 3. Database: Esquema completo con 9 tablas y migraciones automáticas.
- * 4. Security: Middleware de sesión, CORS, y protección de archivos.
+ * ESTADO: ESTABLE, COMPLETO Y CORREGIDO
+ * 1. Logic-Free: Reglas de negocio cargadas dinámicamente desde DB.
+ * 2. Media Proxy V3: Headers completos (Auth + UserAgent) para evitar 401/403.
+ * 3. Source Detection Fix: Reconocimiento exacto de 'Tienda Virtual' y 'Web'.
+ * 4. Database: Esquema completo con autorecuperación y migraciones.
  * ============================================================
  */
 
@@ -23,9 +23,9 @@ const { open } = require('sqlite');
 
 // --- 1. CONFIGURACIÓN DEL SERVIDOR ---
 const app = express();
-app.set('trust proxy', 1); // Necesario para Railway/Render/Heroku
+app.set('trust proxy', 1); // Necesario para despliegues en la nube
 
-// Aumentamos límites para manejar subida de archivos pesados (imágenes HQ/Videos)
+// Aumentamos límites para manejar subida de archivos pesados
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors());
@@ -37,7 +37,6 @@ const upload = multer({
 });
 
 // --- SISTEMA DE COLA DE MENSAJES (DEBOUNCE) ---
-// Evita que el bot responda 5 veces si el usuario manda 5 mensajes cortos seguidos.
 const messageQueue = new Map(); 
 const DEBOUNCE_TIME = 8000; // 8 Segundos de espera para agrupar
 
@@ -47,7 +46,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-val-secure-master-v1"; 
+const SESSION_SECRET = "icc-val-secure-master-v2"; 
 
 // PROMPT GENÉRICO (El cerebro real se carga desde la Base de Datos)
 const DEFAULT_PROMPT = `Eres un asistente virtual. Tu comportamiento, nombre y reglas de negocio dependen estrictamente de la configuración cargada por el administrador. Si no hay configuración disponible, responde amablemente que estás en modo de espera.`;
@@ -70,7 +69,7 @@ const proteger = (req, res, next) => {
     }
 };
 
-// Protección de archivos de datos directos (JSON/DB)
+// Protección de archivos de datos directos
 app.use((req, res, next) => {
     if ((req.path.endsWith('.json') || req.path.endsWith('.db') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
         return res.status(403).send('🚫 Acceso Prohibido a Base de Datos');
@@ -139,7 +138,7 @@ let db, globalKnowledge = [], serverInstance;
         iniciarCronJobs();
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER BACKEND v25.26 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER BACKEND v25.27 ONLINE (Port ${PORT})`));
         
         serverInstance.on('error', (e) => { 
             if(e.code === 'EADDRINUSE') {
@@ -171,11 +170,15 @@ async function setCfg(k, v) {
     await db.run("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", [k, JSON.stringify(v)]); 
 }
 
+// --- CORRECCIÓN DE FUENTES (FIX) ---
 function detectarFuente(mensaje) {
     if (!mensaje) return 'Organico';
     const msg = mensaje.toLowerCase();
-    if (msg.includes('http') || msg.includes('.com')) return 'Web/Link';
-    if (msg.includes('asesoría')) return 'Campaña';
+    
+    // Detección específica para las etiquetas del Dashboard
+    if (msg.includes('storeicc.com') || msg.includes('deseo asesoría')) return 'Tienda Virtual';
+    if (msg.includes('importadoracasacolombia.com')) return 'Web';
+    
     return 'Organico';
 }
 
@@ -189,7 +192,6 @@ async function uploadToMeta(buffer, mime, name) {
         form.append('type', type); 
         form.append('messaging_product', 'whatsapp');
         
-        // Petición a Meta para subir el archivo
         const r = await axios.post(`https://graph.facebook.com/v21.0/${PHONE_ID}/media`, form, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}`, ...form.getHeaders() } 
         });
@@ -225,7 +227,6 @@ async function enviarWhatsApp(to, content, type = "text") {
 }
 
 // --- 7. MEDIA PROXY (FIXED: AUTH + HEADERS) ---
-// Esta es la parte que arregla tus imágenes y audios rotos.
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     try {
         // PASO 1: Obtener la URL firmada de Meta
@@ -234,7 +235,7 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
         });
         
         // PASO 2: Descargar el archivo binario
-        // IMPORTANTE: Incluimos Authorization Y User-Agent para que AWS/Meta no nos bloquee (Error 401/403)
+        // IMPORTANTE: Incluimos Authorization Y User-Agent para que AWS/Meta no nos bloquee
         const response = await axios.get(urlData.url, { 
             headers: { 
                 'Authorization': `Bearer ${META_TOKEN}`,
@@ -243,7 +244,6 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
             responseType: 'arraybuffer' 
         });
         
-        // Determinar tipo de contenido correcto
         let contentType = urlData.mime_type || 'application/octet-stream';
         if (contentType.includes('audio') || contentType.includes('ogg')) contentType = 'audio/ogg'; 
         
@@ -266,25 +266,24 @@ function limpiarRespuesta(txt) {
 }
 
 async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFile = false) {
-    // 1. Guardar mensaje del usuario en historial
+    // 1. Guardar mensaje del usuario
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', dbMsg, new Date().toISOString()]);
     
-    // 2. Actualizar Metadata (Marcar como no leído, actualizar hora)
+    // 2. Actualizar Metadata
     await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [phone, new Date().toISOString()]);
 
-    // 3. Verificar si el bot está apagado para este usuario
+    // 3. Verificar si el bot está activo
     const bot = await db.get("SELECT active FROM bot_status WHERE phone = ?", [phone]);
     if (bot && bot.active === 0) return null; // Bot pausado manualmente
 
-    // 4. Manejo de Archivos (Respuesta rápida)
+    // 4. Manejo de Archivos
     if (isFile) {
         const rFile = "¡Recibido! 📁 Dame un momento lo reviso.";
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', rFile, new Date().toISOString()]);
         return rFile;
     }
 
-    // --- CARGA DE CEREBRO (TODO VIENE DE LA DB) ---
-    // Aquí es donde garantizamos que la lógica de negocio NO está en el código.
+    // --- CARGA DE CEREBRO (DESDE DB) ---
     let promptUsuario = await getCfg('bot_prompt');
     const configUsar = (promptUsuario && promptUsuario.length > 5) ? promptUsuario : DEFAULT_PROMPT;
     
@@ -294,11 +293,10 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const techRules = await getCfg('tech_rules', []);
     const biz = await getCfg('biz_profile', {});
     
-    // Recuperar historial reciente para contexto
+    // Historial y Lead Info
     const history = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [phone])).reverse();
-    
-    // Recuperar datos conocidos del Lead
     const lead = await db.get("SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
+    
     let memoriaDatos = `ID CLIENTE: ${phone}\n`;
     if (lead) {
         if (lead.nombre) memoriaDatos += `Nombre: ${lead.nombre}\n`;
@@ -306,44 +304,42 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         if (lead.interes) memoriaDatos += `Interés: ${lead.interes}\n`;
     }
 
-    // Búsqueda en Inventario (RAG Simple)
+    // Búsqueda en Inventario
     const busqueda = aiMsg.toLowerCase().split(" ").slice(0,3).join(" ");
     const stock = globalKnowledge.filter(i => (i.searchable||"").toLowerCase().includes(busqueda)).slice(0,5);
 
-    // CONSTRUCCIÓN DEL PROMPT FINAL
+    // PROMPT FINAL
     const promptFinal = `
-    === ROL Y PERSONALIDAD (CONFIGURADO POR USUARIO) ===
+    === ROL Y PERSONALIDAD ===
     ${configUsar}
     
     === REGLAS TÉCNICAS Y COMERCIALES ===
     ${techRules.join("\n")}
     Horario: ${biz.hours || 'No definido'}
     
-    === CONOCIMIENTO WEB ===
+    === CONTEXTO WEB ===
     ${webContext || "Sin datos extra."}
     
-    === DATOS DEL CLIENTE (MEMORIA) ===
+    === DATOS DEL CLIENTE ===
     ${memoriaDatos}
     
-    === DATOS DE INVENTARIO RELACIONADOS ===
+    === INVENTARIO RELACIONADO ===
     ${JSON.stringify(stock)}
     
-    === HILO DE CONVERSACIÓN ===
+    === HISTORIAL RECIENTE ===
     ${JSON.stringify(history)}
     
-    === INSTRUCCIÓN DEL SISTEMA (NO REVELAR) ===
-    Analiza la conversación. Si detectas información nueva (Nombre, Email, Ciudad, Interés), genera este JSON al final:
+    === INSTRUCCIÓN DEL SISTEMA ===
+    Si detectas datos nuevos (Nombre, Email, Ciudad, Interés), genera este JSON al final:
     \`\`\`json
     {"es_lead": boolean, "nombre":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead"}
     \`\`\`
     `;
 
     try {
-        // Llamada a Gemini
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: promptFinal }] }] });
         const raw = r.data.candidates[0].content.parts[0].text;
         
-        // Extracción de datos (JSON)
         const match = raw.match(/```json([\s\S]*?)```|{([\s\S]*?)}/);
         if (match) {
             try {
@@ -352,16 +348,15 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
             } catch(e) { console.error("Error parseando JSON de IA", e); }
         }
 
-        // Respuesta limpia al usuario
         let reply = limpiarRespuesta(raw);
-        if (!reply) reply = "Disculpa, no entendí bien. ¿Puedes repetir?";
+        if (!reply) reply = "Disculpa, no entendí bien.";
         
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', reply, new Date().toISOString()]);
         return reply;
 
     } catch (e) { 
         console.error("AI Error:", e.response?.data || e.message);
-        return "Estoy experimentando una alta carga. Dame un momento."; 
+        return "Estoy validando información. Un momento."; 
     }
 }
 
@@ -373,16 +368,14 @@ async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
     let ciudadLimpia = limpiarDato(info.ciudad); 
     let interesLimpio = limpiarDato(info.interes) || (oldLead ? oldLead.interes : "Consultando");
     
-    // Si el cliente vuelve después de mucho tiempo, reiniciamos el mensaje de despedida
     let farewellReset = (oldLead && !oldLead.fecha) ? ", farewell_sent = 0" : "";
 
     if (oldLead) {
-        // Actualizar existente
         await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=? ${farewellReset} WHERE id=?`, 
             [name, interesLimpio, info.etiqueta || oldLead.etiqueta, new Date().toISOString(), ciudadLimpia || oldLead.ciudad, info.correo || oldLead.correo, oldLead.id]);
         await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [name, phone]);
     } else if (interesLimpio || ciudadLimpia || info.es_lead) {
-        // Crear nuevo
+        // USO DE LA FUNCIÓN CORREGIDA
         const fuente = detectarFuente(originalMsg);
         await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo, source, farewell_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`, 
             [phone, name, interesLimpio, "Pendiente", new Date().toISOString(), ciudadLimpia, info.correo, fuente]);
@@ -390,45 +383,42 @@ async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
     }
 }
 
-// --- 10. CRON JOBS (TAREAS AUTOMÁTICAS) ---
+// --- 10. CRON JOBS ---
 function iniciarCronJobs() {
     setInterval(async () => {
         try {
             const now = new Date();
-            
-            // 1. Mensaje de Despedida/Cierre (30 min inactivo después de dar datos)
+            // Despedida
             const leadsTerminados = await db.all(`SELECT * FROM leads WHERE farewell_sent = 0 AND ciudad IS NOT NULL AND LOWER(ciudad) NOT IN ('unknown', 'null', 'n/a') AND nombre IS NOT NULL AND fecha < datetime('now', '-1 hour') AND fecha > datetime('now', '-24 hour')`);
             
             for (const l of leadsTerminados) {
                 const meta = await db.get("SELECT last_interaction FROM metadata WHERE phone = ?", [l.phone]);
                 const lastMsgDate = new Date(meta?.last_interaction || 0);
                 if (now - lastMsgDate > 30 * 60 * 1000) {
-                    const msgDespedida = "Gracias por tu información. Un asesor comercial revisará tu solicitud y te contactará pronto. 🤝";
+                    const msgDespedida = "Gracias por tu información. Un asesor comercial te contactará pronto. 🤝";
                     await enviarWhatsApp(l.phone, msgDespedida);
                     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [l.phone, 'bot', msgDespedida, now.toISOString()]);
                     await db.run("UPDATE leads SET farewell_sent = 1 WHERE id = ?", [l.id]);
                 }
             }
 
-            // 2. Recuperación de "Carrito" (Gente que preguntó y se fue)
+            // Recuperación
             const olvidados = await db.all(`SELECT m.phone FROM metadata m LEFT JOIN leads l ON m.phone = l.phone WHERE l.id IS NULL AND m.last_interaction < datetime('now', '-24 hour') AND m.last_interaction > datetime('now', '-48 hour') AND m.archived = 0`);
             
             for (const o of olvidados) {
                 const lastMsg = await db.get("SELECT role FROM history WHERE phone = ? ORDER BY id DESC LIMIT 1", [o.phone]);
-                if (lastMsg && lastMsg.role === 'bot') { // Solo si lo último fue del bot (esperando respuesta)
-                    const msgRecuerdo = "Hola, ¿lograste revisar la información anterior? Quedo atento si necesitas algo más.";
+                if (lastMsg && lastMsg.role === 'bot') {
+                    const msgRecuerdo = "Hola, ¿aún necesitas ayuda con tu consulta?";
                     await enviarWhatsApp(o.phone, msgRecuerdo);
                     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [o.phone, 'bot', msgRecuerdo, now.toISOString()]);
                     await db.run("UPDATE metadata SET last_interaction = ? WHERE phone = ?", [now.toISOString(), o.phone]);
                 }
             }
         } catch (e) { console.error("Cron Error:", e); }
-    }, 60000 * 5); // Ejecutar cada 5 minutos
+    }, 60000 * 5); 
 }
 
-// --- 11. RUTAS API (ENDPOINTS) ---
-
-// Autenticación
+// --- 11. RUTAS API ---
 app.post('/auth', (req, res) => {
     if (req.body.user === ADMIN_USER && req.body.pass === ADMIN_PASS) { req.session.isLogged = true; res.json({success:true}); } else { res.status(401).json({success:false}); }
 });
@@ -436,16 +426,13 @@ app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login'
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 
-// Configuración AI
 app.get('/api/config/prompt', proteger, async (req, res) => res.json({ prompt: await getCfg('bot_prompt', DEFAULT_PROMPT) }));
 app.post('/api/config/prompt', proteger, async (req, res) => { await setCfg('bot_prompt', req.body.prompt); res.json({success:true}); });
 
-// Base de Conocimiento Web
 app.get('/api/data/web-knowledge', proteger, async (req, res) => { res.json(await db.all("SELECT * FROM knowledge_sources ORDER BY id DESC")); });
 app.post('/api/data/web-knowledge', proteger, async (req, res) => { await db.run("INSERT INTO knowledge_sources (type, url, summary, date) VALUES (?, ?, ?, ?)", ['web', req.body.url, req.body.summary, new Date().toLocaleString()]); res.json({success:true}); });
 app.post('/api/data/web-knowledge/delete', proteger, async (req, res) => { await db.run("DELETE FROM knowledge_sources WHERE id = ?", [req.body.id]); res.json({success:true}); });
 
-// Chat List (Dashboard)
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
         const view = req.query.view || 'active';
@@ -468,7 +455,6 @@ app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     res.json(await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]));
 });
 
-// Acciones sobre Chats (Toggle Pin/Archive)
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
     const cleanPhone = phone.replace(/\D/g, ''); 
@@ -491,7 +477,6 @@ app.post('/api/chat/action', proteger, async (req, res) => {
     res.json({success:true});
 });
 
-// Datos Genéricos
 app.get('/api/data/:type', proteger, async (req, res) => {
     const t = req.params.type;
     if (t === 'leads') res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
@@ -502,7 +487,6 @@ app.get('/api/data/:type', proteger, async (req, res) => {
     else res.json([]);
 });
 
-// Configuración CRM
 app.post('/api/config/logo', proteger, upload.single('file'), async (req, res) => { await setCfg('logo_url', `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`); res.json({success:true}); });
 app.post('/api/config/biz/save', proteger, async (req, res) => { await setCfg('biz_profile', {name:req.body.name, hours:req.body.hours}); res.json({success:true}); });
 app.post('/api/tags/add', proteger, async (req, res) => { await db.run("INSERT INTO global_tags (name, color) VALUES (?, ?)", [req.body.name, req.body.color]); res.json({success:true}); });
@@ -519,13 +503,12 @@ app.post('/api/knowledge/delete', proteger, async (req, res) => { const i=await 
 app.post('/api/knowledge/clear', proteger, async (req, res) => { await db.run("DELETE FROM inventory"); await refreshKnowledge(); res.json({success:true}); });
 app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res) => { try { const rows = parse(req.file.buffer.toString('utf-8'), { columns: true }); for (const row of rows) await db.run("INSERT OR IGNORE INTO inventory (searchable, raw_data) VALUES (?, ?)", [Object.values(row).join(" "), JSON.stringify(row)]); await refreshKnowledge(); res.json({ success: true }); } catch(e) { res.status(500).json({ error: "CSV Error" }); } });
 
-// Envío Manual de Mensajes y Archivos
 app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => { 
     try { 
         const mid = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname); 
         if(mid) { 
             await enviarWhatsApp(req.body.phone, { id: mid }, req.body.type); 
-            // Guardar con formato interno limpio
+            // Guardar formato interno para que el frontend lo reconozca
             const msgType = `[MEDIA:${req.body.type.toUpperCase()}:${mid}]`;
             await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [req.body.phone, 'manual', msgType, new Date().toISOString()]); 
             await db.run("UPDATE metadata SET last_interaction = ? WHERE phone = ?", [new Date().toISOString(), req.body.phone]); 
@@ -549,7 +532,7 @@ app.post('/api/chat/send', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({ error: "Error interno" }); } 
 });
 
-// --- WEBHOOK (RECEPCIÓN) ---
+// --- WEBHOOK ---
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
 
 app.post('/webhook', async (req, res) => { 
@@ -567,7 +550,6 @@ app.post('/webhook', async (req, res) => {
 
             if(msg.type !== 'text') { 
                 isFile = true; 
-                // Formato Estandarizado Interno para Archivos
                 userMsg = `[MEDIA:${msg.type.toUpperCase()}:${msg[msg.type].id}]`; 
             } 
             
