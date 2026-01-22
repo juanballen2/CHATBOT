@@ -1,9 +1,9 @@
 /*
- * SERVER BACKEND - v25.30 (REPAIR & RETROACTIVE)
+ * SERVER BACKEND - v25.33 (FINAL FUSION)
  * ============================================================
- * 1. Escaneo Retroactivo: Al iniciar, corrige fuentes antiguas.
- * 2. Media Proxy Blindado: Maneja errores 400/404 de Meta sin saturar logs.
- * 3. Verificador de Token: Te avisa al arrancar si el token murió.
+ * 1. Soporte Excel (.xlsx) y Edición de Inventario.
+ * 2. Mantiene Escaneo Retroactivo y Validación de Token (v25.30).
+ * 3. Mantiene Proxy Blindado y DB modo WAL.
  * ============================================================
  */
 
@@ -12,6 +12,7 @@ const session = require('express-session');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+const XLSX = require('xlsx'); // <--- NUEVA LIBRERÍA OBLIGATORIA
 const { parse } = require('csv-parse/sync');
 const axios = require('axios');
 const cors = require('cors');
@@ -41,7 +42,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-val-secure-v30-repair"; 
+const SESSION_SECRET = "icc-val-secure-v33-final"; 
 
 const DEFAULT_PROMPT = `Eres un asistente virtual. Tu comportamiento depende estrictamente de la configuración.`;
 
@@ -82,6 +83,7 @@ let db, globalKnowledge = [], serverInstance;
             driver: sqlite3.Database 
         });
 
+        // MANTENEMOS OPTIMIZACIÓN DE LA v25.30
         await db.exec("PRAGMA journal_mode = WAL;");
         await db.exec("PRAGMA synchronous = NORMAL;");
         
@@ -116,19 +118,19 @@ let db, globalKnowledge = [], serverInstance;
         await refreshKnowledge();
         iniciarCronJobs();
         
-        // --- TAREAS DE INICIO ---
-        await verificarTokenMeta();     // 1. Chequeo de Token
-        await escanearFuentesHistoricas(); // 2. Corrección Retroactiva
+        // --- TAREAS DE INICIO (MANTENIDAS DE v25.30) ---
+        await verificarTokenMeta();     
+        await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.30 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.33 ONLINE (Port ${PORT})`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
 
-// --- 5. FUNCIONES DE DIAGNÓSTICO Y CORRECCIÓN ---
+// --- 5. FUNCIONES DE DIAGNÓSTICO Y CORRECCIÓN (MANTENIDAS) ---
 
-// A. Verificar si el Token sirve
+// A. Verificar Token
 async function verificarTokenMeta() {
     try {
         console.log("🔍 Verificando estado del Token Meta...");
@@ -137,38 +139,31 @@ async function verificarTokenMeta() {
     } catch (e) {
         console.error("\n==================================================");
         console.error("❌ ERROR CRÍTICO: EL TOKEN DE META ES INVÁLIDO O EXPIRÓ.");
-        console.error(`Status: ${e.response?.status} - ${e.response?.statusText}`);
-        if(e.response?.data) console.error("Detalle:", JSON.stringify(e.response.data, null, 2));
-        console.error("SOLUCIÓN: Genera un nuevo token en developers.facebook.com y actualiza la variable de entorno.");
+        console.error("SOLUCIÓN: Genera un nuevo token en developers.facebook.com");
         console.error("==================================================\n");
     }
 }
 
-// B. Escaneo Retroactivo (Tu petición)
+// B. Escaneo Retroactivo
 async function escanearFuentesHistoricas() {
     console.log("🕵️ Iniciando escaneo retroactivo de fuentes (Store/Web)...");
     try {
-        // Obtenemos leads que no tienen fuente o es organica
         const leads = await db.all("SELECT id, phone, source FROM leads WHERE source IS NULL OR source = 'Organico'");
         let count = 0;
-
         for (const lead of leads) {
-            // Buscamos en su historial antiguo
             const history = await db.all("SELECT text FROM history WHERE phone = ?", [lead.phone]);
             for (const msg of history) {
-                const fuente = analizarTextoFuente(msg.text); // Usamos la misma función de detección
+                const fuente = analizarTextoFuente(msg.text); 
                 if (fuente) {
                     await db.run("UPDATE leads SET source = ? WHERE id = ?", [fuente, lead.id]);
-                    console.log(`✨ CORREGIDO: ${lead.phone} ahora es '${fuente}' (Detectado en historial)`);
+                    console.log(`✨ CORREGIDO: ${lead.phone} ahora es '${fuente}'`);
                     count++;
-                    break; // Ya encontramos la fuente, pasamos al siguiente lead
+                    break; 
                 }
             }
         }
         console.log(`✅ Escaneo finalizado. Se actualizaron ${count} leads antiguos.`);
-    } catch (e) {
-        console.error("Error en escaneo retroactivo:", e);
-    }
+    } catch (e) { console.error("Error en escaneo retroactivo:", e); }
 }
 
 // --- 6. UTILIDADES ---
@@ -195,7 +190,7 @@ function analizarTextoFuente(texto) {
     return null;
 }
 
-// --- 7. META API (ENVÍO) ---
+// --- 7. META API ---
 async function uploadToMeta(buffer, mime, name) {
     try {
         const form = new FormData();
@@ -225,17 +220,12 @@ async function enviarWhatsApp(to, content, type = "text") {
     } catch (e) { return false; }
 }
 
-// --- 8. PROXY DE MEDIOS (FIX 400 ERROR) ---
+// --- 8. PROXY DE MEDIOS (MANTENEMOS VERSIÓN BLINDADA v25.30) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     const mediaId = req.params.id;
-    
-    // Validación básica de ID
-    if (!mediaId || mediaId === 'undefined' || mediaId === 'null') {
-        return res.status(404).send("ID Inválido");
-    }
+    if (!mediaId || mediaId === 'undefined') return res.status(404).send("ID Inválido");
 
     try {
-        // PASO 1: Obtener URL de descarga
         let urlData;
         try {
             const responseUrl = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, { 
@@ -243,24 +233,14 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
             });
             urlData = responseUrl.data;
         } catch (apiError) {
-            // Manejo específico de errores de Meta
             if (apiError.response) {
                 const status = apiError.response.status;
-                if (status === 400 || status === 404) {
-                    // console.warn(`[MEDIA INFO] Archivo ${mediaId} ya no existe en Meta (Expirado/Borrado).`);
-                    return res.status(404).send("Medio expirado o no encontrado en Meta");
-                }
-                if (status === 401) {
-                    console.error("[MEDIA ALERT] Token de Meta inválido o expirado.");
-                    return res.status(401).send("Token Meta Expirado");
-                }
+                if (status === 400 || status === 404) return res.status(404).send("Medio expirado o no encontrado");
+                if (status === 401) return res.status(401).send("Token Meta Expirado");
             }
-            throw apiError; // Otros errores
+            throw apiError;
         }
         
-        const mediaUrl = urlData.url;
-        
-        // PASO 2: Descargar Stream
         const headers = { 
             'Authorization': `Bearer ${META_TOKEN}`,
             'User-Agent': 'Mozilla/5.0 (compatible; ICC-Bot/1.0)' 
@@ -269,12 +249,11 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
 
         const response = await axios({
             method: 'get',
-            url: mediaUrl,
+            url: urlData.url,
             headers: headers,
             responseType: 'stream'
         });
 
-        // PASO 3: Pipe al cliente
         res.set({
             'Content-Type': response.headers['content-type'] || urlData.mime_type,
             'Content-Length': response.headers['content-length'],
@@ -288,12 +267,9 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
         } else {
             res.status(200);
         }
-
         response.data.pipe(res);
 
     } catch (e) { 
-        // Si llegamos aquí, es un error de red o desconocido, no de Meta 400/404 que ya capturamos arriba
-        // console.error(`[MEDIA STREAM ERROR] ID ${mediaId}:`, e.message);
         if (!res.headersSent) res.status(500).send("Error interno media"); 
     }
 });
@@ -308,7 +284,6 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', dbMsg, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [phone, new Date().toISOString()]);
 
-    // Detección de fuente (Sigue activa para nuevos mensajes)
     const fuenteDetectada = analizarTextoFuente(dbMsg);
     if (fuenteDetectada) {
         const leadExistente = await db.get("SELECT id, source FROM leads WHERE phone = ?", [phone]);
@@ -489,22 +464,10 @@ app.get('/api/chat-history/:phone', proteger, async (req, res) => {
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
     const cleanPhone = phone.replace(/\D/g, ''); 
-    
-    if(action === 'delete') { 
-        for(const t of ['history','metadata','bot_status','leads']) await db.run(`DELETE FROM ${t} WHERE phone=?`,[cleanPhone]); 
-    }
-    else if(action === 'set_labels') {
-        const etiquetasStr = JSON.stringify(value);
-        await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, etiquetasStr]);
-        const tagPrincipal = value.length > 0 ? value[0].text : "Sin Etiqueta";
-        await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [tagPrincipal, cleanPhone]);
-    }
-    else if(action === 'toggle_pin') {
-        await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET pinned = CASE WHEN pinned = 1 THEN 0 ELSE 1 END", [cleanPhone]);
-    }
-    else if(action === 'toggle_archive') {
-        await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET archived = CASE WHEN archived = 1 THEN 0 ELSE 1 END", [cleanPhone]);
-    }
+    if(action === 'delete') { for(const t of ['history','metadata','bot_status','leads']) await db.run(`DELETE FROM ${t} WHERE phone=?`,[cleanPhone]); }
+    else if(action === 'set_labels') { await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, JSON.stringify(value)]); await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [value.length > 0 ? value[0].text : "Sin Etiqueta", cleanPhone]); }
+    else if(action === 'toggle_pin') { await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET pinned = CASE WHEN pinned = 1 THEN 0 ELSE 1 END", [cleanPhone]); }
+    else if(action === 'toggle_archive') { await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET archived = CASE WHEN archived = 1 THEN 0 ELSE 1 END", [cleanPhone]); }
     res.json({success:true});
 });
 
@@ -516,6 +479,39 @@ app.get('/api/data/:type', proteger, async (req, res) => {
     else if (t === 'knowledge') res.json(await db.all("SELECT * FROM inventory"));
     else if (t === 'config') res.json({ website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []), biz_profile: await getCfg('biz_profile', {}), logo_url: await getCfg('logo_url') });
     else res.json([]);
+});
+
+// NUEVO: Endpoint para editar inventario
+app.post('/api/knowledge/update', proteger, async (req, res) => {
+    const { id, data } = req.body;
+    try {
+        const searchable = Object.values(data).join(" ");
+        await db.run("UPDATE inventory SET raw_data = ?, searchable = ? WHERE id = ?", [JSON.stringify(data), searchable, id]);
+        await refreshKnowledge();
+        res.json({success:true});
+    } catch(e) { res.status(500).json({error: "Error actualizando"}); }
+});
+
+// NUEVO: Endpoint de carga universal (Excel y CSV) usando XLSX
+app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res) => { 
+    try { 
+        const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+        
+        for (const row of rows) {
+            // Normalizar claves a minúsculas
+            const cleanRow = {};
+            for(const k in row) cleanRow[k.toLowerCase().trim()] = row[k];
+            
+            await db.run("INSERT OR IGNORE INTO inventory (searchable, raw_data) VALUES (?, ?)", [Object.values(cleanRow).join(" "), JSON.stringify(cleanRow)]); 
+        }
+        await refreshKnowledge(); 
+        res.json({ success: true, count: rows.length }); 
+    } catch(e) { 
+        console.error("Upload Error:", e);
+        res.status(500).json({ error: "Error procesando archivo" }); 
+    } 
 });
 
 app.post('/api/config/logo', proteger, upload.single('file'), async (req, res) => { await setCfg('logo_url', `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`); res.json({success:true}); });
@@ -530,35 +526,26 @@ app.post('/api/config/rules/add', proteger, async (req, res) => { let r=await ge
 app.post('/api/config/rules/delete', proteger, async (req, res) => { let r=await getCfg('tech_rules',[]); r.splice(req.body.index,1); await setCfg('tech_rules',r); res.json({rules:r}); });
 app.post('/api/leads/update', proteger, async(req,res)=>{ await db.run(`UPDATE leads SET ${req.body.field}=? WHERE id=?`,[req.body.value, req.body.id]); res.json({success:true}); });
 app.post('/api/leads/delete', proteger, async(req,res)=>{ await db.run("DELETE FROM leads WHERE id=?",[req.body.id]); res.json({success:true}); });
-app.post('/api/knowledge/delete', proteger, async (req, res) => { const i=await db.all("SELECT id FROM inventory"); if(i[req.body.index]) await db.run("DELETE FROM inventory WHERE id=?",[i[req.body.index].id]); await refreshKnowledge(); res.json({success:true}); });
+app.post('/api/knowledge/delete', proteger, async (req, res) => { await db.run("DELETE FROM inventory WHERE id=?",[req.body.id]); await refreshKnowledge(); res.json({success:true}); });
 app.post('/api/knowledge/clear', proteger, async (req, res) => { await db.run("DELETE FROM inventory"); await refreshKnowledge(); res.json({success:true}); });
-app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res) => { try { const rows = parse(req.file.buffer.toString('utf-8'), { columns: true }); for (const row of rows) await db.run("INSERT OR IGNORE INTO inventory (searchable, raw_data) VALUES (?, ?)", [Object.values(row).join(" "), JSON.stringify(row)]); await refreshKnowledge(); res.json({ success: true }); } catch(e) { res.status(500).json({ error: "CSV Error" }); } });
 
 app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => { 
-    try { 
-        const mid = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname); 
-        if(mid) { 
-            await enviarWhatsApp(req.body.phone, { id: mid }, req.body.type); 
+    try { const mid = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname); 
+        if(mid) { await enviarWhatsApp(req.body.phone, { id: mid }, req.body.type); 
             const msgType = `[MEDIA:${req.body.type.toUpperCase()}:${mid}]`;
             await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [req.body.phone, 'manual', msgType, new Date().toISOString()]); 
             await db.run("UPDATE metadata SET last_interaction = ? WHERE phone = ?", [new Date().toISOString(), req.body.phone]); 
             res.json({success: true}); 
-        } else {
-            res.status(500).json({error: "Error Meta"}); 
-        }
+        } else { res.status(500).json({error: "Error Meta"}); }
     } catch(e) { res.status(500).json({error: e.message}); } 
 });
 
 app.post('/api/chat/send', proteger, async (req, res) => { 
-    const { phone, message } = req.body; 
-    const cleanPhone = phone.replace(/\D/g, ''); 
-    try { 
-        const sent = await enviarWhatsApp(cleanPhone, message); 
-        if(sent) { 
-            await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', message, new Date().toISOString()]); 
+    const { phone, message } = req.body; const cleanPhone = phone.replace(/\D/g, ''); 
+    try { const sent = await enviarWhatsApp(cleanPhone, message); 
+        if(sent) { await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', message, new Date().toISOString()]); 
             await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount, last_interaction) VALUES (?, ?, 1, 0, 0, ?) ON CONFLICT(phone) DO UPDATE SET last_interaction=excluded.last_interaction`, [cleanPhone, cleanPhone, new Date().toISOString()]); 
-            res.json({ success: true }); 
-        } else res.status(500).json({ error: "Error enviando" }); 
+            res.json({ success: true }); } else res.status(500).json({ error: "Error enviando" }); 
     } catch(e) { res.status(500).json({ error: "Error interno" }); } 
 });
 
@@ -566,41 +553,19 @@ app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' 
 
 app.post('/webhook', async (req, res) => { 
     res.sendStatus(200); 
-    try { 
-        const val = req.body.entry?.[0]?.changes?.[0]?.value; 
-        const msg = val?.messages?.[0]; 
-        
+    try { const val = req.body.entry?.[0]?.changes?.[0]?.value; const msg = val?.messages?.[0]; 
         if (val?.contacts?.[0]) await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName WHERE addedManual=0", [val.contacts[0].wa_id, val.contacts[0].profile.name]); 
-        
-        if(msg) { 
-            const phone = msg.from; 
-            let userMsg = msg.text?.body || ""; 
-            let isFile = false;
-
-            if(msg.type !== 'text') { 
-                isFile = true; 
-                userMsg = `[MEDIA:${msg.type.toUpperCase()}:${msg[msg.type].id}]`; 
-            } 
-            
+        if(msg) { const phone = msg.from; let userMsg = msg.text?.body || ""; let isFile = false;
+            if(msg.type !== 'text') { isFile = true; userMsg = `[MEDIA:${msg.type.toUpperCase()}:${msg[msg.type].id}]`; } 
             if (messageQueue.has(phone)) { clearTimeout(messageQueue.get(phone).timer); }
-
             const currentData = messageQueue.get(phone) || { text: [], name: val?.contacts?.[0]?.profile.name || "Cliente" };
             currentData.text.push(userMsg); 
-
             const timer = setTimeout(async () => {
-                const fullText = currentData.text.join("\n"); 
-                messageQueue.delete(phone); 
-
+                const fullText = currentData.text.join("\n"); messageQueue.delete(phone); 
                 const reply = await procesarConValentina(fullText, isFile ? '[ARCHIVO]' : fullText, phone, currentData.name, isFile); 
-                
-                if (reply) {
-                    await enviarWhatsApp(phone, reply);
-                }
-
+                if (reply) { await enviarWhatsApp(phone, reply); }
             }, DEBOUNCE_TIME);
-
-            currentData.timer = timer;
-            messageQueue.set(phone, currentData);
+            currentData.timer = timer; messageQueue.set(phone, currentData);
         } 
     } catch(e) { console.error("Webhook Error", e); } 
 });
