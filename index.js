@@ -1,10 +1,10 @@
 /*
- * SERVER BACKEND - v25.28 (FINAL PRODUCTION)
+ * SERVER BACKEND - v25.29 (PATCHED PRODUCTION)
  * ============================================================
- * 1. Fuente Histórica: Escanea el historial del chat para detectar
- * si el cliente vino de 'Store' o 'Web' en el pasado.
- * 2. Proxy V3: Headers completos para descarga de medios.
- * 3. Base de Datos: Esquema completo y robusto.
+ * CORRECCIONES APLICADAS:
+ * 1. Fuente Temprana: Detecta Store/Web ANTES de la IA.
+ * 2. Media Stream: Fix para audios pausados (Range Headers).
+ * 3. SQLite WAL: Previene bloqueos de base de datos.
  * ============================================================
  */
 
@@ -28,6 +28,8 @@ app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors());
 
+// NOTA: Para producción masiva de videos, se recomienda DiskStorage. 
+// Se mantiene MemoryStorage para compatibilidad con funciones actuales.
 const upload = multer({ 
     storage: multer.memoryStorage(),
     limits: { fileSize: 100 * 1024 * 1024 } 
@@ -42,9 +44,8 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-val-secure-v28-final"; 
+const SESSION_SECRET = "icc-val-secure-v29-patched"; 
 
-// Prompt por defecto (se sobreescribe con la DB)
 const DEFAULT_PROMPT = `Eres un asistente virtual. Tu comportamiento depende estrictamente de la configuración.`;
 
 // --- 3. SESIONES ---
@@ -71,7 +72,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- 4. BASE DE DATOS ---
+// --- 4. BASE DE DATOS (OPTIMIZADA) ---
 let db, globalKnowledge = [], serverInstance;
 
 (async () => {
@@ -84,7 +85,12 @@ let db, globalKnowledge = [], serverInstance;
             driver: sqlite3.Database 
         });
 
-        console.log("📂 Base de Datos Conectada.");
+        // OPTIMIZACIÓN CRÍTICA: WAL Mode para concurrencia
+        await db.exec("PRAGMA journal_mode = WAL;");
+        await db.exec("PRAGMA synchronous = NORMAL;");
+        await db.exec("PRAGMA busy_timeout = 5000;"); // Espera 5s si está ocupada antes de fallar
+
+        console.log("📂 Base de Datos Conectada (Modo WAL Activo).");
 
         const tables = [
             `history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT)`,
@@ -118,7 +124,7 @@ let db, globalKnowledge = [], serverInstance;
         iniciarCronJobs();
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.28 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.29 ONLINE (Port ${PORT})`));
         
         serverInstance.on('error', (e) => { 
             if(e.code === 'EADDRINUSE') {
@@ -148,31 +154,14 @@ async function setCfg(k, v) {
     await db.run("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", [k, JSON.stringify(v)]); 
 }
 
-// --- 6. DETECCIÓN DE FUENTE PROFUNDA (SCANNER) ---
-async function determinarFuenteHistorica(phone, mensajeActual) {
-    // Función auxiliar de chequeo
-    const check = (txt) => {
-        if(!txt) return null;
-        const t = txt.toLowerCase();
-        if (t.includes('storeicc.com') || t.includes('deseo asesoría')) return 'Tienda Virtual';
-        if (t.includes('importadoracasacolombia.com')) return 'Web';
-        return null;
-    };
-
-    // 1. Revisar mensaje actual primero (Prioridad Alta)
-    let source = check(mensajeActual);
-    if (source) return source;
-
-    // 2. Si no, escanear historial (últimos 50 mensajes)
-    try {
-        const history = await db.all("SELECT text FROM history WHERE phone = ? ORDER BY id ASC LIMIT 50", [phone]);
-        for (const row of history) {
-            source = check(row.text);
-            if (source) return source; // ¡Encontró el origen en el pasado!
-        }
-    } catch(e) { console.error("Error scanning history source:", e); }
-
-    return 'Organico'; // Si no encuentra nada
+// --- 6. DETECCIÓN DE FUENTE ---
+// Esta función ahora es pura utilidad, se llama explícitamente al recibir mensaje
+function analizarTextoFuente(texto) {
+    if(!texto) return null;
+    const t = texto.toLowerCase();
+    if (t.includes('storeicc.com') || t.includes('deseo asesoría')) return 'Tienda Virtual';
+    if (t.includes('importadoracasacolombia.com')) return 'Web';
+    return null;
 }
 
 // --- 7. META API ---
@@ -212,40 +201,92 @@ async function enviarWhatsApp(to, content, type = "text") {
     } catch (e) { return false; }
 }
 
-// --- 8. PROXY DE MEDIOS (FIXED) ---
+// --- 8. PROXY DE MEDIOS (STREAMING FIX) ---
+// Corrige el problema de audios pausados en iPhone/Web
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     try {
+        // 1. Obtener URL de descarga
         const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
         
-        const response = await axios.get(urlData.url, { 
-            headers: { 
-                'Authorization': `Bearer ${META_TOKEN}`,
-                'User-Agent': 'Mozilla/5.0 (compatible; ICC-Bot/1.0)' 
-            }, 
-            responseType: 'arraybuffer' 
-        });
+        const mediaUrl = urlData.url;
         
-        let contentType = urlData.mime_type || 'application/octet-stream';
-        if (contentType.includes('audio') || contentType.includes('ogg')) contentType = 'audio/ogg'; 
-        
-        res.writeHead(200, { 'Content-Length': response.data.length, 'Content-Type': contentType });
-        res.end(Buffer.from(response.data));
+        // 2. Preparar headers para Streaming y Range Requests
+        const headers = { 
+            'Authorization': `Bearer ${META_TOKEN}`,
+            'User-Agent': 'Mozilla/5.0 (compatible; ICC-Bot/1.0)' 
+        };
 
-    } catch (e) { res.status(500).send("Error Media"); }
+        if (req.headers.range) {
+            headers['Range'] = req.headers.range;
+        }
+
+        // 3. Solicitar archivo como STREAM
+        const response = await axios({
+            method: 'get',
+            url: mediaUrl,
+            headers: headers,
+            responseType: 'stream' // Clave para no saturar RAM
+        });
+
+        // 4. Copiar headers relevantes al cliente
+        res.set({
+            'Content-Type': response.headers['content-type'] || urlData.mime_type,
+            'Content-Length': response.headers['content-length'],
+            'Accept-Ranges': 'bytes',
+            'Cache-Control': 'public, max-age=31536000'
+        });
+
+        if (response.headers['content-range']) {
+            res.set('Content-Range', response.headers['content-range']);
+            res.status(206); // Partial Content
+        } else {
+            res.status(200);
+        }
+
+        // 5. Pipe directo (Meta -> Servidor -> Cliente)
+        response.data.pipe(res);
+
+    } catch (e) { 
+        console.error("Media Proxy Error:", e.message);
+        if (!res.headersSent) res.status(500).send("Error Media Stream"); 
+    }
 });
 
-// --- 9. LOGICA IA ---
+// --- 9. LÓGICA IA ---
 function limpiarRespuesta(txt) {
     let clean = txt.replace(/```json([\s\S]*?)```|{([\s\S]*?)}/gi, "").trim(); 
     return clean.replace(/[\r\n]+/g, "\n").trim();
 }
 
 async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFile = false) {
+    // A. Guardar Historial
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', dbMsg, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [phone, new Date().toISOString()]);
 
+    // B. CORRECCIÓN CRÍTICA: DETECCIÓN DE FUENTE TEMPRANA
+    // Se ejecuta ANTES de que la IA decida nada.
+    const fuenteDetectada = analizarTextoFuente(dbMsg);
+    if (fuenteDetectada) {
+        // Buscamos si ya existe lead
+        const leadExistente = await db.get("SELECT id, source FROM leads WHERE phone = ?", [phone]);
+        
+        if (leadExistente) {
+            // Solo actualizamos si era Organico o NULL, para no sobrescribir una fuente previa válida
+            if (!leadExistente.source || leadExistente.source === 'Organico') {
+                await db.run("UPDATE leads SET source = ? WHERE id = ?", [fuenteDetectada, leadExistente.id]);
+                console.log(`[FUENTE] Actualizado ${phone} a ${fuenteDetectada}`);
+            }
+        } else {
+            // Creamos el lead preliminar SOLO con la fuente (sin nombre aún)
+            await db.run(`INSERT INTO leads (phone, nombre, source, etiqueta, fecha, farewell_sent) VALUES (?, ?, ?, ?, ?, 0)`, 
+                [phone, name, fuenteDetectada, "Pendiente", new Date().toISOString()]);
+            console.log(`[FUENTE] Nuevo tráfico detectado de ${phone}: ${fuenteDetectada}`);
+        }
+    }
+
+    // C. Verificar Bot Activo
     const bot = await db.get("SELECT active FROM bot_status WHERE phone = ?", [phone]);
     if (bot && bot.active === 0) return null;
 
@@ -255,6 +296,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         return rFile;
     }
 
+    // D. Preparar Contexto IA
     let promptUsuario = await getCfg('bot_prompt');
     const configUsar = (promptUsuario && promptUsuario.length > 5) ? promptUsuario : DEFAULT_PROMPT;
     
@@ -298,7 +340,8 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     ${JSON.stringify(history)}
     
     === INSTRUCCIÓN ===
-    Si detectas datos nuevos (Nombre, Email, Ciudad, Interés), genera este JSON al final:
+    Si detectas datos nuevos (Nombre, Email, Ciudad, Interés), genera este JSON al final.
+    NOTA: Si el cliente YA es un lead registrado, solo devuelve JSON si hay datos NUEVOS para actualizar.
     \`\`\`json
     {"es_lead": boolean, "nombre":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead"}
     \`\`\`
@@ -312,7 +355,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         if (match) {
             try {
                 const info = JSON.parse((match[1]||match[0]).replace(/```json|```/g, "").trim());
-                await gestionarLead(phone, info, name, lead, dbMsg); 
+                await gestionarLead(phone, info, name, lead); // Ya no pasamos el msg original, ya se procesó
             } catch(e) {}
         }
 
@@ -328,7 +371,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     }
 }
 
-async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
+async function gestionarLead(phone, info, fbName, oldLead) {
     const limpiarDato = (d) => (!d || /^(unknown|null|n\/a|no menciona|cliente|pend)$/i.test(d.toString().trim())) ? null : d.trim();
 
     let name = limpiarDato(info.nombre) || fbName;
@@ -336,19 +379,15 @@ async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
     let interesLimpio = limpiarDato(info.interes) || (oldLead ? oldLead.interes : "Consultando");
     let farewellReset = (oldLead && !oldLead.fecha) ? ", farewell_sent = 0" : "";
 
-    // AQUÍ ESTÁ EL CAMBIO CLAVE: Escaneo profundo
-    const fuente = await determinarFuenteHistorica(phone, originalMsg);
-
+    // NOTA: La fuente ya se gestionó en procesarConValentina, aquí solo actualizamos datos personales
     if (oldLead) {
-        // Mantiene la fuente antigua si ya era válida, si no, usa la nueva detectada
-        const fuenteFinal = (oldLead.source && oldLead.source !== 'Organico') ? oldLead.source : fuente;
-        
-        await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=?, source=? ${farewellReset} WHERE id=?`, 
-            [name, interesLimpio, info.etiqueta || oldLead.etiqueta, new Date().toISOString(), ciudadLimpia || oldLead.ciudad, info.correo || oldLead.correo, fuenteFinal, oldLead.id]);
+        await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=? ${farewellReset} WHERE id=?`, 
+            [name, interesLimpio, info.etiqueta || oldLead.etiqueta, new Date().toISOString(), ciudadLimpia || oldLead.ciudad, info.correo || oldLead.correo, oldLead.id]);
         await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [name, phone]);
     } else if (interesLimpio || ciudadLimpia || info.es_lead) {
-        await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo, source, farewell_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`, 
-            [phone, name, interesLimpio, "Pendiente", new Date().toISOString(), ciudadLimpia, info.correo, fuente]);
+        // Fallback por si la IA detecta lead en un mensaje que NO tenía link de fuente
+        await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo, source, farewell_sent) VALUES (?, ?, ?, ?, ?, ?, ?, 'Organico', 0)`, 
+            [phone, name, interesLimpio, "Pendiente", new Date().toISOString(), ciudadLimpia, info.correo]);
         await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [name, phone]);
     }
 }
