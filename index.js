@@ -1,11 +1,10 @@
 /*
- * SERVER BACKEND - v25.27 (PRODUCTION MASTER - SOURCE FIXED)
+ * SERVER BACKEND - v25.28 (FINAL PRODUCTION)
  * ============================================================
- * ESTADO: ESTABLE, COMPLETO Y CORREGIDO
- * 1. Logic-Free: Reglas de negocio cargadas dinámicamente desde DB.
- * 2. Media Proxy V3: Headers completos (Auth + UserAgent) para evitar 401/403.
- * 3. Source Detection Fix: Reconocimiento exacto de 'Tienda Virtual' y 'Web'.
- * 4. Database: Esquema completo con autorecuperación y migraciones.
+ * 1. Fuente Histórica: Escanea el historial del chat para detectar
+ * si el cliente vino de 'Store' o 'Web' en el pasado.
+ * 2. Proxy V3: Headers completos para descarga de medios.
+ * 3. Base de Datos: Esquema completo y robusto.
  * ============================================================
  */
 
@@ -23,22 +22,19 @@ const { open } = require('sqlite');
 
 // --- 1. CONFIGURACIÓN DEL SERVIDOR ---
 const app = express();
-app.set('trust proxy', 1); // Necesario para despliegues en la nube
+app.set('trust proxy', 1);
 
-// Aumentamos límites para manejar subida de archivos pesados
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors());
 
-// Configuración de Multer (Almacenamiento en Memoria RAM temporal)
 const upload = multer({ 
     storage: multer.memoryStorage(),
-    limits: { fileSize: 100 * 1024 * 1024 } // 100MB Límite
+    limits: { fileSize: 100 * 1024 * 1024 } 
 });
 
-// --- SISTEMA DE COLA DE MENSAJES (DEBOUNCE) ---
 const messageQueue = new Map(); 
-const DEBOUNCE_TIME = 8000; // 8 Segundos de espera para agrupar
+const DEBOUNCE_TIME = 8000; 
 
 // --- 2. VARIABLES DE ENTORNO ---
 const API_KEY = process.env.GEMINI_API_KEY; 
@@ -46,10 +42,10 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-val-secure-master-v2"; 
+const SESSION_SECRET = "icc-val-secure-v28-final"; 
 
-// PROMPT GENÉRICO (El cerebro real se carga desde la Base de Datos)
-const DEFAULT_PROMPT = `Eres un asistente virtual. Tu comportamiento, nombre y reglas de negocio dependen estrictamente de la configuración cargada por el administrador. Si no hay configuración disponible, responde amablemente que estás en modo de espera.`;
+// Prompt por defecto (se sobreescribe con la DB)
+const DEFAULT_PROMPT = `Eres un asistente virtual. Tu comportamiento depende estrictamente de la configuración.`;
 
 // --- 3. SESIONES ---
 app.use(session({
@@ -57,27 +53,25 @@ app.use(session({
     secret: SESSION_SECRET, 
     resave: false, 
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 86400000 } // 24 Horas
+    cookie: { secure: false, maxAge: 86400000 } 
 }));
 
-// Middleware de Seguridad (Gatekeeper)
 const proteger = (req, res, next) => {
     if (req.session.isLogged) {
         next();
     } else {
-        res.status(401).send("Acceso Denegado: Inicia sesión.");
+        res.status(401).send("No autorizado.");
     }
 };
 
-// Protección de archivos de datos directos
 app.use((req, res, next) => {
-    if ((req.path.endsWith('.json') || req.path.endsWith('.db') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
-        return res.status(403).send('🚫 Acceso Prohibido a Base de Datos');
+    if ((req.path.endsWith('.json') || req.path.includes('/data/')) && !req.path.startsWith('/api/')) {
+        return res.status(403).send('🚫 Acceso Denegado');
     }
     next();
 });
 
-// --- 4. BASE DE DATOS (INICIALIZACIÓN ROBUSTA) ---
+// --- 4. BASE DE DATOS ---
 let db, globalKnowledge = [], serverInstance;
 
 (async () => {
@@ -90,35 +84,23 @@ let db, globalKnowledge = [], serverInstance;
             driver: sqlite3.Database 
         });
 
-        console.log("📂 Conexión a Base de Datos Establecida.");
+        console.log("📂 Base de Datos Conectada.");
 
-        // Definición explícita de todas las tablas requeridas
         const tables = [
             `history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT)`,
-            
             `leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT UNIQUE, nombre TEXT, interes TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, correo TEXT, source TEXT DEFAULT 'Organico', status_tag TEXT, farewell_sent INTEGER DEFAULT 0)`,
-            
             `metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0, photoUrl TEXT, archived INTEGER DEFAULT 0, unreadCount INTEGER DEFAULT 0, last_interaction TEXT)`,
-            
             `bot_status (phone TEXT PRIMARY KEY, active INTEGER DEFAULT 1)`,
-            
             `inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, searchable TEXT UNIQUE, raw_data TEXT)`,
-            
             `config (key TEXT PRIMARY KEY, value TEXT)`,
-            
             `shortcuts (id INTEGER PRIMARY KEY AUTOINCREMENT, keyword TEXT UNIQUE, text TEXT)`,
-            
             `global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT)`,
-            
             `knowledge_sources (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, url TEXT, summary TEXT, active INTEGER DEFAULT 1, date TEXT)`
         ];
 
-        // Crear tablas si no existen
-        for (const t of tables) {
-            await db.exec(`CREATE TABLE IF NOT EXISTS ${t}`);
-        }
+        for (const t of tables) await db.exec(`CREATE TABLE IF NOT EXISTS ${t}`);
 
-        // Migraciones: Intentar agregar columnas nuevas a tablas viejas sin romper nada
+        // Migraciones
         const migrations = [
             "ALTER TABLE metadata ADD COLUMN photoUrl TEXT",
             "ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0",
@@ -130,34 +112,30 @@ let db, globalKnowledge = [], serverInstance;
             "ALTER TABLE config ADD COLUMN logoUrl TEXT"
         ];
 
-        for (const m of migrations) { 
-            try { await db.exec(m); } catch(e){ /* Silencio si la columna ya existe */ } 
-        }
+        for (const m of migrations) { try { await db.exec(m); } catch(e){} }
 
         await refreshKnowledge();
         iniciarCronJobs();
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 SERVER BACKEND v25.27 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.28 ONLINE (Port ${PORT})`));
         
         serverInstance.on('error', (e) => { 
             if(e.code === 'EADDRINUSE') {
-                console.log("Puerto ocupado, reintentando en 1s...");
                 setTimeout(() => { serverInstance.close(); serverInstance.listen(PORT); }, 1000); 
             }
         });
 
-    } catch (e) { console.error("❌ ERROR CRÍTICO EN DB:", e); }
+    } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
 
-// --- 5. UTILIDADES DEL SISTEMA ---
+// --- 5. UTILIDADES ---
 async function refreshKnowledge() {
     try { 
         globalKnowledge = (await db.all("SELECT * FROM inventory")).map(r => ({ 
             searchable: r.searchable, 
             data: JSON.parse(r.raw_data) 
         })); 
-        console.log(`📦 Inventario cargado: ${globalKnowledge.length} items.`);
     } catch(e) { globalKnowledge = []; }
 }
 
@@ -170,19 +148,34 @@ async function setCfg(k, v) {
     await db.run("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", [k, JSON.stringify(v)]); 
 }
 
-// --- CORRECCIÓN DE FUENTES (FIX) ---
-function detectarFuente(mensaje) {
-    if (!mensaje) return 'Organico';
-    const msg = mensaje.toLowerCase();
-    
-    // Detección específica para las etiquetas del Dashboard
-    if (msg.includes('storeicc.com') || msg.includes('deseo asesoría')) return 'Tienda Virtual';
-    if (msg.includes('importadoracasacolombia.com')) return 'Web';
-    
-    return 'Organico';
+// --- 6. DETECCIÓN DE FUENTE PROFUNDA (SCANNER) ---
+async function determinarFuenteHistorica(phone, mensajeActual) {
+    // Función auxiliar de chequeo
+    const check = (txt) => {
+        if(!txt) return null;
+        const t = txt.toLowerCase();
+        if (t.includes('storeicc.com') || t.includes('deseo asesoría')) return 'Tienda Virtual';
+        if (t.includes('importadoracasacolombia.com')) return 'Web';
+        return null;
+    };
+
+    // 1. Revisar mensaje actual primero (Prioridad Alta)
+    let source = check(mensajeActual);
+    if (source) return source;
+
+    // 2. Si no, escanear historial (últimos 50 mensajes)
+    try {
+        const history = await db.all("SELECT text FROM history WHERE phone = ? ORDER BY id ASC LIMIT 50", [phone]);
+        for (const row of history) {
+            source = check(row.text);
+            if (source) return source; // ¡Encontró el origen en el pasado!
+        }
+    } catch(e) { console.error("Error scanning history source:", e); }
+
+    return 'Organico'; // Si no encuentra nada
 }
 
-// --- 6. META API (CONEXIÓN WHATSAPP) ---
+// --- 7. META API ---
 async function uploadToMeta(buffer, mime, name) {
     try {
         const form = new FormData();
@@ -196,10 +189,7 @@ async function uploadToMeta(buffer, mime, name) {
             headers: { 'Authorization': `Bearer ${META_TOKEN}`, ...form.getHeaders() } 
         });
         return r.data.id;
-    } catch (e) { 
-        console.error("Error subiendo archivo a Meta:", e.response?.data || e.message);
-        return null; 
-    }
+    } catch (e) { return null; }
 }
 
 async function enviarWhatsApp(to, content, type = "text") {
@@ -218,24 +208,17 @@ async function enviarWhatsApp(to, content, type = "text") {
         await axios.post(`https://graph.facebook.com/v21.0/${PHONE_ID}/messages`, payload, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
-        console.log(`✅ Mensaje enviado a ${to}`);
         return true;
-    } catch (e) { 
-        console.error("❌ Error enviando a Meta:", e.response ? JSON.stringify(e.response.data) : e.message); 
-        return false; 
-    }
+    } catch (e) { return false; }
 }
 
-// --- 7. MEDIA PROXY (FIXED: AUTH + HEADERS) ---
+// --- 8. PROXY DE MEDIOS (FIXED) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     try {
-        // PASO 1: Obtener la URL firmada de Meta
         const { data: urlData } = await axios.get(`https://graph.facebook.com/v21.0/${req.params.id}`, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
         
-        // PASO 2: Descargar el archivo binario
-        // IMPORTANTE: Incluimos Authorization Y User-Agent para que AWS/Meta no nos bloquee
         const response = await axios.get(urlData.url, { 
             headers: { 
                 'Authorization': `Bearer ${META_TOKEN}`,
@@ -247,43 +230,31 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
         let contentType = urlData.mime_type || 'application/octet-stream';
         if (contentType.includes('audio') || contentType.includes('ogg')) contentType = 'audio/ogg'; 
         
-        res.writeHead(200, { 
-            'Content-Length': response.data.length, 
-            'Content-Type': contentType 
-        });
+        res.writeHead(200, { 'Content-Length': response.data.length, 'Content-Type': contentType });
         res.end(Buffer.from(response.data));
 
-    } catch (e) { 
-        console.error("Media Proxy Error:", e.response ? e.response.status : e.message);
-        res.status(500).send("Error recuperando archivo multimedia."); 
-    }
+    } catch (e) { res.status(500).send("Error Media"); }
 });
 
-// --- 8. CEREBRO IA (AGNÓSTICO) ---
+// --- 9. LOGICA IA ---
 function limpiarRespuesta(txt) {
     let clean = txt.replace(/```json([\s\S]*?)```|{([\s\S]*?)}/gi, "").trim(); 
     return clean.replace(/[\r\n]+/g, "\n").trim();
 }
 
 async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFile = false) {
-    // 1. Guardar mensaje del usuario
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', dbMsg, new Date().toISOString()]);
-    
-    // 2. Actualizar Metadata
     await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [phone, new Date().toISOString()]);
 
-    // 3. Verificar si el bot está activo
     const bot = await db.get("SELECT active FROM bot_status WHERE phone = ?", [phone]);
-    if (bot && bot.active === 0) return null; // Bot pausado manualmente
+    if (bot && bot.active === 0) return null;
 
-    // 4. Manejo de Archivos
     if (isFile) {
-        const rFile = "¡Recibido! 📁 Dame un momento lo reviso.";
+        const rFile = "¡Recibido! 📁 Lo reviso enseguida.";
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', rFile, new Date().toISOString()]);
         return rFile;
     }
 
-    // --- CARGA DE CEREBRO (DESDE DB) ---
     let promptUsuario = await getCfg('bot_prompt');
     const configUsar = (promptUsuario && promptUsuario.length > 5) ? promptUsuario : DEFAULT_PROMPT;
     
@@ -293,7 +264,6 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const techRules = await getCfg('tech_rules', []);
     const biz = await getCfg('biz_profile', {});
     
-    // Historial y Lead Info
     const history = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [phone])).reverse();
     const lead = await db.get("SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
     
@@ -304,32 +274,30 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         if (lead.interes) memoriaDatos += `Interés: ${lead.interes}\n`;
     }
 
-    // Búsqueda en Inventario
     const busqueda = aiMsg.toLowerCase().split(" ").slice(0,3).join(" ");
     const stock = globalKnowledge.filter(i => (i.searchable||"").toLowerCase().includes(busqueda)).slice(0,5);
 
-    // PROMPT FINAL
     const promptFinal = `
-    === ROL Y PERSONALIDAD ===
+    === ROL ===
     ${configUsar}
     
-    === REGLAS TÉCNICAS Y COMERCIALES ===
+    === REGLAS ===
     ${techRules.join("\n")}
-    Horario: ${biz.hours || 'No definido'}
+    Horario: ${biz.hours || ''}
     
     === CONTEXTO WEB ===
-    ${webContext || "Sin datos extra."}
+    ${webContext}
     
-    === DATOS DEL CLIENTE ===
+    === DATOS CLIENTE ===
     ${memoriaDatos}
     
-    === INVENTARIO RELACIONADO ===
+    === INVENTARIO ===
     ${JSON.stringify(stock)}
     
-    === HISTORIAL RECIENTE ===
+    === HISTORIAL ===
     ${JSON.stringify(history)}
     
-    === INSTRUCCIÓN DEL SISTEMA ===
+    === INSTRUCCIÓN ===
     Si detectas datos nuevos (Nombre, Email, Ciudad, Interés), genera este JSON al final:
     \`\`\`json
     {"es_lead": boolean, "nombre":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead"}
@@ -345,38 +313,40 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
             try {
                 const info = JSON.parse((match[1]||match[0]).replace(/```json|```/g, "").trim());
                 await gestionarLead(phone, info, name, lead, dbMsg); 
-            } catch(e) { console.error("Error parseando JSON de IA", e); }
+            } catch(e) {}
         }
 
         let reply = limpiarRespuesta(raw);
-        if (!reply) reply = "Disculpa, no entendí bien.";
+        if (!reply) reply = "¿En qué te puedo ayudar?";
         
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', reply, new Date().toISOString()]);
         return reply;
 
     } catch (e) { 
-        console.error("AI Error:", e.response?.data || e.message);
-        return "Estoy validando información. Un momento."; 
+        console.error("AI Error:", e);
+        return "Dame un momento, estoy verificando esa información."; 
     }
 }
 
-// --- 9. GESTIÓN DE LEADS (DB OPERATIONS) ---
 async function gestionarLead(phone, info, fbName, oldLead, originalMsg) {
     const limpiarDato = (d) => (!d || /^(unknown|null|n\/a|no menciona|cliente|pend)$/i.test(d.toString().trim())) ? null : d.trim();
 
     let name = limpiarDato(info.nombre) || fbName;
     let ciudadLimpia = limpiarDato(info.ciudad); 
     let interesLimpio = limpiarDato(info.interes) || (oldLead ? oldLead.interes : "Consultando");
-    
     let farewellReset = (oldLead && !oldLead.fecha) ? ", farewell_sent = 0" : "";
 
+    // AQUÍ ESTÁ EL CAMBIO CLAVE: Escaneo profundo
+    const fuente = await determinarFuenteHistorica(phone, originalMsg);
+
     if (oldLead) {
-        await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=? ${farewellReset} WHERE id=?`, 
-            [name, interesLimpio, info.etiqueta || oldLead.etiqueta, new Date().toISOString(), ciudadLimpia || oldLead.ciudad, info.correo || oldLead.correo, oldLead.id]);
+        // Mantiene la fuente antigua si ya era válida, si no, usa la nueva detectada
+        const fuenteFinal = (oldLead.source && oldLead.source !== 'Organico') ? oldLead.source : fuente;
+        
+        await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, correo=?, source=? ${farewellReset} WHERE id=?`, 
+            [name, interesLimpio, info.etiqueta || oldLead.etiqueta, new Date().toISOString(), ciudadLimpia || oldLead.ciudad, info.correo || oldLead.correo, fuenteFinal, oldLead.id]);
         await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [name, phone]);
     } else if (interesLimpio || ciudadLimpia || info.es_lead) {
-        // USO DE LA FUNCIÓN CORREGIDA
-        const fuente = detectarFuente(originalMsg);
         await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, correo, source, farewell_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`, 
             [phone, name, interesLimpio, "Pendiente", new Date().toISOString(), ciudadLimpia, info.correo, fuente]);
         await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [name, phone]);
@@ -388,27 +358,25 @@ function iniciarCronJobs() {
     setInterval(async () => {
         try {
             const now = new Date();
-            // Despedida
             const leadsTerminados = await db.all(`SELECT * FROM leads WHERE farewell_sent = 0 AND ciudad IS NOT NULL AND LOWER(ciudad) NOT IN ('unknown', 'null', 'n/a') AND nombre IS NOT NULL AND fecha < datetime('now', '-1 hour') AND fecha > datetime('now', '-24 hour')`);
             
             for (const l of leadsTerminados) {
                 const meta = await db.get("SELECT last_interaction FROM metadata WHERE phone = ?", [l.phone]);
                 const lastMsgDate = new Date(meta?.last_interaction || 0);
                 if (now - lastMsgDate > 30 * 60 * 1000) {
-                    const msgDespedida = "Gracias por tu información. Un asesor comercial te contactará pronto. 🤝";
+                    const msgDespedida = "Gracias por tu información. Un asesor te contactará pronto. 🤝";
                     await enviarWhatsApp(l.phone, msgDespedida);
                     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [l.phone, 'bot', msgDespedida, now.toISOString()]);
                     await db.run("UPDATE leads SET farewell_sent = 1 WHERE id = ?", [l.id]);
                 }
             }
 
-            // Recuperación
             const olvidados = await db.all(`SELECT m.phone FROM metadata m LEFT JOIN leads l ON m.phone = l.phone WHERE l.id IS NULL AND m.last_interaction < datetime('now', '-24 hour') AND m.last_interaction > datetime('now', '-48 hour') AND m.archived = 0`);
             
             for (const o of olvidados) {
                 const lastMsg = await db.get("SELECT role FROM history WHERE phone = ? ORDER BY id DESC LIMIT 1", [o.phone]);
                 if (lastMsg && lastMsg.role === 'bot') {
-                    const msgRecuerdo = "Hola, ¿aún necesitas ayuda con tu consulta?";
+                    const msgRecuerdo = "Hola, ¿sigues interesado?";
                     await enviarWhatsApp(o.phone, msgRecuerdo);
                     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [o.phone, 'bot', msgRecuerdo, now.toISOString()]);
                     await db.run("UPDATE metadata SET last_interaction = ? WHERE phone = ?", [now.toISOString(), o.phone]);
@@ -532,7 +500,6 @@ app.post('/api/chat/send', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({ error: "Error interno" }); } 
 });
 
-// --- WEBHOOK ---
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
 
 app.post('/webhook', async (req, res) => { 
@@ -558,7 +525,6 @@ app.post('/webhook', async (req, res) => {
             const currentData = messageQueue.get(phone) || { text: [], name: val?.contacts?.[0]?.profile.name || "Cliente" };
             currentData.text.push(userMsg); 
 
-            // DEBOUNCE
             const timer = setTimeout(async () => {
                 const fullText = currentData.text.join("\n"); 
                 messageQueue.delete(phone); 
@@ -579,3 +545,5 @@ app.post('/webhook', async (req, res) => {
 
 process.on('SIGTERM', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
 process.on('SIGINT', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
+
+// --- FIN DEL ARCHIVO ---
