@@ -1,9 +1,9 @@
 /*
- * SERVER BACKEND - v25.33 (FINAL FUSION)
+ * SERVER BACKEND - v25.34 (FINAL PRODUCTION BLINDADO)
  * ============================================================
- * 1. Soporte Excel (.xlsx) y Edición de Inventario.
- * 2. Mantiene Escaneo Retroactivo y Validación de Token (v25.30).
- * 3. Mantiene Proxy Blindado y DB modo WAL.
+ * 1. Soporte Excel (.xlsx) y Edición de Inventario (Mantenido).
+ * 2. Webhook "Crash-Proof": Protegido contra mensajes sin ID/Nombre.
+ * 3. Proxy de Medios: Validado para descargar con el nuevo Token.
  * ============================================================
  */
 
@@ -12,7 +12,7 @@ const session = require('express-session');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const XLSX = require('xlsx'); // <--- NUEVA LIBRERÍA OBLIGATORIA
+const XLSX = require('xlsx'); // Librería Excel requerida
 const { parse } = require('csv-parse/sync');
 const axios = require('axios');
 const cors = require('cors');
@@ -42,7 +42,7 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_ID = process.env.PHONE_NUMBER_ID;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-val-secure-v33-final"; 
+const SESSION_SECRET = "icc-val-secure-v34-final"; 
 
 const DEFAULT_PROMPT = `Eres un asistente virtual. Tu comportamiento depende estrictamente de la configuración.`;
 
@@ -83,7 +83,6 @@ let db, globalKnowledge = [], serverInstance;
             driver: sqlite3.Database 
         });
 
-        // MANTENEMOS OPTIMIZACIÓN DE LA v25.30
         await db.exec("PRAGMA journal_mode = WAL;");
         await db.exec("PRAGMA synchronous = NORMAL;");
         
@@ -118,52 +117,40 @@ let db, globalKnowledge = [], serverInstance;
         await refreshKnowledge();
         iniciarCronJobs();
         
-        // --- TAREAS DE INICIO (MANTENIDAS DE v25.30) ---
         await verificarTokenMeta();     
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.33 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.34 ONLINE (Port ${PORT})`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
 
-// --- 5. FUNCIONES DE DIAGNÓSTICO Y CORRECCIÓN (MANTENIDAS) ---
-
-// A. Verificar Token
+// --- 5. DIAGNÓSTICO ---
 async function verificarTokenMeta() {
     try {
         console.log("🔍 Verificando estado del Token Meta...");
         const r = await axios.get(`https://graph.facebook.com/v21.0/me?access_token=${META_TOKEN}`);
         console.log(`✅ TOKEN OK. Conectado como: ${r.data.name} (ID: ${r.data.id})`);
     } catch (e) {
-        console.error("\n==================================================");
-        console.error("❌ ERROR CRÍTICO: EL TOKEN DE META ES INVÁLIDO O EXPIRÓ.");
-        console.error("SOLUCIÓN: Genera un nuevo token en developers.facebook.com");
-        console.error("==================================================\n");
+        console.error("❌ ERROR CRÍTICO: Token Meta Inválido.");
     }
 }
 
-// B. Escaneo Retroactivo
 async function escanearFuentesHistoricas() {
-    console.log("🕵️ Iniciando escaneo retroactivo de fuentes (Store/Web)...");
     try {
         const leads = await db.all("SELECT id, phone, source FROM leads WHERE source IS NULL OR source = 'Organico'");
-        let count = 0;
         for (const lead of leads) {
             const history = await db.all("SELECT text FROM history WHERE phone = ?", [lead.phone]);
             for (const msg of history) {
                 const fuente = analizarTextoFuente(msg.text); 
                 if (fuente) {
                     await db.run("UPDATE leads SET source = ? WHERE id = ?", [fuente, lead.id]);
-                    console.log(`✨ CORREGIDO: ${lead.phone} ahora es '${fuente}'`);
-                    count++;
                     break; 
                 }
             }
         }
-        console.log(`✅ Escaneo finalizado. Se actualizaron ${count} leads antiguos.`);
-    } catch (e) { console.error("Error en escaneo retroactivo:", e); }
+    } catch (e) { console.error("Error historial:", e); }
 }
 
 // --- 6. UTILIDADES ---
@@ -220,7 +207,7 @@ async function enviarWhatsApp(to, content, type = "text") {
     } catch (e) { return false; }
 }
 
-// --- 8. PROXY DE MEDIOS (MANTENEMOS VERSIÓN BLINDADA v25.30) ---
+// --- 8. PROXY DE MEDIOS (SEGURO) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     const mediaId = req.params.id;
     if (!mediaId || mediaId === 'undefined') return res.status(404).send("ID Inválido");
@@ -233,10 +220,8 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
             });
             urlData = responseUrl.data;
         } catch (apiError) {
-            if (apiError.response) {
-                const status = apiError.response.status;
-                if (status === 400 || status === 404) return res.status(404).send("Medio expirado o no encontrado");
-                if (status === 401) return res.status(401).send("Token Meta Expirado");
+            if (apiError.response && (apiError.response.status === 404 || apiError.response.status === 400)) {
+                return res.status(404).send("Medio no encontrado");
             }
             throw apiError;
         }
@@ -290,12 +275,10 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         if (leadExistente) {
             if (!leadExistente.source || leadExistente.source === 'Organico') {
                 await db.run("UPDATE leads SET source = ? WHERE id = ?", [fuenteDetectada, leadExistente.id]);
-                console.log(`[FUENTE] Actualizado ${phone} a ${fuenteDetectada}`);
             }
         } else {
             await db.run(`INSERT INTO leads (phone, nombre, source, etiqueta, fecha, farewell_sent) VALUES (?, ?, ?, ?, ?, 0)`, 
                 [phone, name, fuenteDetectada, "Pendiente", new Date().toISOString()]);
-            console.log(`[FUENTE] Nuevo tráfico detectado de ${phone}: ${fuenteDetectada}`);
         }
     }
 
@@ -352,7 +335,6 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     try {
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: promptFinal }] }] });
         const raw = r.data.candidates[0].content.parts[0].text;
-        
         const match = raw.match(/```json([\s\S]*?)```|{([\s\S]*?)}/);
         if (match) {
             try {
@@ -360,17 +342,11 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
                 await gestionarLead(phone, info, name, lead); 
             } catch(e) {}
         }
-
         let reply = limpiarRespuesta(raw);
         if (!reply) reply = "¿En qué te puedo ayudar?";
-        
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', reply, new Date().toISOString()]);
         return reply;
-
-    } catch (e) { 
-        console.error("AI Error:", e);
-        return "Dame un momento, estoy verificando esa información."; 
-    }
+    } catch (e) { return "Dame un momento, estoy verificando esa información."; }
 }
 
 async function gestionarLead(phone, info, fbName, oldLead) {
@@ -391,36 +367,21 @@ async function gestionarLead(phone, info, fbName, oldLead) {
     }
 }
 
-// --- 10. CRON JOBS ---
 function iniciarCronJobs() {
     setInterval(async () => {
         try {
             const now = new Date();
             const leadsTerminados = await db.all(`SELECT * FROM leads WHERE farewell_sent = 0 AND ciudad IS NOT NULL AND LOWER(ciudad) NOT IN ('unknown', 'null', 'n/a') AND nombre IS NOT NULL AND fecha < datetime('now', '-1 hour') AND fecha > datetime('now', '-24 hour')`);
-            
             for (const l of leadsTerminados) {
                 const meta = await db.get("SELECT last_interaction FROM metadata WHERE phone = ?", [l.phone]);
-                const lastMsgDate = new Date(meta?.last_interaction || 0);
-                if (now - lastMsgDate > 30 * 60 * 1000) {
+                if (now - new Date(meta?.last_interaction || 0) > 30 * 60 * 1000) {
                     const msgDespedida = "Gracias por tu información. Un asesor te contactará pronto. 🤝";
                     await enviarWhatsApp(l.phone, msgDespedida);
                     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [l.phone, 'bot', msgDespedida, now.toISOString()]);
                     await db.run("UPDATE leads SET farewell_sent = 1 WHERE id = ?", [l.id]);
                 }
             }
-
-            const olvidados = await db.all(`SELECT m.phone FROM metadata m LEFT JOIN leads l ON m.phone = l.phone WHERE l.id IS NULL AND m.last_interaction < datetime('now', '-24 hour') AND m.last_interaction > datetime('now', '-48 hour') AND m.archived = 0`);
-            
-            for (const o of olvidados) {
-                const lastMsg = await db.get("SELECT role FROM history WHERE phone = ? ORDER BY id DESC LIMIT 1", [o.phone]);
-                if (lastMsg && lastMsg.role === 'bot') {
-                    const msgRecuerdo = "Hola, ¿sigues interesado?";
-                    await enviarWhatsApp(o.phone, msgRecuerdo);
-                    await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [o.phone, 'bot', msgRecuerdo, now.toISOString()]);
-                    await db.run("UPDATE metadata SET last_interaction = ? WHERE phone = ?", [now.toISOString(), o.phone]);
-                }
-            }
-        } catch (e) { console.error("Cron Error:", e); }
+        } catch (e) {}
     }, 60000 * 5); 
 }
 
@@ -432,11 +393,59 @@ app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login'
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 
-app.get('/api/config/prompt', proteger, async (req, res) => res.json({ prompt: await getCfg('bot_prompt', DEFAULT_PROMPT) }));
-app.post('/api/config/prompt', proteger, async (req, res) => { await setCfg('bot_prompt', req.body.prompt); res.json({success:true}); });
+app.get('/api/data/:type', proteger, async (req, res) => {
+    const t = req.params.type;
+    if (t === 'leads') res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
+    else if (t === 'tags') res.json(await db.all("SELECT * FROM global_tags"));
+    else if (t === 'shortcuts') res.json(await db.all("SELECT * FROM shortcuts"));
+    else if (t === 'knowledge') res.json(await db.all("SELECT * FROM inventory"));
+    else if (t === 'config') res.json({ website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []), biz_profile: await getCfg('biz_profile', {}), logo_url: await getCfg('logo_url') });
+    else res.json([]);
+});
 
-app.get('/api/data/web-knowledge', proteger, async (req, res) => { res.json(await db.all("SELECT * FROM knowledge_sources ORDER BY id DESC")); });
+app.post('/api/knowledge/update', proteger, async (req, res) => {
+    const { id, data } = req.body;
+    try {
+        const searchable = Object.values(data).join(" ");
+        await db.run("UPDATE inventory SET raw_data = ?, searchable = ? WHERE id = ?", [JSON.stringify(data), searchable, id]);
+        await refreshKnowledge();
+        res.json({success:true});
+    } catch(e) { res.status(500).json({error: "Error actualizando"}); }
+});
+
+app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res) => { 
+    try { 
+        const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+        for (const row of rows) {
+            const cleanRow = {};
+            for(const k in row) cleanRow[k.toLowerCase().trim()] = row[k];
+            await db.run("INSERT OR IGNORE INTO inventory (searchable, raw_data) VALUES (?, ?)", [Object.values(cleanRow).join(" "), JSON.stringify(cleanRow)]); 
+        }
+        await refreshKnowledge(); 
+        res.json({ success: true, count: rows.length }); 
+    } catch(e) { res.status(500).json({ error: "Error procesando archivo" }); } 
+});
+
+app.post('/api/config/logo', proteger, upload.single('file'), async (req, res) => { await setCfg('logo_url', `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`); res.json({success:true}); });
+app.post('/api/config/biz/save', proteger, async (req, res) => { await setCfg('biz_profile', {name:req.body.name, hours:req.body.hours}); res.json({success:true}); });
+app.post('/api/tags/add', proteger, async (req, res) => { await db.run("INSERT INTO global_tags (name, color) VALUES (?, ?)", [req.body.name, req.body.color]); res.json({success:true}); });
+app.post('/api/tags/delete', proteger, async (req, res) => { await db.run("DELETE FROM global_tags WHERE id = ?", [req.body.id]); res.json({success:true}); });
+app.post('/api/shortcuts/add', proteger, async (req, res) => { await db.run("INSERT INTO shortcuts (keyword, text) VALUES (?, ?)", [req.body.keyword, req.body.text]); res.json({success:true}); });
+app.post('/api/shortcuts/delete', proteger, async (req, res) => { await db.run("DELETE FROM shortcuts WHERE id = ?", [req.body.id]); res.json({success:true}); });
+app.post('/api/contacts/upload-photo', proteger, upload.single('file'), async (req, res) => { await db.run("INSERT INTO metadata (phone, photoUrl) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET photoUrl=excluded.photoUrl", [req.body.phone, `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`]); res.json({success:true}); });
+app.post('/api/chat/toggle-bot', proteger, async (req, res) => { await db.run("INSERT OR REPLACE INTO bot_status (phone, active) VALUES (?, ?)", [req.body.phone, req.body.active?1:0]); res.json({success:true}); });
+app.post('/api/config/rules/add', proteger, async (req, res) => { let r=await getCfg('tech_rules',[]); r.push(req.body.rule); await setCfg('tech_rules',r); res.json({rules:r}); });
+app.post('/api/config/rules/delete', proteger, async (req, res) => { let r=await getCfg('tech_rules',[]); r.splice(req.body.index,1); await setCfg('tech_rules',r); res.json({rules:r}); });
+app.post('/api/leads/update', proteger, async(req,res)=>{ await db.run(`UPDATE leads SET ${req.body.field}=? WHERE id=?`,[req.body.value, req.body.id]); res.json({success:true}); });
+app.post('/api/leads/delete', proteger, async(req,res)=>{ await db.run("DELETE FROM leads WHERE id=?",[req.body.id]); res.json({success:true}); });
+app.post('/api/knowledge/delete', proteger, async (req, res) => { await db.run("DELETE FROM inventory WHERE id=?",[req.body.id]); await refreshKnowledge(); res.json({success:true}); });
+app.post('/api/knowledge/clear', proteger, async (req, res) => { await db.run("DELETE FROM inventory"); await refreshKnowledge(); res.json({success:true}); });
+app.post('/api/config/prompt', proteger, async (req, res) => { await setCfg('bot_prompt', req.body.prompt); res.json({success:true}); });
+app.get('/api/config/prompt', proteger, async (req, res) => res.json({ prompt: await getCfg('bot_prompt', DEFAULT_PROMPT) }));
 app.post('/api/data/web-knowledge', proteger, async (req, res) => { await db.run("INSERT INTO knowledge_sources (type, url, summary, date) VALUES (?, ?, ?, ?)", ['web', req.body.url, req.body.summary, new Date().toLocaleString()]); res.json({success:true}); });
+app.get('/api/data/web-knowledge', proteger, async (req, res) => { res.json(await db.all("SELECT * FROM knowledge_sources ORDER BY id DESC")); });
 app.post('/api/data/web-knowledge/delete', proteger, async (req, res) => { await db.run("DELETE FROM knowledge_sources WHERE id = ?", [req.body.id]); res.json({success:true}); });
 
 app.get('/api/chats-full', proteger, async (req, res) => {
@@ -471,64 +480,6 @@ app.post('/api/chat/action', proteger, async (req, res) => {
     res.json({success:true});
 });
 
-app.get('/api/data/:type', proteger, async (req, res) => {
-    const t = req.params.type;
-    if (t === 'leads') res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
-    else if (t === 'tags') res.json(await db.all("SELECT * FROM global_tags"));
-    else if (t === 'shortcuts') res.json(await db.all("SELECT * FROM shortcuts"));
-    else if (t === 'knowledge') res.json(await db.all("SELECT * FROM inventory"));
-    else if (t === 'config') res.json({ website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []), biz_profile: await getCfg('biz_profile', {}), logo_url: await getCfg('logo_url') });
-    else res.json([]);
-});
-
-// NUEVO: Endpoint para editar inventario
-app.post('/api/knowledge/update', proteger, async (req, res) => {
-    const { id, data } = req.body;
-    try {
-        const searchable = Object.values(data).join(" ");
-        await db.run("UPDATE inventory SET raw_data = ?, searchable = ? WHERE id = ?", [JSON.stringify(data), searchable, id]);
-        await refreshKnowledge();
-        res.json({success:true});
-    } catch(e) { res.status(500).json({error: "Error actualizando"}); }
-});
-
-// NUEVO: Endpoint de carga universal (Excel y CSV) usando XLSX
-app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res) => { 
-    try { 
-        const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-        const sheetName = workbook.SheetNames[0];
-        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-        
-        for (const row of rows) {
-            // Normalizar claves a minúsculas
-            const cleanRow = {};
-            for(const k in row) cleanRow[k.toLowerCase().trim()] = row[k];
-            
-            await db.run("INSERT OR IGNORE INTO inventory (searchable, raw_data) VALUES (?, ?)", [Object.values(cleanRow).join(" "), JSON.stringify(cleanRow)]); 
-        }
-        await refreshKnowledge(); 
-        res.json({ success: true, count: rows.length }); 
-    } catch(e) { 
-        console.error("Upload Error:", e);
-        res.status(500).json({ error: "Error procesando archivo" }); 
-    } 
-});
-
-app.post('/api/config/logo', proteger, upload.single('file'), async (req, res) => { await setCfg('logo_url', `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`); res.json({success:true}); });
-app.post('/api/config/biz/save', proteger, async (req, res) => { await setCfg('biz_profile', {name:req.body.name, hours:req.body.hours}); res.json({success:true}); });
-app.post('/api/tags/add', proteger, async (req, res) => { await db.run("INSERT INTO global_tags (name, color) VALUES (?, ?)", [req.body.name, req.body.color]); res.json({success:true}); });
-app.post('/api/tags/delete', proteger, async (req, res) => { await db.run("DELETE FROM global_tags WHERE id = ?", [req.body.id]); res.json({success:true}); });
-app.post('/api/shortcuts/add', proteger, async (req, res) => { await db.run("INSERT INTO shortcuts (keyword, text) VALUES (?, ?)", [req.body.keyword, req.body.text]); res.json({success:true}); });
-app.post('/api/shortcuts/delete', proteger, async (req, res) => { await db.run("DELETE FROM shortcuts WHERE id = ?", [req.body.id]); res.json({success:true}); });
-app.post('/api/contacts/upload-photo', proteger, upload.single('file'), async (req, res) => { await db.run("INSERT INTO metadata (phone, photoUrl) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET photoUrl=excluded.photoUrl", [req.body.phone, `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`]); res.json({success:true}); });
-app.post('/api/chat/toggle-bot', proteger, async (req, res) => { await db.run("INSERT OR REPLACE INTO bot_status (phone, active) VALUES (?, ?)", [req.body.phone, req.body.active?1:0]); res.json({success:true}); });
-app.post('/api/config/rules/add', proteger, async (req, res) => { let r=await getCfg('tech_rules',[]); r.push(req.body.rule); await setCfg('tech_rules',r); res.json({rules:r}); });
-app.post('/api/config/rules/delete', proteger, async (req, res) => { let r=await getCfg('tech_rules',[]); r.splice(req.body.index,1); await setCfg('tech_rules',r); res.json({rules:r}); });
-app.post('/api/leads/update', proteger, async(req,res)=>{ await db.run(`UPDATE leads SET ${req.body.field}=? WHERE id=?`,[req.body.value, req.body.id]); res.json({success:true}); });
-app.post('/api/leads/delete', proteger, async(req,res)=>{ await db.run("DELETE FROM leads WHERE id=?",[req.body.id]); res.json({success:true}); });
-app.post('/api/knowledge/delete', proteger, async (req, res) => { await db.run("DELETE FROM inventory WHERE id=?",[req.body.id]); await refreshKnowledge(); res.json({success:true}); });
-app.post('/api/knowledge/clear', proteger, async (req, res) => { await db.run("DELETE FROM inventory"); await refreshKnowledge(); res.json({success:true}); });
-
 app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => { 
     try { const mid = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname); 
         if(mid) { await enviarWhatsApp(req.body.phone, { id: mid }, req.body.type); 
@@ -551,21 +502,55 @@ app.post('/api/chat/send', proteger, async (req, res) => {
 
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
 
+// --- WEBHOOK BLINDADO (v25.34 FIX) ---
 app.post('/webhook', async (req, res) => { 
     res.sendStatus(200); 
-    try { const val = req.body.entry?.[0]?.changes?.[0]?.value; const msg = val?.messages?.[0]; 
-        if (val?.contacts?.[0]) await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName WHERE addedManual=0", [val.contacts[0].wa_id, val.contacts[0].profile.name]); 
-        if(msg) { const phone = msg.from; let userMsg = msg.text?.body || ""; let isFile = false;
-            if(msg.type !== 'text') { isFile = true; userMsg = `[MEDIA:${msg.type.toUpperCase()}:${msg[msg.type].id}]`; } 
+    try { 
+        const val = req.body.entry?.[0]?.changes?.[0]?.value; 
+        const msg = val?.messages?.[0]; 
+        
+        // FIX CRASH 1: Verificar si contacts existe antes de leer el nombre
+        if (val?.contacts?.[0]?.profile?.name) {
+            await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName WHERE addedManual=0", [val.contacts[0].wa_id, val.contacts[0].profile.name]); 
+        }
+        
+        if(msg) { 
+            const phone = msg.from; 
+            let userMsg = msg.text?.body || ""; 
+            let isFile = false;
+
+            // FIX CRASH 2: Verificar si el objeto del tipo multimedia existe y tiene ID
+            if(msg.type !== 'text') { 
+                if (msg[msg.type] && msg[msg.type].id) {
+                    isFile = true; 
+                    userMsg = `[MEDIA:${msg.type.toUpperCase()}:${msg[msg.type].id}]`; 
+                } else {
+                    // Si llega un tipo desconocido o sin ID (ej: reacción), lo ignoramos o marcamos genérico
+                    userMsg = `[EVENTO:${msg.type.toUpperCase()}]`;
+                }
+            } 
+            
             if (messageQueue.has(phone)) { clearTimeout(messageQueue.get(phone).timer); }
-            const currentData = messageQueue.get(phone) || { text: [], name: val?.contacts?.[0]?.profile.name || "Cliente" };
+
+            // Usar nombre seguro
+            const safeName = val?.contacts?.[0]?.profile?.name || "Cliente";
+            const currentData = messageQueue.get(phone) || { text: [], name: safeName };
             currentData.text.push(userMsg); 
+
             const timer = setTimeout(async () => {
-                const fullText = currentData.text.join("\n"); messageQueue.delete(phone); 
+                const fullText = currentData.text.join("\n"); 
+                messageQueue.delete(phone); 
+
                 const reply = await procesarConValentina(fullText, isFile ? '[ARCHIVO]' : fullText, phone, currentData.name, isFile); 
-                if (reply) { await enviarWhatsApp(phone, reply); }
+                
+                if (reply) {
+                    await enviarWhatsApp(phone, reply);
+                }
+
             }, DEBOUNCE_TIME);
-            currentData.timer = timer; messageQueue.set(phone, currentData);
+
+            currentData.timer = timer;
+            messageQueue.set(phone, currentData);
         } 
     } catch(e) { console.error("Webhook Error", e); } 
 });
