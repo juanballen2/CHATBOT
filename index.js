@@ -1,10 +1,10 @@
 /*
- * SERVER BACKEND - v25.37 (FIX: GEMINI 1.0 PRO SPECIFIC)
+ * SERVER BACKEND - v25.38 (FIX: GEMINI 1.5 PRO CONFIRMED)
  * ============================================================
- * 1. Soporte Excel (.xlsx) y Edición de Inventario (Mantenido).
- * 2. Webhook "Crash-Proof": Protegido contra mensajes sin ID/Nombre.
- * 3. Proxy de Medios: Validado para descargar con el nuevo Token.
- * 4. FIX: Uso de 'gemini-1.0-pro' (Versión exacta Legacy).
+ * 1. FIX CRÍTICO: Cambio a 'gemini-1.5-pro'.
+ * - Causa: 'gemini-1.0-pro' y '1.5-flash' dan error 404.
+ * - Evidencia: Logs indican actividad en '1.5-pro' en Enero 2026.
+ * 2. Mantenimiento: Funciones de Excel, Webhook y DB intactas.
  * ============================================================
  */
 
@@ -13,7 +13,7 @@ const session = require('express-session');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const XLSX = require('xlsx'); // Librería Excel requerida
+const XLSX = require('xlsx'); 
 const { parse } = require('csv-parse/sync');
 const axios = require('axios');
 const cors = require('cors');
@@ -122,7 +122,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.37 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.38 ONLINE (Port ${PORT})`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -334,8 +334,8 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     `;
 
     try {
-        // CORRECCIÓN FINAL: Usamos 'gemini-1.0-pro' que es el nombre EXACTO de la versión compatible
-        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: promptFinal }] }] });
+        // CORRECCIÓN FINAL: Usamos 'gemini-1.5-pro' que es el modelo confirmado como activo en tus logs
+        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: promptFinal }] }] });
         const raw = r.data.candidates[0].content.parts[0].text;
         const match = raw.match(/```json([\s\S]*?)```|{([\s\S]*?)}/);
         if (match) {
