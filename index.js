@@ -1,9 +1,10 @@
 /*
- * SERVER BACKEND - v25.34 (FINAL PRODUCTION BLINDADO)
+ * SERVER BACKEND - v25.35 (CORREGIDO GEMINI STABLE)
  * ============================================================
  * 1. Soporte Excel (.xlsx) y Edición de Inventario (Mantenido).
  * 2. Webhook "Crash-Proof": Protegido contra mensajes sin ID/Nombre.
  * 3. Proxy de Medios: Validado para descargar con el nuevo Token.
+ * 4. FIX: Cambio a Gemini 1.5 Flash (Estable) + Logs de error.
  * ============================================================
  */
 
@@ -117,11 +118,11 @@ let db, globalKnowledge = [], serverInstance;
         await refreshKnowledge();
         iniciarCronJobs();
         
-        await verificarTokenMeta();     
+        await verificarTokenMeta();      
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.34 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.35 ONLINE (Port ${PORT})`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -333,7 +334,8 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     `;
 
     try {
-        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: promptFinal }] }] });
+        // CORRECCIÓN AQUÍ: Cambio a modelo estable gemini-1.5-flash
+        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: promptFinal }] }] });
         const raw = r.data.candidates[0].content.parts[0].text;
         const match = raw.match(/```json([\s\S]*?)```|{([\s\S]*?)}/);
         if (match) {
@@ -346,7 +348,11 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         if (!reply) reply = "¿En qué te puedo ayudar?";
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', reply, new Date().toISOString()]);
         return reply;
-    } catch (e) { return "Dame un momento, estoy verificando esa información."; }
+    } catch (e) { 
+        // CORRECCIÓN AQUÍ: Logs detallados para depuración
+        console.error("❌ ERROR GEMINI:", e.response ? JSON.stringify(e.response.data) : e.message);
+        return "Dame un momento, estoy verificando esa información."; 
+    }
 }
 
 async function gestionarLead(phone, info, fbName, oldLead) {
