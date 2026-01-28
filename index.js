@@ -1,10 +1,9 @@
 /*
- * SERVER BACKEND - v25.39 (FIX: GEMINI 2.0 FLASH STABLE)
+ * SERVER BACKEND - v25.40 (DEBUG MODE + FAST RESPONSE)
  * ============================================================
- * 1. MODELO ACTUALIZADO: 'gemini-2.0-flash'.
- * - Basado en tus logs de incidentes que confirman actividad
- * de la serie 2.0 Flash en producción.
- * 2. Mantenimiento: Funciones de Excel, Webhook y DB intactas.
+ * 1. TIEMPO DE RESPUESTA: Reducido a 1.5s (Antes 8s).
+ * 2. DIAGNÓSTICO: Logs detallados para encontrar el fallo.
+ * 3. MODELO: Mantenemos gemini-2.0-flash.
  * ============================================================
  */
 
@@ -35,7 +34,7 @@ const upload = multer({
 });
 
 const messageQueue = new Map(); 
-const DEBOUNCE_TIME = 8000; 
+const DEBOUNCE_TIME = 1500; // REDUCIDO: Antes 8000, ahora 1.5 segundos para respuesta rápida.
 
 // --- 2. VARIABLES DE ENTORNO ---
 const API_KEY = process.env.GEMINI_API_KEY; 
@@ -122,7 +121,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.39 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.40 DEBUG ONLINE (Port ${PORT})`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -134,7 +133,8 @@ async function verificarTokenMeta() {
         const r = await axios.get(`https://graph.facebook.com/v21.0/me?access_token=${META_TOKEN}`);
         console.log(`✅ TOKEN OK. Conectado como: ${r.data.name} (ID: ${r.data.id})`);
     } catch (e) {
-        console.error("❌ ERROR CRÍTICO: Token Meta Inválido.");
+        console.error("❌ ERROR CRÍTICO: Token Meta Inválido o Expirado.");
+        console.error("DETALLE:", e.response ? e.response.data : e.message);
     }
 }
 
@@ -195,17 +195,22 @@ async function uploadToMeta(buffer, mime, name) {
 }
 
 async function enviarWhatsApp(to, content, type = "text") {
+    console.log(`📤 Intentando enviar a ${to}...`);
     try {
         const payload = { messaging_product: "whatsapp", to, type };
         if (type === "text") { payload.text = { body: content }; } 
         else if (content.id) { payload[type] = { id: content.id }; if(type === 'document') payload[type].filename = 'Archivo Adjunto.pdf'; } 
         else { payload[type] = { link: content }; }
         
-        await axios.post(`https://graph.facebook.com/v21.0/${PHONE_ID}/messages`, payload, { 
+        const res = await axios.post(`https://graph.facebook.com/v21.0/${PHONE_ID}/messages`, payload, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
+        console.log(`✅ ENVIADO EXITOSO: ID ${res.data.messages[0].id}`);
         return true;
-    } catch (e) { return false; }
+    } catch (e) { 
+        console.error(`❌ ERROR ENVIANDO WHATSAPP:`, e.response ? e.response.data : e.message);
+        return false; 
+    }
 }
 
 // --- 8. PROXY DE MEDIOS (SEGURO) ---
@@ -267,6 +272,7 @@ function limpiarRespuesta(txt) {
 }
 
 async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFile = false) {
+    console.log(`🤖 PROCESANDO con Gemini para: ${phone}`);
     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', dbMsg, new Date().toISOString()]);
     await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [phone, new Date().toISOString()]);
 
@@ -284,7 +290,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     }
 
     const bot = await db.get("SELECT active FROM bot_status WHERE phone = ?", [phone]);
-    if (bot && bot.active === 0) return null;
+    if (bot && bot.active === 0) { console.log("🔕 Bot desactivado para este usuario"); return null; }
 
     if (isFile) {
         const rFile = "¡Recibido! 📁 Lo reviso enseguida.";
@@ -334,9 +340,11 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     `;
 
     try {
-        // CORRECCIÓN AQUÍ: Usamos 'gemini-2.0-flash' (Sin sufijo exp, versión estable reciente)
+        console.log("🚀 Enviando a Gemini 2.0 Flash...");
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: promptFinal }] }] });
         const raw = r.data.candidates[0].content.parts[0].text;
+        console.log("💡 Respuesta Gemini recibida.");
+        
         const match = raw.match(/```json([\s\S]*?)```|{([\s\S]*?)}/);
         if (match) {
             try {
@@ -507,14 +515,15 @@ app.post('/api/chat/send', proteger, async (req, res) => {
 
 app.get('/webhook', (req, res) => (req.query['hub.verify_token'] === 'ICC_2025' ? res.send(req.query['hub.challenge']) : res.sendStatus(403)));
 
-// --- WEBHOOK BLINDADO (v25.34 FIX) ---
+// --- WEBHOOK BLINDADO (v25.40 DEBUG) ---
 app.post('/webhook', async (req, res) => { 
     res.sendStatus(200); 
     try { 
+        console.log("📩 WEBHOOK RECIBIDO:", JSON.stringify(req.body, null, 2));
+
         const val = req.body.entry?.[0]?.changes?.[0]?.value; 
         const msg = val?.messages?.[0]; 
         
-        // FIX CRASH 1: Verificar si contacts existe antes de leer el nombre
         if (val?.contacts?.[0]?.profile?.name) {
             await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName WHERE addedManual=0", [val.contacts[0].wa_id, val.contacts[0].profile.name]); 
         }
@@ -524,31 +533,32 @@ app.post('/webhook', async (req, res) => {
             let userMsg = msg.text?.body || ""; 
             let isFile = false;
 
-            // FIX CRASH 2: Verificar si el objeto del tipo multimedia existe y tiene ID
             if(msg.type !== 'text') { 
                 if (msg[msg.type] && msg[msg.type].id) {
                     isFile = true; 
                     userMsg = `[MEDIA:${msg.type.toUpperCase()}:${msg[msg.type].id}]`; 
                 } else {
-                    // Si llega un tipo desconocido o sin ID (ej: reacción), lo ignoramos o marcamos genérico
                     userMsg = `[EVENTO:${msg.type.toUpperCase()}]`;
                 }
             } 
             
             if (messageQueue.has(phone)) { clearTimeout(messageQueue.get(phone).timer); }
 
-            // Usar nombre seguro
             const safeName = val?.contacts?.[0]?.profile?.name || "Cliente";
             const currentData = messageQueue.get(phone) || { text: [], name: safeName };
             currentData.text.push(userMsg); 
+
+            console.log(`⏳ Encolando mensaje de ${phone}. Esperando ${DEBOUNCE_TIME}ms...`);
 
             const timer = setTimeout(async () => {
                 const fullText = currentData.text.join("\n"); 
                 messageQueue.delete(phone); 
 
+                console.log(`🔥 Procesando bloque de mensajes para ${phone}`);
                 const reply = await procesarConValentina(fullText, isFile ? '[ARCHIVO]' : fullText, phone, currentData.name, isFile); 
                 
                 if (reply) {
+                    console.log(`📤 Respuesta generada: "${reply}". Enviando a WhatsApp...`);
                     await enviarWhatsApp(phone, reply);
                 }
 
@@ -564,3 +574,4 @@ process.on('SIGTERM', () => { if (serverInstance) serverInstance.close(() => pro
 process.on('SIGINT', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
 
 // --- FIN DEL ARCHIVO ---
+
