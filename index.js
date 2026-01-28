@@ -1,10 +1,10 @@
 /*
- * SERVER BACKEND - v25.36 (FIX: GEMINI PRO 1.0 STANDARD)
+ * SERVER BACKEND - v25.37 (FIX: GEMINI 1.0 PRO SPECIFIC)
  * ============================================================
  * 1. Soporte Excel (.xlsx) y Edición de Inventario (Mantenido).
  * 2. Webhook "Crash-Proof": Protegido contra mensajes sin ID/Nombre.
  * 3. Proxy de Medios: Validado para descargar con el nuevo Token.
- * 4. FIX: Cambio a 'gemini-pro' (Versión global compatible).
+ * 4. FIX: Uso de 'gemini-1.0-pro' (Versión exacta Legacy).
  * ============================================================
  */
 
@@ -122,7 +122,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.36 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.37 ONLINE (Port ${PORT})`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -334,8 +334,8 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     `;
 
     try {
-        // CORRECCIÓN AQUÍ: Usamos 'gemini-pro' que es la versión 1.0 estándar global
-        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: promptFinal }] }] });
+        // CORRECCIÓN FINAL: Usamos 'gemini-1.0-pro' que es el nombre EXACTO de la versión compatible
+        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: promptFinal }] }] });
         const raw = r.data.candidates[0].content.parts[0].text;
         const match = raw.match(/```json([\s\S]*?)```|{([\s\S]*?)}/);
         if (match) {
