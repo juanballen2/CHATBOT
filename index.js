@@ -1,9 +1,9 @@
 /*
- * SERVER BACKEND - v25.38 (FIX: GEMINI 1.5 PRO CONFIRMED)
+ * SERVER BACKEND - v25.39 (FIX: GEMINI 2.0 FLASH STABLE)
  * ============================================================
- * 1. FIX CRÍTICO: Cambio a 'gemini-1.5-pro'.
- * - Causa: 'gemini-1.0-pro' y '1.5-flash' dan error 404.
- * - Evidencia: Logs indican actividad en '1.5-pro' en Enero 2026.
+ * 1. MODELO ACTUALIZADO: 'gemini-2.0-flash'.
+ * - Basado en tus logs de incidentes que confirman actividad
+ * de la serie 2.0 Flash en producción.
  * 2. Mantenimiento: Funciones de Excel, Webhook y DB intactas.
  * ============================================================
  */
@@ -122,7 +122,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.38 ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.39 ONLINE (Port ${PORT})`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -334,8 +334,8 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     `;
 
     try {
-        // CORRECCIÓN FINAL: Usamos 'gemini-1.5-pro' que es el modelo confirmado como activo en tus logs
-        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: promptFinal }] }] });
+        // CORRECCIÓN AQUÍ: Usamos 'gemini-2.0-flash' (Sin sufijo exp, versión estable reciente)
+        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: promptFinal }] }] });
         const raw = r.data.candidates[0].content.parts[0].text;
         const match = raw.match(/```json([\s\S]*?)```|{([\s\S]*?)}/);
         if (match) {
