@@ -1,9 +1,11 @@
 /*
- * SERVER BACKEND - v25.41 (BLINDADO + LOGIC FIX)
+ * SERVER BACKEND - v26.0 (ARQUITECTURA V2 - FULL FEATURES)
  * ============================================================
  * 1. FIX: Bloqueo de bucles (Ignora mensajes propios).
- * 2. FIX: Archivos no pasan por IA (Respuesta inmediata).
- * 3. SEGURIDAD: Token de verificación forzado a 'ICC_2025'.
+ * 2. FIX: Proxy Multimedia Robustecido (Headers correctos).
+ * 3. FEATURE: Auto-Etiquetado 'REDES' por Referral.
+ * 4. FEATURE: Endpoints para Edición de Etiquetas y Bulk Actions.
+ * 5. SEGURIDAD: Token de verificación forzado a 'ICC_2025'.
  * ============================================================
  */
 
@@ -39,11 +41,11 @@ const DEBOUNCE_TIME = 1500;
 // --- 2. VARIABLES DE ENTORNO ---
 const API_KEY = process.env.GEMINI_API_KEY; 
 const META_TOKEN = process.env.META_TOKEN;
-const PHONE_ID = process.env.PHONE_NUMBER_ID; // ¡OJO! Asegúrate que sea el ID del teléfono, no el de la cuenta WABA.
+const PHONE_ID = process.env.PHONE_NUMBER_ID; 
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = "icc-val-secure-v34-final"; 
-const VERIFY_TOKEN = "ICC_2025"; // FIX: Token fijo para evitar errores de tipeo
+const VERIFY_TOKEN = "ICC_2025"; 
 
 const DEFAULT_PROMPT = `Eres un asistente virtual. Tu comportamiento depende estrictamente de la configuración.`;
 
@@ -121,7 +123,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v25.41 BLINDADO ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v26.0 BLINDADO ONLINE (Port ${PORT})`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -207,28 +209,57 @@ async function enviarWhatsApp(to, content, type = "text") {
         console.log(`✅ ENVIADO EXITOSO: ID ${res.data.messages[0].id}`);
         return true;
     } catch (e) { 
-        // FIX: Mostrar el error completo de Meta
         console.error(`❌ ERROR ENVIANDO WHATSAPP:`, e.response ? JSON.stringify(e.response.data) : e.message);
         return false; 
     }
 }
 
-// --- 8. PROXY DE MEDIOS ---
+// --- 8. PROXY DE MEDIOS (ROBUSTECIDO) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
-    // (Código del proxy igual que antes, omitido por brevedad pero funcional)
     const mediaId = req.params.id;
     if (!mediaId || mediaId === 'undefined') return res.status(404).send("ID Inválido");
+
     try {
+        // 1. Obtener URL firmada de Meta
         let urlData;
         try {
-            const responseUrl = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
+            const responseUrl = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, { 
+                headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
+            });
             urlData = responseUrl.data;
-        } catch (apiError) { return res.status(404).send("Medio no encontrado"); }
+        } catch (apiError) { 
+            console.error("Error obteniendo URL de medio:", apiError.message);
+            return res.status(404).send("Medio no encontrado en Meta"); 
+        }
         
-        const response = await axios({ method: 'get', url: urlData.url, headers: { 'Authorization': `Bearer ${META_TOKEN}` }, responseType: 'stream' });
-        res.set({ 'Content-Type': response.headers['content-type'] || urlData.mime_type });
+        // 2. Descargar stream binario con headers correctos
+        const response = await axios({ 
+            method: 'get', 
+            url: urlData.url, 
+            headers: { 
+                'Authorization': `Bearer ${META_TOKEN}`,
+                'User-Agent': 'Mozilla/5.0' // Ayuda a evitar algunos bloqueos de CDN
+            }, 
+            responseType: 'stream' 
+        });
+
+        // 3. Pasar cabeceras al navegador (CRÍTICO para audios/videos)
+        const contentType = response.headers['content-type'] || urlData.mime_type;
+        const contentLength = response.headers['content-length'];
+
+        const headers = { 'Content-Type': contentType };
+        if (contentLength) headers['Content-Length'] = contentLength;
+        
+        // Soporte básico para caché
+        headers['Cache-Control'] = 'public, max-age=31536000'; // 1 año
+
+        res.set(headers);
         response.data.pipe(res);
-    } catch (e) { if (!res.headersSent) res.status(500).send("Error interno media"); }
+
+    } catch (e) { 
+        console.error("Error en Proxy Media:", e.message);
+        if (!res.headersSent) res.status(500).send("Error interno descargando medio"); 
+    }
 });
 
 // --- 9. LÓGICA IA ---
@@ -255,11 +286,11 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const bot = await db.get("SELECT active FROM bot_status WHERE phone = ?", [phone]);
     if (bot && bot.active === 0) { console.log("🔕 Bot desactivado para este usuario"); return null; }
 
-    // --- FIX CRÍTICO: MANEJO DE ARCHIVOS ---
+    // --- MANEJO DE ARCHIVOS ---
     if (isFile) {
         const rFile = "¡Recibido! 📁 Lo reviso enseguida. (Por ahora solo proceso texto, pero guardaré esto).";
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', rFile, new Date().toISOString()]);
-        return rFile; // RETORNAMOS AQUÍ PARA NO ENVIAR BASURA A GEMINI
+        return rFile; 
     }
 
     let promptUsuario = await getCfg('bot_prompt');
@@ -326,7 +357,6 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
 }
 
 async function gestionarLead(phone, info, fbName, oldLead) {
-    // ... (Lógica igual a v25.40) ...
     const limpiarDato = (d) => (!d || /^(unknown|null|n\/a|no menciona|cliente|pend)$/i.test(d.toString().trim())) ? null : d.trim();
     let name = limpiarDato(info.nombre) || fbName;
     let ciudadLimpia = limpiarDato(info.ciudad); 
@@ -345,7 +375,6 @@ async function gestionarLead(phone, info, fbName, oldLead) {
 }
 
 function iniciarCronJobs() {
-    // ... (Igual a v25.40) ...
     setInterval(async () => {
         try {
             const now = new Date();
@@ -370,7 +399,6 @@ app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html'))
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 
 app.get('/api/data/:type', proteger, async (req, res) => {
-    // ... (Igual v25.40) ...
     const t = req.params.type;
     if (t === 'leads') res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
     else if (t === 'tags') res.json(await db.all("SELECT * FROM global_tags"));
@@ -379,10 +407,6 @@ app.get('/api/data/:type', proteger, async (req, res) => {
     else if (t === 'config') res.json({ website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []), biz_profile: await getCfg('biz_profile', {}), logo_url: await getCfg('logo_url') });
     else res.json([]);
 });
-// (El resto de endpoints API se mantienen igual que v25.40 para no cortar el mensaje...)
-// ... [MANTENER EL RESTO DE RUTAS API DE V25.40 AQUÍ] ...
-// ... [app.post /api/knowledge/update ... etc] ...
-// ... RECUERDA COPIAR LAS RUTAS DEL CÓDIGO ANTERIOR SI TE FALTAN ... 
 
 app.post('/api/knowledge/update', proteger, async (req, res) => {
     const { id, data } = req.body;
@@ -408,11 +432,21 @@ app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res)
         res.json({ success: true, count: rows.length }); 
     } catch(e) { res.status(500).json({ error: "Error procesando archivo" }); } 
 });
-// ... [RESTO DE RUTAS API SIMILARES A V25.40] ...
+
 app.post('/api/config/logo', proteger, upload.single('file'), async (req, res) => { await setCfg('logo_url', `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`); res.json({success:true}); });
 app.post('/api/config/biz/save', proteger, async (req, res) => { await setCfg('biz_profile', {name:req.body.name, hours:req.body.hours}); res.json({success:true}); });
+
+// --- GESTIÓN DE ETIQUETAS (CRUD COMPLETO) ---
 app.post('/api/tags/add', proteger, async (req, res) => { await db.run("INSERT INTO global_tags (name, color) VALUES (?, ?)", [req.body.name, req.body.color]); res.json({success:true}); });
 app.post('/api/tags/delete', proteger, async (req, res) => { await db.run("DELETE FROM global_tags WHERE id = ?", [req.body.id]); res.json({success:true}); });
+// NUEVO: Endpoint para editar etiqueta existente
+app.post('/api/tags/update', proteger, async (req, res) => { 
+    try {
+        await db.run("UPDATE global_tags SET name = ?, color = ? WHERE id = ?", [req.body.name, req.body.color, req.body.id]); 
+        res.json({success:true});
+    } catch(e) { res.status(500).json({error: "Error editando etiqueta"}); }
+});
+
 app.post('/api/shortcuts/add', proteger, async (req, res) => { await db.run("INSERT INTO shortcuts (keyword, text) VALUES (?, ?)", [req.body.keyword, req.body.text]); res.json({success:true}); });
 app.post('/api/shortcuts/delete', proteger, async (req, res) => { await db.run("DELETE FROM shortcuts WHERE id = ?", [req.body.id]); res.json({success:true}); });
 app.post('/api/contacts/upload-photo', proteger, upload.single('file'), async (req, res) => { await db.run("INSERT INTO metadata (phone, photoUrl) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET photoUrl=excluded.photoUrl", [req.body.phone, `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`]); res.json({success:true}); });
@@ -451,6 +485,38 @@ app.get('/api/chat-history/:phone', proteger, async (req, res) => {
     res.json(await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]));
 });
 
+// NUEVO: Endpoint para acciones masivas (Bulk Actions)
+app.post('/api/contacts/bulk-update', proteger, async (req, res) => {
+    const { phones, action, value } = req.body; 
+    // phones = array de números, action = 'set_label' | 'set_status', value = objeto etiqueta o string
+    try {
+        if (!phones || !Array.isArray(phones)) return res.status(400).json({error: "Lista de teléfonos inválida"});
+        
+        for (const phone of phones) {
+            const cleanPhone = phone.replace(/\D/g, '');
+            if (action === 'set_label') {
+                // Sobrescribir etiquetas
+                await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, JSON.stringify([value])]); 
+                // Actualizar tag en leads para consistencia
+                await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [value.text, cleanPhone]);
+            } else if (action === 'add_label') {
+                // Agregar sin borrar existentes (Opción avanzada)
+                const current = await db.get("SELECT labels FROM metadata WHERE phone = ?", [cleanPhone]);
+                let labels = current ? JSON.parse(current.labels || "[]") : [];
+                // Evitar duplicados
+                if (!labels.find(l => l.text === value.text)) {
+                    labels.push(value);
+                    await db.run("UPDATE metadata SET labels = ? WHERE phone = ?", [JSON.stringify(labels), cleanPhone]);
+                }
+            }
+        }
+        res.json({success: true});
+    } catch (e) {
+        console.error("Bulk Error:", e);
+        res.status(500).json({error: "Error en actualización masiva"});
+    }
+});
+
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
     const cleanPhone = phone.replace(/\D/g, ''); 
@@ -483,7 +549,6 @@ app.post('/api/chat/send', proteger, async (req, res) => {
 
 // --- VERIFICACIÓN WEBHOOK ---
 app.get('/webhook', (req, res) => {
-    // FIX: Verificar contra la constante VERIFY_TOKEN segura
     if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
         res.send(req.query['hub.challenge']);
     } else {
@@ -491,17 +556,18 @@ app.get('/webhook', (req, res) => {
     }
 });
 
-// --- WEBHOOK BLINDADO (v25.41 FIXED) ---
+// --- WEBHOOK BLINDADO (v26.0) ---
 app.post('/webhook', async (req, res) => { 
     res.sendStatus(200); 
     try { 
         console.log("📩 WEBHOOK RECIBIDO:", JSON.stringify(req.body, null, 2));
 
-        const val = req.body.entry?.[0]?.changes?.[0]?.value; 
+        const entry = req.body.entry?.[0];
+        const changes = entry?.changes?.[0];
+        const val = changes?.value; 
         const msg = val?.messages?.[0]; 
         
         // --- FIX CRÍTICO: ANTI-BUCLE ---
-        // Si el mensaje viene de NUESTRO propio número, ignorarlo completamente.
         if (msg && msg.from === PHONE_ID) {
              console.log("🔁 Ignorando mensaje propio (Anti-Loop).");
              return;
@@ -513,6 +579,35 @@ app.post('/webhook', async (req, res) => {
         
         if(msg) { 
             const phone = msg.from; 
+            
+            // --- FEATURE 5: AUTO-ETIQUETADO REDES (Referral) ---
+            // Detectar si viene de anuncio (Referral object)
+            if (msg.referral) {
+                console.log(`📢 CAMPAÑA DETECTADA de ${phone}:`, msg.referral);
+                const refSource = `Meta Ads: ${msg.referral.source_url || 'N/A'}`;
+                
+                // 1. Actualizar Leads
+                const existeLead = await db.get("SELECT id FROM leads WHERE phone = ?", [phone]);
+                if (existeLead) {
+                    await db.run("UPDATE leads SET source = ?, status_tag = 'REDES' WHERE phone = ?", [refSource, phone]);
+                } else {
+                    // Crear lead preliminar si no existe
+                    await db.run(`INSERT INTO leads (phone, nombre, source, etiqueta, fecha, status_tag, farewell_sent) VALUES (?, ?, ?, ?, ?, ?, 0)`, 
+                        [phone, val?.contacts?.[0]?.profile?.name || "Cliente Ads", refSource, "Pendiente", new Date().toISOString(), "REDES"]);
+                }
+
+                // 2. Inyectar Etiqueta 'REDES' en Metadata
+                const meta = await db.get("SELECT labels FROM metadata WHERE phone = ?", [phone]);
+                let labels = meta ? JSON.parse(meta.labels || "[]") : [];
+                
+                // Si no tiene la etiqueta REDES, agregarla
+                if (!labels.find(l => l.text === 'REDES')) {
+                    labels.push({ text: 'REDES', color: '#ff0000' }); // Rojo intenso
+                    await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [phone, JSON.stringify(labels)]);
+                }
+            }
+            // --- FIN AUTO-ETIQUETADO ---
+
             let userMsg = msg.text?.body || ""; 
             let isFile = false;
 
@@ -531,25 +626,23 @@ app.post('/webhook', async (req, res) => {
             const currentData = messageQueue.get(phone) || { text: [], name: safeName, isFile: false };
             
             currentData.text.push(userMsg); 
-            // Si detectamos archivo, marcamos todo el lote como "con archivo"
             if(isFile) currentData.isFile = true;
 
             console.log(`⏳ Encolando mensaje de ${phone}. Esperando ${DEBOUNCE_TIME}ms...`);
 
             const timer = setTimeout(async () => {
-                const data = messageQueue.get(phone); // Recuperar datos frescos
+                const data = messageQueue.get(phone); 
                 const fullText = data.text.join("\n"); 
                 messageQueue.delete(phone); 
 
                 console.log(`🔥 Procesando bloque de mensajes para ${phone}`);
                 
-                // PASAMOS EL FLAG isFile CORRECTAMENTE AHORA
                 const reply = await procesarConValentina(
                     fullText, 
-                    data.isFile ? '[ARCHIVO]' : fullText, // Si hay archivo, enviamos etiqueta limpia a IA
+                    data.isFile ? '[ARCHIVO]' : fullText, 
                     phone, 
                     data.name, 
-                    data.isFile // Flag para evitar llamada a Gemini si es archivo
+                    data.isFile 
                 ); 
                 
                 if (reply) {
@@ -567,5 +660,3 @@ app.post('/webhook', async (req, res) => {
 
 process.on('SIGTERM', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
 process.on('SIGINT', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
-
-
