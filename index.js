@@ -1,11 +1,11 @@
 /*
- * SERVER BACKEND - v26.0 (ARQUITECTURA V2 - FULL FEATURES)
+ * SERVER BACKEND - v27.0 (AUDIO FIX + FULL FEATURES)
  * ============================================================
- * 1. FIX: Bloqueo de bucles (Ignora mensajes propios).
- * 2. FIX: Proxy Multimedia Robustecido (Headers correctos).
+ * 1. FIX: Proxy Multimedia con Buffering (Soluciona audios cortados).
+ * 2. FIX: Bloqueo de bucles (Ignora mensajes propios).
  * 3. FEATURE: Auto-Etiquetado 'REDES' por Referral.
- * 4. FEATURE: Endpoints para Edición de Etiquetas y Bulk Actions.
- * 5. SEGURIDAD: Token de verificación forzado a 'ICC_2025'.
+ * 4. FEATURE: Bulk Actions y Edición de Etiquetas.
+ * 5. SEGURIDAD: Token de verificación 'ICC_2025'.
  * ============================================================
  */
 
@@ -123,7 +123,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v26.0 BLINDADO ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v27.0 (AUDIO FIX) ONLINE (Port ${PORT})`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -214,7 +214,8 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- 8. PROXY DE MEDIOS (ROBUSTECIDO) ---
+// --- 8. PROXY DE MEDIOS (V27 - BUFFERING FIXED) ---
+// Cambiado de Stream a Buffer para calcular Content-Length exacto
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     const mediaId = req.params.id;
     if (!mediaId || mediaId === 'undefined') return res.status(404).send("ID Inválido");
@@ -232,29 +233,30 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
             return res.status(404).send("Medio no encontrado en Meta"); 
         }
         
-        // 2. Descargar stream binario con headers correctos
+        // 2. ESTRATEGIA BUFFERING: Descargar todo a RAM primero
         const response = await axios({ 
             method: 'get', 
             url: urlData.url, 
             headers: { 
                 'Authorization': `Bearer ${META_TOKEN}`,
-                'User-Agent': 'Mozilla/5.0' // Ayuda a evitar algunos bloqueos de CDN
+                'User-Agent': 'Mozilla/5.0' 
             }, 
-            responseType: 'stream' 
+            responseType: 'arraybuffer' // <--- CAMBIO CLAVE: Descarga binaria completa
         });
 
-        // 3. Pasar cabeceras al navegador (CRÍTICO para audios/videos)
+        const buffer = Buffer.from(response.data);
         const contentType = response.headers['content-type'] || urlData.mime_type;
-        const contentLength = response.headers['content-length'];
 
-        const headers = { 'Content-Type': contentType };
-        if (contentLength) headers['Content-Length'] = contentLength;
-        
-        // Soporte básico para caché
-        headers['Cache-Control'] = 'public, max-age=31536000'; // 1 año
+        // 3. Enviar headers con peso exacto
+        res.writeHead(200, {
+            'Content-Type': contentType,
+            'Content-Length': buffer.length, // <--- SOLUCIÓN AL CORTE DE AUDIO
+            'Cache-Control': 'public, max-age=31536000', 
+            'Accept-Ranges': 'bytes' 
+        });
 
-        res.set(headers);
-        response.data.pipe(res);
+        // 4. Enviar el archivo
+        res.end(buffer);
 
     } catch (e) { 
         console.error("Error en Proxy Media:", e.message);
