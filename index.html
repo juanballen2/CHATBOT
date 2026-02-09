@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v26.0 - Control Total</title>
+    <title>Valentina v27.0 - Audio Fixed</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
@@ -593,7 +593,14 @@
                         const mediaUrl = `/api/media-proxy/${id}?v=final`; 
                         if(type === 'IMAGE') { text = `<div style="display:flex; flex-direction:column; gap:5px;"><img src="${mediaUrl}" style="max-width:250px; border-radius:8px; cursor:pointer; min-height:100px; background:#0b141a;" onclick="window.open(this.src)" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none; color:#ef4444; font-size:0.8rem; padding:10px; border:1px dashed #ef4444; border-radius:8px;">⚠️ Error de imagen.</div></div>`; }
                         else if(type === 'AUDIO') {
-                            text = `<div class="audio-wrapper"><div class="audio-player"><button class="play-btn" id="btn-${id}" onclick="togglePlay('${id}')"><i class="fas fa-play"></i></button><div class="audio-progress"><div class="progress-bar-bg"><div id="prog-${id}" class="progress-fill"></div></div><div id="time-${id}" class="audio-time">0:00</div></div><audio id="audio-${id}" src="${mediaUrl}" preload="metadata" ontimeupdate="updateProgress('${id}')" onended="resetPlayer('${id}')" onplaying="onAudioStart('${id}')" style="display:none;"></audio></div><a href="${mediaUrl}" download="nota_voz.ogg" class="btn-download-audio" title="Descargar"><i class="fas fa-download"></i></a></div>`;
+                            text = `<div class="audio-wrapper">
+                                <div class="audio-player">
+                                    <button class="play-btn" id="btn-${id}" onclick="togglePlay('${id}')"><i class="fas fa-play"></i></button>
+                                    <div class="audio-progress"><div class="progress-bar-bg"><div id="prog-${id}" class="progress-fill"></div></div><div id="time-${id}" class="audio-time">0:00</div></div>
+                                    <audio id="audio-${id}" src="${mediaUrl}" preload="auto" ontimeupdate="updateProgress('${id}')" onended="resetPlayer('${id}')" onplaying="onAudioStart('${id}')" style="display:none;"></audio>
+                                </div>
+                                <a href="${mediaUrl}" download="nota_voz.ogg" class="btn-download-audio" title="Descargar"><i class="fas fa-download"></i></a>
+                            </div>`;
                         } else { text = `<a href="${mediaUrl}" target="_blank" style="color:white; text-decoration:none; display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:10px; border-radius:6px;"><i class="fas fa-file-download" style="font-size:1.5rem;"></i><div style="display:flex; flex-direction:column;"><span>Archivo Adjunto (${type})</span><span style="font-size:0.75rem; color:var(--primary);">Clic para descargar</span></div></a>`; }
                     } 
                     
@@ -654,9 +661,7 @@
                 });
             } else {
                 // Si es media, reenviamos el contenido textual que representa al media [MEDIA:TYPE:ID]
-                // Esto hará que el bot lo renderice como media en el historial, aunque en WhatsApp real
-                // se enviará como texto a menos que implementemos forward nativo (limitación API).
-                // *Mejora v26.0*: Enviamos el texto raw para mantener referencia.
+                // Esto hará que el bot lo renderice como media en el historial
                  await fetch('/api/chat/send', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
