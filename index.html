@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v27.0 - Audio Fixed</title>
+    <title>Valentina v27.1 - Final Fixed</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
@@ -94,9 +94,36 @@
         .msg.bot, .msg.manual { background: var(--outgoing); align-self: flex-end; border-top-right-radius: 0; color: #fff; }
         .msg-time { font-size: 0.65rem; opacity: 0.6; align-self: flex-end; margin-top: 2px; }
         
-        /* Botón de Reenvío */
-        .msg-forward-btn { position: absolute; top: 5px; right: -30px; background: rgba(0,0,0,0.3); color: #fff; border-radius: 50%; width: 25px; height: 25px; display: none; align-items: center; justify-content: center; cursor: pointer; font-size: 0.8rem; }
-        .msg:hover .msg-forward-btn { display: flex; }
+        /* Botón de Reenvío con Delay */
+        .msg-forward-btn { 
+            position: absolute; 
+            top: 5px; 
+            right: -30px; 
+            background: rgba(0,0,0,0.3); 
+            color: #fff; 
+            border-radius: 50%; 
+            width: 25px; 
+            height: 25px; 
+            /* CAMBIO: Opacidad para animación */
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            cursor: pointer; 
+            font-size: 0.8rem; 
+            opacity: 0;
+            visibility: hidden;
+            /* TRUCO: Delay de 2s al salir */
+            transition: opacity 0.3s ease 2s, visibility 0.3s ease 2s;
+        }
+
+        /* Cuando pasas el mouse por el mensaje */
+        .msg:hover .msg-forward-btn { 
+            opacity: 1;
+            visibility: visible;
+            /* TRUCO: Delay 0s al entrar */
+            transition-delay: 0s;
+        }
+
         .msg.bot:hover .msg-forward-btn { left: -30px; right: auto; }
         .msg-forward-btn:hover { background: var(--primary); }
 
