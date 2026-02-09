@@ -1,8 +1,8 @@
 /*
- * SERVER BACKEND - v27.0 (AUDIO FIX + FULL FEATURES)
+ * SERVER BACKEND - v27.1 (FINAL STABLE)
  * ============================================================
- * 1. FIX: Proxy Multimedia con Buffering (Soluciona audios cortados).
- * 2. FIX: Bloqueo de bucles (Ignora mensajes propios).
+ * 1. FIX: Proxy Multimedia (Buffering + Forzado MIME audio/ogg).
+ * 2. FIX: Bloqueo de bucles (Anti-Loop).
  * 3. FEATURE: Auto-Etiquetado 'REDES' por Referral.
  * 4. FEATURE: Bulk Actions y Edición de Etiquetas.
  * 5. SEGURIDAD: Token de verificación 'ICC_2025'.
@@ -123,7 +123,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v27.0 (AUDIO FIX) ONLINE (Port ${PORT})`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v27.1 (FINAL) ONLINE (Port ${PORT})`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -214,26 +214,25 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- 8. PROXY DE MEDIOS (V27 - BUFFERING FIXED) ---
-// Cambiado de Stream a Buffer para calcular Content-Length exacto
+// --- 8. PROXY DE MEDIOS (V27.1 - AUDIO FIX TOTAL) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     const mediaId = req.params.id;
     if (!mediaId || mediaId === 'undefined') return res.status(404).send("ID Inválido");
 
     try {
-        // 1. Obtener URL firmada de Meta
+        // 1. Obtener URL firmada
         let urlData;
         try {
-            const responseUrl = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, { 
+            const r = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, { 
                 headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
             });
-            urlData = responseUrl.data;
+            urlData = r.data;
         } catch (apiError) { 
-            console.error("Error obteniendo URL de medio:", apiError.message);
-            return res.status(404).send("Medio no encontrado en Meta"); 
+            console.error("Error Meta URL:", apiError.message);
+            return res.status(404).send("Medio no encontrado"); 
         }
         
-        // 2. ESTRATEGIA BUFFERING: Descargar todo a RAM primero
+        // 2. Descargar a Buffer (Memoria)
         const response = await axios({ 
             method: 'get', 
             url: urlData.url, 
@@ -241,26 +240,32 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
                 'Authorization': `Bearer ${META_TOKEN}`,
                 'User-Agent': 'Mozilla/5.0' 
             }, 
-            responseType: 'arraybuffer' // <--- CAMBIO CLAVE: Descarga binaria completa
+            responseType: 'arraybuffer' 
         });
 
         const buffer = Buffer.from(response.data);
-        const contentType = response.headers['content-type'] || urlData.mime_type;
+        
+        // 3. Forzar MIME correcto para Audios (CRÍTICO)
+        let contentType = response.headers['content-type'] || urlData.mime_type;
+        if (contentType.includes('audio') || urlData.mime_type.includes('audio')) {
+            contentType = 'audio/ogg'; // Forzamos OGG para evitar errores en browsers
+        }
 
-        // 3. Enviar headers con peso exacto
+        console.log(`🎧 Proxy: ID ${mediaId} | ${buffer.length} bytes | Tipo: ${contentType}`);
+
+        // 4. Enviar con Content-Length exacto
         res.writeHead(200, {
             'Content-Type': contentType,
-            'Content-Length': buffer.length, // <--- SOLUCIÓN AL CORTE DE AUDIO
+            'Content-Length': buffer.length,
             'Cache-Control': 'public, max-age=31536000', 
             'Accept-Ranges': 'bytes' 
         });
 
-        // 4. Enviar el archivo
         res.end(buffer);
 
     } catch (e) { 
-        console.error("Error en Proxy Media:", e.message);
-        if (!res.headersSent) res.status(500).send("Error interno descargando medio"); 
+        console.error("Error Proxy:", e.message);
+        if (!res.headersSent) res.status(500).send("Error interno"); 
     }
 });
 
