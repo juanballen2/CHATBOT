@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v25.33 - Control Total</title>
+    <title>Valentina v26.0 - Control Total</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
@@ -17,103 +17,115 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
         body { background-color: var(--dark); color: var(--text); height: 100vh; display: flex; overflow: hidden; }
 
-        /* --- MODAL DE EDICIÓN (NUEVO) --- */
-        #edit-modal { display: none; position: fixed; z-index: 5000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); align-items: center; justify-content: center; backdrop-filter: blur(2px); }
-        #edit-modal.show { display: flex; animation: fadeIn 0.2s; }
-        .modal-content { background-color: var(--panel); padding: 25px; border-radius: 12px; width: 90%; max-width: 450px; border: 1px solid var(--border); box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
-        .modal-title { font-size: 1.2rem; margin-bottom: 20px; color: var(--text); font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        /* --- MODALES GENERALES --- */
+        .modal-overlay { display: none; position: fixed; z-index: 5000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+        .modal-overlay.show { display: flex; animation: fadeIn 0.2s; }
+        .modal-content { background-color: var(--panel); padding: 25px; border-radius: 12px; width: 90%; max-width: 450px; border: 1px solid var(--border); box-shadow: 0 20px 50px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 15px; }
+        .modal-title { font-size: 1.2rem; color: var(--text); font-weight: 600; display: flex; align-items: center; gap: 10px; }
         .modal-form label { display: block; margin-bottom: 5px; font-size: 0.85rem; color: var(--primary); font-weight: 500; }
-        .modal-form input, .modal-form textarea { width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 6px; border: 1px solid var(--border); background: var(--dark); color: white; outline: none; font-size: 0.95rem; }
-        .modal-form input:focus, .modal-form textarea:focus { border-color: var(--primary); }
+        .modal-form input, .modal-form textarea, .modal-form select { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--dark); color: white; outline: none; font-size: 0.95rem; }
         .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
 
-        /* --- ANIMACIONES UX --- */
+        /* --- ANIMACIONES --- */
         button:active, .chat-item:active { transform: scale(0.98); }
         button, .chat-item { transition: all 0.1s ease-in-out; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #37404a; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #555; }
 
-        /* --- SIDEBAR --- */
+        /* --- LAYOUT PRINCIPAL --- */
         .sidebar { width: 60px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 100; flex-shrink: 0; }
         .nav-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: transparent; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; margin-bottom: 15px; }
         .nav-btn:hover { background: #374248; color: var(--primary); }
         .nav-btn.active { background: #374248; color: var(--primary); box-shadow: 0 0 10px rgba(0, 168, 132, 0.4); }
         .nav-bottom { margin-top: auto; padding-bottom: 20px; }
 
-        /* --- MAIN AREA --- */
         .main-area { flex: 1; display: flex; position: relative; overflow: hidden; background: var(--dark); }
         .view-panel { display: none; width: 100%; height: 100%; }
         #tab-chat.active { display: flex; flex-direction: row; }
         #tab-leads.active, #tab-config.active { display: flex; flex-direction: column; overflow-y: auto; }
 
-        /* --- CHAT LIST --- */
-        .chat-list { width: 380px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--dark); flex-shrink: 0; }
+        /* --- LISTA DE CHATS --- */
+        .chat-list { width: 380px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--dark); flex-shrink: 0; position: relative; }
         .chat-header { padding: 10px 15px; border-bottom: 1px solid var(--border); background: var(--panel); }
         .search-container { display: flex; gap: 8px; margin-bottom: 10px; }
-        .search-bar { flex: 1; padding: 8px 12px; background: var(--dark); border: 1px solid var(--border); color: var(--text); border-radius: 8px; outline: none; font-size: 0.9rem; transition: border-color 0.2s; }
-        .search-bar:focus { border-color: var(--primary); }
-        .new-chat-btn { width: 36px; height: 36px; border-radius: 8px; border: none; background: var(--accent); color: #000; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .search-bar { flex: 1; padding: 8px 12px; background: var(--dark); border: 1px solid var(--border); color: var(--text); border-radius: 8px; outline: none; font-size: 0.9rem; }
+        .action-btn { width: 36px; height: 36px; border-radius: 8px; border: none; background: var(--panel); color: var(--text-muted); cursor: pointer; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; }
+        .action-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .new-chat-btn { background: var(--accent); color: #000; border: none; }
+        
         .view-filters { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 5px; align-items: center; }
         .filter-chip { font-size: 0.8rem; padding: 5px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 20px; cursor: pointer; white-space: nowrap; color: var(--text-muted); transition: 0.2s; }
-        .filter-chip:hover { background: #37404a; }
         .filter-chip.active { background: #2a3942; color: var(--primary); border-color: var(--primary); font-weight: 600; }
-        .tag-filter-select { background: var(--dark); color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; padding: 4px; font-size: 0.8rem; outline: none; max-width: 120px; cursor: pointer; }
+        .tag-filter-select { background: var(--dark); color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; padding: 4px; font-size: 0.8rem; max-width: 120px; }
+
         .chat-items { flex: 1; overflow-y: auto; }
-        .chat-item { padding: 12px 15px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; gap: 12px; align-items: center; }
+        .chat-item { padding: 12px 15px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; gap: 12px; align-items: center; position: relative; }
         .chat-item:hover { background: var(--hover-item); }
         .chat-item.active { background: var(--active-item); border-left: 4px solid var(--primary); padding-left: 11px; } 
         .chat-item.archived { opacity: 0.6; }
+        
+        /* Checkbox para Bulk Actions */
+        .bulk-checkbox { display: none; width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; }
+        .chat-list.bulk-mode .bulk-checkbox { display: block; }
+        
         .avatar { width: 45px; height: 45px; border-radius: 50%; background: var(--border); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
         .chat-info { flex: 1; min-width: 0; }
         .chat-name { font-weight: 500; font-size: 1rem; color: #e9edef; display: flex; justify-content: space-between; }
-        .chat-date { font-size: 0.75rem; color: var(--text-muted); font-weight: 400; }
         .chat-preview { display: flex; justify-content: space-between; align-items: center; margin-top: 3px; }
         .chat-last-msg { font-size: 0.85rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
         .badge { background: var(--primary); color: #000; font-size: 0.7rem; padding: 2px 6px; border-radius: 10px; font-weight: bold; min-width: 18px; text-align: center; }
         .mini-tags { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
         .mini-tag { font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; color: #000; font-weight: 600; }
 
+        /* Barra de Acciones Masivas */
+        #bulk-toolbar { display: none; position: absolute; bottom: 0; left: 0; width: 100%; background: var(--panel); border-top: 2px solid var(--primary); padding: 15px; z-index: 50; flex-direction: column; gap: 10px; box-shadow: 0 -5px 20px rgba(0,0,0,0.5); }
+        #bulk-toolbar.show { display: flex; animation: slideUp 0.3s; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .bulk-actions-row { display: flex; justify-content: space-between; align-items: center; }
+
         /* --- CHAT AREA --- */
         .chat-area { flex: 1; display: flex; flex-direction: column; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-color: #0b141a; position: relative; }
-        .chat-top { padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .chat-top { padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
         .messages { flex: 1; overflow-y: auto; padding: 20px 40px; display: flex; flex-direction: column; gap: 4px; }
-        .msg { max-width: 65%; padding: 6px 10px; border-radius: 8px; font-size: 0.9rem; line-height: 1.4; position: relative; word-wrap: break-word; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); }
+        
+        .msg { max-width: 65%; padding: 6px 10px; border-radius: 8px; font-size: 0.9rem; line-height: 1.4; position: relative; word-wrap: break-word; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); display: flex; flex-direction: column; }
         .msg.user { background: var(--incoming); align-self: flex-start; border-top-left-radius: 0; color: #fff; }
         .msg.bot, .msg.manual { background: var(--outgoing); align-self: flex-end; border-top-right-radius: 0; color: #fff; }
-        .msg.manual { background: #005c4b; }
-        .msg-time { font-size: 0.65rem; opacity: 0.6; text-align: right; margin-top: 2px; margin-left: 10px; float: right; }
+        .msg-time { font-size: 0.65rem; opacity: 0.6; align-self: flex-end; margin-top: 2px; }
+        
+        /* Botón de Reenvío */
+        .msg-forward-btn { position: absolute; top: 5px; right: -30px; background: rgba(0,0,0,0.3); color: #fff; border-radius: 50%; width: 25px; height: 25px; display: none; align-items: center; justify-content: center; cursor: pointer; font-size: 0.8rem; }
+        .msg:hover .msg-forward-btn { display: flex; }
+        .msg.bot:hover .msg-forward-btn { left: -30px; right: auto; }
+        .msg-forward-btn:hover { background: var(--primary); }
 
-        /* --- AUDIO PLAYER --- */
+        /* Audio Player & Input */
         .audio-wrapper { display: flex; align-items: center; gap: 8px; }
         .audio-player { display: flex; align-items: center; gap: 12px; width: 220px; padding: 5px; background: rgba(0,0,0,0.1); border-radius: 8px; }
-        .play-btn { width: 34px; height: 34px; background: #53bdeb; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; flex-shrink: 0; transition: background 0.2s; }
-        .play-btn:hover { background: #37a6d6; }
+        .play-btn { width: 34px; height: 34px; background: #53bdeb; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; flex-shrink: 0; }
         .audio-progress { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
         .progress-bar-bg { width: 100%; height: 4px; background: rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; }
         .progress-fill { height: 100%; width: 0%; background: #53bdeb; transition: width 0.1s linear; }
         .audio-time { font-size: 0.7rem; color: #ccc; font-family: monospace; }
-        .btn-download-audio { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--text-muted); text-decoration: none; transition: 0.2s; background: rgba(0,0,0,0.2); }
-        .btn-download-audio:hover { background: rgba(255,255,255,0.1); color: white; }
+        .btn-download-audio { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); text-decoration: none; background: rgba(0,0,0,0.2); }
 
         .input-area { padding: 10px 16px; background: var(--panel); display: flex; gap: 10px; align-items: center; }
         .input-box { flex: 1; padding: 12px; border-radius: 8px; border: none; background: #2a3942; color: white; outline: none; resize: none; height: 42px; font-size: 0.95rem; }
-        .send-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: var(--primary); color: #fff; cursor: pointer; font-size: 1.1rem; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-        .send-btn:hover { background: #008f6f; }
+        .send-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: var(--primary); color: #fff; cursor: pointer; font-size: 1.1rem; }
         .attach-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1.3rem; cursor: pointer; }
-        .attach-btn:hover { color: var(--text); }
 
         /* --- CRM & CONFIG --- */
         .crm-panel { width: 320px; border-left: 1px solid var(--border); background: var(--dark); padding: 20px; overflow-y: auto; display: none; flex-shrink: 0; }
         .crm-panel.open { display: block; position: absolute; right: 0; height: 100%; z-index: 30; border-left: 1px solid var(--primary); background: var(--dark); box-shadow: -5px 0 15px rgba(0,0,0,0.5); }
         .crm-section { margin-bottom: 30px; background: var(--panel); padding: 15px; border-radius: 8px; }
         .crm-title { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; font-weight: 600; }
-        .crm-input { width: 100%; padding: 8px 10px; margin-bottom: 10px; background: var(--dark); border: 1px solid var(--border); color: white; border-radius: 4px; font-size: 0.9rem; transition: border-color 0.2s; }
-        .crm-input:focus { border-color: var(--primary); outline: none; }
+        .crm-input { width: 100%; padding: 8px 10px; margin-bottom: 10px; background: var(--dark); border: 1px solid var(--border); color: white; border-radius: 4px; font-size: 0.9rem; }
         .tag-container { display: flex; flex-wrap: wrap; gap: 6px; }
         .tag { padding: 4px 10px; border-radius: 99px; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border); color: var(--text-muted); transition: 0.2s; }
         .tag.selected { border-color: var(--primary); background: rgba(0, 168, 132, 0.2); color: #fff; }
+        
+        /* Switch */
         .switch-container { display: flex; align-items: center; justify-content: space-between; }
         .switch { position: relative; display: inline-block; width: 36px; height: 20px; }
         .switch input { opacity: 0; width: 0; height: 0; }
@@ -121,42 +133,39 @@
         .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
         input:checked + .slider { background-color: var(--primary); }
         input:checked + .slider:before { transform: translateX(16px); }
+
         .leads-container, .config-container { padding: 30px; width: 100%; box-sizing: border-box; }
         .data-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9rem; }
         .data-table th, .data-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border); }
         .data-table th { color: var(--text-muted); font-weight: 500; }
         .data-table tr:hover { background: rgba(255,255,255,0.02); }
-        
-        .lead-source-tag { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .lead-source-tag { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
         .lead-source-web { background: rgba(30, 64, 175, 0.3); color: #93c5fd; border: 1px solid #1e40af; }
         .lead-source-store { background: rgba(134, 25, 143, 0.3); color: #f0abfc; border: 1px solid #a21caf; }
-        
+
         .config-header-main { font-size: 1.2rem; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 10px; color: var(--text-muted); }
         .config-row { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
         .config-card { background: var(--panel); padding: 20px; border-radius: 10px; border: 1px solid var(--border); flex: 1; min-width: 300px; margin-bottom: 20px; }
         .config-header { font-size: 1rem; font-weight: 600; margin-bottom: 15px; color: var(--primary); display: flex; justify-content: space-between; align-items: center; }
-        .code-editor { width: 100%; height: 120px; background: #111b21; color: #25d366; padding: 10px; border-radius: 5px; font-family: monospace; border: 1px solid var(--border); resize: vertical; font-size: 0.85rem; }
+        .code-editor { width: 100%; height: 120px; background: #111b21; color: #25d366; padding: 10px; border-radius: 5px; font-family: monospace; border: 1px solid var(--border); resize: vertical; }
         .config-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; background: var(--dark); border-bottom: 1px solid var(--border); font-size: 0.9rem; }
         .config-input-group { display: flex; gap: 10px; margin-bottom: 10px; }
         .cfg-input { flex: 1; padding: 8px; border-radius: 5px; border: 1px solid var(--border); background: var(--dark); color: white; }
+        
         .btn-small { padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; font-size: 0.8rem; font-weight: 500; transition: all 0.2s; }
         .btn-green { background: var(--outgoing); color: #fff; }
         .btn-green:hover { background: #007a63; }
         .btn-red { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; }
-        .btn-red:hover { background: rgba(239, 68, 68, 0.4); }
         .btn-blue { background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid #3b82f6; }
-        .btn-blue:hover { background: rgba(59, 130, 246, 0.4); }
 
         #context-menu { position: absolute; display: none; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 4px 20px rgba(0,0,0,0.6); border-radius: 6px; width: 180px; z-index: 1000; overflow: hidden; }
-        .ctx-item { padding: 12px 15px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 10px; color: var(--text); transition: 0.2s; }
+        .ctx-item { padding: 12px 15px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 10px; color: var(--text); }
         .ctx-item:hover { background: var(--dark); color: var(--primary); }
         .ctx-divider { height: 1px; background: var(--border); margin: 0; }
         
         #toast { visibility: hidden; min-width: 250px; margin-left: -125px; background-color: var(--panel); color: #fff; text-align: center; border-radius: 4px; padding: 16px; position: fixed; z-index: 2000; left: 50%; bottom: 30px; font-size: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); border: 1px solid var(--primary); }
-        #toast.show { visibility: visible; -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
-        @-webkit-keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
         @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
-        @-webkit-keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
         @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
         
         @media (max-width: 768px) {
@@ -184,11 +193,12 @@
     <div class="main-area">
         
         <div id="tab-chat" class="view-panel active">
-            <div class="chat-list">
+            <div class="chat-list" id="chat-list-panel">
                 <div class="chat-header">
                     <div class="search-container">
                         <input type="text" class="search-bar" id="main-search" placeholder="🔍 Buscar..." onkeyup="debounceSearch(this.value)">
-                        <button class="new-chat-btn" onclick="startNewChat()" title="Nuevo Chat"><i class="fas fa-plus"></i></button>
+                        <button class="action-btn" id="bulk-toggle-btn" onclick="toggleBulkMode()" title="Selección Múltiple"><i class="fas fa-check-double"></i></button>
+                        <button class="action-btn new-chat-btn" onclick="startNewChat()" title="Nuevo Chat"><i class="fas fa-plus"></i></button>
                     </div>
                     <div class="view-filters">
                         <span class="filter-chip active" onclick="setChatFilter('active', this)">Activos</span>
@@ -200,6 +210,19 @@
                     </div>
                 </div>
                 <div class="chat-items" id="chat-list-container"></div>
+                
+                <div id="bulk-toolbar">
+                    <div style="color:var(--text); font-size:0.9rem; font-weight:bold;">
+                        <span id="bulk-count">0</span> seleccionados
+                    </div>
+                    <div class="bulk-actions-row">
+                        <select id="bulk-tag-select" class="tag-filter-select" style="max-width:100%;">
+                            <option value="">Seleccionar Etiqueta...</option>
+                        </select>
+                        <button class="btn-small btn-green" onclick="executeBulkAction('set_label')">Aplicar</button>
+                        <button class="btn-small btn-blue" onclick="executeBulkAction('toggle_archive')" title="Archivar/Desarchivar"><i class="fas fa-archive"></i></button>
+                    </div>
+                </div>
             </div>
 
             <div class="chat-area" id="conversation-view" style="display:none;">
@@ -219,7 +242,7 @@
                 
                 <div class="input-area">
                     <button class="attach-btn" onclick="document.getElementById('file-upload').click()"><i class="fas fa-paperclip"></i></button>
-                    <input type="file" id="file-upload" hidden onchange="uploadFile()">
+                    <input type="file" id="file-upload" hidden onchange="uploadFile()" accept="image/*,video/*,audio/*,application/pdf">
                     <textarea class="input-box" id="msg-input" placeholder="Escribe un mensaje..." onkeypress="checkEnter(event)"></textarea>
                     <button class="send-btn" onclick="sendMessage()"><i class="fas fa-paper-plane"></i></button>
                 </div>
@@ -306,23 +329,55 @@
         </div>
     </div>
 
-    <div id="edit-modal">
+    <div id="edit-modal" class="modal-overlay">
         <div class="modal-content">
-            <div class="modal-title"><i class="fas fa-edit"></i> Editar Producto</div>
+            <div class="modal-title"><i class="fas fa-box-open"></i> Editar Producto</div>
             <div class="modal-form">
                 <input type="hidden" id="edit-id">
                 <label>Nombre del Producto</label>
-                <input type="text" id="edit-nombre" placeholder="Ej: Camiseta Negra">
+                <input type="text" id="edit-nombre">
                 <label>Precio</label>
-                <input type="text" id="edit-precio" placeholder="Ej: 50000">
-                <label>Stock / Cantidad</label>
-                <input type="text" id="edit-stock" placeholder="Ej: 10">
-                <label>Descripción / Detalles</label>
-                <textarea id="edit-desc" rows="3" placeholder="Detalles, tallas, colores..."></textarea>
+                <input type="text" id="edit-precio">
+                <label>Stock</label>
+                <input type="text" id="edit-stock">
+                <label>Descripción</label>
+                <textarea id="edit-desc" rows="3"></textarea>
             </div>
             <div class="modal-actions">
-                <button class="btn-small btn-red" onclick="closeEditModal()">Cancelar</button>
-                <button class="btn-small btn-green" onclick="saveEditInventory()">Guardar Cambios</button>
+                <button class="btn-small btn-red" onclick="closeModal('edit-modal')">Cancelar</button>
+                <button class="btn-small btn-green" onclick="saveEditInventory()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tag-edit-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width:350px;">
+            <div class="modal-title"><i class="fas fa-tag"></i> Editar Etiqueta</div>
+            <div class="modal-form">
+                <input type="hidden" id="edit-tag-id">
+                <label>Nombre</label>
+                <input type="text" id="edit-tag-name">
+                <label>Color</label>
+                <input type="color" id="edit-tag-color" style="height:40px;">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-small btn-red" onclick="closeModal('tag-edit-modal')">Cancelar</button>
+                <button class="btn-small btn-green" onclick="saveTagEdit()">Actualizar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="forward-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-title"><i class="fas fa-share"></i> Reenviar Mensaje</div>
+            <div class="modal-form">
+                <p id="forward-preview" style="font-size:0.85rem; color:var(--text-muted); font-style:italic; margin-bottom:15px; border-left:2px solid var(--primary); padding-left:10px;"></p>
+                <label>Buscar Chat Destino</label>
+                <input type="text" id="forward-search" placeholder="Escribe nombre..." onkeyup="filterForwardList()">
+                <div id="forward-list" style="max-height:200px; overflow-y:auto; border:1px solid var(--border); border-radius:6px;"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-small btn-red" onclick="closeModal('forward-modal')">Cancelar</button>
             </div>
         </div>
     </div>
@@ -340,10 +395,19 @@
     <script>
         let currentChat = null, currentFilter = 'active', chatsData = [], contextPhone = null, searchTimeout = null;
         let currentlyPlaying = null;
-        let currentInventory = []; // Para edición
+        let currentInventory = []; 
+        
+        // Variables para Bulk Actions
+        let bulkMode = false;
+        let selectedChats = new Set();
 
-        window.onload = function() { startSyncLoop(); refreshLeads(); loadAllConfig(); loadTagFilterOptions(); document.addEventListener('click', () => document.getElementById('context-menu').style.display = 'none'); };
+        // Variables para Reenvío
+        let msgToForward = null;
+
+        window.onload = function() { startSyncLoop(); refreshLeads(); loadAllConfig(); loadTagFilterOptions(); document.addEventListener('click', (e) => { if(!e.target.closest('.chat-item')) document.getElementById('context-menu').style.display = 'none'; }); };
         function showToast(msg) { const x = document.getElementById("toast"); x.innerText = msg; x.className = "show"; setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000); }
+        function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+        
         function switchTab(tab) {
             document.querySelectorAll('.view-panel').forEach(el => el.classList.remove('active'));
             document.getElementById('tab-' + tab).classList.add('active');
@@ -363,7 +427,11 @@
         function startNewChat() { const phone = prompt("Ingresa el número:"); if (!phone) return; const name = prompt("Nombre:") || phone; openChat(phone.replace(/\D/g, ''), name, ''); }
         function startSyncLoop() { syncChats(); setInterval(syncChats, 3000); setInterval(() => { if(currentChat) loadMessages(currentChat, false); }, 3000); }
         
-        async function loadTagFilterOptions() { try { const tags = await (await fetch('/api/data/tags')).json(); document.getElementById('tag-filter').innerHTML = '<option value="">Todas</option>' + tags.map(t => `<option value="${t.name}">${t.name}</option>`).join(''); } catch(e) {} }
+        async function loadTagFilterOptions() { try { const tags = await (await fetch('/api/data/tags')).json(); 
+            const html = '<option value="">Todas</option>' + tags.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+            document.getElementById('tag-filter').innerHTML = html;
+            document.getElementById('bulk-tag-select').innerHTML = '<option value="">Etiquetar como...</option>' + tags.map(t => `<option value='${JSON.stringify({text:t.name, color:t.color})}'>${t.name}</option>`).join('');
+        } catch(e) {} }
         
         async function syncChats() { 
             try { 
@@ -381,6 +449,63 @@
         function setChatFilter(filter, el) { currentFilter = filter; document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active')); el.classList.add('active'); syncChats(); }
         function normalizeTag(tag) { return typeof tag === 'string' ? { text: tag, color: '#555' } : tag; }
         
+        // --- LOGICA BULK ACTIONS ---
+        function toggleBulkMode() {
+            bulkMode = !bulkMode;
+            const btn = document.getElementById('bulk-toggle-btn');
+            const toolbar = document.getElementById('bulk-toolbar');
+            const panel = document.getElementById('chat-list-panel');
+            
+            if (bulkMode) {
+                btn.classList.add('active');
+                panel.classList.add('bulk-mode');
+                toolbar.classList.add('show');
+            } else {
+                btn.classList.remove('active');
+                panel.classList.remove('bulk-mode');
+                toolbar.classList.remove('show');
+                selectedChats.clear();
+                renderChatList(); // Limpia selections visuales
+            }
+        }
+
+        function toggleChatSelection(phone, event) {
+            if (!bulkMode) return;
+            event.stopPropagation(); // Evita abrir el chat
+            if (selectedChats.has(phone)) selectedChats.delete(phone);
+            else selectedChats.add(phone);
+            document.getElementById('bulk-count').innerText = selectedChats.size;
+            renderChatList(); // Re-render para mostrar checks
+        }
+
+        async function executeBulkAction(action) {
+            if (selectedChats.size === 0) return alert("Selecciona al menos un chat");
+            
+            let value = null;
+            if (action === 'set_label') {
+                const valStr = document.getElementById('bulk-tag-select').value;
+                if (!valStr) return alert("Selecciona una etiqueta");
+                value = JSON.parse(valStr);
+                action = 'add_label'; // Usamos add para no borrar las que ya tienen (backend v26.0 soporta esto)
+            }
+
+            if (!confirm(`¿Aplicar acción a ${selectedChats.size} chats?`)) return;
+
+            await fetch('/api/contacts/bulk-update', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    phones: Array.from(selectedChats),
+                    action: action,
+                    value: value
+                })
+            });
+
+            showToast("Acción masiva completada");
+            toggleBulkMode(); // Salir del modo bulk
+            syncChats();
+        }
+        
         function renderChatList() {
             const container = document.getElementById('chat-list-container'); 
             const scroll = container.children.length > 0 ? container.scrollTop : 0;
@@ -389,10 +514,27 @@
                 let labelsHtml = ''; if(c.labels && Array.isArray(c.labels)) labelsHtml = c.labels.map(l => { const tag = normalizeTag(l); return `<span class="mini-tag" style="background:${tag.color}30; color:${tag.color}; border:1px solid ${tag.color}">${tag.text}</span>` }).join('');
                 
                 let sourceBadge = '';
-                if(c.source === 'Web') sourceBadge = `<span class="badge" style="background:#1e3a8a; color:#fff;">WEB</span>`;
-                if(c.source === 'Tienda Virtual') sourceBadge = `<span class="badge" style="background:#a21caf; color:#fff;">TIENDA</span>`;
+                if(c.source && c.source.includes('Ads')) sourceBadge = `<span class="badge" style="background:#ff0000; color:#fff;">ADS</span>`;
+                else if(c.source === 'Web') sourceBadge = `<span class="badge" style="background:#1e3a8a; color:#fff;">WEB</span>`;
+                else if(c.source === 'Tienda Virtual') sourceBadge = `<span class="badge" style="background:#a21caf; color:#fff;">TIENDA</span>`;
 
-                return `<div id="chat-${c.id}" class="chat-item ${currentChat === c.id ? 'active' : ''} ${c.archived ? 'archived' : ''}" onclick="openChat('${c.id}', '${c.name}', '${c.photoUrl || ''}')" oncontextmenu="showContextMenu(event, '${c.id}', ${c.pinned}, ${c.archived})"><div class="avatar">${c.photoUrl ? `<img src="${c.photoUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fas fa-user"></i>'}</div><div class="chat-info"><div class="chat-name"><span>${c.name} ${c.pinned ? '<i class="fas fa-thumbtack pin-icon"></i>' : ''}</span><span class="chat-date">${new Date(c.lastMessage.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span></div><div class="chat-preview"><span class="chat-last-msg">${c.lastMessage.text || 'Multimedia'}</span><div style="display:flex; gap:3px;">${c.unreadCount > 0 ? `<span class="badge">${c.unreadCount}</span>` : ''}${sourceBadge}</div></div><div class="mini-tags">${labelsHtml}</div></div></div>`;
+                const isSelected = selectedChats.has(c.id);
+
+                return `<div id="chat-${c.id}" class="chat-item ${currentChat === c.id ? 'active' : ''} ${c.archived ? 'archived' : ''}" onclick="openChat('${c.id}', '${c.name}', '${c.photoUrl || ''}')" oncontextmenu="showContextMenu(event, '${c.id}', ${c.pinned}, ${c.archived})">
+                    <input type="checkbox" class="bulk-checkbox" ${isSelected ? 'checked' : ''} onclick="toggleChatSelection('${c.id}', event)">
+                    <div class="avatar">${c.photoUrl ? `<img src="${c.photoUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fas fa-user"></i>'}</div>
+                    <div class="chat-info">
+                        <div class="chat-name">
+                            <span>${c.name} ${c.pinned ? '<i class="fas fa-thumbtack pin-icon"></i>' : ''}</span>
+                            <span class="chat-date">${new Date(c.lastMessage.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        </div>
+                        <div class="chat-preview">
+                            <span class="chat-last-msg">${c.lastMessage.text || 'Multimedia'}</span>
+                            <div style="display:flex; gap:3px;">${c.unreadCount > 0 ? `<span class="badge">${c.unreadCount}</span>` : ''}${sourceBadge}</div>
+                        </div>
+                        <div class="mini-tags">${labelsHtml}</div>
+                    </div>
+                </div>`;
             }).join(''); 
             
             if(scroll > 0) container.scrollTop = scroll;
@@ -403,6 +545,8 @@
         function quickLabel() { if(!contextPhone) return; const chat = chatsData.find(c => c.id === contextPhone); if(chat) openChat(chat.id, chat.name, chat.photoUrl); document.getElementById('crm-panel').classList.add('open'); document.getElementById('context-menu').style.display = 'none'; }
         
         async function openChat(phone, name, photo) { 
+            if(bulkMode) return toggleChatSelection(phone, event); // Si estamos en modo bulk, clic selecciona
+
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
             const clickedItem = document.getElementById(`chat-${phone}`);
             if(clickedItem) clickedItem.classList.add('active');
@@ -435,22 +579,93 @@
 
         async function loadMessages(phone, scrollDown) {
             try { const res = await fetch(`/api/chat-history/${phone}`); const msgs = await res.json(); if(currentChat !== phone) return; const container = document.getElementById('messages-container');
-                container.innerHTML = msgs.map(m => { let text = m.text;
-                    if(text.includes('[MEDIA:')) { const parts = text.split(':'); const type = parts[1]; const id = parts[2].replace(']', ''); const mediaUrl = `/api/media-proxy/${id}?v=final`; 
+                container.innerHTML = msgs.map(m => { 
+                    let text = m.text;
+                    let isMedia = false;
+                    let mediaId = null;
+
+                    if(text.includes('[MEDIA:')) { 
+                        isMedia = true;
+                        const parts = text.split(':'); 
+                        const type = parts[1]; 
+                        const id = parts[2].replace(']', ''); 
+                        mediaId = id;
+                        const mediaUrl = `/api/media-proxy/${id}?v=final`; 
                         if(type === 'IMAGE') { text = `<div style="display:flex; flex-direction:column; gap:5px;"><img src="${mediaUrl}" style="max-width:250px; border-radius:8px; cursor:pointer; min-height:100px; background:#0b141a;" onclick="window.open(this.src)" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none; color:#ef4444; font-size:0.8rem; padding:10px; border:1px dashed #ef4444; border-radius:8px;">⚠️ Error de imagen.</div></div>`; }
                         else if(type === 'AUDIO') {
-                            text = `<div class="audio-wrapper">
-                                            <div class="audio-player">
-                                                <button class="play-btn" id="btn-${id}" onclick="togglePlay('${id}')"><i class="fas fa-play"></i></button>
-                                                <div class="audio-progress"><div class="progress-bar-bg"><div id="prog-${id}" class="progress-fill"></div></div><div id="time-${id}" class="audio-time">0:00</div></div>
-                                                <audio id="audio-${id}" src="${mediaUrl}" preload="metadata" ontimeupdate="updateProgress('${id}')" onended="resetPlayer('${id}')" onplaying="onAudioStart('${id}')" style="display:none;"></audio>
-                                            </div>
-                                            <a href="${mediaUrl}" download="nota_voz.ogg" class="btn-download-audio" title="Descargar"><i class="fas fa-download"></i></a>
-                                    </div>`;
+                            text = `<div class="audio-wrapper"><div class="audio-player"><button class="play-btn" id="btn-${id}" onclick="togglePlay('${id}')"><i class="fas fa-play"></i></button><div class="audio-progress"><div class="progress-bar-bg"><div id="prog-${id}" class="progress-fill"></div></div><div id="time-${id}" class="audio-time">0:00</div></div><audio id="audio-${id}" src="${mediaUrl}" preload="metadata" ontimeupdate="updateProgress('${id}')" onended="resetPlayer('${id}')" onplaying="onAudioStart('${id}')" style="display:none;"></audio></div><a href="${mediaUrl}" download="nota_voz.ogg" class="btn-download-audio" title="Descargar"><i class="fas fa-download"></i></a></div>`;
                         } else { text = `<a href="${mediaUrl}" target="_blank" style="color:white; text-decoration:none; display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:10px; border-radius:6px;"><i class="fas fa-file-download" style="font-size:1.5rem;"></i><div style="display:flex; flex-direction:column;"><span>Archivo Adjunto (${type})</span><span style="font-size:0.75rem; color:var(--primary);">Clic para descargar</span></div></a>`; }
-                    } return `<div class="msg ${m.role}">${text}<div class="msg-time">${formatSmartTime(m.time)}</div></div>`;
+                    } 
+                    
+                    // Escapar texto para el onclick
+                    const safeText = m.text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    
+                    return `<div class="msg ${m.role}">
+                        ${text}
+                        <div class="msg-time">${formatSmartTime(m.time)}</div>
+                        <div class="msg-forward-btn" onclick="openForwardModal('${safeText}', ${isMedia}, '${mediaId}')" title="Reenviar">
+                            <i class="fas fa-share"></i>
+                        </div>
+                    </div>`;
                 }).join(''); if(scrollDown) setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
             } catch(e) {}
+        }
+
+        // --- LÓGICA DE REENVÍO ---
+        function openForwardModal(content, isMedia, mediaId) {
+            msgToForward = { content, isMedia, mediaId };
+            
+            let preview = "";
+            if (isMedia) preview = "Multimedia (Imagen/Audio)";
+            else preview = content.substring(0, 50) + "...";
+            
+            document.getElementById('forward-preview').innerText = "Reenviando: " + preview;
+            document.getElementById('forward-modal').classList.add('show');
+            renderForwardList(chatsData); // Mostrar todos al inicio
+        }
+
+        function filterForwardList() {
+            const term = document.getElementById('forward-search').value.toLowerCase();
+            const filtered = chatsData.filter(c => c.name.toLowerCase().includes(term) || c.id.includes(term));
+            renderForwardList(filtered);
+        }
+
+        function renderForwardList(list) {
+            const container = document.getElementById('forward-list');
+            container.innerHTML = list.map(c => `
+                <div style="padding:10px; border-bottom:1px solid var(--border); cursor:pointer; display:flex; align-items:center; gap:10px; hover:background:var(--hover-item);" onclick="executeForward('${c.id}')">
+                    <div class="avatar" style="width:30px; height:30px;">${c.photoUrl ? `<img src="${c.photoUrl}" style="width:100%;height:100%;">` : '<i class="fas fa-user"></i>'}</div>
+                    <div style="font-size:0.9rem;">${c.name}</div>
+                </div>
+            `).join('');
+        }
+
+        async function executeForward(targetPhone) {
+            if(!msgToForward) return;
+            
+            closeModal('forward-modal');
+            
+            // Si es texto, enviamos texto
+            if (!msgToForward.isMedia) {
+                await fetch('/api/chat/send', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ phone: targetPhone, message: msgToForward.content })
+                });
+            } else {
+                // Si es media, reenviamos el contenido textual que representa al media [MEDIA:TYPE:ID]
+                // Esto hará que el bot lo renderice como media en el historial, aunque en WhatsApp real
+                // se enviará como texto a menos que implementemos forward nativo (limitación API).
+                // *Mejora v26.0*: Enviamos el texto raw para mantener referencia.
+                 await fetch('/api/chat/send', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ phone: targetPhone, message: msgToForward.content })
+                });
+            }
+            
+            showToast("Mensaje reenviado");
+            if (currentChat === targetPhone) loadMessages(targetPhone, true);
         }
 
         function togglePlay(id) { const audio = document.getElementById(`audio-${id}`); const btn = document.getElementById(`btn-${id}`); if(audio.paused) { if(currentlyPlaying && currentlyPlaying !== audio) { currentlyPlaying.pause(); resetPlayer(currentlyPlaying.id.replace('audio-', '')); } btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; audio.play(); currentlyPlaying = audio; } else { audio.pause(); btn.innerHTML = '<i class="fas fa-play"></i>'; } }
@@ -517,9 +732,37 @@
         function renderRulesList(rules) { document.getElementById('rules-list').innerHTML = (rules || []).map((r, i) => `<li class="config-item"><span>${r}</span><button class="btn-small btn-red" onclick="deleteRule(${i})"><i class="fas fa-trash"></i></button></li>`).join(''); }
         async function addRule() { const r = document.getElementById('rule-input').value; if(!r) return; const res = await fetch('/api/config/rules/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ rule: r }) }); const data = await res.json(); renderRulesList(data.rules); document.getElementById('rule-input').value = ""; }
         async function deleteRule(i) { const res = await fetch('/api/config/rules/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ index: i }) }); const data = await res.json(); renderRulesList(data.rules); }
-        function renderConfigTags(tags) { document.getElementById('config-tags-list').innerHTML = tags.map(t => `<li class="config-item"><span style="color:${t.color};font-weight:bold;">${t.name}</span><button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button></li>`).join(''); renderCRMTags(tags); }
+        
+        // --- TAG CRUD ---
+        function renderConfigTags(tags) { 
+            document.getElementById('config-tags-list').innerHTML = tags.map(t => `<li class="config-item">
+                <span style="color:${t.color};font-weight:bold;">${t.name}</span>
+                <div style="display:flex; gap:5px;">
+                    <button class="btn-small btn-blue" onclick="editTag(${t.id}, '${t.name}', '${t.color}')"><i class="fas fa-pencil-alt"></i></button>
+                    <button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button>
+                </div>
+            </li>`).join(''); 
+            renderCRMTags(tags); 
+        }
         async function addTag() { const name = document.getElementById('tag-name').value; const color = document.getElementById('tag-color').value; if(!name) return; await fetch('/api/tags/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name, color }) }); loadAllConfig(); document.getElementById('tag-name').value = ""; }
         async function deleteTag(id) { await fetch('/api/tags/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) }); loadAllConfig(); }
+        
+        function editTag(id, name, color) {
+            document.getElementById('edit-tag-id').value = id;
+            document.getElementById('edit-tag-name').value = name;
+            document.getElementById('edit-tag-color').value = color;
+            document.getElementById('tag-edit-modal').classList.add('show');
+        }
+        async function saveTagEdit() {
+            const id = document.getElementById('edit-tag-id').value;
+            const name = document.getElementById('edit-tag-name').value;
+            const color = document.getElementById('edit-tag-color').value;
+            await fetch('/api/tags/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id, name, color }) });
+            closeModal('tag-edit-modal');
+            loadAllConfig();
+            showToast("Etiqueta actualizada");
+        }
+
         function renderConfigShortcuts(shortcuts) { const list = shortcuts.map(s => `<li class="config-item"><span><b>${s.keyword}</b></span><button class="btn-small btn-red" onclick="deleteShortcut(${s.id})"><i class="fas fa-trash"></i></button></li>`).join(''); document.getElementById('config-shortcuts-list').innerHTML = list; document.getElementById('shortcuts-list').innerHTML = shortcuts.map(s => `<span class="tag" onclick="insertShortcut('${s.text}')">${s.keyword}</span>`).join(''); }
         async function addShortcut() { const k = document.getElementById('short-key').value; const t = document.getElementById('short-text').value; if(!k || !t) return; await fetch('/api/shortcuts/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ keyword: k, text: t }) }); loadAllConfig(); document.getElementById('short-key').value = ""; document.getElementById('short-text').value = ""; }
         async function deleteShortcut(id) { await fetch('/api/shortcuts/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) }); loadAllConfig(); }
@@ -530,7 +773,6 @@
             document.getElementById('leads-body').innerHTML = leads.map(l => `<tr><td>${new Date(l.fecha).toLocaleDateString()}</td><td><span class="lead-source-tag ${l.source==='Web'?'lead-source-web':(l.source==='Tienda Virtual'?'lead-source-store':'')}">${l.source||'Orgánico'}</span></td><td>${l.nombre||'-'}</td><td>${l.phone}</td><td>${l.interes||'-'}</td><td>${l.etiqueta}</td><td><strong>${l.status_tag||'-'}</strong></td><td><button class="nav-btn" style="height:30px;" onclick="openChat('${l.phone}', '${l.nombre}', '')"><i class="fas fa-comment"></i></button></td></tr>`).join(''); 
         }
 
-        // --- FUNCIONES INVENTARIO & EDICIÓN (BLINDADAS) ---
         async function loadInventoryPreview() {
             const list = document.getElementById('inventory-list');
             const countLabel = document.getElementById('inventory-count');
@@ -551,11 +793,10 @@
                         display = `<b>${nombre}</b> ${precio ? `($${precio})` : ''}`;
                     } catch(e) { display = item.searchable.substring(0, 30) + "..."; }
                     
-                    // Ahora el botón editar abre el modal
                     return `<li class="config-item" style="font-size:0.85rem;">
                         <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:65%;">${display}</span>
                         <div style="display:flex; gap:5px;">
-                            <button class="btn-small btn-blue" onclick="openEditModal(${item.id})"><i class="fas fa-edit"></i></button>
+                            <button class="btn-small btn-blue" onclick="openEditModal(${item.id})"><i class="fas fa-pencil-alt"></i></button>
                             <button class="btn-small btn-red" onclick="deleteInventoryItem(${item.id})"><i class="fas fa-trash"></i></button>
                         </div>
                     </li>`;
@@ -566,7 +807,6 @@
         function openEditModal(id) {
             const item = currentInventory.find(i => i.id === id);
             if(!item) return;
-            
             try {
                 const data = JSON.parse(item.raw_data);
                 document.getElementById('edit-id').value = id;
@@ -574,12 +814,9 @@
                 document.getElementById('edit-precio').value = data.precio || data.price || "";
                 document.getElementById('edit-stock').value = data.stock || data.cantidad || "";
                 document.getElementById('edit-desc').value = data.descripcion || data.desc || "";
-                
                 document.getElementById('edit-modal').classList.add('show');
             } catch(e) { alert("Error al leer datos del producto."); }
         }
-
-        function closeEditModal() { document.getElementById('edit-modal').classList.remove('show'); }
 
         async function saveEditInventory() {
             const id = document.getElementById('edit-id').value;
@@ -589,21 +826,18 @@
                 stock: document.getElementById('edit-stock').value,
                 descripcion: document.getElementById('edit-desc').value
             };
-            
             await fetch('/api/knowledge/update', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ id, data: newData })
             });
-            
-            closeEditModal();
+            closeModal('edit-modal');
             showToast("Producto actualizado");
             loadInventoryPreview();
         }
 
         async function deleteInventoryItem(id) {
             if(!confirm("¿Borrar este producto definitivamente?")) return;
-            // Ahora usa el endpoint por ID del backend v25.33
             await fetch('/api/knowledge/delete', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
