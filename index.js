@@ -1,12 +1,10 @@
 /*
- * SERVER BACKEND - v28.0 (STABLE - SILENT MODE)
+ * SERVER BACKEND - v28.1 (AI FLOW FIXED + CATEGORIES UPDATED)
  * ============================================================
- * 1. FIX: Proxy Multimedia con Streams (Soluciona bloqueos de carga de imágenes).
- * 2. FEATURE: Auto-mapeo de Ciudad a Departamento.
- * 3. FEATURE: Mapeo estricto de Intereses (Repuestos, Martillos, etc.).
- * 4. OPTIMIZACIÓN: Logs desactivados para evitar saturación del servidor.
- * 5. FEATURE: Mensaje orgánico de recepción de archivos.
- * 6. FEATURE: Columnas preparadas (Ciudad, Departamento, Correo) para Excel.
+ * 1. FIX: Restauración de la personalidad natural de la IA.
+ * 2. FIX: Separación de la respuesta conversacional y la extracción de datos JSON.
+ * 3. UPDATE: Nuevas categorías de interés según analista (Maquinaria nueva, etc.).
+ * 4. Mantiene fixes anteriores: Stream Proxy, Auto-Dpto, etc.
  * ============================================================
  */
 
@@ -115,7 +113,7 @@ let db, globalKnowledge = [], serverInstance;
             "ALTER TABLE leads ADD COLUMN status_tag TEXT",
             "ALTER TABLE leads ADD COLUMN farewell_sent INTEGER DEFAULT 0",
             "ALTER TABLE config ADD COLUMN logoUrl TEXT",
-            "ALTER TABLE leads ADD COLUMN departamento TEXT" // Migración para Departamento
+            "ALTER TABLE leads ADD COLUMN departamento TEXT" 
         ];
         for (const m of migrations) { try { await db.exec(m); } catch(e){} }
 
@@ -125,7 +123,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v28.0 ONLINE (Port ${PORT}) - LOGS DESACTIVADOS`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v28.1 ONLINE (Port ${PORT}) - LOGS DESACTIVADOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -251,7 +249,7 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- 8. PROXY DE MEDIOS (V28.0 - STREAM FIX - EVITA COLAPSO DE IMÁGENES) ---
+// --- 8. PROXY DE MEDIOS (V28.1 - STREAM FIX - EVITA COLAPSO DE IMÁGENES) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     const mediaId = req.params.id;
     if (!mediaId || mediaId === 'undefined') return res.status(404).send("ID Inválido");
@@ -350,25 +348,38 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const busqueda = aiMsg.toLowerCase().split(" ").slice(0,3).join(" ");
     const stock = globalKnowledge.filter(i => (i.searchable||"").toLowerCase().includes(busqueda)).slice(0,5);
 
+    // --- FIX CRITICO: SEPARACIÓN DE TAREAS PARA LA IA ---
+    // Le indicamos que su PRINCIPAL tarea es conversar de forma natural.
+    // La tarea de extracción de JSON es SECUNDARIA y no debe afectar su personalidad.
     const promptFinal = `
-    === ROL ===
+    === TU PERSONALIDAD Y REGLAS (SÍGUELAS ESTRICTAMENTE EN TU RESPUESTA) ===
     ${configUsar}
-    === REGLAS ===
+    
+    Reglas Técnicas Adicionales:
     ${techRules.join("\n")}
     Horario: ${biz.hours || ''}
+    
     === CONTEXTO WEB ===
     ${webContext}
-    === DATOS CLIENTE ===
+    === DATOS DEL CLIENTE ===
     ${memoriaDatos}
     === INVENTARIO ===
     ${JSON.stringify(stock)}
-    === HISTORIAL ===
+    === HISTORIAL RECIENTE ===
     ${JSON.stringify(history)}
-    === INSTRUCCIÓN ===
-    Si detectas datos nuevos (Nombre, Email, Ciudad, Interés), genera este JSON al final.
-    Para el campo "interes", clasifica obligatoriamente en una de estas opciones: "REPUESTOS", "MARTILLOS", "MAQUINARIA", "VOLQUETAS", o deja null si no está claro.
+    
+    === TAREA 1: RESPONDER AL CLIENTE ===
+    Responde al cliente de manera natural, conversacional y aplicando TODAS las reglas de tu personalidad definidas arriba. No cambies tu tono.
+
+    === TAREA 2: EXTRACCIÓN DE DATOS (OCULTA) ===
+    Independientemente de lo que respondas arriba, si en la conversación actual notas que el cliente nos ha dado información nueva (Nombre, Ciudad, Correo o muestra interés en algo), debes generar AL FINAL DE TODO TU MENSAJE un bloque JSON para que el sistema lo guarde.
+    
+    Para el campo "interes" en el JSON, clasifica OBLIGATORIAMENTE en una de estas categorías (o deja null si no aplica):
+    "Maquinaria nueva", "Maquinaria usada", "Volquetas", "Martillos Hidráulicos", "Brazos largos", "Accesorios", "Repuestos", "Servicio", "Otro".
+    
+    Formato del JSON a añadir al final:
     \`\`\`json
-    {"es_lead": boolean, "nombre":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead"}
+    {"es_lead": true_o_false, "nombre":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead"}
     \`\`\`
     `;
 
@@ -376,6 +387,8 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: promptFinal }] }] });
         const raw = r.data.candidates[0].content.parts[0].text;
         
+        // El bot ahora prioriza su personalidad. El JSON viene adjunto al final.
+        // Aquí lo extraemos silenciosamente y actualizamos la Base de Datos.
         const match = raw.match(/```json([\s\S]*?)```|{([\s\S]*?)}/);
         if (match) {
             try {
@@ -383,8 +396,11 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
                 await gestionarLead(phone, info, name, lead); 
             } catch(e) {}
         }
+        
+        // Limpiamos la respuesta que verá el cliente para que NO vea el JSON.
         let reply = limpiarRespuesta(raw);
         if (!reply || reply.length < 2) reply = "¿En qué te puedo ayudar?";
+        
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', reply, new Date().toISOString()]);
         return reply;
     } catch (e) { 
