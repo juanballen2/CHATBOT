@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v27.1 - Final Fixed</title>
+    <title>Valentina v28.0 - Final CRM</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
@@ -29,7 +29,7 @@
         /* --- ANIMACIONES --- */
         button:active, .chat-item:active { transform: scale(0.98); }
         button, .chat-item { transition: all 0.1s ease-in-out; }
-        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #37404a; border-radius: 3px; }
 
@@ -104,7 +104,6 @@
             border-radius: 50%; 
             width: 25px; 
             height: 25px; 
-            /* CAMBIO: Opacidad para animación */
             display: flex; 
             align-items: center; 
             justify-content: center; 
@@ -112,15 +111,12 @@
             font-size: 0.8rem; 
             opacity: 0;
             visibility: hidden;
-            /* TRUCO: Delay de 2s al salir */
             transition: opacity 0.3s ease 2s, visibility 0.3s ease 2s;
         }
 
-        /* Cuando pasas el mouse por el mensaje */
         .msg:hover .msg-forward-btn { 
             opacity: 1;
             visibility: visible;
-            /* TRUCO: Delay 0s al entrar */
             transition-delay: 0s;
         }
 
@@ -148,6 +144,9 @@
         .crm-section { margin-bottom: 30px; background: var(--panel); padding: 15px; border-radius: 8px; }
         .crm-title { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; font-weight: 600; }
         .crm-input { width: 100%; padding: 8px 10px; margin-bottom: 10px; background: var(--dark); border: 1px solid var(--border); color: white; border-radius: 4px; font-size: 0.9rem; }
+        select.crm-input { appearance: none; cursor: pointer; background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%238696a0%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E"); background-repeat: no-repeat; background-position: right 10px top 50%; background-size: 10px auto; }
+        select.crm-input option { background: var(--panel); color: white; }
+        
         .tag-container { display: flex; flex-wrap: wrap; gap: 6px; }
         .tag { padding: 4px 10px; border-radius: 99px; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border); color: var(--text-muted); transition: 0.2s; }
         .tag.selected { border-color: var(--primary); background: rgba(0, 168, 132, 0.2); color: #fff; }
@@ -162,8 +161,9 @@
         input:checked + .slider:before { transform: translateX(16px); }
 
         .leads-container, .config-container { padding: 30px; width: 100%; box-sizing: border-box; }
-        .data-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9rem; }
-        .data-table th, .data-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border); }
+        .table-responsive { width: 100%; overflow-x: auto; margin-top: 20px; }
+        .data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; min-width: 1000px; }
+        .data-table th, .data-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
         .data-table th { color: var(--text-muted); font-weight: 500; }
         .data-table tr:hover { background: rgba(255,255,255,0.02); }
         .lead-source-tag { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
@@ -287,15 +287,41 @@
                         </label>
                     </div>
                 </div>
+                
                 <div class="crm-section">
-                    <div class="crm-title">📝 Datos del Cliente</div>
-                    <input id="crm-name" class="crm-input" placeholder="Nombre">
+                    <div class="crm-title">📝 Datos del Contacto</div>
+                    <input id="crm-name" class="crm-input" placeholder="Nombre Completo">
+                    <input id="crm-email" class="crm-input" type="email" placeholder="Correo Electrónico">
                     <input id="crm-city" class="crm-input" placeholder="Ciudad">
-                    <input id="crm-email" class="crm-input" placeholder="Correo">
-                    <input id="crm-interest" class="crm-input" placeholder="Interés">
-                    <button class="btn-small btn-green" style="width:100%" onclick="saveLeadManual()">Guardar Datos</button>
+                    <input id="crm-dept" class="crm-input" placeholder="Departamento" readonly title="Se asigna automáticamente desde el sistema" style="opacity:0.7; cursor:not-allowed;">
+                    
+                    <div class="crm-title" style="margin-top:20px;">🎯 Perfilamiento</div>
+                    <select id="crm-interest" class="crm-input">
+                        <option value="">Selecciona Interés...</option>
+                        <option value="REPUESTOS">REPUESTOS</option>
+                        <option value="MARTILLOS">MARTILLOS</option>
+                        <option value="MAQUINARIA">MAQUINARIA</option>
+                        <option value="VOLQUETAS">VOLQUETAS</option>
+                        <option value="Consultando">Consultando</option>
+                    </select>
+
+                    <div class="crm-title" style="margin-top:20px;">💼 Ejecutivo Asignado</div>
+                    <select id="crm-executive" class="crm-input">
+                        <option value="Pendiente">Pendiente (Sin Asignar)</option>
+                        <option value="005Dn000007mWFhIAM">Luz</option>
+                        <option value="005UO000000PdB3YAK">Felipe</option>
+                        <option value="005Dn000005u1yTIAQ">Mario</option>
+                        <option value="005Dn000005u27NIAQ">Marcos</option>
+                        <option value="005Dn000005u22vIAA">Fabio</option>
+                        <option value="005Dn000005u2BkIAI">Diana</option>
+                        <option value="005Dn000007H1EUIA0">Marketing</option>
+                        <option value="005Dn000003Z5vbIAC">Oscar</option>
+                    </select>
+
+                    <button class="btn-small btn-green" style="width:100%; margin-top:15px;" onclick="saveLeadManual()">Guardar Cambios</button>
                 </div>
-                <div class="crm-section"><div class="crm-title">🏷️ Etiquetar</div><div class="tag-container" id="tag-list"></div></div>
+
+                <div class="crm-section"><div class="crm-title">🏷️ Etiqueta Comercial</div><div class="tag-container" id="tag-list"></div></div>
                 <div class="crm-section"><div class="crm-title">⚡ Respuestas Rápidas</div><div class="tag-container" id="shortcuts-list"></div></div>
             </div>
         </div>
@@ -309,10 +335,12 @@
                         <button class="btn-small btn-blue" onclick="refreshLeads()"><i class="fas fa-sync"></i> Actualizar</button>
                     </div>
                 </div>
-                <table class="data-table">
-                    <thead><tr><th>Fecha</th><th>Fuente</th><th>Nombre</th><th>Teléfono</th><th>Interés</th><th>Etiqueta IA</th><th>Etiqueta Comercial</th><th>Acciones</th></tr></thead>
-                    <tbody id="leads-body"></tbody>
-                </table>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead><tr><th>Fecha</th><th>Fuente</th><th>Nombre</th><th>Teléfono</th><th>Ciudad</th><th>Departamento</th><th>Correo</th><th>Interés</th><th>Ejecutivo</th><th>Etiqueta Comercial</th><th>Acciones</th></tr></thead>
+                        <tbody id="leads-body"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -424,12 +452,22 @@
         let currentlyPlaying = null;
         let currentInventory = []; 
         
-        // Variables para Bulk Actions
         let bulkMode = false;
         let selectedChats = new Set();
-
-        // Variables para Reenvío
         let msgToForward = null;
+
+        // Diccionario de Ejecutivos para la Interfaz vs Excel
+        const executivesMap = {
+            "005Dn000007mWFhIAM": "Luz",
+            "005UO000000PdB3YAK": "Felipe",
+            "005Dn000005u1yTIAQ": "Mario",
+            "005Dn000005u27NIAQ": "Marcos",
+            "005Dn000005u22vIAA": "Fabio",
+            "005Dn000005u2BkIAI": "Diana",
+            "005Dn000007H1EUIA0": "Marketing",
+            "005Dn000003Z5vbIAC": "Oscar",
+            "Pendiente": "Pendiente (Sin Asignar)"
+        };
 
         window.onload = function() { startSyncLoop(); refreshLeads(); loadAllConfig(); loadTagFilterOptions(); document.addEventListener('click', (e) => { if(!e.target.closest('.chat-item')) document.getElementById('context-menu').style.display = 'none'; }); };
         function showToast(msg) { const x = document.getElementById("toast"); x.innerText = msg; x.className = "show"; setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000); }
@@ -476,7 +514,6 @@
         function setChatFilter(filter, el) { currentFilter = filter; document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active')); el.classList.add('active'); syncChats(); }
         function normalizeTag(tag) { return typeof tag === 'string' ? { text: tag, color: '#555' } : tag; }
         
-        // --- LOGICA BULK ACTIONS ---
         function toggleBulkMode() {
             bulkMode = !bulkMode;
             const btn = document.getElementById('bulk-toggle-btn');
@@ -492,17 +529,17 @@
                 panel.classList.remove('bulk-mode');
                 toolbar.classList.remove('show');
                 selectedChats.clear();
-                renderChatList(); // Limpia selections visuales
+                renderChatList();
             }
         }
 
         function toggleChatSelection(phone, event) {
             if (!bulkMode) return;
-            event.stopPropagation(); // Evita abrir el chat
+            event.stopPropagation();
             if (selectedChats.has(phone)) selectedChats.delete(phone);
             else selectedChats.add(phone);
             document.getElementById('bulk-count').innerText = selectedChats.size;
-            renderChatList(); // Re-render para mostrar checks
+            renderChatList();
         }
 
         async function executeBulkAction(action) {
@@ -513,7 +550,7 @@
                 const valStr = document.getElementById('bulk-tag-select').value;
                 if (!valStr) return alert("Selecciona una etiqueta");
                 value = JSON.parse(valStr);
-                action = 'add_label'; // Usamos add para no borrar las que ya tienen (backend v26.0 soporta esto)
+                action = 'add_label';
             }
 
             if (!confirm(`¿Aplicar acción a ${selectedChats.size} chats?`)) return;
@@ -529,7 +566,7 @@
             });
 
             showToast("Acción masiva completada");
-            toggleBulkMode(); // Salir del modo bulk
+            toggleBulkMode();
             syncChats();
         }
         
@@ -572,7 +609,7 @@
         function quickLabel() { if(!contextPhone) return; const chat = chatsData.find(c => c.id === contextPhone); if(chat) openChat(chat.id, chat.name, chat.photoUrl); document.getElementById('crm-panel').classList.add('open'); document.getElementById('context-menu').style.display = 'none'; }
         
         async function openChat(phone, name, photo) { 
-            if(bulkMode) return toggleChatSelection(phone, event); // Si estamos en modo bulk, clic selecciona
+            if(bulkMode) return toggleChatSelection(phone, event); 
 
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
             const clickedItem = document.getElementById(`chat-${phone}`);
@@ -615,10 +652,14 @@
                         isMedia = true;
                         const parts = text.split(':'); 
                         const type = parts[1]; 
-                        const id = parts[2].replace(']', ''); 
+                        const id = parts[2].split(']')[0]; 
+                        const extraCaption = text.split(']').slice(1).join(']').trim(); 
                         mediaId = id;
                         const mediaUrl = `/api/media-proxy/${id}?v=final`; 
-                        if(type === 'IMAGE') { text = `<div style="display:flex; flex-direction:column; gap:5px;"><img src="${mediaUrl}" style="max-width:250px; border-radius:8px; cursor:pointer; min-height:100px; background:#0b141a;" onclick="window.open(this.src)" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none; color:#ef4444; font-size:0.8rem; padding:10px; border:1px dashed #ef4444; border-radius:8px;">⚠️ Error de imagen.</div></div>`; }
+                        
+                        let captionHtml = extraCaption ? `<div style="margin-top:8px; font-size:0.9rem;">${extraCaption}</div>` : '';
+
+                        if(type === 'IMAGE') { text = `<div style="display:flex; flex-direction:column; gap:5px;"><img src="${mediaUrl}" style="max-width:250px; border-radius:8px; cursor:pointer; min-height:100px; background:#0b141a;" onclick="window.open(this.src)" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none; color:#ef4444; font-size:0.8rem; padding:10px; border:1px dashed #ef4444; border-radius:8px;">⚠️ Error de imagen.</div>${captionHtml}</div>`; }
                         else if(type === 'AUDIO') {
                             text = `<div class="audio-wrapper">
                                 <div class="audio-player">
@@ -628,10 +669,9 @@
                                 </div>
                                 <a href="${mediaUrl}" download="nota_voz.ogg" class="btn-download-audio" title="Descargar"><i class="fas fa-download"></i></a>
                             </div>`;
-                        } else { text = `<a href="${mediaUrl}" target="_blank" style="color:white; text-decoration:none; display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:10px; border-radius:6px;"><i class="fas fa-file-download" style="font-size:1.5rem;"></i><div style="display:flex; flex-direction:column;"><span>Archivo Adjunto (${type})</span><span style="font-size:0.75rem; color:var(--primary);">Clic para descargar</span></div></a>`; }
+                        } else { text = `<a href="${mediaUrl}" target="_blank" style="color:white; text-decoration:none; display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:10px; border-radius:6px;"><i class="fas fa-file-download" style="font-size:1.5rem;"></i><div style="display:flex; flex-direction:column;"><span>Archivo Adjunto (${type})</span><span style="font-size:0.75rem; color:var(--primary);">Clic para descargar</span></div></a>${captionHtml}`; }
                     } 
                     
-                    // Escapar texto para el onclick
                     const safeText = m.text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     
                     return `<div class="msg ${m.role}">
@@ -645,17 +685,15 @@
             } catch(e) {}
         }
 
-        // --- LÓGICA DE REENVÍO ---
         function openForwardModal(content, isMedia, mediaId) {
             msgToForward = { content, isMedia, mediaId };
-            
             let preview = "";
-            if (isMedia) preview = "Multimedia (Imagen/Audio)";
+            if (isMedia) preview = "Multimedia (Imagen/Audio/Doc)";
             else preview = content.substring(0, 50) + "...";
             
             document.getElementById('forward-preview').innerText = "Reenviando: " + preview;
             document.getElementById('forward-modal').classList.add('show');
-            renderForwardList(chatsData); // Mostrar todos al inicio
+            renderForwardList(chatsData);
         }
 
         function filterForwardList() {
@@ -676,25 +714,13 @@
 
         async function executeForward(targetPhone) {
             if(!msgToForward) return;
-            
             closeModal('forward-modal');
             
-            // Si es texto, enviamos texto
-            if (!msgToForward.isMedia) {
-                await fetch('/api/chat/send', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ phone: targetPhone, message: msgToForward.content })
-                });
-            } else {
-                // Si es media, reenviamos el contenido textual que representa al media [MEDIA:TYPE:ID]
-                // Esto hará que el bot lo renderice como media en el historial
-                 await fetch('/api/chat/send', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ phone: targetPhone, message: msgToForward.content })
-                });
-            }
+            await fetch('/api/chat/send', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ phone: targetPhone, message: msgToForward.content })
+            });
             
             showToast("Mensaje reenviado");
             if (currentChat === targetPhone) loadMessages(targetPhone, true);
@@ -725,9 +751,106 @@
         async function sendMessage() { const txt = document.getElementById('msg-input').value; if(!txt) return; document.getElementById('msg-input').value = ''; const container = document.getElementById('messages-container'); container.innerHTML += `<div class="msg manual">${txt} <div class="msg-time">...</div></div>`; container.scrollTop = container.scrollHeight; await fetch('/api/chat/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, message: txt }) }); loadMessages(currentChat, true); }
         function checkEnter(e) { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
         async function toggleBotActive() { const active = document.getElementById('bot-switch').checked; await fetch('/api/chat/toggle-bot', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, active }) }); showToast(active ? "🤖 Bot Activado" : "⏸️ Bot Pausado"); }
-        async function loadLeadDataToCRM(phone) { document.getElementById('crm-name').value=""; document.getElementById('crm-city').value=""; document.getElementById('crm-email').value=""; document.getElementById('crm-interest').value=""; const res = await fetch('/api/data/leads'); const leads = await res.json(); const lead = leads.find(l => l.phone === phone); if(lead) { document.getElementById('crm-name').value = lead.nombre||""; document.getElementById('crm-city').value = lead.ciudad||""; document.getElementById('crm-email').value = lead.correo||""; document.getElementById('crm-interest').value = lead.interes||""; } }
-        async function saveLeadManual() { if(!currentChat) return; const res = await fetch('/api/data/leads'); const leads = await res.json(); const lead = leads.find(l => l.phone === currentChat); const id = lead ? lead.id : null; if(id) { const updates = [{field:'nombre',value:document.getElementById('crm-name').value},{field:'ciudad',value:document.getElementById('crm-city').value},{field:'correo',value:document.getElementById('crm-email').value},{field:'interes',value:document.getElementById('crm-interest').value}]; for(let u of updates) await fetch('/api/leads/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id, field: u.field, value: u.value }) }); showToast("✅ Datos Guardados"); refreshLeads(); } else { showToast("⚠️ Espera un mensaje."); } }
-        function downloadExcel() { const rows = [['Fecha', 'Fuente', 'Nombre', 'Telefono', 'Interes', 'Etiqueta IA', 'Etiqueta Comercial']]; const table = document.getElementById('leads-body'); for (let tr of table.rows) { const cells = Array.from(tr.cells).slice(0, 7).map(c => c.innerText); rows.push(cells); } let csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n"); const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", "leads_icc.csv"); document.body.appendChild(link); link.click(); }
+        
+        async function loadLeadDataToCRM(phone) { 
+            document.getElementById('crm-name').value=""; 
+            document.getElementById('crm-city').value=""; 
+            document.getElementById('crm-dept').value=""; 
+            document.getElementById('crm-email').value=""; 
+            document.getElementById('crm-interest').value=""; 
+            document.getElementById('crm-executive').value="Pendiente"; 
+
+            const res = await fetch('/api/data/leads'); 
+            const leads = await res.json(); 
+            const lead = leads.find(l => l.phone === phone); 
+            
+            if(lead) { 
+                document.getElementById('crm-name').value = lead.nombre||""; 
+                document.getElementById('crm-city').value = lead.ciudad||""; 
+                document.getElementById('crm-dept').value = lead.departamento||""; 
+                document.getElementById('crm-email').value = lead.correo||""; 
+                
+                // Set Interés
+                let interestSelect = document.getElementById('crm-interest');
+                let foundInterest = false;
+                if(lead.interes) {
+                    for(let opt of interestSelect.options) {
+                        if(opt.value.toUpperCase() === lead.interes.toUpperCase()) {
+                            interestSelect.value = opt.value;
+                            foundInterest = true; break;
+                        }
+                    }
+                    if(!foundInterest) interestSelect.value = "Consultando";
+                }
+
+                // Set Ejecutivo (Guardado en 'etiqueta')
+                let execSelect = document.getElementById('crm-executive');
+                if (lead.etiqueta && executivesMap[lead.etiqueta]) {
+                    execSelect.value = lead.etiqueta;
+                } else {
+                    execSelect.value = "Pendiente";
+                }
+            } 
+        }
+
+        async function saveLeadManual() { 
+            if(!currentChat) return; 
+            const res = await fetch('/api/data/leads'); 
+            const leads = await res.json(); 
+            const lead = leads.find(l => l.phone === currentChat); 
+            const id = lead ? lead.id : null; 
+            
+            if(id) { 
+                const updates = [
+                    {field:'nombre', value:document.getElementById('crm-name').value},
+                    {field:'ciudad', value:document.getElementById('crm-city').value},
+                    {field:'correo', value:document.getElementById('crm-email').value},
+                    {field:'interes', value:document.getElementById('crm-interest').value},
+                    {field:'etiqueta', value:document.getElementById('crm-executive').value}
+                ]; 
+                for(let u of updates) {
+                    await fetch('/api/leads/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id, field: u.field, value: u.value }) }); 
+                }
+                showToast("✅ Datos Guardados"); 
+                refreshLeads(); 
+            } else { 
+                showToast("⚠️ Espera un mensaje del cliente."); 
+            } 
+        }
+        
+        function downloadExcel() { 
+            const rows = [['Fecha', 'Fuente', 'Nombre', 'Telefono', 'Ciudad', 'Departamento', 'Correo', 'Interes', 'Ejecutivo ID', 'Etiqueta Comercial']]; 
+            const table = document.getElementById('leads-body'); 
+            
+            for (let tr of table.rows) { 
+                const cells = Array.from(tr.cells);
+                const rowData = [
+                    cells[0].innerText, // Fecha
+                    cells[1].innerText, // Fuente
+                    cells[2].innerText, // Nombre
+                    cells[3].innerText, // Telefono
+                    cells[4].innerText, // Ciudad
+                    cells[5].innerText, // Departamento
+                    cells[6].innerText, // Correo
+                    cells[7].innerText, // Interes
+                    tr.getAttribute('data-exec-id'), // Ejecutivo ID
+                    cells[9].innerText  // Etiqueta Comercial
+                ];
+                rows.push(rowData); 
+            } 
+            
+            // BOM UTF-8 para que las tildes se vean bien en Excel
+            let csvContent = "\uFEFF";
+            csvContent += rows.map(e => e.map(v => `"${v ? String(v).replace(/"/g, '""') : ''}"`).join(",")).join("\n"); 
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a"); 
+            link.href = URL.createObjectURL(blob);
+            link.download = "leads_icc.csv"; 
+            document.body.appendChild(link); 
+            link.click(); 
+        }
+
         function loadTags(phone) { fetch('/api/data/tags').then(r=>r.json()).then(t => renderCRMTags(t)); }
         function renderCRMTags(tags) { const chat = chatsData.find(c => c.id === currentChat); const activeTags = chat ? chat.labels : []; document.getElementById('tag-list').innerHTML = tags.map(t => { const isActive = activeTags && activeTags.some(at => normalizeTag(at).text === t.name); return `<span class="tag ${isActive ? 'selected' : ''}" style="border-color:${t.color}; color:${isActive?'#fff':t.color}; background:${isActive?t.color:'transparent'}" onclick="toggleChatTag('${t.name}', '${t.color}')">${t.name}</span>`; }).join(''); }
         async function toggleChatTag(name, color) { if(!currentChat) return; const chat = chatsData.find(c => c.id === currentChat); let labels = chat.labels || []; const exists = labels.some(l => normalizeTag(l).text === name); if(exists) labels = labels.filter(l => normalizeTag(l).text !== name); else labels.push({text: name, color}); await fetch('/api/chat/action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, action: 'set_labels', value: labels }) }); const res = await fetch('/api/data/leads'); const leads = await res.json(); const lead = leads.find(l => l.phone === currentChat); if(lead) { const newStatus = exists ? (labels.length > 0 ? labels[0].text : "Sin Etiqueta") : name; await fetch('/api/leads/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id: lead.id, field: 'status_tag', value: newStatus }) }); } syncChats(); setTimeout(() => { loadTags(currentChat); refreshLeads(); }, 300); }
@@ -799,10 +922,27 @@
         async function addShortcut() { const k = document.getElementById('short-key').value; const t = document.getElementById('short-text').value; if(!k || !t) return; await fetch('/api/shortcuts/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ keyword: k, text: t }) }); loadAllConfig(); document.getElementById('short-key').value = ""; document.getElementById('short-text').value = ""; }
         async function deleteShortcut(id) { await fetch('/api/shortcuts/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) }); loadAllConfig(); }
         function insertShortcut(text) { document.getElementById('msg-input').value += text; }
+        
         async function refreshLeads() { 
             const res = await fetch('/api/data/leads'); 
             const leads = await res.json(); 
-            document.getElementById('leads-body').innerHTML = leads.map(l => `<tr><td>${new Date(l.fecha).toLocaleDateString()}</td><td><span class="lead-source-tag ${l.source==='Web'?'lead-source-web':(l.source==='Tienda Virtual'?'lead-source-store':'')}">${l.source||'Orgánico'}</span></td><td>${l.nombre||'-'}</td><td>${l.phone}</td><td>${l.interes||'-'}</td><td>${l.etiqueta}</td><td><strong>${l.status_tag||'-'}</strong></td><td><button class="nav-btn" style="height:30px;" onclick="openChat('${l.phone}', '${l.nombre}', '')"><i class="fas fa-comment"></i></button></td></tr>`).join(''); 
+            
+            document.getElementById('leads-body').innerHTML = leads.map(l => {
+                const execName = executivesMap[l.etiqueta] || l.etiqueta || 'Pendiente';
+                return `<tr data-exec-id="${l.etiqueta || 'Pendiente'}">
+                    <td>${new Date(l.fecha).toLocaleDateString()}</td>
+                    <td><span class="lead-source-tag ${l.source==='Web'?'lead-source-web':(l.source==='Tienda Virtual'?'lead-source-store':'')}">${l.source||'Orgánico'}</span></td>
+                    <td>${l.nombre||'-'}</td>
+                    <td>${l.phone}</td>
+                    <td>${l.ciudad||'-'}</td>
+                    <td>${l.departamento||'-'}</td>
+                    <td>${l.correo||'-'}</td>
+                    <td><strong>${l.interes||'-'}</strong></td>
+                    <td>${execName}</td>
+                    <td><span class="tag" style="background:var(--panel)">${l.status_tag||'-'}</span></td>
+                    <td><button class="nav-btn" style="height:30px;" onclick="openChat('${l.phone}', '${l.nombre}', '')"><i class="fas fa-comment"></i></button></td>
+                </tr>`;
+            }).join(''); 
         }
 
         async function loadInventoryPreview() {
