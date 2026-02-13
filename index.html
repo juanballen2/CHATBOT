@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valentina v28.0 - Final CRM</title>
+    <title>Valentina v28.1 - Final CRM</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
@@ -298,10 +298,15 @@
                     <div class="crm-title" style="margin-top:20px;">🎯 Perfilamiento</div>
                     <select id="crm-interest" class="crm-input">
                         <option value="">Selecciona Interés...</option>
-                        <option value="REPUESTOS">REPUESTOS</option>
-                        <option value="MARTILLOS">MARTILLOS</option>
-                        <option value="MAQUINARIA">MAQUINARIA</option>
-                        <option value="VOLQUETAS">VOLQUETAS</option>
+                        <option value="Maquinaria nueva">Maquinaria nueva</option>
+                        <option value="Maquinaria usada">Maquinaria usada</option>
+                        <option value="Volquetas">Volquetas</option>
+                        <option value="Martillos Hidráulicos">Martillos Hidráulicos</option>
+                        <option value="Brazos largos">Brazos largos</option>
+                        <option value="Accesorios">Accesorios</option>
+                        <option value="Repuestos">Repuestos</option>
+                        <option value="Servicio">Servicio</option>
+                        <option value="Otro">Otro</option>
                         <option value="Consultando">Consultando</option>
                     </select>
 
@@ -770,7 +775,7 @@
                 document.getElementById('crm-dept').value = lead.departamento||""; 
                 document.getElementById('crm-email').value = lead.correo||""; 
                 
-                // Set Interés
+                // Set Interés (Ahora funciona con las nuevas categorías que pueden tener espacios)
                 let interestSelect = document.getElementById('crm-interest');
                 let foundInterest = false;
                 if(lead.interes) {
