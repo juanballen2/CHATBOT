@@ -35,7 +35,7 @@ const upload = multer({
 });
 
 const messageQueue = new Map(); 
-const DEBOUNCE_TIME = 1500; 
+const DEBOUNCE_TIME = 4500; 
 
 // --- 2. VARIABLES DE ENTORNO ---
 const API_KEY = process.env.GEMINI_API_KEY; 
@@ -693,3 +693,4 @@ app.post('/webhook', async (req, res) => {
 
 process.on('SIGTERM', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
 process.on('SIGINT', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
+
