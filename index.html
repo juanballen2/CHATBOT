@@ -92,6 +92,10 @@
         .msg { max-width: 65%; padding: 6px 10px; border-radius: 8px; font-size: 0.9rem; line-height: 1.4; position: relative; word-wrap: break-word; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); display: flex; flex-direction: column; }
         .msg.user { background: var(--incoming); align-self: flex-start; border-top-left-radius: 0; color: #fff; }
         .msg.bot, .msg.manual { background: var(--outgoing); align-self: flex-end; border-top-right-radius: 0; color: #fff; }
+        
+        /* NUEVO: ESTILO PARA LA ALERTA DE ERROR DE IA */
+        .msg.alert { background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #ff8a8a; align-self: center; border-radius: 8px; width: 85%; max-width: 85%; text-align: center; font-weight: 500; font-size: 0.85rem; }
+        
         .msg-time { font-size: 0.65rem; opacity: 0.6; align-self: flex-end; margin-top: 2px; }
         
         /* Botón de Reenvío con Delay */
@@ -679,12 +683,15 @@
                     
                     const safeText = m.text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     
-                    return `<div class="msg ${m.role}">
+                    // --- DETECTA SI ES UNA ALERTA DE SISTEMA ---
+                    const isAlert = text.includes('[ALERTA:');
+                    
+                    return `<div class="msg ${isAlert ? 'alert' : m.role}">
                         ${text}
                         <div class="msg-time">${formatSmartTime(m.time)}</div>
-                        <div class="msg-forward-btn" onclick="openForwardModal('${safeText}', ${isMedia}, '${mediaId}')" title="Reenviar">
+                        ${!isAlert ? `<div class="msg-forward-btn" onclick="openForwardModal('${safeText}', ${isMedia}, '${mediaId}')" title="Reenviar">
                             <i class="fas fa-share"></i>
-                        </div>
+                        </div>` : ''}
                     </div>`;
                 }).join(''); if(scrollDown) setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
             } catch(e) {}
