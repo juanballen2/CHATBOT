@@ -119,7 +119,7 @@ let db, globalKnowledge = [], serverInstance;
 
         await refreshKnowledge();
         iniciarCronJobs();
-        await verificarTokenMeta();      
+        await verificarTokenMeta();     
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
@@ -249,52 +249,50 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- 8. PROXY DE MEDIOS (V28.1 - STREAM FIX - EVITA COLAPSO DE IMÁGENES) ---
+// --- 8. PROXY DE MEDIOS (V28.1 - ARRAYBUFFER FIX) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
-    const mediaId = req.params.id;
-    if (!mediaId || mediaId === 'undefined') return res.status(404).send("ID Inválido");
+    // Limpieza estricta: Solo permite números para evitar el Error 400
+    const mediaId = req.params.id ? req.params.id.replace(/\D/g, '') : '';
+    if (!mediaId) return res.status(404).send("ID Inválido");
 
     try {
-        // 1. Obtener URL firmada
-        let urlData;
-        try {
-            const r = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, { 
-                headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
-            });
-            urlData = r.data;
-        } catch (apiError) { 
-            console.error("Error Meta URL Proxy:", apiError.message);
-            return res.status(404).send("Medio no encontrado"); 
-        }
+        // 1. Obtener URL de descarga temporal desde Meta
+        const metaRes = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, { 
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
+        });
         
-        // 2. Descargar con Stream (Evita saturar la memoria RAM y carga más rápido)
-        const response = await axios({ 
+        const urlData = metaRes.data;
+        if (!urlData || !urlData.url) throw new Error("Meta no devolvió una URL válida");
+
+        // 2. Descargar archivo completo en memoria (Más seguro que Stream en Railway)
+        const fileRes = await axios({ 
             method: 'get', 
             url: urlData.url, 
-            headers: { 
-                'Authorization': `Bearer ${META_TOKEN}`,
-                'User-Agent': 'Mozilla/5.0' 
-            }, 
-            responseType: 'stream' 
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` }, 
+            responseType: 'arraybuffer' 
         });
 
-        // 3. Forzar MIME
-        let contentType = response.headers['content-type'] || urlData.mime_type;
-        if (contentType.includes('audio') || urlData.mime_type.includes('audio')) {
+        // 3. Establecer MIME Type correctamente
+        let contentType = fileRes.headers['content-type'] || urlData.mime_type || 'image/jpeg';
+        if (contentType.includes('audio') || (urlData.mime_type && urlData.mime_type.includes('audio'))) {
             contentType = 'audio/ogg'; 
         }
 
-        // 4. Enviar Stream Directo al cliente
-        res.writeHead(200, {
+        // 4. Forzar visualización en línea
+        res.set({
             'Content-Type': contentType,
-            'Cache-Control': 'public, max-age=31536000' 
+            'Content-Disposition': 'inline', 
+            'Cache-Control': 'public, max-age=31536000'
         });
-
-        response.data.pipe(res);
+        
+        res.send(fileRes.data);
 
     } catch (e) { 
-        console.error("Error Proxy Stream:", e.message);
-        if (!res.headersSent) res.status(500).send("Error interno"); 
+        // Log detallado para saber EXACTAMENTE qué está fallando si Meta lo rechaza
+        const errorMsg = e.response && e.response.data ? JSON.stringify(e.response.data) : e.message;
+        console.error(`❌ ERROR PROXY MEDIA [${mediaId}]:`, errorMsg);
+        
+        if (!res.headersSent) res.status(500).send("Error procesando medio"); 
     }
 });
 
@@ -693,4 +691,3 @@ app.post('/webhook', async (req, res) => {
 
 process.on('SIGTERM', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
 process.on('SIGINT', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
-
