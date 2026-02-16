@@ -1,10 +1,10 @@
 /*
- * SERVER BACKEND - v28.4 (AUDIO CACHE & RANGE FIX)
+ * SERVER BACKEND - v28.5 (NATIVE DISK CACHE FIX)
  * ============================================================
- * 1. FIX: Caché en RAM para audios/videos (soluciona cortes al reproducir).
- * 2. FIX: Soporte de rangos HTTP (206) fluido.
+ * 1. FIX DEFINITIVO: Audios/Videos se guardan en disco temporalmente.
+ * 2. FIX: Express res.sendFile maneja los rangos 206 nativamente (cero cortes).
  * 3. FIX: Múltiples imágenes (Álbumes) se guardan individualmente.
- * 4. FIX: ArrayBuffer en Proxy para evitar imágenes corruptas.
+ * 4. ADD: Limpieza automática de archivos para no saturar Railway.
  * ============================================================
  */
 
@@ -35,7 +35,6 @@ const upload = multer({
 });
 
 const messageQueue = new Map(); 
-const mediaCache = new Map(); // 🔥 NUEVO: CACHÉ PARA AUDIOS Y MEDIOS
 const DEBOUNCE_TIME = 4500; 
 
 // --- 2. VARIABLES DE ENTORNO ---
@@ -124,7 +123,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v28.4 ONLINE (Port ${PORT}) - LOGS DESACTIVADOS`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v28.5 ONLINE (Port ${PORT}) - LOGS DESACTIVADOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -250,79 +249,72 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- 8. PROXY DE MEDIOS (V28.4 - CACHE & RANGE FIX) ---
+// --- 8. PROXY DE MEDIOS (V28.5 - DISK CACHE & EXPRESS NATIVE) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     const mediaId = req.params.id ? req.params.id.replace(/\D/g, '') : '';
     if (!mediaId) return res.status(404).send("ID Inválido");
 
     try {
-        let buffer;
-        let contentType;
-
-        // 🔥 1. VERIFICAR CACHÉ EN MEMORIA
-        if (mediaCache.has(mediaId)) {
-            const cached = mediaCache.get(mediaId);
-            buffer = cached.buffer;
-            contentType = cached.contentType;
-        } else {
-            // 🔥 2. SI NO ESTÁ, DESCARGAR DE META
-            const metaRes = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, { 
-                headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
-            });
-            
-            const urlData = metaRes.data;
-            if (!urlData || !urlData.url) throw new Error("Meta no devolvió una URL válida");
-
-            const fileRes = await axios({ 
-                method: 'get', 
-                url: urlData.url, 
-                headers: { 'Authorization': `Bearer ${META_TOKEN}` }, 
-                responseType: 'arraybuffer' 
-            });
-
-            buffer = Buffer.from(fileRes.data);
-            contentType = fileRes.headers['content-type'] || urlData.mime_type || 'image/jpeg';
-            
-            if (contentType.includes('audio') || (urlData.mime_type && urlData.mime_type.includes('audio'))) {
-                contentType = 'audio/ogg'; 
-            } else if (contentType.includes('video')) {
-                contentType = 'video/mp4'; 
-            }
-
-            // GUARDAR EN CACHÉ Y BORRAR A LOS 5 MINUTOS (Evita saturar RAM en Railway)
-            mediaCache.set(mediaId, { buffer, contentType });
-            setTimeout(() => mediaCache.delete(mediaId), 5 * 60 * 1000); // 5 mins
+        // Creamos una carpeta temporal en el servidor para los medios
+        const cacheDir = path.join(__dirname, 'data', 'media_cache');
+        if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+        
+        // 1. Buscamos si ya existe cualquier archivo con ese ID guardado en disco
+        const files = fs.readdirSync(cacheDir);
+        const existingFile = files.find(f => f.startsWith(mediaId));
+        
+        if (existingFile) {
+            // Si ya está guardado, Express se encarga de servirlo nativamente
+            return res.sendFile(path.join(cacheDir, existingFile));
         }
 
-        const size = buffer.length;
-        const range = req.headers.range;
+        // 2. Si no está, lo descargamos de Meta
+        const metaRes = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, { 
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
+        });
+        
+        const urlData = metaRes.data;
+        if (!urlData || !urlData.url) throw new Error("Meta no devolvió una URL válida");
 
-        // 🔥 3. ENVIAR DATOS SOLICITADOS (CHUNKS O COMPLETO)
-        if (range) {
-            const parts = range.replace(/bytes=/, "").split("-");
-            const start = parseInt(parts[0], 10);
-            const end = parts[1] ? parseInt(parts[1], 10) : size - 1;
-            const chunksize = (end - start) + 1;
+        const fileRes = await axios({ 
+            method: 'get', 
+            url: urlData.url, 
+            headers: { 'Authorization': `Bearer ${META_TOKEN}` }, 
+            responseType: 'arraybuffer' 
+        });
 
-            res.writeHead(206, {
-                'Content-Range': `bytes ${start}-${end}/${size}`,
-                'Accept-Ranges': 'bytes',
-                'Content-Length': chunksize,
-                'Content-Type': contentType,
-                'Content-Disposition': 'inline',
-                'Cache-Control': 'public, max-age=31536000'
-            });
-            res.end(buffer.slice(start, end + 1));
-        } else {
-            res.writeHead(200, {
-                'Content-Length': size,
-                'Accept-Ranges': 'bytes',
-                'Content-Type': contentType,
-                'Content-Disposition': 'inline',
-                'Cache-Control': 'public, max-age=31536000'
-            });
-            res.end(buffer);
+        // 3. Asignar la extensión correcta para que el navegador lo entienda
+        let contentType = fileRes.headers['content-type'] || urlData.mime_type || 'application/octet-stream';
+        let ext = '.bin';
+        
+        if (contentType.includes('audio') || (urlData.mime_type && urlData.mime_type.includes('audio'))) {
+            contentType = 'audio/ogg'; 
+            ext = '.ogg';
+        } else if (contentType.includes('video')) {
+            contentType = 'video/mp4'; 
+            ext = '.mp4';
+        } else if (contentType.includes('jpeg') || contentType.includes('jpg')) {
+            contentType = 'image/jpeg';
+            ext = '.jpg';
+        } else if (contentType.includes('png')) {
+            contentType = 'image/png';
+            ext = '.png';
         }
+
+        const filePath = path.join(cacheDir, `${mediaId}${ext}`);
+
+        // 4. Guardamos el archivo físico completo en el disco de Railway
+        fs.writeFileSync(filePath, fileRes.data);
+
+        // 5. Dejamos que Express envíe el archivo (ÉL maneja los rangos y cortes a la perfección)
+        res.sendFile(filePath, {
+            headers: { 'Content-Type': contentType }
+        });
+
+        // 6. Programamos su destrucción en 10 minutos para no llenar el disco duro
+        setTimeout(() => {
+            try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(e){}
+        }, 10 * 60 * 1000);
 
     } catch (e) { 
         const errorMsg = e.response && e.response.data ? JSON.stringify(e.response.data) : e.message;
