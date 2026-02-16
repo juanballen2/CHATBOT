@@ -1,9 +1,10 @@
 /*
- * SERVER BACKEND - v28.2 (ALBUM FIX + ARRAYBUFFER MEDIA PROXY)
+ * SERVER BACKEND - v28.3 (AUDIO/VIDEO RANGE FIX + ALBUM FIX)
  * ============================================================
- * 1. FIX: Múltiples imágenes (Álbumes) se guardan individualmente.
- * 2. FIX: ArrayBuffer en Proxy para evitar imágenes corruptas.
- * 3. ADD: Ruta /rescate para ver fotos de emergencia.
+ * 1. FIX: Soporte de rangos HTTP (206) para reproducir audios/videos.
+ * 2. FIX: Múltiples imágenes (Álbumes) se guardan individualmente.
+ * 3. FIX: ArrayBuffer en Proxy para evitar imágenes corruptas.
+ * 4. ADD: Ruta /rescate para ver fotos de emergencia.
  * ============================================================
  */
 
@@ -122,7 +123,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v28.2 ONLINE (Port ${PORT}) - LOGS DESACTIVADOS`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v28.3 ONLINE (Port ${PORT}) - LOGS DESACTIVADOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -248,7 +249,7 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- 8. PROXY DE MEDIOS ---
+// --- 8. PROXY DE MEDIOS (V28.3 - AUDIO/VIDEO RANGE FIX) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     const mediaId = req.params.id ? req.params.id.replace(/\D/g, '') : '';
     if (!mediaId) return res.status(404).send("ID Inválido");
@@ -268,18 +269,47 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
             responseType: 'arraybuffer' 
         });
 
+        // Convertimos el archivo en un Buffer para poder medirlo y cortarlo
+        const buffer = Buffer.from(fileRes.data);
+        const size = buffer.length;
+
         let contentType = fileRes.headers['content-type'] || urlData.mime_type || 'image/jpeg';
         if (contentType.includes('audio') || (urlData.mime_type && urlData.mime_type.includes('audio'))) {
-            contentType = 'audio/ogg'; 
+            contentType = 'audio/ogg'; // WhatsApp usa OGG nativamente
+        } else if (contentType.includes('video')) {
+            contentType = 'video/mp4'; 
         }
 
-        res.set({
-            'Content-Type': contentType,
-            'Content-Disposition': 'inline', 
-            'Cache-Control': 'public, max-age=31536000'
-        });
-        
-        res.send(fileRes.data);
+        // --- MAGIA PARA LOS AUDIOS: MANEJO DE RANGOS (CHUNK STREAMING) ---
+        const range = req.headers.range;
+
+        if (range) {
+            // Si el reproductor de audio pide una parte específica (para poder adelantar/atrasar)
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : size - 1;
+            const chunksize = (end - start) + 1;
+
+            res.writeHead(206, {
+                'Content-Range': `bytes ${start}-${end}/${size}`,
+                'Accept-Ranges': 'bytes',
+                'Content-Length': chunksize,
+                'Content-Type': contentType,
+                'Content-Disposition': 'inline',
+                'Cache-Control': 'public, max-age=31536000'
+            });
+            res.end(buffer.slice(start, end + 1));
+        } else {
+            // Si es una foto o el navegador pide todo de golpe
+            res.writeHead(200, {
+                'Content-Length': size,
+                'Accept-Ranges': 'bytes', // Le decimos al navegador que SÍ puede saltar en el audio
+                'Content-Type': contentType,
+                'Content-Disposition': 'inline',
+                'Cache-Control': 'public, max-age=31536000'
+            });
+            res.end(buffer);
+        }
 
     } catch (e) { 
         const errorMsg = e.response && e.response.data ? JSON.stringify(e.response.data) : e.message;
