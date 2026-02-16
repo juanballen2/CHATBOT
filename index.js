@@ -1,10 +1,11 @@
 /*
- * SERVER BACKEND - v28.5 (NATIVE DISK CACHE FIX)
+ * SERVER BACKEND - v28.5 (NATIVE DISK CACHE FIX & AI PROMPT FIX)
  * ============================================================
  * 1. FIX DEFINITIVO: Audios/Videos se guardan en disco temporalmente.
  * 2. FIX: Express res.sendFile maneja los rangos 206 nativamente (cero cortes).
  * 3. FIX: Múltiples imágenes (Álbumes) se guardan individualmente.
  * 4. ADD: Limpieza automática de archivos para no saturar Railway.
+ * 5. FIX IA: Personalidad delegada 100% al Frontend y JSON silencioso.
  * ============================================================
  */
 
@@ -346,7 +347,9 @@ app.get('/rescate', async (req, res) => {
 
 // --- 9. LÓGICA IA ---
 function limpiarRespuesta(txt) {
-    let clean = txt.replace(/```json([\s\S]*?)```|{([\s\S]*?)}/gi, "").trim(); 
+    // Filtro silencioso: Quita el JSON de la vista del cliente sin importar qué más diga
+    let clean = txt.replace(/```json([\s\S]*?)```/gi, "");
+    clean = clean.replace(/\{"es_lead"[\s\S]*?\}/gi, ""); 
     return clean.replace(/[\r\n]+/g, "\n").trim();
 }
 
@@ -370,6 +373,7 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         return rFile; 
     }
 
+    // 1. OBTENEMOS LA PERSONALIDAD PURA DEL FRONTEND
     let promptUsuario = await getCfg('bot_prompt');
     const configUsar = (promptUsuario && promptUsuario.length > 5) ? promptUsuario : DEFAULT_PROMPT;
     
@@ -390,36 +394,25 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const busqueda = aiMsg.toLowerCase().split(" ").slice(0,3).join(" ");
     const stock = globalKnowledge.filter(i => (i.searchable||"").toLowerCase().includes(busqueda)).slice(0,5);
 
+    // 2. ARMAMOS EL PROMPT: Personalidad arriba, reglas de motor abajo.
     const promptFinal = `
-    === TU PERSONALIDAD Y REGLAS (SÍGUELAS ESTRICTAMENTE EN TU RESPUESTA) ===
-    ${configUsar}
-    
-    Reglas Técnicas Adicionales:
-    ${techRules.join("\n")}
-    Horario: ${biz.hours || ''}
-    
-    === CONTEXTO WEB ===
-    ${webContext}
-    === DATOS DEL CLIENTE ===
-    ${memoriaDatos}
-    === INVENTARIO ===
-    ${JSON.stringify(stock)}
-    === HISTORIAL RECIENTE ===
-    ${JSON.stringify(history)}
-    
-    === TAREA 1: RESPONDER AL CLIENTE ===
-    Responde al cliente de manera natural, conversacional y aplicando TODAS las reglas de tu personalidad definidas arriba. No cambies tu tono.
+${configUsar}
 
-    === TAREA 2: EXTRACCIÓN DE DATOS (OCULTA) ===
-    Independientemente de lo que respondas arriba, si en la conversación actual notas que el cliente nos ha dado información nueva (Nombre, Ciudad, Correo o muestra interés en algo), debes generar AL FINAL DE TODO TU MENSAJE un bloque JSON para que el sistema lo guarde.
-    
-    Para el campo "interes" en el JSON, clasifica OBLIGATORIAMENTE en una de estas categorías (o deja null si no aplica):
-    "Maquinaria nueva", "Maquinaria usada", "Volquetas", "Martillos Hidráulicos", "Brazos largos", "Accesorios", "Repuestos", "Servicio", "Otro".
-    
-    Formato del JSON a añadir al final:
-    \`\`\`json
-    {"es_lead": true_o_false, "nombre":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead"}
-    \`\`\`
+=== DATOS DE CONTEXTO DEL SISTEMA ===
+Reglas Técnicas: ${techRules.join(" | ")}
+Horario: ${biz.hours || ''}
+Contexto Web: ${webContext}
+Memoria del cliente: ${memoriaDatos}
+Inventario: ${JSON.stringify(stock)}
+Historial reciente: ${JSON.stringify(history)}
+
+=== INSTRUCCIÓN FUNCIONAL (SISTEMA OBLIGATORIO) ===
+1. Responde al cliente de forma natural basándote ÚNICAMENTE en tu personalidad definida al inicio. No narres tus acciones (ej. no digas "Aquí tienes la respuesta").
+2. SIEMPRE al final de tu respuesta, añade el siguiente bloque JSON si lograste identificar algún dato nuevo o interés del cliente para actualizar el CRM. Si no hay datos, inclúyelo con valores null.
+\`\`\`json
+{"es_lead": true_o_false, "nombre":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead"}
+\`\`\`
+(Intereses permitidos: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos Hidráulicos, Brazos largos, Accesorios, Repuestos, Servicio, Otro, Consultando).
     `;
 
     try {
