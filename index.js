@@ -1,10 +1,10 @@
 /*
- * SERVER BACKEND - v28.3 (AUDIO/VIDEO RANGE FIX + ALBUM FIX)
+ * SERVER BACKEND - v28.4 (AUDIO CACHE & RANGE FIX)
  * ============================================================
- * 1. FIX: Soporte de rangos HTTP (206) para reproducir audios/videos.
- * 2. FIX: Múltiples imágenes (Álbumes) se guardan individualmente.
- * 3. FIX: ArrayBuffer en Proxy para evitar imágenes corruptas.
- * 4. ADD: Ruta /rescate para ver fotos de emergencia.
+ * 1. FIX: Caché en RAM para audios/videos (soluciona cortes al reproducir).
+ * 2. FIX: Soporte de rangos HTTP (206) fluido.
+ * 3. FIX: Múltiples imágenes (Álbumes) se guardan individualmente.
+ * 4. FIX: ArrayBuffer en Proxy para evitar imágenes corruptas.
  * ============================================================
  */
 
@@ -35,6 +35,7 @@ const upload = multer({
 });
 
 const messageQueue = new Map(); 
+const mediaCache = new Map(); // 🔥 NUEVO: CACHÉ PARA AUDIOS Y MEDIOS
 const DEBOUNCE_TIME = 4500; 
 
 // --- 2. VARIABLES DE ENTORNO ---
@@ -123,7 +124,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v28.3 ONLINE (Port ${PORT}) - LOGS DESACTIVADOS`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v28.4 ONLINE (Port ${PORT}) - LOGS DESACTIVADOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -249,42 +250,55 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- 8. PROXY DE MEDIOS (V28.3 - AUDIO/VIDEO RANGE FIX) ---
+// --- 8. PROXY DE MEDIOS (V28.4 - CACHE & RANGE FIX) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     const mediaId = req.params.id ? req.params.id.replace(/\D/g, '') : '';
     if (!mediaId) return res.status(404).send("ID Inválido");
 
     try {
-        const metaRes = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, { 
-            headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
-        });
-        
-        const urlData = metaRes.data;
-        if (!urlData || !urlData.url) throw new Error("Meta no devolvió una URL válida");
+        let buffer;
+        let contentType;
 
-        const fileRes = await axios({ 
-            method: 'get', 
-            url: urlData.url, 
-            headers: { 'Authorization': `Bearer ${META_TOKEN}` }, 
-            responseType: 'arraybuffer' 
-        });
+        // 🔥 1. VERIFICAR CACHÉ EN MEMORIA
+        if (mediaCache.has(mediaId)) {
+            const cached = mediaCache.get(mediaId);
+            buffer = cached.buffer;
+            contentType = cached.contentType;
+        } else {
+            // 🔥 2. SI NO ESTÁ, DESCARGAR DE META
+            const metaRes = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, { 
+                headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
+            });
+            
+            const urlData = metaRes.data;
+            if (!urlData || !urlData.url) throw new Error("Meta no devolvió una URL válida");
 
-        // Convertimos el archivo en un Buffer para poder medirlo y cortarlo
-        const buffer = Buffer.from(fileRes.data);
-        const size = buffer.length;
+            const fileRes = await axios({ 
+                method: 'get', 
+                url: urlData.url, 
+                headers: { 'Authorization': `Bearer ${META_TOKEN}` }, 
+                responseType: 'arraybuffer' 
+            });
 
-        let contentType = fileRes.headers['content-type'] || urlData.mime_type || 'image/jpeg';
-        if (contentType.includes('audio') || (urlData.mime_type && urlData.mime_type.includes('audio'))) {
-            contentType = 'audio/ogg'; // WhatsApp usa OGG nativamente
-        } else if (contentType.includes('video')) {
-            contentType = 'video/mp4'; 
+            buffer = Buffer.from(fileRes.data);
+            contentType = fileRes.headers['content-type'] || urlData.mime_type || 'image/jpeg';
+            
+            if (contentType.includes('audio') || (urlData.mime_type && urlData.mime_type.includes('audio'))) {
+                contentType = 'audio/ogg'; 
+            } else if (contentType.includes('video')) {
+                contentType = 'video/mp4'; 
+            }
+
+            // GUARDAR EN CACHÉ Y BORRAR A LOS 5 MINUTOS (Evita saturar RAM en Railway)
+            mediaCache.set(mediaId, { buffer, contentType });
+            setTimeout(() => mediaCache.delete(mediaId), 5 * 60 * 1000); // 5 mins
         }
 
-        // --- MAGIA PARA LOS AUDIOS: MANEJO DE RANGOS (CHUNK STREAMING) ---
+        const size = buffer.length;
         const range = req.headers.range;
 
+        // 🔥 3. ENVIAR DATOS SOLICITADOS (CHUNKS O COMPLETO)
         if (range) {
-            // Si el reproductor de audio pide una parte específica (para poder adelantar/atrasar)
             const parts = range.replace(/bytes=/, "").split("-");
             const start = parseInt(parts[0], 10);
             const end = parts[1] ? parseInt(parts[1], 10) : size - 1;
@@ -300,10 +314,9 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
             });
             res.end(buffer.slice(start, end + 1));
         } else {
-            // Si es una foto o el navegador pide todo de golpe
             res.writeHead(200, {
                 'Content-Length': size,
-                'Accept-Ranges': 'bytes', // Le decimos al navegador que SÍ puede saltar en el audio
+                'Accept-Ranges': 'bytes',
                 'Content-Type': contentType,
                 'Content-Disposition': 'inline',
                 'Cache-Control': 'public, max-age=31536000'
@@ -346,9 +359,6 @@ function limpiarRespuesta(txt) {
 }
 
 async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFile = false) {
-    // ELIMINADO EL INSERT INTO history AQUÍ PARA EVITAR DUPLICADOS Y COLAPSOS
-    // AHORA CADA IMAGEN SE INSERTA INMEDIATAMENTE EN EL WEBHOOK ANTES DEL DEBOUNCE
-
     const fuenteDetectada = analizarTextoFuente(dbMsg);
     if (fuenteDetectada) {
         const leadExistente = await db.get("SELECT id, source FROM leads WHERE phone = ?", [phone]);
@@ -693,8 +703,6 @@ app.post('/webhook', async (req, res) => {
             } 
             
             // === GUARDADO INDIVIDUAL E INMEDIATO (FIX DE ÁLBUMES) ===
-            // Al guardar inmediatamente en SQLite, cada foto enviada en ráfaga
-            // tendrá su propia burbuja renderizada en el CRM
             if (userMsg) {
                 await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', userMsg, new Date().toISOString()]);
                 await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [phone, new Date().toISOString()]);
@@ -713,7 +721,6 @@ app.post('/webhook', async (req, res) => {
                 const fullText = data.text.join("\n"); 
                 messageQueue.delete(phone); 
                 
-                // La IA procesará todos los textos/fotos de una sola vez para ahorrar Tokens
                 const reply = await procesarConValentina(
                     fullText, 
                     data.isFile ? '[ARCHIVO]' : fullText, 
