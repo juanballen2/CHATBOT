@@ -661,7 +661,8 @@
                         isMedia = true;
                         const parts = text.split(':'); 
                         const type = parts[1]; 
-                        const id = parts[2].split(']')[0]; 
+                        // FIX APLICADO: Extraer solo los números del ID para evitar corchetes o espacios basura.
+                        const id = parts[2].split(']')[0].replace(/\D/g, ''); 
                         const extraCaption = text.split(']').slice(1).join(']').trim(); 
                         mediaId = id;
                         const mediaUrl = `/api/media-proxy/${id}?v=final`; 
