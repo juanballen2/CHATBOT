@@ -651,7 +651,11 @@
         }
 
         async function loadMessages(phone, scrollDown) {
-            try { const res = await fetch(`/api/chat-history/${phone}`); const msgs = await res.json(); if(currentChat !== phone) return; const container = document.getElementById('messages-container');
+            try { 
+                const res = await fetch(`/api/chat-history/${phone}`); 
+                const msgs = await res.json(); 
+                if(currentChat !== phone) return; 
+                const container = document.getElementById('messages-container');
                 container.innerHTML = msgs.map(m => { 
                     let text = m.text;
                     let isMedia = false;
@@ -669,17 +673,30 @@
                         
                         let captionHtml = extraCaption ? `<div style="margin-top:8px; font-size:0.9rem;">${extraCaption}</div>` : '';
 
-                        if(type === 'IMAGE') { text = `<div style="display:flex; flex-direction:column; gap:5px;"><img src="${mediaUrl}" style="max-width:250px; border-radius:8px; cursor:pointer; min-height:100px; background:#0b141a;" onclick="window.open(this.src)" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none; color:#ef4444; font-size:0.8rem; padding:10px; border:1px dashed #ef4444; border-radius:8px;">⚠️ Error de imagen.</div>${captionHtml}</div>`; }
+                        if(type === 'IMAGE') { 
+                            text = `<div style="display:flex; flex-direction:column; gap:5px;"><img src="${mediaUrl}" style="max-width:250px; border-radius:8px; cursor:pointer; min-height:100px; background:#0b141a;" onclick="window.open(this.src)" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none; color:#ef4444; font-size:0.8rem; padding:10px; border:1px dashed #ef4444; border-radius:8px;">⚠️ Error de imagen.</div>${captionHtml}</div>`; 
+                        }
                         else if(type === 'AUDIO') {
                             text = `<div class="audio-wrapper">
                                 <div class="audio-player">
-                                    <button class="play-btn" id="btn-${id}" onclick="togglePlay('${id}')"><i class="fas fa-play"></i></button>
-                                    <div class="audio-progress"><div class="progress-bar-bg"><div id="prog-${id}" class="progress-fill"></div></div><div id="time-${id}" class="audio-time">0:00</div></div>
-                                    <audio id="audio-${id}" src="${mediaUrl}" preload="auto" ontimeupdate="updateProgress('${id}')" onended="resetPlayer('${id}')" onplaying="onAudioStart('${id}')" style="display:none;"></audio>
+                                    <button class="play-btn" id="btn-${id}" onclick="togglePlay('${id}', '${mediaUrl}')">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <div class="audio-progress">
+                                        <div class="progress-bar-bg">
+                                            <div id="prog-${id}" class="progress-fill"></div>
+                                        </div>
+                                        <div id="time-${id}" class="audio-time">0:00</div>
+                                    </div>
+                                    <audio id="audio-${id}" ontimeupdate="updateProgress('${id}')" onended="resetPlayer('${id}')" onplaying="onAudioStart('${id}')" style="display:none;"></audio>
                                 </div>
-                                <a href="${mediaUrl}" download="nota_voz.ogg" class="btn-download-audio" title="Descargar"><i class="fas fa-download"></i></a>
+                                <a href="${mediaUrl}" download="nota_voz.ogg" class="btn-download-audio" title="Descargar">
+                                    <i class="fas fa-download"></i>
+                                </a>
                             </div>`;
-                        } else { text = `<a href="${mediaUrl}" target="_blank" style="color:white; text-decoration:none; display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:10px; border-radius:6px;"><i class="fas fa-file-download" style="font-size:1.5rem;"></i><div style="display:flex; flex-direction:column;"><span>Archivo Adjunto (${type})</span><span style="font-size:0.75rem; color:var(--primary);">Clic para descargar</span></div></a>${captionHtml}`; }
+                        } else { 
+                            text = `<a href="${mediaUrl}" target="_blank" style="color:white; text-decoration:none; display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:10px; border-radius:6px;"><i class="fas fa-file-download" style="font-size:1.5rem;"></i><div style="display:flex; flex-direction:column;"><span>Archivo Adjunto (${type})</span><span style="font-size:0.75rem; color:var(--primary);">Clic para descargar</span></div></a>${captionHtml}`; 
+                        }
                     } 
                     
                     const safeText = m.text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
@@ -694,7 +711,9 @@
                             <i class="fas fa-share"></i>
                         </div>` : ''}
                     </div>`;
-                }).join(''); if(scrollDown) setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
+                }).join(''); 
+                
+                if(scrollDown) setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
             } catch(e) {}
         }
 
@@ -739,10 +758,68 @@
             if (currentChat === targetPhone) loadMessages(targetPhone, true);
         }
 
-        function togglePlay(id) { const audio = document.getElementById(`audio-${id}`); const btn = document.getElementById(`btn-${id}`); if(audio.paused) { if(currentlyPlaying && currentlyPlaying !== audio) { currentlyPlaying.pause(); resetPlayer(currentlyPlaying.id.replace('audio-', '')); } btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; audio.play(); currentlyPlaying = audio; } else { audio.pause(); btn.innerHTML = '<i class="fas fa-play"></i>'; } }
-        function onAudioStart(id) { document.getElementById(`btn-${id}`).innerHTML = '<i class="fas fa-pause"></i>'; }
-        function updateProgress(id) { const audio = document.getElementById(`audio-${id}`); const bar = document.getElementById(`prog-${id}`); const time = document.getElementById(`time-${id}`); if(audio && audio.duration) { const percent = (audio.currentTime / audio.duration) * 100; bar.style.width = percent + '%'; const mins = Math.floor(audio.currentTime / 60); const secs = Math.floor(audio.currentTime % 60); time.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`; } }
-        function resetPlayer(id) { document.getElementById(`btn-${id}`).innerHTML = '<i class="fas fa-play"></i>'; document.getElementById(`prog-${id}`).style.width = '0%'; }
+        // --- FUNCIONES DEL REPRODUCTOR DE AUDIO EXPANDIDAS ---
+        async function togglePlay(id, url) { 
+            const audio = document.getElementById(`audio-${id}`); 
+            const btn = document.getElementById(`btn-${id}`); 
+            
+            if (audio.paused) { 
+                if (currentlyPlaying && currentlyPlaying !== audio) { 
+                    currentlyPlaying.pause(); 
+                    resetPlayer(currentlyPlaying.id.replace('audio-', '')); 
+                } 
+                
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; 
+                
+                // MAGIA: Si el audio no está cargado, lo descargamos completo como Blob a la memoria
+                if (!audio.src || audio.src === window.location.href) {
+                    try {
+                        const res = await fetch(url);
+                        const blob = await res.blob();
+                        audio.src = URL.createObjectURL(blob); // Convertimos el archivo en un objeto local
+                    } catch(e) {
+                        console.error("Error cargando el audio:", e);
+                        btn.innerHTML = '<i class="fas fa-play"></i>';
+                        return;
+                    }
+                }
+                
+                audio.play().then(() => { 
+                    currentlyPlaying = audio; 
+                }).catch((error) => { 
+                    console.error("Error reproduciendo:", error);
+                    btn.innerHTML = '<i class="fas fa-play"></i>'; 
+                });
+            } else { 
+                audio.pause(); 
+                btn.innerHTML = '<i class="fas fa-play"></i>'; 
+            } 
+        }
+
+        function onAudioStart(id) { 
+            document.getElementById(`btn-${id}`).innerHTML = '<i class="fas fa-pause"></i>'; 
+        }
+
+        function updateProgress(id) { 
+            const audio = document.getElementById(`audio-${id}`); 
+            const bar = document.getElementById(`prog-${id}`); 
+            const time = document.getElementById(`time-${id}`); 
+            
+            if (audio && audio.duration) { 
+                const percent = (audio.currentTime / audio.duration) * 100; 
+                bar.style.width = percent + '%'; 
+                
+                const mins = Math.floor(audio.currentTime / 60); 
+                const secs = Math.floor(audio.currentTime % 60); 
+                time.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`; 
+            } 
+        }
+
+        function resetPlayer(id) { 
+            document.getElementById(`btn-${id}`).innerHTML = '<i class="fas fa-play"></i>'; 
+            document.getElementById(`prog-${id}`).style.width = '0%'; 
+        }
+        // --------------------------------------------------------
 
         async function uploadFile() {
             const input = document.getElementById('file-upload');
