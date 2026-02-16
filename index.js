@@ -1,10 +1,9 @@
 /*
- * SERVER BACKEND - v28.1 (AI FLOW FIXED + CATEGORIES UPDATED)
+ * SERVER BACKEND - v28.2 (ALBUM FIX + ARRAYBUFFER MEDIA PROXY)
  * ============================================================
- * 1. FIX: Restauración de la personalidad natural de la IA.
- * 2. FIX: Separación de la respuesta conversacional y la extracción de datos JSON.
- * 3. UPDATE: Nuevas categorías de interés según analista (Maquinaria nueva, etc.).
- * 4. Mantiene fixes anteriores: Stream Proxy, Auto-Dpto, etc.
+ * 1. FIX: Múltiples imágenes (Álbumes) se guardan individualmente.
+ * 2. FIX: ArrayBuffer en Proxy para evitar imágenes corruptas.
+ * 3. ADD: Ruta /rescate para ver fotos de emergencia.
  * ============================================================
  */
 
@@ -123,7 +122,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v28.1 ONLINE (Port ${PORT}) - LOGS DESACTIVADOS`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v28.2 ONLINE (Port ${PORT}) - LOGS DESACTIVADOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -249,14 +248,12 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- 8. PROXY DE MEDIOS (V28.1 - ARRAYBUFFER FIX) ---
+// --- 8. PROXY DE MEDIOS ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
-    // Limpieza estricta: Solo permite números para evitar el Error 400
     const mediaId = req.params.id ? req.params.id.replace(/\D/g, '') : '';
     if (!mediaId) return res.status(404).send("ID Inválido");
 
     try {
-        // 1. Obtener URL de descarga temporal desde Meta
         const metaRes = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
@@ -264,7 +261,6 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
         const urlData = metaRes.data;
         if (!urlData || !urlData.url) throw new Error("Meta no devolvió una URL válida");
 
-        // 2. Descargar archivo completo en memoria (Más seguro que Stream en Railway)
         const fileRes = await axios({ 
             method: 'get', 
             url: urlData.url, 
@@ -272,13 +268,11 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
             responseType: 'arraybuffer' 
         });
 
-        // 3. Establecer MIME Type correctamente
         let contentType = fileRes.headers['content-type'] || urlData.mime_type || 'image/jpeg';
         if (contentType.includes('audio') || (urlData.mime_type && urlData.mime_type.includes('audio'))) {
             contentType = 'audio/ogg'; 
         }
 
-        // 4. Forzar visualización en línea
         res.set({
             'Content-Type': contentType,
             'Content-Disposition': 'inline', 
@@ -288,12 +282,31 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
         res.send(fileRes.data);
 
     } catch (e) { 
-        // Log detallado para saber EXACTAMENTE qué está fallando si Meta lo rechaza
         const errorMsg = e.response && e.response.data ? JSON.stringify(e.response.data) : e.message;
         console.error(`❌ ERROR PROXY MEDIA [${mediaId}]:`, errorMsg);
-        
         if (!res.headersSent) res.status(500).send("Error procesando medio"); 
     }
+});
+
+// --- RUTA DE RESCATE DE EMERGENCIA ---
+app.get('/rescate', async (req, res) => {
+    const ids = ["1854969351824003", "1854969375157334", "1854969401823998"];
+    let html = "<h1 style='font-family:sans-serif;'>Rescate de Fotos del Cliente</h1><div style='display:flex; flex-wrap:wrap; gap:20px;'>";
+    
+    for (const id of ids) {
+        try {
+            const urlRes = await axios.get(`https://graph.facebook.com/v21.0/${id}`, { headers: { 'Authorization': `Bearer ${META_TOKEN}` } });
+            const imgRes = await axios.get(urlRes.data.url, { headers: { 'Authorization': `Bearer ${META_TOKEN}`, 'User-Agent': 'Mozilla/5.0' }, responseType: 'arraybuffer' });
+            const base64 = Buffer.from(imgRes.data, 'binary').toString('base64');
+            const mime = urlRes.data.mime_type || 'image/jpeg';
+            html += `<div><p style='font-family:sans-serif;'>Foto ${id}</p><img src="data:${mime};base64,${base64}" style="max-width: 350px; border-radius: 8px; border: 2px solid #00a884; box-shadow: 0 4px 10px rgba(0,0,0,0.2);"></div>`;
+        } catch (e) {
+            const errorDetalle = e.response && e.response.data ? JSON.stringify(e.response.data) : e.message;
+            html += `<div><p>Foto ${id} ❌ FALLÓ</p><pre style="color:red; background:#fee; padding:10px;">${errorDetalle}</pre></div>`;
+        }
+    }
+    html += "</div>";
+    res.send(html);
 });
 
 // --- 9. LÓGICA IA ---
@@ -303,8 +316,8 @@ function limpiarRespuesta(txt) {
 }
 
 async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFile = false) {
-    await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', dbMsg, new Date().toISOString()]);
-    await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [phone, new Date().toISOString()]);
+    // ELIMINADO EL INSERT INTO history AQUÍ PARA EVITAR DUPLICADOS Y COLAPSOS
+    // AHORA CADA IMAGEN SE INSERTA INMEDIATAMENTE EN EL WEBHOOK ANTES DEL DEBOUNCE
 
     const fuenteDetectada = analizarTextoFuente(dbMsg);
     if (fuenteDetectada) {
@@ -319,7 +332,6 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const bot = await db.get("SELECT active FROM bot_status WHERE phone = ?", [phone]);
     if (bot && bot.active === 0) { return null; }
 
-    // --- MANEJO DE ARCHIVOS ORGANICO ---
     if (isFile) {
         const rFile = "¡Excelente! 📷 Ya he guardado tu archivo en nuestro sistema. Uno de nuestros asesores lo revisará muy pronto para darte una respuesta precisa.";
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', rFile, new Date().toISOString()]);
@@ -346,9 +358,6 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const busqueda = aiMsg.toLowerCase().split(" ").slice(0,3).join(" ");
     const stock = globalKnowledge.filter(i => (i.searchable||"").toLowerCase().includes(busqueda)).slice(0,5);
 
-    // --- FIX CRITICO: SEPARACIÓN DE TAREAS PARA LA IA ---
-    // Le indicamos que su PRINCIPAL tarea es conversar de forma natural.
-    // La tarea de extracción de JSON es SECUNDARIA y no debe afectar su personalidad.
     const promptFinal = `
     === TU PERSONALIDAD Y REGLAS (SÍGUELAS ESTRICTAMENTE EN TU RESPUESTA) ===
     ${configUsar}
@@ -385,8 +394,6 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: promptFinal }] }] });
         const raw = r.data.candidates[0].content.parts[0].text;
         
-        // El bot ahora prioriza su personalidad. El JSON viene adjunto al final.
-        // Aquí lo extraemos silenciosamente y actualizamos la Base de Datos.
         const match = raw.match(/```json([\s\S]*?)```|{([\s\S]*?)}/);
         if (match) {
             try {
@@ -395,7 +402,6 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
             } catch(e) {}
         }
         
-        // Limpiamos la respuesta que verá el cliente para que NO vea el JSON.
         let reply = limpiarRespuesta(raw);
         if (!reply || reply.length < 2) reply = "¿En qué te puedo ayudar?";
         
@@ -656,6 +662,14 @@ app.post('/webhook', async (req, res) => {
                 }
             } 
             
+            // === GUARDADO INDIVIDUAL E INMEDIATO (FIX DE ÁLBUMES) ===
+            // Al guardar inmediatamente en SQLite, cada foto enviada en ráfaga
+            // tendrá su propia burbuja renderizada en el CRM
+            if (userMsg) {
+                await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', userMsg, new Date().toISOString()]);
+                await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [phone, new Date().toISOString()]);
+            }
+
             if (messageQueue.has(phone)) { clearTimeout(messageQueue.get(phone).timer); }
 
             const safeName = val?.contacts?.[0]?.profile?.name || "Cliente";
@@ -669,6 +683,7 @@ app.post('/webhook', async (req, res) => {
                 const fullText = data.text.join("\n"); 
                 messageQueue.delete(phone); 
                 
+                // La IA procesará todos los textos/fotos de una sola vez para ahorrar Tokens
                 const reply = await procesarConValentina(
                     fullText, 
                     data.isFile ? '[ARCHIVO]' : fullText, 
