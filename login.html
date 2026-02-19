@@ -2,77 +2,131 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICC Acceso Seguro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Valentina CRM - Acceso Seguro</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --primary: #E9511D;       /* Tu naranja corporativo */
+            --primary: #E9511D;
             --primary-dark: #c03d12;
-            --dark-bg: #1a1b1f;       /* Fondo oscuro profundo */
-            --card-bg: #ffffff;
-            --text-gray: #6d707a;
-            --border: #e1e4e8;
+            --primary-glow: rgba(233, 81, 29, 0.5);
+            
+            /* Colores Glassmorphism Dark */
+            --glass-bg: rgba(20, 22, 26, 0.65);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --input-bg: rgba(0, 0, 0, 0.2);
+            
+            --text-main: #ffffff;
+            --text-muted: #8b929a;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body {
-            margin: 0;
             font-family: 'Montserrat', sans-serif;
-            /* Fondo moderno con degradado sutil */
-            background: linear-gradient(135deg, #131417 0%, #2c3e50 100%);
             height: 100vh;
+            height: 100dvh; /* FIX para móviles */
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: hidden;
+            color: var(--text-main);
+            /* Fondo con gradiente animado */
+            background: linear-gradient(-45deg, #0f172a, #1e1b4b, #311325, #1a0b1c);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
         }
 
-        /* Efecto de partículas o luz de fondo (opcional visual) */
-        body::before {
-            content: '';
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Partículas / Círculos de luz de fondo */
+        .circle-light {
             position: absolute;
-            width: 120%;
-            height: 120%;
-            background: radial-gradient(circle at center, rgba(233, 81, 29, 0.1) 0%, transparent 60%);
+            border-radius: 50%;
+            filter: blur(80px);
             z-index: -1;
+            animation: floatOrb 10s infinite ease-in-out alternate;
+        }
+        .circle-1 {
+            width: 300px; height: 300px;
+            background: rgba(233, 81, 29, 0.15);
+            top: 10%; left: 20%;
+        }
+        .circle-2 {
+            width: 400px; height: 400px;
+            background: rgba(59, 130, 246, 0.1);
+            bottom: -5%; right: 10%;
+            animation-delay: -5s;
+        }
+
+        @keyframes floatOrb {
+            0% { transform: translateY(0) scale(1); }
+            100% { transform: translateY(-30px) scale(1.1); }
         }
 
         .box {
-            background: var(--card-bg);
-            padding: 50px 40px;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3); /* Sombra profunda */
-            width: 100%;
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            padding: 45px 35px;
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+            width: 90%;
             max-width: 400px;
             text-align: center;
             position: relative;
-            overflow: hidden;
-            border-top: 6px solid var(--primary);
-            animation: slideUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+            animation: slideUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
         }
 
         @keyframes slideUp {
-            from { opacity: 0; transform: translateY(30px); }
+            from { opacity: 0; transform: translateY(40px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
+        /* Contenedor del Logo con animación flotante */
+        .logo-container {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px auto;
+            background: url('https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg') no-repeat center/contain;
+            border-radius: 50%;
+            box-shadow: 0 10px 25px var(--primary-glow);
+            animation: floatLogo 3s ease-in-out infinite;
+            border: 2px solid rgba(233, 81, 29, 0.3);
+            background-color: #fff; /* Fondo blanco para que el SVG resalte */
+        }
+
+        @keyframes floatLogo {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
         h2 {
-            color: #2c3e50;
             margin: 0 0 5px 0;
             font-weight: 700;
             font-size: 24px;
-            letter-spacing: -0.5px;
+            letter-spacing: 0.5px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
 
         .subtitle {
-            color: var(--text-gray);
+            color: var(--text-muted);
             font-size: 13px;
-            margin-bottom: 35px;
+            margin-bottom: 30px;
             font-weight: 500;
         }
 
-        /* Contenedor de inputs para los iconos */
         .input-group {
             position: relative;
             margin-bottom: 20px;
@@ -81,102 +135,120 @@
 
         .input-group i {
             position: absolute;
-            left: 15px;
+            left: 16px;
             top: 50%;
             transform: translateY(-50%);
-            color: #a0a0a0;
-            font-size: 14px;
-            transition: 0.3s;
+            color: var(--text-muted);
+            font-size: 16px;
+            transition: all 0.3s ease;
         }
 
         input {
             width: 100%;
-            padding: 14px 14px 14px 45px; /* Padding extra a la izq para el icono */
-            border: 2px solid var(--border);
-            border-radius: 8px;
-            box-sizing: border-box;
+            padding: 15px 15px 15px 48px;
+            background: var(--input-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            color: var(--text-main);
             font-family: 'Montserrat', sans-serif;
             font-size: 14px;
             transition: all 0.3s ease;
             outline: none;
-            background: #f9f9f9;
         }
 
-        /* Efecto Focus */
+        input::placeholder {
+            color: var(--text-muted);
+        }
+
         input:focus {
             border-color: var(--primary);
-            background: #fff;
-            box-shadow: 0 0 0 4px rgba(233, 81, 29, 0.1);
+            background: rgba(0, 0, 0, 0.4);
+            box-shadow: 0 0 15px rgba(233, 81, 29, 0.2);
         }
 
         input:focus + i {
             color: var(--primary);
+            transform: translateY(-50%) scale(1.1);
         }
 
         button {
             width: 100%;
-            padding: 15px;
+            padding: 16px;
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             color: #fff;
             border: none;
-            border-radius: 50px; /* Botón redondeado moderno */
+            border-radius: 12px;
             cursor: pointer;
             font-weight: 700;
             font-size: 14px;
             letter-spacing: 1px;
             text-transform: uppercase;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(233, 81, 29, 0.3);
+            box-shadow: 0 6px 20px rgba(233, 81, 29, 0.3);
             margin-top: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        button::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%; width: 50%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: 0.5s;
         }
 
         button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(233, 81, 29, 0.4);
-            filter: brightness(1.1);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(233, 81, 29, 0.5);
+        }
+
+        button:hover::after {
+            left: 100%;
         }
         
         button:disabled {
-            background: #ccc;
+            background: #4a4a4a;
+            box-shadow: none;
             cursor: not-allowed;
             transform: none;
+            color: #888;
         }
 
         #err {
-            background: #ffebeb;
-            color: #d63031;
-            padding: 10px;
-            border-radius: 6px;
+            background: rgba(239, 68, 68, 0.15);
+            color: #ff6b6b;
+            padding: 12px;
+            border-radius: 8px;
             font-size: 13px;
             margin-top: 20px;
             display: none;
-            border: 1px solid #fab1a0;
+            border: 1px solid rgba(239, 68, 68, 0.3);
             font-weight: 600;
         }
 
-        /* Animación de error (Temblor) */
         .shake {
-            animation: shake 0.5s;
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
         }
 
         @keyframes shake {
-            0% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            50% { transform: translateX(5px); }
-            75% { transform: translateX(-5px); }
-            100% { transform: translateX(0); }
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
         }
     </style>
 </head>
 <body>
 
+    <div class="circle-light circle-1"></div>
+    <div class="circle-light circle-2"></div>
+
     <div class="box" id="loginBox">
-        <div style="margin-bottom: 20px;">
-            <i class="fa-solid fa-layer-group fa-3x" style="color: var(--primary);"></i>
-        </div>
+        <div class="logo-container"></div>
 
         <h2>ICC System</h2>
-        <p class="subtitle">Ingresa tus credenciales administrativas</p>
+        <p class="subtitle">Gestión Comercial & IA</p>
         
         <form onsubmit="login(event)">
             <div class="input-group">
@@ -189,7 +261,7 @@
                 <i class="fa-solid fa-lock"></i>
             </div>
 
-            <button id="btn">Ingresar al Sistema</button>
+            <button id="btn">Acceder al Sistema</button>
             
             <div id="err">
                 <i class="fa-solid fa-circle-exclamation"></i> Acceso Denegado
@@ -209,11 +281,13 @@
             errorMsg.style.display = 'none';
             box.classList.remove('shake');
             
+            // Reflow para que la animación de shake pueda repetirse si falla varias veces
+            void box.offsetWidth; 
+            
             // Estado Cargando
             const originalText = btn.innerText;
-            btn.innerText = "Verificando...";
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Verificando...';
             btn.disabled = true;
-            btn.style.opacity = "0.7";
 
             try {
                 const res = await fetch('/auth', {
@@ -225,19 +299,19 @@
                 const d = await res.json();
                 
                 if(d.success) {
-                    btn.innerText = "¡Éxito!";
-                    btn.style.background = "#27ae60"; // Verde éxito
-                    setTimeout(() => { window.location.href = '/'; }, 500);
+                    btn.innerHTML = '<i class="fas fa-check"></i> ¡Éxito!';
+                    btn.style.background = "linear-gradient(135deg, #10b981 0%, #059669 100%)"; // Verde éxito
+                    btn.style.boxShadow = "0 6px 20px rgba(16, 185, 129, 0.4)";
+                    setTimeout(() => { window.location.href = '/'; }, 600);
                 } else { 
                     throw new Error('Login failed');
                 }
             } catch (error) {
                 // Manejo de Error Visual
                 errorMsg.style.display = 'block';
-                box.classList.add('shake'); // Activa la animación de temblor
+                box.classList.add('shake'); 
                 btn.innerText = originalText;
                 btn.disabled = false;
-                btn.style.opacity = "1";
             }
         }
     </script>
