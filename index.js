@@ -1,11 +1,13 @@
 /*
- * SERVER BACKEND - v28.5 (NATIVE DISK CACHE FIX & AI PROMPT FIX)
+ * SERVER BACKEND - v29.0 (ICBOT + DB INDEXES + EXTREME CACHE CLEANUP)
  * ============================================================
- * 1. FIX DEFINITIVO: Audios/Videos se guardan en disco temporalmente.
- * 2. FIX: Express res.sendFile maneja los rangos 206 nativamente (cero cortes).
- * 3. FIX: Múltiples imágenes (Álbumes) se guardan individualmente.
- * 4. ADD: Limpieza automática de archivos para no saturar Railway.
- * 5. FIX IA: Personalidad delegada 100% al Frontend y JSON silencioso.
+ * 1. FIX: Renombrado oficial a ICBOT.
+ * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone) para consultas ultra rápidas.
+ * 3. ADD: Cronjob de Limpieza robusto para la carpeta 'media_cache' cada 30 minutos.
+ * 4. FIX DEFINITIVO: Audios/Videos con soporte Range 206 (codecs=opus).
+ * 5. ADD: Sistema Anti-bucle (Auto-apagado del bot al tener todos los datos).
+ * 6. FIX: Prioridad absoluta al nombre dado por el cliente en el chat.
+ * 7. FIX: Cola de mensajes (Debounce) activa para evitar respuestas "uno por uno".
  * ============================================================
  */
 
@@ -35,6 +37,7 @@ const upload = multer({
     limits: { fileSize: 100 * 1024 * 1024 } 
 });
 
+// Cola de mensajes para evitar que el bot responda antes de tiempo
 const messageQueue = new Map(); 
 const DEBOUNCE_TIME = 4500; 
 
@@ -44,10 +47,11 @@ const META_TOKEN = process.env.META_TOKEN;
 const PHONE_ID = process.env.PHONE_NUMBER_ID; 
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
-const SESSION_SECRET = "icc-val-secure-v34-final"; 
+const SESSION_SECRET = "icbot-secure-v29-final"; 
 const VERIFY_TOKEN = "ICC_2025"; 
 
-const DEFAULT_PROMPT = `Eres un asistente virtual. Tu comportamiento depende estrictamente de la configuración.`;
+// CAMBIO DE NOMBRE A ICBOT
+const DEFAULT_PROMPT = `Eres ICBOT, un asistente virtual comercial de Importadora Casa Colombia. Tu objetivo principal es atender al cliente, resolver sus dudas y perfilarlo recopilando sus datos para pasarlo a un asesor humano.`;
 
 // --- 3. SESIONES ---
 app.use(session({
@@ -73,7 +77,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- 4. BASE DE DATOS (WAL MODE) ---
+// --- 4. BASE DE DATOS (WAL MODE + ÍNDICES SENIOR) ---
 let db, globalKnowledge = [], serverInstance;
 
 (async () => {
@@ -118,13 +122,21 @@ let db, globalKnowledge = [], serverInstance;
         ];
         for (const m of migrations) { try { await db.exec(m); } catch(e){} }
 
+        // NUEVO: MEJORA DE RENDIMIENTO (ÍNDICES)
+        const indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_history_phone ON history(phone)",
+            "CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone)",
+            "CREATE INDEX IF NOT EXISTS idx_metadata_phone ON metadata(phone)"
+        ];
+        for (const idx of indexes) { try { await db.exec(idx); } catch(e){} }
+
         await refreshKnowledge();
         iniciarCronJobs();
         await verificarTokenMeta();     
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v28.5 ONLINE (Port ${PORT}) - LOGS DESACTIVADOS`));
+        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v29.0 ONLINE (Port ${PORT}) - ICBOT INICIADO`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -179,7 +191,6 @@ function analizarTextoFuente(texto) {
     return null;
 }
 
-// DICCIONARIO DE DEPARTAMENTOS
 function obtenerDepartamento(ciudad) {
     if (!ciudad) return null;
     const c = ciudad.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
@@ -250,26 +261,23 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- 8. PROXY DE MEDIOS (V28.5 - DISK CACHE & EXPRESS NATIVE) ---
+// --- 8. PROXY DE MEDIOS (SOLUCIÓN DE STREAMING PARA AUDIO CORTADO) ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     const mediaId = req.params.id ? req.params.id.replace(/\D/g, '') : '';
     if (!mediaId) return res.status(404).send("ID Inválido");
 
     try {
-        // Creamos una carpeta temporal en el servidor para los medios
         const cacheDir = path.join(__dirname, 'data', 'media_cache');
         if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
         
-        // 1. Buscamos si ya existe cualquier archivo con ese ID guardado en disco
         const files = fs.readdirSync(cacheDir);
         const existingFile = files.find(f => f.startsWith(mediaId));
         
         if (existingFile) {
-            // Si ya está guardado, Express se encarga de servirlo nativamente
+            // Express sendFile ya maneja el Header de Rango (206 Partial Content) automáticamente.
             return res.sendFile(path.join(cacheDir, existingFile));
         }
 
-        // 2. Si no está, lo descargamos de Meta
         const metaRes = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
         });
@@ -284,12 +292,12 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
             responseType: 'arraybuffer' 
         });
 
-        // 3. Asignar la extensión correcta para que el navegador lo entienda
         let contentType = fileRes.headers['content-type'] || urlData.mime_type || 'application/octet-stream';
         let ext = '.bin';
         
+        // FIX PARA AUDIO: Especificamos codecs=opus para que navegadores soporten el streaming nativo de WhatsApp
         if (contentType.includes('audio') || (urlData.mime_type && urlData.mime_type.includes('audio'))) {
-            contentType = 'audio/ogg'; 
+            contentType = 'audio/ogg; codecs=opus'; 
             ext = '.ogg';
         } else if (contentType.includes('video')) {
             contentType = 'video/mp4'; 
@@ -303,23 +311,17 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
         }
 
         const filePath = path.join(cacheDir, `${mediaId}${ext}`);
-
-        // 4. Guardamos el archivo físico completo en el disco de Railway
         fs.writeFileSync(filePath, fileRes.data);
 
-        // 5. Dejamos que Express envíe el archivo (ÉL maneja los rangos y cortes a la perfección)
-        res.sendFile(filePath, {
-            headers: { 'Content-Type': contentType }
-        });
+        // Dejar que Express controle los headers de rango enviando el archivo
+        res.sendFile(filePath, { headers: { 'Content-Type': contentType } });
 
-        // 6. Programamos su destrucción en 10 minutos para no llenar el disco duro
+        // Fallback de borrado corto por si el cron falla
         setTimeout(() => {
             try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(e){}
         }, 10 * 60 * 1000);
 
     } catch (e) { 
-        const errorMsg = e.response && e.response.data ? JSON.stringify(e.response.data) : e.message;
-        console.error(`❌ ERROR PROXY MEDIA [${mediaId}]:`, errorMsg);
         if (!res.headersSent) res.status(500).send("Error procesando medio"); 
     }
 });
@@ -347,7 +349,6 @@ app.get('/rescate', async (req, res) => {
 
 // --- 9. LÓGICA IA ---
 function limpiarRespuesta(txt) {
-    // Filtro silencioso: Quita el JSON de la vista del cliente sin importar qué más diga
     let clean = txt.replace(/```json([\s\S]*?)```/gi, "");
     clean = clean.replace(/\{"es_lead"[\s\S]*?\}/gi, ""); 
     return clean.replace(/[\r\n]+/g, "\n").trim();
@@ -373,7 +374,6 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
         return rFile; 
     }
 
-    // 1. OBTENEMOS LA PERSONALIDAD PURA DEL FRONTEND
     let promptUsuario = await getCfg('bot_prompt');
     const configUsar = (promptUsuario && promptUsuario.length > 5) ? promptUsuario : DEFAULT_PROMPT;
     
@@ -384,17 +384,18 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const history = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [phone])).reverse();
     const lead = await db.get("SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
     
-    let memoriaDatos = `ID CLIENTE: ${phone}\n`;
+    let memoriaDatos = `ID CLIENTE: ${phone}\nNombre en WhatsApp (No confiable): ${name}\n`;
     if (lead) {
-        if (lead.nombre) memoriaDatos += `Nombre: ${lead.nombre}\n`;
+        if (lead.nombre) memoriaDatos += `Nombre verificado: ${lead.nombre}\n`;
         if (lead.ciudad) memoriaDatos += `Ciudad: ${lead.ciudad}\n`;
+        if (lead.correo) memoriaDatos += `Correo: ${lead.correo}\n`;
         if (lead.interes) memoriaDatos += `Interés: ${lead.interes}\n`;
     }
 
     const busqueda = aiMsg.toLowerCase().split(" ").slice(0,3).join(" ");
     const stock = globalKnowledge.filter(i => (i.searchable||"").toLowerCase().includes(busqueda)).slice(0,5);
 
-    // 2. ARMAMOS EL PROMPT: Personalidad arriba, reglas de motor abajo.
+    // PROMPT RE-ESTRUCTURADO PARA APAGADO AUTOMÁTICO Y PRIORIDAD DE NOMBRE
     const promptFinal = `
 ${configUsar}
 
@@ -402,15 +403,18 @@ ${configUsar}
 Reglas Técnicas: ${techRules.join(" | ")}
 Horario: ${biz.hours || ''}
 Contexto Web: ${webContext}
-Memoria del cliente: ${memoriaDatos}
+Memoria del cliente actual: 
+${memoriaDatos}
 Inventario: ${JSON.stringify(stock)}
 Historial reciente: ${JSON.stringify(history)}
 
 === INSTRUCCIÓN FUNCIONAL (SISTEMA OBLIGATORIO) ===
-1. Responde al cliente de forma natural basándote ÚNICAMENTE en tu personalidad definida al inicio. No narres tus acciones (ej. no digas "Aquí tienes la respuesta").
-2. SIEMPRE al final de tu respuesta, añade el siguiente bloque JSON si lograste identificar algún dato nuevo o interés del cliente para actualizar el CRM. Si no hay datos, inclúyelo con valores null.
+1. Responde al cliente de forma natural basándote ÚNICAMENTE en tu personalidad.
+2. REGLA DE NOMBRE: Si el cliente escribe su nombre en la conversación (ej. "Soy Carlos", "Me llamo Juan"), ESE NOMBRE TIENE PRIORIDAD ABSOLUTA sobre el "Nombre en WhatsApp". Asígnalo en el JSON.
+3. REGLA DE AUTO-APAGADO (ANTI-BUCLES): Tu objetivo final es conseguir Nombre, Correo, Ciudad e Interés. SI YA TIENES LOS 4 DATOS (revisa la Memoria), despídete cordialmente, dile que un asesor lo contactará pronto, y OBLIGATORIAMENTE pon "apagar_bot": true en tu JSON. No sigas haciendo preguntas si ya tienes la información.
+4. SIEMPRE al final de tu respuesta, añade el siguiente bloque JSON:
 \`\`\`json
-{"es_lead": true_o_false, "nombre":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead"}
+{"es_lead": true_o_false, "nombre":"...", "interes":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead", "apagar_bot": false_o_true}
 \`\`\`
 (Intereses permitidos: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos Hidráulicos, Brazos largos, Accesorios, Repuestos, Servicio, Otro, Consultando).
     `;
@@ -433,31 +437,44 @@ Historial reciente: ${JSON.stringify(history)}
         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', reply, new Date().toISOString()]);
         return reply;
     } catch (e) { 
-        console.error("❌ ERROR GEMINI:", e.response ? JSON.stringify(e.response.data) : e.message);
         return "Dame un momento, estoy verificando esa información."; 
     }
 }
 
 async function gestionarLead(phone, info, fbName, oldLead) {
     const limpiarDato = (d) => (!d || /^(unknown|null|n\/a|no menciona|cliente|pend)$/i.test(d.toString().trim())) ? null : d.trim();
-    let name = limpiarDato(info.nombre) || fbName;
+    
+    // AQUÍ PRIORIZAMOS: Si la IA captó un nombre en la charla, pisa al fbName.
+    let name = limpiarDato(info.nombre) || (oldLead && oldLead.nombre && oldLead.nombre !== fbName ? oldLead.nombre : fbName);
+    
     let ciudadLimpia = limpiarDato(info.ciudad); 
     let dpto = obtenerDepartamento(ciudadLimpia) || (oldLead ? oldLead.departamento : null);
     let interesLimpio = limpiarDato(info.interes) || (oldLead ? oldLead.interes : "Consultando");
+    let correoLimpio = limpiarDato(info.correo) || (oldLead ? oldLead.correo : null);
     let farewellReset = (oldLead && !oldLead.fecha) ? ", farewell_sent = 0" : "";
 
     if (oldLead) {
         await db.run(`UPDATE leads SET nombre=?, interes=?, etiqueta=?, fecha=?, ciudad=?, departamento=?, correo=? ${farewellReset} WHERE id=?`, 
-            [name, interesLimpio, info.etiqueta || oldLead.etiqueta, new Date().toISOString(), ciudadLimpia || oldLead.ciudad, dpto, info.correo || oldLead.correo, oldLead.id]);
+            [name, interesLimpio, info.etiqueta || oldLead.etiqueta, new Date().toISOString(), ciudadLimpia || oldLead.ciudad, dpto, correoLimpio, oldLead.id]);
         await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [name, phone]);
     } else if (interesLimpio || ciudadLimpia || info.es_lead) {
         await db.run(`INSERT INTO leads (phone, nombre, interes, etiqueta, fecha, ciudad, departamento, correo, source, farewell_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Organico', 0)`, 
-            [phone, name, interesLimpio, "Pendiente", new Date().toISOString(), ciudadLimpia, dpto, info.correo]);
+            [phone, name, interesLimpio, "Pendiente", new Date().toISOString(), ciudadLimpia, dpto, correoLimpio]);
         await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [name, phone]);
+    }
+
+    // LÓGICA DE APAGADO AUTOMÁTICO
+    const leadTieneTodo = (name && name !== fbName && ciudadLimpia && interesLimpio && interesLimpio !== "Consultando" && correoLimpio);
+    
+    if (info.apagar_bot === true || leadTieneTodo) {
+        await db.run("INSERT OR REPLACE INTO bot_status (phone, active) VALUES (?, 0)", [phone]);
+        console.log(`🤖 ICBOT APAGADO AUTOMÁTICAMENTE para ${phone} (Gestión Finalizada)`);
     }
 }
 
+// NUEVO: MEJORA DE RENDIMIENTO (CRONJOBS)
 function iniciarCronJobs() {
+    // 1. Cronjob para mensajes de despedida (Cada 5 min)
     setInterval(async () => {
         try {
             const now = new Date();
@@ -473,6 +490,26 @@ function iniciarCronJobs() {
             }
         } catch (e) {}
     }, 60000 * 5); 
+
+    // 2. Cronjob NUEVO: Limpieza robusta de caché de medios (Cada 30 min)
+    setInterval(() => {
+        try {
+            const cacheDir = path.join(__dirname, 'data', 'media_cache');
+            if (fs.existsSync(cacheDir)) {
+                const files = fs.readdirSync(cacheDir);
+                const now = Date.now();
+                files.forEach(file => {
+                    const filePath = path.join(cacheDir, file);
+                    const stats = fs.statSync(filePath);
+                    // Borrar si el archivo tiene más de 30 minutos (30 * 60 * 1000 ms)
+                    if (now - stats.mtimeMs > 1800000) {
+                        fs.unlinkSync(filePath);
+                        console.log(`🗑️ Caché limpiado: Eliminado archivo temporal ${file}`);
+                    }
+                });
+            }
+        } catch(e) { console.error("Error limpiando cache:", e); }
+    }, 60000 * 30);
 }
 
 // --- 11. RUTAS API ---
@@ -518,8 +555,6 @@ app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res)
 
 app.post('/api/config/logo', proteger, upload.single('file'), async (req, res) => { await setCfg('logo_url', `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`); res.json({success:true}); });
 app.post('/api/config/biz/save', proteger, async (req, res) => { await setCfg('biz_profile', {name:req.body.name, hours:req.body.hours}); res.json({success:true}); });
-
-// --- GESTIÓN DE ETIQUETAS (CRUD COMPLETO) ---
 app.post('/api/tags/add', proteger, async (req, res) => { await db.run("INSERT INTO global_tags (name, color) VALUES (?, ?)", [req.body.name, req.body.color]); res.json({success:true}); });
 app.post('/api/tags/delete', proteger, async (req, res) => { await db.run("DELETE FROM global_tags WHERE id = ?", [req.body.id]); res.json({success:true}); });
 app.post('/api/tags/update', proteger, async (req, res) => { 
@@ -528,7 +563,6 @@ app.post('/api/tags/update', proteger, async (req, res) => {
         res.json({success:true});
     } catch(e) { res.status(500).json({error: "Error editando etiqueta"}); }
 });
-
 app.post('/api/shortcuts/add', proteger, async (req, res) => { await db.run("INSERT INTO shortcuts (keyword, text) VALUES (?, ?)", [req.body.keyword, req.body.text]); res.json({success:true}); });
 app.post('/api/shortcuts/delete', proteger, async (req, res) => { await db.run("DELETE FROM shortcuts WHERE id = ?", [req.body.id]); res.json({success:true}); });
 app.post('/api/contacts/upload-photo', proteger, upload.single('file'), async (req, res) => { await db.run("INSERT INTO metadata (phone, photoUrl) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET photoUrl=excluded.photoUrl", [req.body.phone, `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`]); res.json({success:true}); });
@@ -623,7 +657,7 @@ app.post('/api/chat/send', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({ error: "Error interno" }); } 
 });
 
-// --- VERIFICACIÓN WEBHOOK ---
+// --- WEBHOOK BLINDADO ---
 app.get('/webhook', (req, res) => {
     if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
         res.send(req.query['hub.challenge']);
@@ -632,7 +666,6 @@ app.get('/webhook', (req, res) => {
     }
 });
 
-// --- WEBHOOK BLINDADO ---
 app.post('/webhook', async (req, res) => { 
     res.sendStatus(200); 
     try { 
@@ -679,7 +712,7 @@ app.post('/webhook', async (req, res) => {
 
             if(msg.type !== 'text') { 
                 isFile = true; 
-                let caption = msg[msg.type]?.caption || ""; // Capturar texto adjunto a la imagen
+                let caption = msg[msg.type]?.caption || ""; 
                 if (msg[msg.type] && msg[msg.type].id) {
                     userMsg = `[MEDIA:${msg.type.toUpperCase()}:${msg[msg.type].id}] ${caption}`; 
                 } else {
@@ -693,6 +726,7 @@ app.post('/webhook', async (req, res) => {
                 await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [phone, new Date().toISOString()]);
             }
 
+            // === DEBOUNCE (SISTEMA DE COLA PARA ESPERAR AL CLIENTE) ===
             if (messageQueue.has(phone)) { clearTimeout(messageQueue.get(phone).timer); }
 
             const safeName = val?.contacts?.[0]?.profile?.name || "Cliente";
