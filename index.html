@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Valentina v28.1 - Final CRM</title>
     <link rel="icon" href="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" type="image/svg+xml">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -29,6 +29,7 @@
             --chat-bg-color: #E5E5E5;
             --avatar-bg: #E0E0E0;
             --avatar-color: #888888;
+            --icon-color: #515050; /* Color base para iconos */
         }
 
         /* TEMA OSCURO */
@@ -47,15 +48,18 @@
             --chat-bg-color: #0b141a;
             --avatar-bg: #37404a;
             --avatar-color: #8696a0;
+            --icon-color: #8696a0; /* Contraste seguro en modo oscuro */
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
-        body { background-color: var(--bg-main); color: var(--text); height: 100vh; display: flex; overflow: hidden; }
+        
+        /* FIX RESPONSIVO: Uso de dvh para pantallas como el A14 */
+        body { background-color: var(--bg-main); color: var(--text); height: 100vh; height: 100dvh; display: flex; overflow: hidden; }
 
         /* --- MODALES GENERALES --- */
         .modal-overlay { display: none; position: fixed; z-index: 5000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); align-items: center; justify-content: center; backdrop-filter: blur(3px); transition: all 0.3s; }
         .modal-overlay.show { display: flex; animation: fadeIn 0.2s; }
-        .modal-content { background-color: var(--bg-main); padding: 25px; border-radius: 12px; width: 90%; max-width: 450px; border: 1px solid var(--border); box-shadow: 0 20px 50px rgba(0,0,0,0.4); display: flex; flex-direction: column; gap: 15px; }
+        .modal-content { background-color: var(--bg-main); padding: 25px; border-radius: 12px; width: 90%; max-width: 450px; border: 1px solid var(--border); box-shadow: 0 20px 50px rgba(0,0,0,0.4); display: flex; flex-direction: column; gap: 15px; max-height: 90dvh; overflow-y: auto; }
         .modal-title { font-size: 1.2rem; color: var(--text); font-weight: 600; display: flex; align-items: center; gap: 10px; }
         .modal-form label { display: block; margin-bottom: 5px; font-size: 0.85rem; color: var(--primary); font-weight: 600; }
         .modal-form input, .modal-form textarea, .modal-form select { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text); outline: none; font-size: 0.95rem; transition: border 0.3s, box-shadow 0.3s; }
@@ -76,7 +80,7 @@
 
         /* --- LAYOUT PRINCIPAL --- */
         .sidebar { width: 60px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 100; flex-shrink: 0; }
-        .nav-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: transparent; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; }
+        .nav-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: transparent; color: var(--icon-color); font-size: 1.2rem; cursor: pointer; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; }
         .nav-btn:hover { background: var(--hover-item); color: var(--primary); }
         .nav-btn.active { background: var(--bg-main); color: var(--primary); box-shadow: 0 0 10px rgba(233, 82, 30, 0.3); border: 1px solid var(--border); }
         .nav-bottom { margin-top: auto; padding-bottom: 20px; display: flex; flex-direction: column; gap: 10px;}
@@ -92,7 +96,7 @@
         .search-container { display: flex; gap: 8px; margin-bottom: 10px; }
         .search-bar { flex: 1; padding: 8px 12px; background: var(--bg-main); border: 1px solid var(--border); color: var(--text); border-radius: 8px; outline: none; font-size: 0.9rem; transition: border 0.3s; }
         .search-bar:focus { border-color: var(--primary); }
-        .action-btn { width: 36px; height: 36px; border-radius: 8px; border: none; background: var(--bg-main); color: var(--text-muted); cursor: pointer; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; }
+        .action-btn { width: 36px; height: 36px; border-radius: 8px; border: none; background: var(--bg-main); color: var(--icon-color); cursor: pointer; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; }
         .action-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
         .new-chat-btn { background: var(--primary); color: #fff; border: none; }
         
@@ -158,7 +162,6 @@
         .play-btn { width: 38px; height: 38px; background: var(--primary); color: white; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: transform 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
         .play-btn:hover { transform: scale(1.1); }
         .audio-progress { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 4px; margin-top: 2px; }
-        /* Rango nativo para que sea deslizable como Whatsapp */
         input[type=range].wa-slider { -webkit-appearance: none; width: 100%; background: transparent; height: 6px; cursor: pointer; }
         input[type=range].wa-slider::-webkit-slider-runnable-track { width: 100%; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; }
         input[type=range].wa-slider::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%; background: var(--primary); margin-top: -4px; box-shadow: 0 1px 3px rgba(0,0,0,0.3); transition: transform 0.1s; }
@@ -173,7 +176,7 @@
         .input-box:focus { border-color: var(--primary); }
         .send-btn { width: 45px; height: 45px; border-radius: 50%; border: none; background: var(--primary); color: #FFF; cursor: pointer; font-size: 1.2rem; display: flex; justify-content: center; align-items: center; }
         .send-btn:hover { filter: brightness(1.1); transform: scale(1.05); }
-        .attach-btn { background: transparent; border: none; color: var(--incoming); font-size: 1.4rem; cursor: pointer; padding: 0 5px; }
+        .attach-btn { background: transparent; border: none; color: var(--icon-color); font-size: 1.4rem; cursor: pointer; padding: 0 5px; }
         .attach-btn:hover { color: var(--primary); transform: scale(1.1); }
 
         /* --- CRM & CONFIG --- */
@@ -243,13 +246,13 @@
         .lightbox-close { position: absolute; top: 20px; right: 30px; color: white; font-size: 40px; font-weight: bold; cursor: pointer; transition: 0.2s; z-index: 5001;}
         .lightbox-close:hover { color: var(--primary); transform: scale(1.1); }
         
-        /* RESPONSIVE ARREGLADO */
+        /* RESPONSIVE ARREGLADO EXTREMO PARA A14 */
         @media (max-width: 768px) {
             .sidebar { display: none; } 
-            .chat-list { width: 100%; height: 100%; position: relative; z-index: 10; }
-            .chat-area { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 20; transform: translateX(100%); transition: transform 0.3s ease; background-color: var(--chat-bg-color); }
+            .chat-list { width: 100%; height: 100dvh; position: absolute; top: 0; left: 0; z-index: 10; }
+            .chat-area { position: absolute; width: 100%; height: 100dvh; top: 0; left: 0; z-index: 20; transform: translateX(100%); transition: transform 0.3s ease; background-color: var(--chat-bg-color); }
             body.mobile-chat-open .chat-area { transform: translateX(0); }
-            #back-btn { display: flex !important; margin-right: 15px; font-size: 1.2rem; cursor: pointer; color: var(--text-muted); align-items: center; justify-content: center; width: 30px; height: 30px;}
+            #back-btn { display: flex !important; margin-right: 15px; font-size: 1.2rem; cursor: pointer; color: var(--icon-color); align-items: center; justify-content: center; width: 30px; height: 30px;}
         }
         #back-btn { display: none; }
     </style>
@@ -555,11 +558,6 @@
             document.addEventListener('click', (e) => { 
                 if(!e.target.closest('.chat-item')) document.getElementById('context-menu').style.display = 'none'; 
             }); 
-            
-            const logoPreview = document.getElementById('logo-preview');
-            if (logoPreview.style.backgroundImage.includes('url("/api/data/config")')) {
-                logoPreview.style.backgroundImage = "url('https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg')";
-            }
         };
 
         /* LÓGICA MODO OSCURO */
@@ -762,7 +760,6 @@
             document.getElementById('chat-header-name').innerText = name; 
             document.getElementById('chat-header-phone').innerText = '+' + phone; 
             
-            // Set Avatar in Header
             const headerAvatar = document.getElementById('chat-header-avatar');
             if(photo) {
                 headerAvatar.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;">`;
@@ -819,7 +816,6 @@
                             text = `<div style="display:flex; flex-direction:column; gap:5px;"><div style="position:relative; width:250px; cursor:pointer; overflow:hidden; border-radius:8px; background:#000; transition:transform 0.2s;" onclick="openLightbox('${mediaUrl}', 'VIDEO')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'"><video src="${mediaUrl}" style="width:100%; opacity:0.8;" preload="metadata"></video><div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(233,82,30,0.8); border-radius:50%; width:45px; height:45px; display:flex; align-items:center; justify-content:center; color:white;"><i class="fas fa-play" style="margin-left:3px;"></i></div></div>${captionHtml}</div>`;
                         }
                         else if(type === 'AUDIO') {
-                            // REPRODUCTOR AUDIO TIPO WHATSAPP
                             text = `<div class="audio-wrapper">
                                 <button class="play-btn" id="btn-${id}" onclick="togglePlay('${id}', '${mediaUrl}')">
                                     <i class="fas fa-play" style="margin-left:3px;"></i>
@@ -1117,7 +1113,10 @@
             renderRulesList(cfg.tech_rules); 
             fetch('/api/data/tags').then(r=>r.json()).then(t => renderConfigTags(t)); 
             fetch('/api/data/shortcuts').then(r=>r.json()).then(s => renderConfigShortcuts(s)); 
-            if(cfg.logo_url) document.getElementById('logo-preview').style.backgroundImage = `url('${cfg.logo_url}')`; 
+            
+            // LÍNEA COMENTADA PARA EVITAR QUE EL LOGO DE ICC REEMPLACE A VALENTINA
+            // if(cfg.logo_url) document.getElementById('logo-preview').style.backgroundImage = `url('${cfg.logo_url}')`; 
+            
             loadInventoryPreview();
         }
         async function saveBizConfig() { await fetch('/api/config/biz/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: document.getElementById('biz-name').value, hours: document.getElementById('biz-hours').value }) }); showToast("Perfil Comercial Actualizado"); }
