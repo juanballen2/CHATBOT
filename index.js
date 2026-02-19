@@ -1,17 +1,19 @@
 /*
- * SERVER BACKEND - v29.0 (ICBOT + DB INDEXES + EXTREME CACHE CLEANUP)
+ * SERVER BACKEND - v30.0 (ICBOT + WEBSOCKETS REALTIME)
  * ============================================================
- * 1. FIX: Renombrado oficial a ICBOT.
- * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone) para consultas ultra rápidas.
- * 3. ADD: Cronjob de Limpieza robusto para la carpeta 'media_cache' cada 30 minutos.
- * 4. FIX DEFINITIVO: Audios/Videos con soporte Range 206 (codecs=opus).
- * 5. ADD: Sistema Anti-bucle (Auto-apagado del bot al tener todos los datos).
- * 6. FIX: Prioridad absoluta al nombre dado por el cliente en el chat.
- * 7. FIX: Cola de mensajes (Debounce) activa para evitar respuestas "uno por uno".
+ * 1. FIX: Renombrado oficial a ICBOT completado.
+ * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone).
+ * 3. ADD: Cronjob de Limpieza robusto 'media_cache'.
+ * 4. FIX: Audios/Videos con soporte Range 206 (codecs=opus).
+ * 5. ADD: Sistema Anti-bucle (Auto-apagado del bot).
+ * 6. FIX: Prioridad absoluta al nombre dado por el cliente.
+ * 7. ADD: WEBSOCKETS (Socket.io) para eliminar el Polling del frontend.
  * ============================================================
  */
 
 const express = require('express');
+const http = require('http'); // <-- WEBSOCKETS: Necesitamos el server nativo
+const { Server } = require('socket.io'); // <-- WEBSOCKETS: La librería mágica
 const session = require('express-session');
 const fs = require('fs');
 const path = require('path');
@@ -26,8 +28,12 @@ const { open } = require('sqlite');
 
 // --- 1. CONFIGURACIÓN DEL SERVIDOR ---
 const app = express();
-app.set('trust proxy', 1);
+const server = http.createServer(app); // <-- WEBSOCKETS: Envolvemos Express
+const io = new Server(server, {        // <-- WEBSOCKETS: Iniciamos el Túnel
+    cors: { origin: "*", methods: ["GET", "POST"] }
+});
 
+app.set('trust proxy', 1);
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors());
@@ -37,7 +43,7 @@ const upload = multer({
     limits: { fileSize: 100 * 1024 * 1024 } 
 });
 
-// Cola de mensajes para evitar que el bot responda antes de tiempo
+// Cola de mensajes
 const messageQueue = new Map(); 
 const DEBOUNCE_TIME = 4500; 
 
@@ -50,7 +56,6 @@ const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = "icbot-secure-v29-final"; 
 const VERIFY_TOKEN = "ICC_2025"; 
 
-// CAMBIO DE NOMBRE A ICBOT
 const DEFAULT_PROMPT = `Eres ICBOT, un asistente virtual comercial de Importadora Casa Colombia. Tu objetivo principal es atender al cliente, resolver sus dudas y perfilarlo recopilando sus datos para pasarlo a un asesor humano.`;
 
 // --- 3. SESIONES ---
@@ -92,7 +97,6 @@ let db, globalKnowledge = [], serverInstance;
 
         await db.exec("PRAGMA journal_mode = WAL;");
         await db.exec("PRAGMA synchronous = NORMAL;");
-        
         console.log("📂 Base de Datos Conectada (WAL Mode).");
 
         const tables = [
@@ -122,7 +126,6 @@ let db, globalKnowledge = [], serverInstance;
         ];
         for (const m of migrations) { try { await db.exec(m); } catch(e){} }
 
-        // NUEVO: MEJORA DE RENDIMIENTO (ÍNDICES)
         const indexes = [
             "CREATE INDEX IF NOT EXISTS idx_history_phone ON history(phone)",
             "CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone)",
@@ -136,10 +139,19 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = app.listen(PORT, () => console.log(`🔥 BACKEND v29.0 ONLINE (Port ${PORT}) - ICBOT INICIADO`));
+        // <-- WEBSOCKETS: Ahora usamos server.listen en lugar de app.listen
+        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v30.0 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
+
+// --- EVENTOS WEBSOCKETS BÁSICOS ---
+io.on('connection', (socket) => {
+    console.log('⚡ Nuevo cliente conectado al Dashboard');
+    socket.on('disconnect', () => {
+        console.log('❌ Cliente desconectado');
+    });
+});
 
 // --- 5. DIAGNÓSTICO ---
 async function verificarTokenMeta() {
@@ -261,7 +273,7 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
-// --- 8. PROXY DE MEDIOS (SOLUCIÓN DE STREAMING PARA AUDIO CORTADO) ---
+// --- 8. PROXY DE MEDIOS ---
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     const mediaId = req.params.id ? req.params.id.replace(/\D/g, '') : '';
     if (!mediaId) return res.status(404).send("ID Inválido");
@@ -274,7 +286,6 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
         const existingFile = files.find(f => f.startsWith(mediaId));
         
         if (existingFile) {
-            // Express sendFile ya maneja el Header de Rango (206 Partial Content) automáticamente.
             return res.sendFile(path.join(cacheDir, existingFile));
         }
 
@@ -295,7 +306,6 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
         let contentType = fileRes.headers['content-type'] || urlData.mime_type || 'application/octet-stream';
         let ext = '.bin';
         
-        // FIX PARA AUDIO: Especificamos codecs=opus para que navegadores soporten el streaming nativo de WhatsApp
         if (contentType.includes('audio') || (urlData.mime_type && urlData.mime_type.includes('audio'))) {
             contentType = 'audio/ogg; codecs=opus'; 
             ext = '.ogg';
@@ -313,10 +323,8 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
         const filePath = path.join(cacheDir, `${mediaId}${ext}`);
         fs.writeFileSync(filePath, fileRes.data);
 
-        // Dejar que Express controle los headers de rango enviando el archivo
         res.sendFile(filePath, { headers: { 'Content-Type': contentType } });
 
-        // Fallback de borrado corto por si el cron falla
         setTimeout(() => {
             try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(e){}
         }, 10 * 60 * 1000);
@@ -326,7 +334,6 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     }
 });
 
-// --- RUTA DE RESCATE DE EMERGENCIA ---
 app.get('/rescate', async (req, res) => {
     const ids = ["1854969351824003", "1854969375157334", "1854969401823998"];
     let html = "<h1 style='font-family:sans-serif;'>Rescate de Fotos del Cliente</h1><div style='display:flex; flex-wrap:wrap; gap:20px;'>";
@@ -354,7 +361,7 @@ function limpiarRespuesta(txt) {
     return clean.replace(/[\r\n]+/g, "\n").trim();
 }
 
-async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFile = false) {
+async function procesarConICBOT(dbMsg, aiMsg, phone, name = "Cliente", isFile = false) {
     const fuenteDetectada = analizarTextoFuente(dbMsg);
     if (fuenteDetectada) {
         const leadExistente = await db.get("SELECT id, source FROM leads WHERE phone = ?", [phone]);
@@ -370,7 +377,13 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
 
     if (isFile) {
         const rFile = "¡Excelente! 📷 Ya he guardado tu archivo en nuestro sistema. Uno de nuestros asesores lo revisará muy pronto para darte una respuesta precisa.";
-        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', rFile, new Date().toISOString()]);
+        const timestamp = new Date().toISOString();
+        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', rFile, timestamp]);
+        
+        // <-- WEBSOCKETS: Emite el archivo del bot
+        io.emit('new_message', { phone: phone, role: 'bot', text: rFile, time: timestamp });
+        io.emit('update_chats_list');
+
         return rFile; 
     }
 
@@ -395,7 +408,6 @@ async function procesarConValentina(dbMsg, aiMsg, phone, name = "Cliente", isFil
     const busqueda = aiMsg.toLowerCase().split(" ").slice(0,3).join(" ");
     const stock = globalKnowledge.filter(i => (i.searchable||"").toLowerCase().includes(busqueda)).slice(0,5);
 
-    // PROMPT RE-ESTRUCTURADO PARA APAGADO AUTOMÁTICO Y PRIORIDAD DE NOMBRE
     const promptFinal = `
 ${configUsar}
 
@@ -434,7 +446,13 @@ Historial reciente: ${JSON.stringify(history)}
         let reply = limpiarRespuesta(raw);
         if (!reply || reply.length < 2) reply = "¿En qué te puedo ayudar?";
         
-        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', reply, new Date().toISOString()]);
+        const timestamp = new Date().toISOString();
+        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', reply, timestamp]);
+        
+        // <-- WEBSOCKETS: Emite la respuesta de la IA
+        io.emit('new_message', { phone: phone, role: 'bot', text: reply, time: timestamp });
+        io.emit('update_chats_list');
+
         return reply;
     } catch (e) { 
         return "Dame un momento, estoy verificando esa información."; 
@@ -444,7 +462,6 @@ Historial reciente: ${JSON.stringify(history)}
 async function gestionarLead(phone, info, fbName, oldLead) {
     const limpiarDato = (d) => (!d || /^(unknown|null|n\/a|no menciona|cliente|pend)$/i.test(d.toString().trim())) ? null : d.trim();
     
-    // AQUÍ PRIORIZAMOS: Si la IA captó un nombre en la charla, pisa al fbName.
     let name = limpiarDato(info.nombre) || (oldLead && oldLead.nombre && oldLead.nombre !== fbName ? oldLead.nombre : fbName);
     
     let ciudadLimpia = limpiarDato(info.ciudad); 
@@ -463,7 +480,6 @@ async function gestionarLead(phone, info, fbName, oldLead) {
         await db.run("UPDATE metadata SET contactName = ? WHERE phone = ?", [name, phone]);
     }
 
-    // LÓGICA DE APAGADO AUTOMÁTICO
     const leadTieneTodo = (name && name !== fbName && ciudadLimpia && interesLimpio && interesLimpio !== "Consultando" && correoLimpio);
     
     if (info.apagar_bot === true || leadTieneTodo) {
@@ -472,9 +488,7 @@ async function gestionarLead(phone, info, fbName, oldLead) {
     }
 }
 
-// NUEVO: MEJORA DE RENDIMIENTO (CRONJOBS)
 function iniciarCronJobs() {
-    // 1. Cronjob para mensajes de despedida (Cada 5 min)
     setInterval(async () => {
         try {
             const now = new Date();
@@ -491,7 +505,6 @@ function iniciarCronJobs() {
         } catch (e) {}
     }, 60000 * 5); 
 
-    // 2. Cronjob NUEVO: Limpieza robusta de caché de medios (Cada 30 min)
     setInterval(() => {
         try {
             const cacheDir = path.join(__dirname, 'data', 'media_cache');
@@ -501,7 +514,6 @@ function iniciarCronJobs() {
                 files.forEach(file => {
                     const filePath = path.join(cacheDir, file);
                     const stats = fs.statSync(filePath);
-                    // Borrar si el archivo tiene más de 30 minutos (30 * 60 * 1000 ms)
                     if (now - stats.mtimeMs > 1800000) {
                         fs.unlinkSync(filePath);
                         console.log(`🗑️ Caché limpiado: Eliminado archivo temporal ${file}`);
@@ -641,8 +653,14 @@ app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, r
     try { const mid = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname); 
         if(mid) { await enviarWhatsApp(req.body.phone, { id: mid }, req.body.type); 
             const msgType = `[MEDIA:${req.body.type.toUpperCase()}:${mid}]`;
-            await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [req.body.phone, 'manual', msgType, new Date().toISOString()]); 
-            await db.run("UPDATE metadata SET last_interaction = ? WHERE phone = ?", [new Date().toISOString(), req.body.phone]); 
+            const timestamp = new Date().toISOString();
+            await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [req.body.phone, 'manual', msgType, timestamp]); 
+            await db.run("UPDATE metadata SET last_interaction = ? WHERE phone = ?", [timestamp, req.body.phone]); 
+            
+            // <-- WEBSOCKETS: Emite tu archivo manual
+            io.emit('new_message', { phone: req.body.phone, role: 'manual', text: msgType, time: timestamp });
+            io.emit('update_chats_list');
+
             res.json({success: true}); 
         } else { res.status(500).json({error: "Error Meta"}); }
     } catch(e) { res.status(500).json({error: e.message}); } 
@@ -651,9 +669,17 @@ app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, r
 app.post('/api/chat/send', proteger, async (req, res) => { 
     const { phone, message } = req.body; const cleanPhone = phone.replace(/\D/g, ''); 
     try { const sent = await enviarWhatsApp(cleanPhone, message); 
-        if(sent) { await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', message, new Date().toISOString()]); 
-            await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount, last_interaction) VALUES (?, ?, 1, 0, 0, ?) ON CONFLICT(phone) DO UPDATE SET last_interaction=excluded.last_interaction`, [cleanPhone, cleanPhone, new Date().toISOString()]); 
-            res.json({ success: true }); } else res.status(500).json({ error: "Error enviando" }); 
+        if(sent) { 
+            const timestamp = new Date().toISOString();
+            await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', message, timestamp]); 
+            await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount, last_interaction) VALUES (?, ?, 1, 0, 0, ?) ON CONFLICT(phone) DO UPDATE SET last_interaction=excluded.last_interaction`, [cleanPhone, cleanPhone, timestamp]); 
+            
+            // <-- WEBSOCKETS: Emite tu mensaje manual
+            io.emit('new_message', { phone: cleanPhone, role: 'manual', text: message, time: timestamp });
+            io.emit('update_chats_list');
+
+            res.json({ success: true }); 
+        } else res.status(500).json({ error: "Error enviando" }); 
     } catch(e) { res.status(500).json({ error: "Error interno" }); } 
 });
 
@@ -722,8 +748,13 @@ app.post('/webhook', async (req, res) => {
             
             // === GUARDADO INDIVIDUAL E INMEDIATO (FIX DE ÁLBUMES) ===
             if (userMsg) {
-                await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', userMsg, new Date().toISOString()]);
-                await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [phone, new Date().toISOString()]);
+                const timestamp = new Date().toISOString();
+                await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', userMsg, timestamp]);
+                await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [phone, timestamp]);
+                
+                // <-- WEBSOCKETS: Emite el mensaje del cliente de inmediato
+                io.emit('new_message', { phone: phone, role: 'user', text: userMsg, time: timestamp });
+                io.emit('update_chats_list');
             }
 
             // === DEBOUNCE (SISTEMA DE COLA PARA ESPERAR AL CLIENTE) ===
@@ -740,7 +771,7 @@ app.post('/webhook', async (req, res) => {
                 const fullText = data.text.join("\n"); 
                 messageQueue.delete(phone); 
                 
-                const reply = await procesarConValentina(
+                const reply = await procesarConICBOT(
                     fullText, 
                     data.isFile ? '[ARCHIVO]' : fullText, 
                     phone, 
