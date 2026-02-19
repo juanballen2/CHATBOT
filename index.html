@@ -333,7 +333,7 @@
                 <div class="crm-section">
                     <div class="crm-title"><i class="fas fa-robot"></i> Control IA</div>
                     <div class="switch-container">
-                        <span class="switch-label">Valentina Responde</span>
+                        <span class="switch-label">ICBOT Responde</span>
                         <label class="switch">
                             <input type="checkbox" id="bot-switch" onchange="toggleBotActive()">
                             <span class="slider"></span>
@@ -908,20 +908,16 @@
                 
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; 
                 
+                // FIX STREAMING: Asignamos la URL directo. Nada de Blobs ni Fetch.
                 if (!audio.src || audio.src === window.location.href) {
-                    try {
-                        const res = await fetch(url);
-                        const blob = await res.blob();
-                        audio.src = URL.createObjectURL(blob); 
-                    } catch(e) {
-                        btn.innerHTML = '<i class="fas fa-play" style="margin-left:3px;"></i>';
-                        return;
-                    }
+                    audio.src = url;
+                    audio.load();
                 }
                 
                 audio.play().then(() => { 
                     currentlyPlaying = audio; 
                 }).catch((error) => { 
+                    console.error("Error reproduciendo:", error);
                     btn.innerHTML = '<i class="fas fa-play" style="margin-left:3px;"></i>'; 
                 });
             } else { 
@@ -1002,7 +998,7 @@
 
         async function sendMessage() { const txt = document.getElementById('msg-input').value; if(!txt) return; document.getElementById('msg-input').value = ''; const container = document.getElementById('messages-container'); container.innerHTML += `<div class="msg manual">${txt} <div class="msg-time">...</div></div>`; container.scrollTop = container.scrollHeight; await fetch('/api/chat/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, message: txt }) }); loadMessages(currentChat, true); }
         function checkEnter(e) { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
-        async function toggleBotActive() { const active = document.getElementById('bot-switch').checked; await fetch('/api/chat/toggle-bot', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, active }) }); showToast(active ? "🤖 Valentina Activada" : "⏸️ Valentina Pausada"); }
+        async function toggleBotActive() { const active = document.getElementById('bot-switch').checked; await fetch('/api/chat/toggle-bot', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, active }) }); showToast(active ? "🤖 ICBOT Activado" : "⏸️ ICBOT Pausado"); }
         
         async function loadLeadDataToCRM(phone) { 
             document.getElementById('crm-name').value=""; 
@@ -1095,7 +1091,7 @@
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a"); 
             link.href = URL.createObjectURL(blob);
-            link.download = "leads_valentina.csv"; 
+            link.download = "leads_icbot.csv"; 
             document.body.appendChild(link); 
             link.click(); 
         }
@@ -1275,4 +1271,3 @@
     </script>
 </body>
 </html>
-
