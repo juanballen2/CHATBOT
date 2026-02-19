@@ -8,6 +8,8 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
+    <script src="/socket.io/socket.io.js"></script>
+    
     <style>
         :root {
             /* TEMA CLARO POR DEFECTO (Blanco, Naranja, Gris) */
@@ -524,6 +526,8 @@
     <div id="toast">Notificación</div>
 
     <script>
+        const socket = io(); // ⚡ INICIAMOS EL TÚNEL WEBSOCKET
+
         let currentChat = null, currentFilter = 'active', chatsData = [], contextPhone = null, searchTimeout = null;
         let currentlyPlaying = null;
         let currentInventory = []; 
@@ -550,7 +554,6 @@
             loadAllConfig(); 
             loadTagFilterOptions(); 
             
-            // Cargar el tema desde localStorage
             const savedTheme = localStorage.getItem('theme') || 'light';
             document.body.setAttribute('data-theme', savedTheme);
             updateThemeIcon(savedTheme);
@@ -559,6 +562,27 @@
                 if(!e.target.closest('.chat-item')) document.getElementById('context-menu').style.display = 'none'; 
             }); 
         };
+
+        // --- 📡 ESCUCHADORES DEL WEBSOCKET EN TIEMPO REAL ---
+        socket.on('update_chats_list', () => {
+            syncChats(); // Solo recarga la barra lateral si Meta avisa que hay novedades
+        });
+
+        socket.on('new_message', (msg) => {
+            // Si nos llega un mensaje y justo estamos viendo ese chat...
+            if (currentChat === msg.phone) {
+                const container = document.getElementById('messages-container');
+                const isScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
+                
+                // "Pegamos" el mensaje nuevo AL FINAL sin destruir la pantalla (¡adiós efecto fantasma y audios cortados!)
+                container.insertAdjacentHTML('beforeend', buildMessageHTML(msg));
+                
+                if(isScrolledToBottom || msg.role === 'bot' || msg.role === 'manual') {
+                    setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
+                }
+            }
+        });
+        // ----------------------------------------------------
 
         /* LÓGICA MODO OSCURO */
         function toggleTheme() {
@@ -629,7 +653,12 @@
         }
         function debounceSearch(val) { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => syncChats(), 300); }
         function startNewChat() { const phone = prompt("Ingresa el número (con indicativo):"); if (!phone) return; const name = prompt("Nombre:") || phone; openChat(phone.replace(/\D/g, ''), name, ''); }
-        function startSyncLoop() { syncChats(); setInterval(syncChats, 3000); setInterval(() => { if(currentChat) loadMessages(currentChat, false); }, 3000); }
+        
+        // --- 🚀 ADIÓS POLLING, HOLA EFICIENCIA ---
+        function startSyncLoop() { 
+            syncChats(); 
+            // Los viejos setInterval que sobrecargaban todo y destruían tu audio ya no existen aquí.
+        }
         
         async function loadTagFilterOptions() { try { const tags = await (await fetch('/api/data/tags')).json(); 
             const html = '<option value="">Todas las etiquetas</option>' + tags.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
@@ -787,69 +816,71 @@
             return `${dateStr} ${timeStr}`;
         }
 
+        // --- CREADOR DE GLOBITOS DE CHAT REUTILIZABLE ---
+        function buildMessageHTML(m) {
+            let text = m.text;
+            let isMedia = false;
+            let mediaId = null;
+
+            if(text.includes('[MEDIA:')) { 
+                isMedia = true;
+                const parts = text.split(':'); 
+                const type = parts[1]; 
+                const id = parts[2].split(']')[0].replace(/\D/g, ''); 
+                const extraCaption = text.split(']').slice(1).join(']').trim(); 
+                mediaId = id;
+                const mediaUrl = `/api/media-proxy/${id}?v=final`; 
+                
+                let captionHtml = extraCaption ? `<div style="margin-top:8px; font-size:0.9rem;">${extraCaption}</div>` : '';
+
+                if(type === 'IMAGE') { 
+                    text = `<div style="display:flex; flex-direction:column; gap:5px;"><img src="${mediaUrl}" style="max-width:250px; border-radius:8px; cursor:pointer; min-height:100px; background:var(--border); transition:transform 0.2s;" onclick="openLightbox('${mediaUrl}', 'IMAGE')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none; color:#ef4444; font-size:0.8rem; padding:10px; border:1px dashed #ef4444; border-radius:8px;">⚠️ Error de imagen.</div>${captionHtml}</div>`; 
+                }
+                else if(type === 'VIDEO') {
+                    text = `<div style="display:flex; flex-direction:column; gap:5px;"><div style="position:relative; width:250px; cursor:pointer; overflow:hidden; border-radius:8px; background:#000; transition:transform 0.2s;" onclick="openLightbox('${mediaUrl}', 'VIDEO')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'"><video src="${mediaUrl}" style="width:100%; opacity:0.8;" preload="metadata"></video><div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(233,82,30,0.8); border-radius:50%; width:45px; height:45px; display:flex; align-items:center; justify-content:center; color:white;"><i class="fas fa-play" style="margin-left:3px;"></i></div></div>${captionHtml}</div>`;
+                }
+                else if(type === 'AUDIO') {
+                    text = `<div class="audio-wrapper">
+                        <button class="play-btn" id="btn-${id}" onclick="togglePlay('${id}', '${mediaUrl}')">
+                            <i class="fas fa-play" style="margin-left:3px;"></i>
+                        </button>
+                        <div class="audio-progress">
+                            <input type="range" class="wa-slider" id="seek-${id}" min="0" max="100" value="0" onchange="seekAudio('${id}', this.value)" oninput="pauseForSeek('${id}')">
+                            <div class="audio-time">
+                                <span id="time-${id}">0:00</span>
+                                <span id="dur-${id}"></span>
+                            </div>
+                        </div>
+                        <audio id="audio-${id}" ontimeupdate="updateProgress('${id}')" onloadedmetadata="setAudioDuration('${id}')" onended="resetPlayer('${id}')" onplaying="onAudioStart('${id}')" style="display:none;"></audio>
+                        <a href="${mediaUrl}" download="nota_voz.ogg" class="btn-download-audio" title="Descargar Audio">
+                            <i class="fas fa-download"></i>
+                        </a>
+                    </div>`;
+                } else { 
+                    text = `<a href="${mediaUrl}" target="_blank" style="color:white; text-decoration:none; display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.2); padding:10px; border-radius:6px; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'"><i class="fas fa-file-download" style="font-size:1.5rem;"></i><div style="display:flex; flex-direction:column;"><span>Archivo Adjunto (${type})</span><span style="font-size:0.75rem; font-weight:600; color:#FFF;">Clic para descargar</span></div></a>${captionHtml}`; 
+                }
+            } 
+            
+            const safeText = m.text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            const isAlert = text.includes('[ALERTA:');
+            
+            return `<div class="msg ${isAlert ? 'alert' : m.role}">
+                ${text}
+                <div class="msg-time">${formatSmartTime(m.time)}</div>
+                ${!isAlert ? `<div class="msg-forward-btn" onclick="openForwardModal('${safeText}', ${isMedia}, '${mediaId}')" title="Reenviar Mensaje">
+                    <i class="fas fa-share"></i>
+                </div>` : ''}
+            </div>`;
+        }
+
         async function loadMessages(phone, scrollDown) {
             try { 
                 const res = await fetch(`/api/chat-history/${phone}`); 
                 const msgs = await res.json(); 
                 if(currentChat !== phone) return; 
                 const container = document.getElementById('messages-container');
-                container.innerHTML = msgs.map(m => { 
-                    let text = m.text;
-                    let isMedia = false;
-                    let mediaId = null;
-
-                    if(text.includes('[MEDIA:')) { 
-                        isMedia = true;
-                        const parts = text.split(':'); 
-                        const type = parts[1]; 
-                        const id = parts[2].split(']')[0].replace(/\D/g, ''); 
-                        const extraCaption = text.split(']').slice(1).join(']').trim(); 
-                        mediaId = id;
-                        const mediaUrl = `/api/media-proxy/${id}?v=final`; 
-                        
-                        let captionHtml = extraCaption ? `<div style="margin-top:8px; font-size:0.9rem;">${extraCaption}</div>` : '';
-
-                        if(type === 'IMAGE') { 
-                            text = `<div style="display:flex; flex-direction:column; gap:5px;"><img src="${mediaUrl}" style="max-width:250px; border-radius:8px; cursor:pointer; min-height:100px; background:var(--border); transition:transform 0.2s;" onclick="openLightbox('${mediaUrl}', 'IMAGE')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none; color:#ef4444; font-size:0.8rem; padding:10px; border:1px dashed #ef4444; border-radius:8px;">⚠️ Error de imagen.</div>${captionHtml}</div>`; 
-                        }
-                        else if(type === 'VIDEO') {
-                            text = `<div style="display:flex; flex-direction:column; gap:5px;"><div style="position:relative; width:250px; cursor:pointer; overflow:hidden; border-radius:8px; background:#000; transition:transform 0.2s;" onclick="openLightbox('${mediaUrl}', 'VIDEO')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'"><video src="${mediaUrl}" style="width:100%; opacity:0.8;" preload="metadata"></video><div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(233,82,30,0.8); border-radius:50%; width:45px; height:45px; display:flex; align-items:center; justify-content:center; color:white;"><i class="fas fa-play" style="margin-left:3px;"></i></div></div>${captionHtml}</div>`;
-                        }
-                        else if(type === 'AUDIO') {
-                            text = `<div class="audio-wrapper">
-                                <button class="play-btn" id="btn-${id}" onclick="togglePlay('${id}', '${mediaUrl}')">
-                                    <i class="fas fa-play" style="margin-left:3px;"></i>
-                                </button>
-                                <div class="audio-progress">
-                                    <input type="range" class="wa-slider" id="seek-${id}" min="0" max="100" value="0" onchange="seekAudio('${id}', this.value)" oninput="pauseForSeek('${id}')">
-                                    <div class="audio-time">
-                                        <span id="time-${id}">0:00</span>
-                                        <span id="dur-${id}"></span>
-                                    </div>
-                                </div>
-                                <audio id="audio-${id}" ontimeupdate="updateProgress('${id}')" onloadedmetadata="setAudioDuration('${id}')" onended="resetPlayer('${id}')" onplaying="onAudioStart('${id}')" style="display:none;"></audio>
-                                <a href="${mediaUrl}" download="nota_voz.ogg" class="btn-download-audio" title="Descargar Audio">
-                                    <i class="fas fa-download"></i>
-                                </a>
-                            </div>`;
-                        } else { 
-                            text = `<a href="${mediaUrl}" target="_blank" style="color:white; text-decoration:none; display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.2); padding:10px; border-radius:6px; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'"><i class="fas fa-file-download" style="font-size:1.5rem;"></i><div style="display:flex; flex-direction:column;"><span>Archivo Adjunto (${type})</span><span style="font-size:0.75rem; font-weight:600; color:#FFF;">Clic para descargar</span></div></a>${captionHtml}`; 
-                        }
-                    } 
-                    
-                    const safeText = m.text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                    
-                    const isAlert = text.includes('[ALERTA:');
-                    
-                    return `<div class="msg ${isAlert ? 'alert' : m.role}">
-                        ${text}
-                        <div class="msg-time">${formatSmartTime(m.time)}</div>
-                        ${!isAlert ? `<div class="msg-forward-btn" onclick="openForwardModal('${safeText}', ${isMedia}, '${mediaId}')" title="Reenviar Mensaje">
-                            <i class="fas fa-share"></i>
-                        </div>` : ''}
-                    </div>`;
-                }).join(''); 
-                
+                // Ahora usamos el constructor para armar todo el historial la primera vez
+                container.innerHTML = msgs.map(m => buildMessageHTML(m)).join(''); 
                 if(scrollDown) setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
             } catch(e) {}
         }
@@ -892,7 +923,6 @@
             });
             
             showToast("Mensaje reenviado exitosamente");
-            if (currentChat === targetPhone) loadMessages(targetPhone, true);
         }
 
         // --- FUNCIONES DEL REPRODUCTOR DE AUDIO WHATSAPP ---
@@ -908,7 +938,6 @@
                 
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; 
                 
-                // FIX STREAMING: Asignamos la URL directo. Nada de Blobs ni Fetch.
                 if (!audio.src || audio.src === window.location.href) {
                     audio.src = url;
                     audio.load();
@@ -988,15 +1017,22 @@
                          (input.files[0].type.startsWith('audio/') ? 'audio' : 
                          (input.files[0].type.startsWith('video/') ? 'video' : 'document'));
             formData.append('type', type);
-            const container = document.getElementById('messages-container');
-            container.innerHTML += `<div class="msg manual">📁 Enviando archivo de forma segura...<div class="msg-time">...</div></div>`;
-            container.scrollTop = container.scrollHeight;
+            
+            showToast("Enviando archivo... ⏳");
+            // Delegamos el dibujo al WebSocket, evitamos duplicados
             await fetch('/api/chat/upload-send', { method: 'POST', body: formData });
             input.value = ''; 
-            loadMessages(currentChat, true);
         }
 
-        async function sendMessage() { const txt = document.getElementById('msg-input').value; if(!txt) return; document.getElementById('msg-input').value = ''; const container = document.getElementById('messages-container'); container.innerHTML += `<div class="msg manual">${txt} <div class="msg-time">...</div></div>`; container.scrollTop = container.scrollHeight; await fetch('/api/chat/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, message: txt }) }); loadMessages(currentChat, true); }
+        async function sendMessage() { 
+            const txt = document.getElementById('msg-input').value; 
+            if(!txt) return; 
+            document.getElementById('msg-input').value = ''; 
+            
+            // Enviamos el mensaje en silencio. El WebSocket nos devolverá la orden de renderizarlo al instante.
+            await fetch('/api/chat/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, message: txt }) }); 
+        }
+
         function checkEnter(e) { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
         async function toggleBotActive() { const active = document.getElementById('bot-switch').checked; await fetch('/api/chat/toggle-bot', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, active }) }); showToast(active ? "🤖 ICBOT Activado" : "⏸️ ICBOT Pausado"); }
         
@@ -1071,16 +1107,16 @@
             for (let tr of table.rows) { 
                 const cells = Array.from(tr.cells);
                 const rowData = [
-                    cells[0].innerText, // Fecha
-                    cells[1].innerText, // Fuente
-                    cells[2].innerText, // Nombre
-                    cells[3].innerText, // Telefono
-                    cells[4].innerText, // Ciudad
-                    cells[5].innerText, // Departamento
-                    cells[6].innerText, // Correo
-                    cells[7].innerText, // Interes
-                    tr.getAttribute('data-exec-id'), // Ejecutivo ID
-                    cells[9].innerText  // Etiqueta Comercial
+                    cells[0].innerText,
+                    cells[1].innerText,
+                    cells[2].innerText,
+                    cells[3].innerText,
+                    cells[4].innerText,
+                    cells[5].innerText,
+                    cells[6].innerText,
+                    cells[7].innerText,
+                    tr.getAttribute('data-exec-id'),
+                    cells[9].innerText
                 ];
                 rows.push(rowData); 
             } 
