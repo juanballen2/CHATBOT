@@ -216,14 +216,30 @@
         .lead-source-web { background: rgba(30, 64, 175, 0.1); color: #3b82f6; border: 1px solid #1e40af; }
         .lead-source-store { background: rgba(134, 25, 143, 0.1); color: #d946ef; border: 1px solid #a21caf; }
 
-        .config-header-main { font-size: 1.3rem; font-weight: 600; border-bottom: 2px solid var(--panel); padding-bottom: 10px; margin-bottom: 15px; color: var(--text); }
+        /* --- NUEVOS ESTILOS PARA LA CONFIGURACIÓN (TABS Y UI LIMPIA) --- */
+        .config-tabs-nav { display: flex; gap: 15px; margin-bottom: 25px; border-bottom: 2px solid var(--border); padding-bottom: 15px; overflow-x: auto; }
+        .btn-tab { background: transparent; border: none; font-size: 0.95rem; font-weight: 600; color: var(--text-muted); padding: 10px 18px; cursor: pointer; transition: all 0.2s; border-radius: 8px; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+        .btn-tab:hover { background: var(--hover-item); color: var(--primary); }
+        .btn-tab.active { background: var(--primary); color: #fff; box-shadow: 0 4px 10px rgba(233, 82, 30, 0.2); }
+        
+        .config-sub-panel { display: none; animation: fadeIn 0.3s; }
+        .config-sub-panel.active { display: block; }
+
+        .config-header-main { font-size: 1.3rem; font-weight: 600; padding-bottom: 10px; margin-bottom: 15px; color: var(--text); display: flex; align-items: center; gap: 10px; }
         .config-row { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
-        .config-card { background: var(--bg-main); padding: 20px; border-radius: 10px; border: 1px solid var(--border); flex: 1; min-width: 300px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
-        .config-header { font-size: 1rem; font-weight: 600; margin-bottom: 15px; color: var(--primary); display: flex; justify-content: space-between; align-items: center; }
-        .code-editor { width: 100%; height: 120px; background: #111b21; color: #25d366; padding: 10px; border-radius: 6px; font-family: monospace; border: 1px solid var(--border); resize: vertical; }
-        .config-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 8px; background: var(--bg-main); border-bottom: 1px solid var(--border); font-size: 0.9rem; transition: background 0.2s; }
+        .config-card { background: var(--bg-main); padding: 25px; border-radius: 12px; border: 1px solid var(--border); flex: 1; min-width: 300px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); }
+        .config-header { font-size: 1.05rem; font-weight: 600; margin-bottom: 5px; color: var(--primary); display: flex; justify-content: space-between; align-items: center; }
+        .config-subtitle { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 15px; display: block; }
+        
+        /* Rediseño del editor de prompt para que sea amigable */
+        .prompt-textarea { width: 100%; height: 180px; background: var(--bg-main); color: var(--text); padding: 15px; border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 0.95rem; border: 1px solid var(--border); resize: vertical; line-height: 1.5; outline: none; transition: border-color 0.3s, box-shadow 0.3s; }
+        .prompt-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(233, 82, 30, 0.1); }
+
+        .config-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 10px; background: var(--bg-main); border-bottom: 1px solid var(--border); font-size: 0.9rem; transition: background 0.2s; border-radius: 6px;}
         .config-item:hover { background: var(--panel); }
         .config-input-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        .cfg-input { flex:1; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text); outline: none; font-size: 0.9rem;}
+        .cfg-input:focus { border-color: var(--primary); }
         
         .btn-small { padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
         .btn-green { background: var(--primary); color: #fff; }
@@ -406,40 +422,126 @@
 
         <div id="tab-config" class="view-panel">
             <div class="config-container">
-                <div>
-                    <div class="config-header-main"><i class="fas fa-brain" style="color:var(--primary);"></i> Cerebro Artificial (IA)</div>
+                
+                <div class="config-tabs-nav">
+                    <button class="btn-tab active" onclick="switchConfigTab('sub-identidad', this)"><i class="fas fa-brain"></i> Identidad y Reglas</button>
+                    <button class="btn-tab" onclick="switchConfigTab('sub-memoria', this)"><i class="fas fa-database"></i> Memoria y Catálogo</button>
+                    <button class="btn-tab" onclick="switchConfigTab('sub-herramientas', this)"><i class="fas fa-tools"></i> Herramientas Comerciales</button>
+                </div>
+
+                <div id="sub-identidad" class="config-sub-panel active">
+                    <div class="config-header-main"><i class="fas fa-id-badge" style="color:var(--primary);"></i> Identidad del Bot</div>
                     <div class="config-row">
-                        <div class="config-card"><div class="config-header"><span>Personalidad (Prompt)</span><button class="btn-small btn-green" onclick="savePrompt()"><i class="fas fa-save"></i></button></div><textarea id="prompt-editor" class="code-editor"></textarea></div>
-                        <div class="config-card"><div class="config-header">Conocimiento Web</div><div class="config-input-group"><input type="text" id="web-url-input" class="cfg-input" placeholder="Ingresa una URL..."><button class="btn-small btn-green" onclick="scanWeb()"><i class="fas fa-plus"></i></button></div><ul class="item-list" id="web-knowledge-list"></ul></div>
-                    </div>
-                    <div class="config-row" style="margin-top:20px;">
-                        <div class="config-card">
+                        <div class="config-card" style="flex: 2;">
                             <div class="config-header">
-                                <span>Inventario (Excel/CSV)</span>
-                                <span id="inventory-count" style="font-size:0.8rem; color:var(--text-muted); background:var(--panel); padding:4px 8px; border-radius:12px;">0 items</span>
+                                <span>Personalidad (Prompt)</span>
+                                <button class="btn-small btn-green" onclick="savePrompt()"><i class="fas fa-save"></i> Guardar Cambios</button>
                             </div>
-                            <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center;">
-                                <input type="file" id="csv-upload" accept=".csv, .xlsx, .xls" style="flex:1; font-size:0.8rem; padding: 5px;">
-                                <button class="btn-small btn-green" onclick="uploadCSV()"><i class="fas fa-upload"></i> Cargar</button>
-                                <button class="btn-small btn-blue" onclick="loadInventoryPreview()" title="Refrescar"><i class="fas fa-sync"></i></button>
-                                <button class="btn-small btn-red" onclick="clearInventory()"><i class="fas fa-trash-alt"></i></button>
+                            <span class="config-subtitle">Define quién es el bot, su tono de voz y su objetivo principal de ventas o atención.</span>
+                            <textarea id="prompt-editor" class="prompt-textarea" placeholder="Ejemplo: Eres un asistente de ventas muy amable llamado ICBOT. Tu objetivo principal es perfilar al cliente y pedir su correo electrónico antes de dar precios exactos..."></textarea>
+                        </div>
+                        
+                        <div class="config-card" style="flex: 1;">
+                            <div class="config-header">Reglas Estrictas</div>
+                            <span class="config-subtitle">Instrucciones que el bot nunca debe romper.</span>
+                            <div class="config-input-group">
+                                <input type="text" id="rule-input" class="cfg-input" placeholder="Ej: Nunca dar descuentos iniciales...">
+                                <button class="btn-small btn-green" onclick="addRule()"><i class="fas fa-plus"></i></button>
                             </div>
-                            <ul class="item-list" id="inventory-list" style="max-height: 200px; overflow-y: auto; border-top: 1px solid var(--border); padding-top: 10px;">
-                                <li style="text-align:center; color:var(--text-muted); font-size:0.8rem;">Cargando inventario...</li>
+                            <ul class="item-list" id="rules-list" style="margin-top: 15px; max-height: 250px; overflow-y: auto;"></ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="sub-memoria" class="config-sub-panel">
+                    <div class="config-header-main"><i class="fas fa-book-open" style="color:var(--primary);"></i> Memoria y Datos</div>
+                    <div class="config-row">
+                        <div class="config-card" style="flex: 2;">
+                            <div class="config-header">
+                                <span>Inventario y Catálogo (Excel/CSV)</span>
+                                <span id="inventory-count" style="font-size:0.85rem; color:var(--text); background:var(--panel); padding:4px 10px; border-radius:12px; border: 1px solid var(--border);">0 items</span>
+                            </div>
+                            <span class="config-subtitle">Sube tu base de datos de productos para que la IA sepa precios y disponibilidad en tiempo real.</span>
+                            
+                            <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center; background: var(--panel); padding: 10px; border-radius: 8px;">
+                                <input type="file" id="csv-upload" accept=".csv, .xlsx, .xls" style="flex:1; font-size:0.85rem;">
+                                <button class="btn-small btn-green" onclick="uploadCSV()"><i class="fas fa-upload"></i> Cargar Archivo</button>
+                                <button class="btn-small btn-blue" onclick="loadInventoryPreview()" title="Refrescar vista"><i class="fas fa-sync"></i></button>
+                                <button class="btn-small btn-red" onclick="clearInventory()" title="Borrar todo el inventario"><i class="fas fa-trash-alt"></i></button>
+                            </div>
+                            <ul class="item-list" id="inventory-list" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--bg-main);">
+                                <li style="text-align:center; color:var(--text-muted); font-size:0.9rem;">Cargando inventario...</li>
                             </ul>
                         </div>
                         
-                        <div class="config-card"><div class="config-header">Reglas de Negocio</div><div class="config-input-group"><input type="text" id="rule-input" class="cfg-input" placeholder="Nueva regla..."><button class="btn-small btn-green" onclick="addRule()"><i class="fas fa-plus"></i></button></div><ul class="item-list" id="rules-list"></ul></div>
+                        <div class="config-card" style="flex: 1;">
+                            <div class="config-header">Lectura de Páginas Web</div>
+                            <span class="config-subtitle">Pega un enlace para que el bot aprenda de esa página.</span>
+                            <div class="config-input-group">
+                                <input type="text" id="web-url-input" class="cfg-input" placeholder="https://tuempresa.com/volquetas">
+                                <button class="btn-small btn-green" onclick="scanWeb()"><i class="fas fa-plus"></i> Añadir</button>
+                            </div>
+                            <ul class="item-list" id="web-knowledge-list" style="margin-top: 15px; max-height: 250px; overflow-y: auto;"></ul>
+                        </div>
                     </div>
                 </div>
-                <div style="margin-top: 40px;">
-                    <div class="config-header-main"><i class="fas fa-tools" style="color:var(--primary);"></i> Herramientas Comerciales</div>
+
+                <div id="sub-herramientas" class="config-sub-panel">
+                    <div class="config-header-main"><i class="fas fa-briefcase" style="color:var(--primary);"></i> Herramientas Operativas</div>
+                    
                     <div class="config-row">
-                        <div class="config-card"><div class="config-header">Etiquetas Visuales</div><div class="config-input-group"><input type="text" id="tag-name" class="cfg-input" placeholder="Nombre de etiqueta"><input type="color" id="tag-color" value="#E9521E" style="width:45px; height:40px; padding:2px; border:1px solid var(--border); border-radius:6px; cursor:pointer;"><button class="btn-small btn-green" onclick="addTag()"><i class="fas fa-plus"></i> Crear</button></div><ul class="item-list" id="config-tags-list"></ul></div>
-                        <div class="config-card"><div class="config-header">Atajos (Respuestas Rápidas)</div><div class="config-input-group"><input type="text" id="short-key" class="cfg-input" placeholder="/hola" style="width:30%;"><input type="text" id="short-text" class="cfg-input" placeholder="Texto extenso..."><button class="btn-small btn-green" onclick="addShortcut()"><i class="fas fa-plus"></i></button></div><ul class="item-list" id="config-shortcuts-list"></ul></div>
+                        <div class="config-card" style="flex: 1;">
+                            <div class="config-header">Perfil de Empresa</div>
+                            <span class="config-subtitle">Información básica del negocio.</span>
+                            <div style="display:flex; gap:10px; flex-direction: column;">
+                                <input id="biz-name" class="cfg-input" placeholder="Nombre Oficial de la Empresa">
+                                <input id="biz-hours" class="cfg-input" placeholder="Horario de atención (Ej: Lun-Vie 8am a 6pm)">
+                                <button class="btn-small btn-green" onclick="saveBizConfig()"><i class="fas fa-save"></i> Guardar Perfil</button>
+                            </div>
+                            <div style="margin-top:20px; font-size:0.9rem; font-weight:600; padding-top: 15px; border-top: 1px solid var(--border);">
+                                Actualizar Logo del Sistema: 
+                                <input type="file" onchange="uploadLogo(this)" style="margin-top: 10px; display: block; font-weight:normal;">
+                            </div>
+                        </div>
+
+                        <div class="config-card" style="flex: 1;">
+                            <div class="config-header">Etiquetas Visuales</div>
+                            <span class="config-subtitle">Crea etiquetas de colores para organizar a los leads en el CRM.</span>
+                            <div class="config-input-group">
+                                <input type="text" id="tag-name" class="cfg-input" placeholder="Nombre (Ej: VIP, Seguimiento)">
+                                <input type="color" id="tag-color" value="#E9521E" style="width:45px; height:40px; padding:2px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
+                                <button class="btn-small btn-green" onclick="addTag()"><i class="fas fa-plus"></i></button>
+                            </div>
+                            <ul class="item-list" id="config-tags-list" style="margin-top: 15px; max-height: 200px; overflow-y: auto;"></ul>
+                        </div>
+                        
+                        <div class="config-card" style="flex: 1;">
+                            <div class="config-header">Respuestas Rápidas (Atajos)</div>
+                            <span class="config-subtitle">Textos largos que puedes enviar usando un comando corto.</span>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <div class="config-input-group">
+                                    <input type="text" id="short-key" class="cfg-input" placeholder="/hola" style="width:30%;">
+                                    <input type="text" id="short-text" class="cfg-input" placeholder="Texto extenso de saludo...">
+                                </div>
+                                <button class="btn-small btn-green" onclick="addShortcut()"><i class="fas fa-plus"></i> Crear Atajo</button>
+                            </div>
+                            <ul class="item-list" id="config-shortcuts-list" style="margin-top: 15px; max-height: 200px; overflow-y: auto;"></ul>
+                        </div>
                     </div>
-                     <div class="config-card" style="margin-top:20px;"><div class="config-header">Perfil de Empresa</div><div style="display:flex; gap:10px;"><input id="biz-name" class="cfg-input" placeholder="Nombre de la Empresa"><input id="biz-hours" class="cfg-input" placeholder="Horario de atención"><button class="btn-small btn-green" onclick="saveBizConfig()"><i class="fas fa-save"></i> Guardar</button></div><div style="margin-top:15px; font-size:0.9rem; font-weight:600;">Actualizar Logo: <input type="file" onchange="uploadLogo(this)" style="margin-left: 10px; font-weight:normal;"></div></div>
                 </div>
+
+            </div>
+        </div>
+        </div>
+
+    <div id="web-audit-modal" class="modal-overlay" onclick="closeModal('web-audit-modal')">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-title"><i class="fas fa-globe" style="color:var(--primary);"></i> Información Aprendida</div>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-top:-5px; margin-bottom:10px;">Esto es lo que el bot extrajo y memorizó de la URL:</p>
+            <div id="web-audit-text" style="background: var(--panel); padding: 15px; border-radius: 8px; font-size: 0.95rem; max-height: 350px; overflow-y: auto; color: var(--text); line-height: 1.6; border: 1px solid var(--border);">
+                </div>
+            <div class="modal-actions">
+                <button class="btn-small btn-green" onclick="closeModal('web-audit-modal')">Cerrar Visor</button>
             </div>
         </div>
     </div>
@@ -583,6 +685,18 @@
             }
         });
         // ----------------------------------------------------
+
+        /* LÓGICA DE SUB-PESTAÑAS DE CONFIGURACIÓN */
+        function switchConfigTab(tabId, btnElement) {
+            // Ocultar todos los paneles de configuración
+            document.querySelectorAll('.config-sub-panel').forEach(panel => panel.classList.remove('active'));
+            // Mostrar el panel seleccionado
+            document.getElementById(tabId).classList.add('active');
+            
+            // Actualizar el estilo de los botones
+            document.querySelectorAll('.btn-tab').forEach(btn => btn.classList.remove('active'));
+            btnElement.classList.add('active');
+        }
 
         /* LÓGICA MODO OSCURO */
         function toggleTheme() {
@@ -1164,8 +1278,15 @@
             loadInventoryPreview();
         }
         async function clearInventory() { if(!confirm("¿Estás 100% seguro de borrar TODO el inventario?")) return; await fetch('/api/knowledge/clear', { method: 'POST' }); showToast("Inventario Eliminado"); loadInventoryPreview(); }
+        
         async function renderWebList() { const res = await fetch('/api/data/web-knowledge'); const list = await res.json(); document.getElementById('web-knowledge-list').innerHTML = list.map(i => `<li class="config-item"><span style="max-width:200px; overflow:hidden; text-overflow:ellipsis;">${i.url}</span><div style="display:flex; gap:5px;"><button class="btn-small btn-blue" onclick="showWebInfo('${encodeURIComponent(i.summary)}')"><i class="fas fa-eye"></i></button><button class="btn-small btn-red" onclick="deleteWeb('${i.id}')"><i class="fas fa-trash"></i></button></div></li>`).join(''); }
-        function showWebInfo(summary) { alert(decodeURIComponent(summary)); }
+        
+        // --- FUNCIÓN MODIFICADA PARA USAR EL MODAL EN LUGAR DE ALERT() ---
+        function showWebInfo(summary) { 
+            document.getElementById('web-audit-text').innerText = decodeURIComponent(summary);
+            document.getElementById('web-audit-modal').classList.add('show');
+        }
+        
         async function scanWeb() { const url = document.getElementById('web-url-input').value; const summary = prompt("Ingresa un resumen corto para esta página:"); if(summary) { await fetch('/api/data/web-knowledge', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url, summary }) }); document.getElementById('web-url-input').value = ""; renderWebList(); } }
         async function deleteWeb(id) { await fetch('/api/data/web-knowledge/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) }); renderWebList(); }
         function renderRulesList(rules) { document.getElementById('rules-list').innerHTML = (rules || []).map((r, i) => `<li class="config-item"><span>${r}</span><button class="btn-small btn-red" onclick="deleteRule(${i})"><i class="fas fa-trash"></i></button></li>`).join(''); }
