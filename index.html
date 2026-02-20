@@ -31,7 +31,7 @@
             --chat-bg-color: #E5E5E5;
             --avatar-bg: #E0E0E0;
             --avatar-color: #888888;
-            --icon-color: #515050; /* Color base para iconos */
+            --icon-color: #515050;
         }
 
         /* TEMA OSCURO */
@@ -50,25 +50,104 @@
             --chat-bg-color: #0b141a;
             --avatar-bg: #37404a;
             --avatar-color: #8696a0;
-            --icon-color: #8696a0; /* Contraste seguro en modo oscuro */
+            --icon-color: #8696a0;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
+        * { 
+            box-sizing: border-box; 
+            margin: 0; 
+            padding: 0; 
+            font-family: 'Inter', sans-serif; 
+            transition: background-color 0.3s, color 0.3s, border-color 0.3s; 
+        }
         
-        /* FIX RESPONSIVO: Uso de dvh para pantallas como el A14 */
-        body { background-color: var(--bg-main); color: var(--text); height: 100vh; height: 100dvh; display: flex; overflow: hidden; }
+        body { 
+            background-color: var(--bg-main); 
+            color: var(--text); 
+            height: 100vh; 
+            height: 100dvh; 
+            display: flex; 
+            overflow: hidden; 
+        }
 
         /* --- MODALES GENERALES --- */
-        .modal-overlay { display: none; position: fixed; z-index: 5000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); align-items: center; justify-content: center; backdrop-filter: blur(3px); transition: all 0.3s; }
-        .modal-overlay.show { display: flex; animation: fadeIn 0.2s; }
-        .modal-content { background-color: var(--bg-main); padding: 25px; border-radius: 12px; width: 90%; max-width: 450px; border: 1px solid var(--border); box-shadow: 0 20px 50px rgba(0,0,0,0.4); display: flex; flex-direction: column; gap: 15px; max-height: 90dvh; overflow-y: auto; }
-        .modal-title { font-size: 1.2rem; color: var(--text); font-weight: 600; display: flex; align-items: center; gap: 10px; }
-        .modal-form label { display: block; margin-bottom: 5px; font-size: 0.85rem; color: var(--primary); font-weight: 600; }
-        .modal-form input, .modal-form textarea, .modal-form select { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text); outline: none; font-size: 0.95rem; transition: border 0.3s, box-shadow 0.3s; }
-        .modal-form input:focus, .modal-form textarea:focus, .modal-form select:focus { border-color: var(--primary); box-shadow: 0 0 5px rgba(233, 82, 30, 0.3); }
-        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
+        .modal-overlay { 
+            display: none; 
+            position: fixed; 
+            z-index: 5000; 
+            left: 0; 
+            top: 0; 
+            width: 100%; 
+            height: 100%; 
+            background-color: rgba(0,0,0,0.7); 
+            align-items: center; 
+            justify-content: center; 
+            backdrop-filter: blur(3px); 
+            transition: all 0.3s; 
+        }
+        
+        .modal-overlay.show { 
+            display: flex; 
+            animation: fadeIn 0.2s; 
+        }
+        
+        .modal-content { 
+            background-color: var(--bg-main); 
+            padding: 25px; 
+            border-radius: 12px; 
+            width: 90%; 
+            max-width: 450px; 
+            border: 1px solid var(--border); 
+            box-shadow: 0 20px 50px rgba(0,0,0,0.4); 
+            display: flex; 
+            flex-direction: column; 
+            gap: 15px; 
+            max-height: 90dvh; 
+            overflow-y: auto; 
+        }
+        
+        .modal-title { 
+            font-size: 1.2rem; 
+            color: var(--text); 
+            font-weight: 600; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+        }
+        
+        .modal-form label { 
+            display: block; 
+            margin-bottom: 5px; 
+            font-size: 0.85rem; 
+            color: var(--primary); 
+            font-weight: 600; 
+        }
+        
+        .modal-form input, .modal-form textarea, .modal-form select { 
+            width: 100%; 
+            padding: 10px; 
+            margin-bottom: 10px; 
+            border-radius: 6px; 
+            border: 1px solid var(--border); 
+            background: var(--bg-main); 
+            color: var(--text); 
+            outline: none; 
+            font-size: 0.95rem; 
+            transition: border 0.3s, box-shadow 0.3s; 
+        }
+        
+        .modal-form input:focus, .modal-form textarea:focus, .modal-form select:focus { 
+            border-color: var(--primary); 
+            box-shadow: 0 0 5px rgba(233, 82, 30, 0.3); 
+        }
+        
+        .modal-actions { 
+            display: flex; 
+            justify-content: flex-end; 
+            gap: 10px; 
+            margin-top: 10px; 
+        }
 
-        /* --- ANIMACIONES Y BOTONES INTERACTIVOS --- */
         button { cursor: pointer; transition: all 0.2s ease-in-out; }
         button:active { transform: scale(0.95); }
         button:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
@@ -81,10 +160,40 @@
         ::-webkit-scrollbar-thumb:hover { background: var(--incoming); }
 
         /* --- LAYOUT PRINCIPAL --- */
-        .sidebar { width: 60px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 100; flex-shrink: 0; }
-        .nav-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: transparent; color: var(--icon-color); font-size: 1.2rem; cursor: pointer; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; }
+        .sidebar { 
+            width: 60px; 
+            background: var(--panel); 
+            border-right: 1px solid var(--border); 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            padding-top: 20px; 
+            z-index: 100; 
+            flex-shrink: 0; 
+        }
+        
+        .nav-btn { 
+            width: 40px; 
+            height: 40px; 
+            border-radius: 50%; 
+            border: none; 
+            background: transparent; 
+            color: var(--icon-color); 
+            font-size: 1.2rem; 
+            cursor: pointer; 
+            margin-bottom: 15px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+        }
+        
         .nav-btn:hover { background: var(--hover-item); color: var(--primary); }
-        .nav-btn.active { background: var(--bg-main); color: var(--primary); box-shadow: 0 0 10px rgba(233, 82, 30, 0.3); border: 1px solid var(--border); }
+        .nav-btn.active { 
+            background: var(--bg-main); 
+            color: var(--primary); 
+            box-shadow: 0 0 10px rgba(233, 82, 30, 0.3); 
+            border: 1px solid var(--border); 
+        }
         .nav-bottom { margin-top: auto; padding-bottom: 20px; display: flex; flex-direction: column; gap: 10px;}
 
         .main-area { flex: 1; display: flex; position: relative; overflow: hidden; background: var(--bg-main); }
@@ -117,7 +226,6 @@
         .bulk-checkbox { display: none; width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; }
         .chat-list.bulk-mode .bulk-checkbox { display: block; }
         
-        /* AVATAR MEJORADO */
         .avatar { width: 45px; height: 45px; border-radius: 50%; background: var(--avatar-bg); color: var(--avatar-color); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; font-size: 1.3rem; }
         
         .chat-info { flex: 1; min-width: 0; }
@@ -128,26 +236,46 @@
         .mini-tags { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
         .mini-tag { font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; color: #000; font-weight: 600; }
 
-        /* Barra de Acciones Masivas */
-        #bulk-toolbar { display: none; position: absolute; bottom: 0; left: 0; width: 100%; background: var(--bg-main); border-top: 2px solid var(--primary); padding: 15px; z-index: 50; flex-direction: column; gap: 10px; box-shadow: 0 -5px 20px rgba(0,0,0,0.1); }
+        #bulk-toolbar { 
+            display: none; 
+            position: absolute; 
+            bottom: 0; 
+            left: 0; 
+            width: 100%; 
+            background: var(--bg-main); 
+            border-top: 2px solid var(--primary); 
+            padding: 15px; 
+            z-index: 50; 
+            flex-direction: column; 
+            gap: 10px; 
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.1); 
+        }
         #bulk-toolbar.show { display: flex; animation: slideUp 0.3s; }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         .bulk-actions-row { display: flex; justify-content: space-between; align-items: center; }
 
         /* --- CHAT AREA --- */
-        .chat-area { flex: 1; display: flex; flex-direction: column; background-color: var(--chat-bg-color); background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-blend-mode: multiply; opacity: 0.95; position: relative; }
+        .chat-area { 
+            flex: 1; 
+            display: flex; 
+            flex-direction: column; 
+            background-color: var(--chat-bg-color); 
+            background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); 
+            background-blend-mode: multiply; 
+            opacity: 0.95; 
+            position: relative; 
+        }
+        
         .chat-top { padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
         .messages { flex: 1; overflow-y: auto; padding: 20px 40px; display: flex; flex-direction: column; gap: 4px; }
         
         .msg { max-width: 65%; padding: 8px 12px; border-radius: 8px; font-size: 0.95rem; line-height: 1.4; position: relative; word-wrap: break-word; box-shadow: 0 1px 2px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
         .msg.user { background: var(--incoming); align-self: flex-start; border-top-left-radius: 0; color: #FFF; }
         .msg.bot, .msg.manual { background: var(--outgoing); align-self: flex-end; border-top-right-radius: 0; color: #FFF; }
-        
         .msg.alert { background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #D32F2F; align-self: center; border-radius: 8px; width: 85%; max-width: 85%; text-align: center; font-weight: 500; font-size: 0.85rem; }
         
         .msg-time { font-size: 0.65rem; opacity: 0.7; align-self: flex-end; margin-top: 4px; }
         
-        /* Botón de Reenvío con Delay */
         .msg-forward-btn { 
             position: absolute; top: 5px; right: -35px; background: var(--bg-main); color: var(--primary); border: 1px solid var(--border);
             border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; 
@@ -158,7 +286,6 @@
         .msg.bot:hover .msg-forward-btn { left: -35px; right: auto; }
         .msg-forward-btn:hover { background: var(--primary); color: #FFF; transform: scale(1.1); }
 
-        /* Audio Player Mejorado (Nivel WhatsApp) */
         .audio-wrapper { display: flex; align-items: center; gap: 12px; padding: 6px; background: rgba(255,255,255,0.15); border-radius: 12px; min-width: 250px; }
         [data-theme="dark"] .audio-wrapper { background: rgba(0,0,0,0.2); }
         .play-btn { width: 38px; height: 38px; background: var(--primary); color: white; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: transform 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
@@ -169,7 +296,6 @@
         input[type=range].wa-slider::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%; background: var(--primary); margin-top: -4px; box-shadow: 0 1px 3px rgba(0,0,0,0.3); transition: transform 0.1s; }
         input[type=range].wa-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
         .audio-time { font-size: 0.7rem; color: #FFF; font-family: monospace; display: flex; justify-content: space-between; opacity: 0.9; padding-top: 2px; }
-
         .btn-download-audio { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #FFF; text-decoration: none; background: rgba(255,255,255,0.1); transition: background 0.2s; }
         .btn-download-audio:hover { background: rgba(255,255,255,0.3); }
 
@@ -197,7 +323,6 @@
         .tag:hover { transform: scale(1.05); }
         .tag.selected { border-color: var(--primary); background: var(--primary); color: #fff; }
         
-        /* Switch */
         .switch-container { display: flex; align-items: center; justify-content: space-between; font-weight: 500; }
         .switch { position: relative; display: inline-block; width: 36px; height: 20px; }
         .switch input { opacity: 0; width: 0; height: 0; }
@@ -216,9 +341,32 @@
         .lead-source-web { background: rgba(30, 64, 175, 0.1); color: #3b82f6; border: 1px solid #1e40af; }
         .lead-source-store { background: rgba(134, 25, 143, 0.1); color: #d946ef; border: 1px solid #a21caf; }
 
-        /* --- NUEVOS ESTILOS PARA LA CONFIGURACIÓN (TABS Y UI LIMPIA) --- */
-        .config-tabs-nav { display: flex; gap: 15px; margin-bottom: 25px; border-bottom: 2px solid var(--border); padding-bottom: 15px; overflow-x: auto; }
-        .btn-tab { background: transparent; border: none; font-size: 0.95rem; font-weight: 600; color: var(--text-muted); padding: 10px 18px; cursor: pointer; transition: all 0.2s; border-radius: 8px; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+        /* --- TABS CONFIGURACIÓN --- */
+        .config-tabs-nav { 
+            display: flex; 
+            gap: 15px; 
+            margin-bottom: 25px; 
+            border-bottom: 2px solid var(--border); 
+            padding-bottom: 15px; 
+            overflow-x: auto; 
+        }
+        
+        .btn-tab { 
+            background: transparent; 
+            border: none; 
+            font-size: 0.95rem; 
+            font-weight: 600; 
+            color: var(--text-muted); 
+            padding: 10px 18px; 
+            cursor: pointer; 
+            transition: all 0.2s; 
+            border-radius: 8px; 
+            white-space: nowrap; 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+        }
+        
         .btn-tab:hover { background: var(--hover-item); color: var(--primary); }
         .btn-tab.active { background: var(--primary); color: #fff; box-shadow: 0 4px 10px rgba(233, 82, 30, 0.2); }
         
@@ -231,8 +379,7 @@
         .config-header { font-size: 1.05rem; font-weight: 600; margin-bottom: 5px; color: var(--primary); display: flex; justify-content: space-between; align-items: center; }
         .config-subtitle { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 15px; display: block; }
         
-        /* Rediseño del editor de prompt para que sea amigable */
-        .prompt-textarea { width: 100%; height: 180px; background: var(--bg-main); color: var(--text); padding: 15px; border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 0.95rem; border: 1px solid var(--border); resize: vertical; line-height: 1.5; outline: none; transition: border-color 0.3s, box-shadow 0.3s; }
+        .prompt-textarea { width: 100%; background: var(--bg-main); color: var(--text); padding: 15px; border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 0.95rem; border: 1px solid var(--border); resize: vertical; line-height: 1.5; outline: none; transition: border-color 0.3s, box-shadow 0.3s; }
         .prompt-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(233, 82, 30, 0.1); }
 
         .config-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 10px; background: var(--bg-main); border-bottom: 1px solid var(--border); font-size: 0.9rem; transition: background 0.2s; border-radius: 6px;}
@@ -259,12 +406,10 @@
         @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
         @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
 
-        /* Estilos Lightbox Nativo */
         .lightbox-content-container { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
         .lightbox-close { position: absolute; top: 20px; right: 30px; color: white; font-size: 40px; font-weight: bold; cursor: pointer; transition: 0.2s; z-index: 5001;}
         .lightbox-close:hover { color: var(--primary); transform: scale(1.1); }
         
-        /* RESPONSIVE ARREGLADO EXTREMO PARA A14 */
         @media (max-width: 768px) {
             .sidebar { display: none; } 
             .chat-list { width: 100%; height: 100dvh; position: absolute; top: 0; left: 0; z-index: 10; }
@@ -434,11 +579,13 @@
                     <div class="config-row">
                         <div class="config-card" style="flex: 2;">
                             <div class="config-header">
-                                <span>Personalidad (Prompt)</span>
-                                <button class="btn-small btn-green" onclick="savePrompt()"><i class="fas fa-save"></i> Guardar Cambios</button>
+                                <span>Personalidad Activa</span>
+                                <button class="btn-small btn-blue" onclick="openPromptEdit()"><i class="fas fa-pencil-alt"></i> Editar</button>
                             </div>
-                            <span class="config-subtitle">Define quién es el bot, su tono de voz y su objetivo principal de ventas o atención.</span>
-                            <textarea id="prompt-editor" class="prompt-textarea" placeholder="Ejemplo: Eres un asistente de ventas muy amable llamado ICBOT. Tu objetivo principal es perfilar al cliente y pedir su correo electrónico antes de dar precios exactos..."></textarea>
+                            <span class="config-subtitle">Así es como se está comportando el bot en este momento:</span>
+                            <div id="prompt-readonly" style="background: var(--panel); padding: 15px; border-radius: 8px; font-size: 0.95rem; color: var(--text); border: 1px solid var(--border); min-height: 120px; white-space: pre-wrap; font-style: italic;">
+                                Cargando personalidad...
+                            </div>
                         </div>
                         
                         <div class="config-card" style="flex: 1;">
@@ -476,7 +623,7 @@
                         
                         <div class="config-card" style="flex: 1;">
                             <div class="config-header">Lectura de Páginas Web</div>
-                            <span class="config-subtitle">Pega un enlace para que el bot aprenda de esa página.</span>
+                            <span class="config-subtitle">Añade un enlace para que el bot memorice su información.</span>
                             <div class="config-input-group">
                                 <input type="text" id="web-url-input" class="cfg-input" placeholder="https://tuempresa.com/volquetas">
                                 <button class="btn-small btn-green" onclick="scanWeb()"><i class="fas fa-plus"></i> Añadir</button>
@@ -532,16 +679,29 @@
 
             </div>
         </div>
+    </div>
+
+    <div id="prompt-edit-modal" class="modal-overlay" onclick="closeModal('prompt-edit-modal')">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 600px;">
+            <div class="modal-title"><i class="fas fa-brain" style="color:var(--primary);"></i> Editar Personalidad</div>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-top:-5px; margin-bottom:10px;">Define el tono, comportamiento y objetivo del bot.</p>
+            <textarea id="prompt-editor" class="prompt-textarea" style="height: 250px;"></textarea>
+            <div class="modal-actions">
+                <button class="btn-small btn-red" onclick="closeModal('prompt-edit-modal')">Cancelar</button>
+                <button class="btn-small btn-green" onclick="savePrompt()"><i class="fas fa-save"></i> Guardar Cambios</button>
+            </div>
         </div>
+    </div>
 
     <div id="web-audit-modal" class="modal-overlay" onclick="closeModal('web-audit-modal')">
-        <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 600px;">
             <div class="modal-title"><i class="fas fa-globe" style="color:var(--primary);"></i> Información Aprendida</div>
-            <p style="font-size:0.85rem; color:var(--text-muted); margin-top:-5px; margin-bottom:10px;">Esto es lo que el bot extrajo y memorizó de la URL:</p>
-            <div id="web-audit-text" style="background: var(--panel); padding: 15px; border-radius: 8px; font-size: 0.95rem; max-height: 350px; overflow-y: auto; color: var(--text); line-height: 1.6; border: 1px solid var(--border);">
-                </div>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-top:-5px; margin-bottom:10px;">Esto es lo que el bot memorizó. Puedes editarlo para mejorarlo:</p>
+            <input type="hidden" id="edit-web-id">
+            <textarea id="web-audit-text" class="prompt-textarea" style="height: 200px; font-size: 0.9rem;"></textarea>
             <div class="modal-actions">
-                <button class="btn-small btn-green" onclick="closeModal('web-audit-modal')">Cerrar Visor</button>
+                <button class="btn-small btn-red" onclick="closeModal('web-audit-modal')">Cerrar</button>
+                <button class="btn-small btn-green" onclick="saveWebEdit()"><i class="fas fa-save"></i> Guardar Corrección</button>
             </div>
         </div>
     </div>
@@ -628,12 +788,15 @@
     <div id="toast">Notificación</div>
 
     <script>
-        const socket = io(); // ⚡ INICIAMOS EL TÚNEL WEBSOCKET
+        const socket = io();
 
-        let currentChat = null, currentFilter = 'active', chatsData = [], contextPhone = null, searchTimeout = null;
+        let currentChat = null;
+        let currentFilter = 'active';
+        let chatsData = [];
+        let contextPhone = null;
+        let searchTimeout = null;
         let currentlyPlaying = null;
         let currentInventory = []; 
-        
         let bulkMode = false;
         let selectedChats = new Set();
         let msgToForward = null;
@@ -661,44 +824,39 @@
             updateThemeIcon(savedTheme);
 
             document.addEventListener('click', (e) => { 
-                if(!e.target.closest('.chat-item')) document.getElementById('context-menu').style.display = 'none'; 
+                if(!e.target.closest('.chat-item')) {
+                    document.getElementById('context-menu').style.display = 'none'; 
+                }
             }); 
         };
 
-        // --- 📡 ESCUCHADORES DEL WEBSOCKET EN TIEMPO REAL ---
-        socket.on('update_chats_list', () => {
-            syncChats(); // Solo recarga la barra lateral si Meta avisa que hay novedades
+        socket.on('update_chats_list', () => { 
+            syncChats(); 
         });
 
         socket.on('new_message', (msg) => {
-            // Si nos llega un mensaje y justo estamos viendo ese chat...
             if (currentChat === msg.phone) {
                 const container = document.getElementById('messages-container');
                 const isScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
                 
-                // "Pegamos" el mensaje nuevo AL FINAL sin destruir la pantalla (¡adiós efecto fantasma y audios cortados!)
                 container.insertAdjacentHTML('beforeend', buildMessageHTML(msg));
                 
                 if(isScrolledToBottom || msg.role === 'bot' || msg.role === 'manual') {
-                    setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
+                    setTimeout(() => { 
+                        container.scrollTop = container.scrollHeight; 
+                    }, 50);
                 }
             }
         });
-        // ----------------------------------------------------
 
-        /* LÓGICA DE SUB-PESTAÑAS DE CONFIGURACIÓN */
         function switchConfigTab(tabId, btnElement) {
-            // Ocultar todos los paneles de configuración
             document.querySelectorAll('.config-sub-panel').forEach(panel => panel.classList.remove('active'));
-            // Mostrar el panel seleccionado
             document.getElementById(tabId).classList.add('active');
             
-            // Actualizar el estilo de los botones
             document.querySelectorAll('.btn-tab').forEach(btn => btn.classList.remove('active'));
             btnElement.classList.add('active');
         }
 
-        /* LÓGICA MODO OSCURO */
         function toggleTheme() {
             const currentTheme = document.body.getAttribute('data-theme');
             const newTheme = currentTheme === 'light' ? 'dark' : 'light';
@@ -706,27 +864,51 @@
             localStorage.setItem('theme', newTheme);
             updateThemeIcon(newTheme);
         }
+
         function updateThemeIcon(theme) {
             const icon = document.getElementById('theme-icon');
-            if(theme === 'dark') { icon.classList.remove('fa-moon'); icon.classList.add('fa-sun'); }
-            else { icon.classList.remove('fa-sun'); icon.classList.add('fa-moon'); }
+            if(theme === 'dark') { 
+                icon.classList.remove('fa-moon'); 
+                icon.classList.add('fa-sun'); 
+            } else { 
+                icon.classList.remove('fa-sun'); 
+                icon.classList.add('fa-moon'); 
+            }
         }
 
-        function showToast(msg) { const x = document.getElementById("toast"); x.innerText = msg; x.className = "show"; setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000); }
-        function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+        function showToast(msg) { 
+            const x = document.getElementById("toast"); 
+            x.innerText = msg; 
+            x.className = "show"; 
+            setTimeout(function(){ 
+                x.className = x.className.replace("show", ""); 
+            }, 3000); 
+        }
+
+        function closeModal(id) { 
+            document.getElementById(id).classList.remove('show'); 
+        }
         
-        /* Lógica del Lightbox (Visor de Medios) */
         function openLightbox(url, type) {
             const modal = document.getElementById('lightbox-modal');
             const img = document.getElementById('lightbox-img');
             const vid = document.getElementById('lightbox-video');
+            
             modal.classList.add('show');
+            
             if (type === 'IMAGE') {
-                img.src = url; img.style.display = 'block'; vid.style.display = 'none'; vid.pause();
+                img.src = url; 
+                img.style.display = 'block'; 
+                vid.style.display = 'none'; 
+                vid.pause();
             } else if (type === 'VIDEO') {
-                vid.src = url; vid.style.display = 'block'; img.style.display = 'none'; vid.play();
+                vid.src = url; 
+                vid.style.display = 'block'; 
+                img.style.display = 'none'; 
+                vid.play();
             }
         }
+
         function closeLightbox(e) {
             if(e.target.id === 'lightbox-modal' || e.target.classList.contains('lightbox-close')) {
                 document.getElementById('lightbox-modal').classList.remove('show');
@@ -734,9 +916,10 @@
             }
         }
 
-        /* Lógica visualizador completo Leads */
         function viewLeadDetails(phone) {
-            fetch('/api/data/leads').then(r=>r.json()).then(leads => {
+            fetch('/api/data/leads')
+            .then(r => r.json())
+            .then(leads => {
                 const lead = leads.find(l => l.phone === phone);
                 if(lead) {
                     let html = '<table class="data-table" style="width:100%;">';
@@ -747,54 +930,95 @@
                     document.getElementById('lead-details-content').innerHTML = html;
                     document.getElementById('lead-details-modal').classList.add('show');
                 }
-            }).catch(e => showToast("Error cargando información del lead."));
+            })
+            .catch(e => showToast("Error cargando información del lead."));
         }
         
         function switchTab(tab) {
             document.querySelectorAll('.view-panel').forEach(el => el.classList.remove('active'));
             document.getElementById('tab-' + tab).classList.add('active');
+            
             document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
             event.currentTarget.classList.add('active');
+            
             if(tab === 'leads') refreshLeads();
             if(tab === 'config') loadInventoryPreview();
         }
-        function toggleCRM() { document.getElementById('crm-panel').classList.toggle('open'); }
+
+        function toggleCRM() { 
+            document.getElementById('crm-panel').classList.toggle('open'); 
+        }
+
         function closeChat() { 
             document.body.classList.remove('mobile-chat-open'); 
             currentChat = null; 
-            if(currentlyPlaying) { currentlyPlaying.pause(); currentlyPlaying = null; }
+            if(currentlyPlaying) { 
+                currentlyPlaying.pause(); 
+                currentlyPlaying = null; 
+            }
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
         }
-        function debounceSearch(val) { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => syncChats(), 300); }
-        function startNewChat() { const phone = prompt("Ingresa el número (con indicativo):"); if (!phone) return; const name = prompt("Nombre:") || phone; openChat(phone.replace(/\D/g, ''), name, ''); }
-        
-        // --- 🚀 ADIÓS POLLING, HOLA EFICIENCIA ---
+
+        function debounceSearch(val) { 
+            clearTimeout(searchTimeout); 
+            searchTimeout = setTimeout(() => syncChats(), 300); 
+        }
+
+        function startNewChat() { 
+            const phone = prompt("Ingresa el número (con indicativo):"); 
+            if (!phone) return; 
+            const name = prompt("Nombre:") || phone; 
+            openChat(phone.replace(/\D/g, ''), name, ''); 
+        }
+
         function startSyncLoop() { 
             syncChats(); 
-            // Los viejos setInterval que sobrecargaban todo y destruían tu audio ya no existen aquí.
         }
         
-        async function loadTagFilterOptions() { try { const tags = await (await fetch('/api/data/tags')).json(); 
-            const html = '<option value="">Todas las etiquetas</option>' + tags.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
-            document.getElementById('tag-filter').innerHTML = html;
-            document.getElementById('bulk-tag-select').innerHTML = '<option value="">Etiquetar como...</option>' + tags.map(t => `<option value='${JSON.stringify({text:t.name, color:t.color})}'>${t.name}</option>`).join('');
-        } catch(e) {} }
+        async function loadTagFilterOptions() { 
+            try { 
+                const tagsResponse = await fetch('/api/data/tags');
+                const tags = await tagsResponse.json(); 
+                
+                const html = '<option value="">Todas las etiquetas</option>' + tags.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+                document.getElementById('tag-filter').innerHTML = html;
+                
+                document.getElementById('bulk-tag-select').innerHTML = '<option value="">Etiquetar como...</option>' + tags.map(t => `<option value='${JSON.stringify({text:t.name, color:t.color})}'>${t.name}</option>`).join('');
+            } catch(e) {
+                console.error("Error cargando filtros de etiquetas:", e);
+            } 
+        }
         
         async function syncChats() { 
             try { 
                 const search = document.getElementById('main-search').value; 
                 const res = await fetch(`/api/chats-full?view=${currentFilter}&search=${search}`); 
                 chatsData = await res.json(); 
+                
                 const tagFilter = document.getElementById('tag-filter').value; 
-                if(tagFilter) chatsData = chatsData.filter(c => c.labels && c.labels.some(l => (l.text || l) === tagFilter)); 
+                if(tagFilter) {
+                    chatsData = chatsData.filter(c => c.labels && c.labels.some(l => (l.text || l) === tagFilter)); 
+                }
+                
                 chatsData.sort((a, b) => new Date(b.lastMessage.time) - new Date(a.lastMessage.time)); 
                 chatsData.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)); 
+                
                 renderChatList(); 
-            } catch(e) {} 
+            } catch(e) {
+                console.error("Error sincronizando chats:", e);
+            } 
         }
 
-        function setChatFilter(filter, el) { currentFilter = filter; document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active')); el.classList.add('active'); syncChats(); }
-        function normalizeTag(tag) { return typeof tag === 'string' ? { text: tag, color: '#555' } : tag; }
+        function setChatFilter(filter, el) { 
+            currentFilter = filter; 
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active')); 
+            el.classList.add('active'); 
+            syncChats(); 
+        }
+
+        function normalizeTag(tag) { 
+            return typeof tag === 'string' ? { text: tag, color: '#555' } : tag; 
+        }
         
         function toggleBulkMode() {
             bulkMode = !bulkMode;
@@ -802,24 +1026,29 @@
             const toolbar = document.getElementById('bulk-toolbar');
             const panel = document.getElementById('chat-list-panel');
             
-            if (bulkMode) {
-                btn.classList.add('active');
-                panel.classList.add('bulk-mode');
+            if (bulkMode) { 
+                btn.classList.add('active'); 
+                panel.classList.add('bulk-mode'); 
                 toolbar.classList.add('show');
-            } else {
-                btn.classList.remove('active');
-                panel.classList.remove('bulk-mode');
-                toolbar.classList.remove('show');
-                selectedChats.clear();
-                renderChatList();
+            } else { 
+                btn.classList.remove('active'); 
+                panel.classList.remove('bulk-mode'); 
+                toolbar.classList.remove('show'); 
+                selectedChats.clear(); 
+                renderChatList(); 
             }
         }
 
         function toggleChatSelection(phone, event) {
             if (!bulkMode) return;
             event.stopPropagation();
-            if (selectedChats.has(phone)) selectedChats.delete(phone);
-            else selectedChats.add(phone);
+            
+            if (selectedChats.has(phone)) {
+                selectedChats.delete(phone); 
+            } else {
+                selectedChats.add(phone);
+            }
+            
             document.getElementById('bulk-count').innerText = selectedChats.size;
             renderChatList();
         }
@@ -831,24 +1060,24 @@
             if (action === 'set_label') {
                 const valStr = document.getElementById('bulk-tag-select').value;
                 if (!valStr) return alert("Selecciona una etiqueta");
-                value = JSON.parse(valStr);
+                value = JSON.parse(valStr); 
                 action = 'add_label';
             }
-
+            
             if (!confirm(`¿Aplicar acción a ${selectedChats.size} chats?`)) return;
-
-            await fetch('/api/contacts/bulk-update', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    phones: Array.from(selectedChats),
-                    action: action,
-                    value: value
-                })
+            
+            await fetch('/api/contacts/bulk-update', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ 
+                    phones: Array.from(selectedChats), 
+                    action: action, 
+                    value: value 
+                }) 
             });
-
-            showToast("Acción masiva completada");
-            toggleBulkMode();
+            
+            showToast("Acción masiva completada"); 
+            toggleBulkMode(); 
             syncChats();
         }
         
@@ -857,16 +1086,27 @@
             const scroll = container.children.length > 0 ? container.scrollTop : 0;
             
             container.innerHTML = chatsData.map(c => {
-                let labelsHtml = ''; if(c.labels && Array.isArray(c.labels)) labelsHtml = c.labels.map(l => { const tag = normalizeTag(l); return `<span class="mini-tag" style="background:${tag.color}20; color:${tag.color}; border:1px solid ${tag.color}50">${tag.text}</span>` }).join('');
+                let labelsHtml = ''; 
+                if(c.labels && Array.isArray(c.labels)) {
+                    labelsHtml = c.labels.map(l => { 
+                        const tag = normalizeTag(l); 
+                        return `<span class="mini-tag" style="background:${tag.color}20; color:${tag.color}; border:1px solid ${tag.color}50">${tag.text}</span>`;
+                    }).join('');
+                }
                 
                 let sourceBadge = '';
-                if(c.source && c.source.includes('Ads')) sourceBadge = `<span class="badge" style="background:#ff0000; color:#fff;">ADS</span>`;
-                else if(c.source === 'Web') sourceBadge = `<span class="badge" style="background:#1e3a8a; color:#fff;">WEB</span>`;
-                else if(c.source === 'Tienda Virtual') sourceBadge = `<span class="badge" style="background:#a21caf; color:#fff;">TIENDA</span>`;
-
+                if(c.source && c.source.includes('Ads')) {
+                    sourceBadge = `<span class="badge" style="background:#ff0000; color:#fff;">ADS</span>`;
+                } else if(c.source === 'Web') {
+                    sourceBadge = `<span class="badge" style="background:#1e3a8a; color:#fff;">WEB</span>`;
+                } else if(c.source === 'Tienda Virtual') {
+                    sourceBadge = `<span class="badge" style="background:#a21caf; color:#fff;">TIENDA</span>`;
+                }
+                
                 const isSelected = selectedChats.has(c.id);
 
-                return `<div id="chat-${c.id}" class="chat-item ${currentChat === c.id ? 'active' : ''} ${c.archived ? 'archived' : ''}" onclick="openChat('${c.id}', '${c.name}', '${c.photoUrl || ''}')" oncontextmenu="showContextMenu(event, '${c.id}', ${c.pinned}, ${c.archived})">
+                return `
+                <div id="chat-${c.id}" class="chat-item ${currentChat === c.id ? 'active' : ''} ${c.archived ? 'archived' : ''}" onclick="openChat('${c.id}', '${c.name}', '${c.photoUrl || ''}')" oncontextmenu="showContextMenu(event, '${c.id}', ${c.pinned}, ${c.archived})">
                     <input type="checkbox" class="bulk-checkbox" ${isSelected ? 'checked' : ''} onclick="toggleChatSelection('${c.id}', event)">
                     <div class="avatar">${c.photoUrl ? `<img src="${c.photoUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fas fa-user"></i>'}</div>
                     <div class="chat-info">
@@ -886,17 +1126,57 @@
             if(scroll > 0) container.scrollTop = scroll;
         }
 
-        function showContextMenu(e, phone, isPinned, isArchived) { e.preventDefault(); contextPhone = phone; const menu = document.getElementById('context-menu'); const pinBtn = document.getElementById('ctx-pin'); pinBtn.innerHTML = isPinned ? '<i class="fas fa-thumbtack" style="opacity:0.5"></i> <span>Desfijar Chat</span>' : '<i class="fas fa-thumbtack"></i> <span>Fijar Chat</span>'; pinBtn.onclick = () => contextAction('toggle_pin'); const archBtn = document.getElementById('ctx-archive'); archBtn.innerHTML = isArchived ? '<i class="fas fa-box-open"></i> <span>Desarchivar</span>' : '<i class="fas fa-archive"></i> <span>Archivar</span>'; archBtn.onclick = () => contextAction('toggle_archive'); menu.style.display = 'block'; menu.style.left = e.pageX + 'px'; menu.style.top = e.pageY + 'px'; }
-        async function contextAction(action, valueOverride = true) { if(!contextPhone) return; if(action === 'delete' && !confirm("¿ELIMINAR CHAT ESTÁ SEGURO?")) return; await fetch('/api/chat/action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: contextPhone, action: action, value: valueOverride }) }); syncChats(); document.getElementById('context-menu').style.display = 'none'; }
-        function quickLabel() { if(!contextPhone) return; const chat = chatsData.find(c => c.id === contextPhone); if(chat) openChat(chat.id, chat.name, chat.photoUrl); document.getElementById('crm-panel').classList.add('open'); document.getElementById('context-menu').style.display = 'none'; }
+        function showContextMenu(e, phone, isPinned, isArchived) { 
+            e.preventDefault(); 
+            contextPhone = phone; 
+            const menu = document.getElementById('context-menu'); 
+            const pinBtn = document.getElementById('ctx-pin'); 
+            
+            pinBtn.innerHTML = isPinned ? '<i class="fas fa-thumbtack" style="opacity:0.5"></i> <span>Desfijar Chat</span>' : '<i class="fas fa-thumbtack"></i> <span>Fijar Chat</span>'; 
+            pinBtn.onclick = () => contextAction('toggle_pin'); 
+            
+            const archBtn = document.getElementById('ctx-archive'); 
+            archBtn.innerHTML = isArchived ? '<i class="fas fa-box-open"></i> <span>Desarchivar</span>' : '<i class="fas fa-archive"></i> <span>Archivar</span>'; 
+            archBtn.onclick = () => contextAction('toggle_archive'); 
+            
+            menu.style.display = 'block'; 
+            menu.style.left = e.pageX + 'px'; 
+            menu.style.top = e.pageY + 'px'; 
+        }
+
+        async function contextAction(action, valueOverride = true) { 
+            if(!contextPhone) return; 
+            if(action === 'delete' && !confirm("¿ELIMINAR CHAT ESTÁ SEGURO?")) return; 
+            
+            await fetch('/api/chat/action', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ phone: contextPhone, action: action, value: valueOverride }) 
+            }); 
+            
+            syncChats(); 
+            document.getElementById('context-menu').style.display = 'none'; 
+        }
+
+        function quickLabel() { 
+            if(!contextPhone) return; 
+            const chat = chatsData.find(c => c.id === contextPhone); 
+            
+            if(chat) {
+                openChat(chat.id, chat.name, chat.photoUrl); 
+            }
+            
+            document.getElementById('crm-panel').classList.add('open'); 
+            document.getElementById('context-menu').style.display = 'none'; 
+        }
         
         async function openChat(phone, name, photo) { 
             if(bulkMode) return toggleChatSelection(phone, event); 
-
+            
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
             const clickedItem = document.getElementById(`chat-${phone}`);
             if(clickedItem) clickedItem.classList.add('active');
-
+            
             currentChat = phone; 
             document.body.classList.add('mobile-chat-open'); 
             document.getElementById('conversation-view').style.display = 'flex'; 
@@ -904,16 +1184,17 @@
             document.getElementById('chat-header-phone').innerText = '+' + phone; 
             
             const headerAvatar = document.getElementById('chat-header-avatar');
-            if(photo) {
-                headerAvatar.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;">`;
-            } else {
-                headerAvatar.innerHTML = `<i class="fas fa-user"></i>`;
+            if(photo) { 
+                headerAvatar.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;">`; 
+            } else { 
+                headerAvatar.innerHTML = `<i class="fas fa-user"></i>`; 
             }
-
+            
             document.getElementById('messages-container').innerHTML = `<div style="display:flex; justify-content:center; align-items:center; height:100%; color:var(--text-muted); flex-direction:column; gap:10px;"><i class="fas fa-circle-notch fa-spin fa-2x" style="color:var(--primary);"></i><span style="font-size:0.9rem;">Cargando historial...</span></div>`; 
             
             const chatInfo = chatsData.find(c => c.id === phone); 
             document.getElementById('bot-switch').checked = chatInfo ? chatInfo.botActive : true; 
+            
             loadLeadDataToCRM(phone); 
             loadTags(phone); 
             await loadMessages(phone, true); 
@@ -921,40 +1202,55 @@
         
         function formatSmartTime(iso) {
             if(!iso) return '';
-            const d = new Date(iso);
+            const d = new Date(iso); 
             const now = new Date();
             const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
             const timeStr = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
             if (isToday) return timeStr;
+            
             const dateStr = d.toLocaleDateString([], {day: '2-digit', month: '2-digit', year:'2-digit'});
             return `${dateStr} ${timeStr}`;
         }
 
-        // --- CREADOR DE GLOBITOS DE CHAT REUTILIZABLE ---
         function buildMessageHTML(m) {
-            let text = m.text;
-            let isMedia = false;
+            let text = m.text; 
+            let isMedia = false; 
             let mediaId = null;
-
+            
             if(text.includes('[MEDIA:')) { 
                 isMedia = true;
                 const parts = text.split(':'); 
                 const type = parts[1]; 
                 const id = parts[2].split(']')[0].replace(/\D/g, ''); 
                 const extraCaption = text.split(']').slice(1).join(']').trim(); 
-                mediaId = id;
+                mediaId = id; 
                 const mediaUrl = `/api/media-proxy/${id}?v=final`; 
-                
                 let captionHtml = extraCaption ? `<div style="margin-top:8px; font-size:0.9rem;">${extraCaption}</div>` : '';
 
                 if(type === 'IMAGE') { 
-                    text = `<div style="display:flex; flex-direction:column; gap:5px;"><img src="${mediaUrl}" style="max-width:250px; border-radius:8px; cursor:pointer; min-height:100px; background:var(--border); transition:transform 0.2s;" onclick="openLightbox('${mediaUrl}', 'IMAGE')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none; color:#ef4444; font-size:0.8rem; padding:10px; border:1px dashed #ef4444; border-radius:8px;">⚠️ Error de imagen.</div>${captionHtml}</div>`; 
+                    text = `
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                        <img src="${mediaUrl}" style="max-width:250px; border-radius:8px; cursor:pointer; min-height:100px; background:var(--border); transition:transform 0.2s;" onclick="openLightbox('${mediaUrl}', 'IMAGE')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
+                        <div style="display:none; color:#ef4444; font-size:0.8rem; padding:10px; border:1px dashed #ef4444; border-radius:8px;">⚠️ Error de imagen.</div>
+                        ${captionHtml}
+                    </div>`; 
                 }
                 else if(type === 'VIDEO') {
-                    text = `<div style="display:flex; flex-direction:column; gap:5px;"><div style="position:relative; width:250px; cursor:pointer; overflow:hidden; border-radius:8px; background:#000; transition:transform 0.2s;" onclick="openLightbox('${mediaUrl}', 'VIDEO')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'"><video src="${mediaUrl}" style="width:100%; opacity:0.8;" preload="metadata"></video><div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(233,82,30,0.8); border-radius:50%; width:45px; height:45px; display:flex; align-items:center; justify-content:center; color:white;"><i class="fas fa-play" style="margin-left:3px;"></i></div></div>${captionHtml}</div>`;
+                    text = `
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                        <div style="position:relative; width:250px; cursor:pointer; overflow:hidden; border-radius:8px; background:#000; transition:transform 0.2s;" onclick="openLightbox('${mediaUrl}', 'VIDEO')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                            <video src="${mediaUrl}" style="width:100%; opacity:0.8;" preload="metadata"></video>
+                            <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(233,82,30,0.8); border-radius:50%; width:45px; height:45px; display:flex; align-items:center; justify-content:center; color:white;">
+                                <i class="fas fa-play" style="margin-left:3px;"></i>
+                            </div>
+                        </div>
+                        ${captionHtml}
+                    </div>`;
                 }
                 else if(type === 'AUDIO') {
-                    text = `<div class="audio-wrapper">
+                    text = `
+                    <div class="audio-wrapper">
                         <button class="play-btn" id="btn-${id}" onclick="togglePlay('${id}', '${mediaUrl}')">
                             <i class="fas fa-play" style="margin-left:3px;"></i>
                         </button>
@@ -971,17 +1267,27 @@
                         </a>
                     </div>`;
                 } else { 
-                    text = `<a href="${mediaUrl}" target="_blank" style="color:white; text-decoration:none; display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.2); padding:10px; border-radius:6px; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'"><i class="fas fa-file-download" style="font-size:1.5rem;"></i><div style="display:flex; flex-direction:column;"><span>Archivo Adjunto (${type})</span><span style="font-size:0.75rem; font-weight:600; color:#FFF;">Clic para descargar</span></div></a>${captionHtml}`; 
+                    text = `
+                    <a href="${mediaUrl}" target="_blank" style="color:white; text-decoration:none; display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.2); padding:10px; border-radius:6px; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                        <i class="fas fa-file-download" style="font-size:1.5rem;"></i>
+                        <div style="display:flex; flex-direction:column;">
+                            <span>Archivo Adjunto (${type})</span>
+                            <span style="font-size:0.75rem; font-weight:600; color:#FFF;">Clic para descargar</span>
+                        </div>
+                    </a>
+                    ${captionHtml}`; 
                 }
             } 
             
             const safeText = m.text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
             const isAlert = text.includes('[ALERTA:');
             
-            return `<div class="msg ${isAlert ? 'alert' : m.role}">
+            return `
+            <div class="msg ${isAlert ? 'alert' : m.role}">
                 ${text}
                 <div class="msg-time">${formatSmartTime(m.time)}</div>
-                ${!isAlert ? `<div class="msg-forward-btn" onclick="openForwardModal('${safeText}', ${isMedia}, '${mediaId}')" title="Reenviar Mensaje">
+                ${!isAlert ? `
+                <div class="msg-forward-btn" onclick="openForwardModal('${safeText}', ${isMedia}, '${mediaId}')" title="Reenviar Mensaje">
                     <i class="fas fa-share"></i>
                 </div>` : ''}
             </div>`;
@@ -991,55 +1297,55 @@
             try { 
                 const res = await fetch(`/api/chat-history/${phone}`); 
                 const msgs = await res.json(); 
+                
                 if(currentChat !== phone) return; 
+                
                 const container = document.getElementById('messages-container');
-                // Ahora usamos el constructor para armar todo el historial la primera vez
                 container.innerHTML = msgs.map(m => buildMessageHTML(m)).join(''); 
-                if(scrollDown) setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
-            } catch(e) {}
+                
+                if(scrollDown) {
+                    setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
+                }
+            } catch(e) {
+                console.error("Error cargando historial de mensajes:", e);
+            }
         }
 
         function openForwardModal(content, isMedia, mediaId) {
             msgToForward = { content, isMedia, mediaId };
-            let preview = "";
-            if (isMedia) preview = "Multimedia (Imagen/Audio/Video/Doc)";
-            else preview = content.substring(0, 50) + "...";
+            let preview = isMedia ? "Multimedia (Imagen/Audio/Video/Doc)" : content.substring(0, 50) + "...";
             
             document.getElementById('forward-preview').innerText = "Reenviando: " + preview;
-            document.getElementById('forward-modal').classList.add('show');
+            document.getElementById('forward-modal').classList.add('show'); 
             renderForwardList(chatsData);
         }
 
-        function filterForwardList() {
-            const term = document.getElementById('forward-search').value.toLowerCase();
-            const filtered = chatsData.filter(c => c.name.toLowerCase().includes(term) || c.id.includes(term));
-            renderForwardList(filtered);
+        function filterForwardList() { 
+            const term = document.getElementById('forward-search').value.toLowerCase(); 
+            const filtered = chatsData.filter(c => c.name.toLowerCase().includes(term) || c.id.includes(term)); 
+            renderForwardList(filtered); 
         }
 
-        function renderForwardList(list) {
-            const container = document.getElementById('forward-list');
-            container.innerHTML = list.map(c => `
-                <div style="padding:12px 15px; border-bottom:1px solid var(--border); cursor:pointer; display:flex; align-items:center; gap:12px; transition:background 0.2s;" onmouseover="this.style.background='var(--hover-item)'" onmouseout="this.style.background='transparent'" onclick="executeForward('${c.id}')">
-                    <div class="avatar" style="width:35px; height:35px;">${c.photoUrl ? `<img src="${c.photoUrl}" style="width:100%;height:100%;">` : '<i class="fas fa-user"></i>'}</div>
-                    <div style="font-size:0.95rem; font-weight:500; color:var(--text);">${c.name}</div>
-                </div>
-            `).join('');
+        function renderForwardList(list) { 
+            document.getElementById('forward-list').innerHTML = list.map(c => `
+            <div style="padding:12px 15px; border-bottom:1px solid var(--border); cursor:pointer; display:flex; align-items:center; gap:12px; transition:background 0.2s;" onmouseover="this.style.background='var(--hover-item)'" onmouseout="this.style.background='transparent'" onclick="executeForward('${c.id}')">
+                <div class="avatar" style="width:35px; height:35px;">${c.photoUrl ? `<img src="${c.photoUrl}" style="width:100%;height:100%;">` : '<i class="fas fa-user"></i>'}</div>
+                <div style="font-size:0.95rem; font-weight:500; color:var(--text);">${c.name}</div>
+            </div>`).join(''); 
         }
 
         async function executeForward(targetPhone) {
-            if(!msgToForward) return;
+            if(!msgToForward) return; 
             closeModal('forward-modal');
             
-            await fetch('/api/chat/send', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ phone: targetPhone, message: msgToForward.content })
+            await fetch('/api/chat/send', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ phone: targetPhone, message: msgToForward.content }) 
             });
-            
             showToast("Mensaje reenviado exitosamente");
         }
 
-        // --- FUNCIONES DEL REPRODUCTOR DE AUDIO WHATSAPP ---
         async function togglePlay(id, url) { 
             const audio = document.getElementById(`audio-${id}`); 
             const btn = document.getElementById(`btn-${id}`); 
@@ -1051,16 +1357,16 @@
                 } 
                 
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; 
-                
-                if (!audio.src || audio.src === window.location.href) {
-                    audio.src = url;
-                    audio.load();
+                if (!audio.src || audio.src === window.location.href) { 
+                    audio.src = url; 
+                    audio.load(); 
                 }
                 
-                audio.play().then(() => { 
+                audio.play()
+                .then(() => { 
                     currentlyPlaying = audio; 
-                }).catch((error) => { 
-                    console.error("Error reproduciendo:", error);
+                })
+                .catch((error) => { 
                     btn.innerHTML = '<i class="fas fa-play" style="margin-left:3px;"></i>'; 
                 });
             } else { 
@@ -1081,60 +1387,62 @@
             if (audio && audio.duration && !audio.paused) { 
                 const percent = (audio.currentTime / audio.duration) * 100; 
                 slider.value = percent; 
-                
                 const mins = Math.floor(audio.currentTime / 60); 
                 const secs = Math.floor(audio.currentTime % 60); 
                 time.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`; 
             } 
         }
 
-        function setAudioDuration(id) {
-            const audio = document.getElementById(`audio-${id}`);
-            const durText = document.getElementById(`dur-${id}`);
-            if (audio.duration && isFinite(audio.duration)) {
-                const mins = Math.floor(audio.duration / 60);
-                const secs = Math.floor(audio.duration % 60);
-                durText.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-            }
+        function setAudioDuration(id) { 
+            const audio = document.getElementById(`audio-${id}`); 
+            const durText = document.getElementById(`dur-${id}`); 
+            
+            if (audio.duration && isFinite(audio.duration)) { 
+                const mins = Math.floor(audio.duration / 60); 
+                const secs = Math.floor(audio.duration % 60); 
+                durText.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`; 
+            } 
         }
 
-        function pauseForSeek(id) {
-            const audio = document.getElementById(`audio-${id}`);
-            if(!audio.paused) audio.pause();
+        function pauseForSeek(id) { 
+            const audio = document.getElementById(`audio-${id}`); 
+            if(!audio.paused) audio.pause(); 
         }
 
-        function seekAudio(id, value) {
-            const audio = document.getElementById(`audio-${id}`);
-            if(audio.duration) {
-                audio.currentTime = (value / 100) * audio.duration;
-                audio.play();
+        function seekAudio(id, value) { 
+            const audio = document.getElementById(`audio-${id}`); 
+            if(audio.duration) { 
+                audio.currentTime = (value / 100) * audio.duration; 
+                audio.play(); 
                 document.getElementById(`btn-${id}`).innerHTML = '<i class="fas fa-pause"></i>'; 
-                currentlyPlaying = audio;
-            }
+                currentlyPlaying = audio; 
+            } 
         }
 
         function resetPlayer(id) { 
             document.getElementById(`btn-${id}`).innerHTML = '<i class="fas fa-play" style="margin-left:3px;"></i>'; 
             document.getElementById(`seek-${id}`).value = 0; 
-            const time = document.getElementById(`time-${id}`);
-            if(time) time.innerText = "0:00";
+            const time = document.getElementById(`time-${id}`); 
+            if(time) time.innerText = "0:00"; 
         }
-        // --------------------------------------------------------
 
         async function uploadFile() {
-            const input = document.getElementById('file-upload');
+            const input = document.getElementById('file-upload'); 
             if(!input.files[0]) return;
-            const formData = new FormData();
-            formData.append('file', input.files[0]);
-            formData.append('phone', currentChat);
-            const type = input.files[0].type.startsWith('image/') ? 'image' : 
-                         (input.files[0].type.startsWith('audio/') ? 'audio' : 
-                         (input.files[0].type.startsWith('video/') ? 'video' : 'document'));
-            formData.append('type', type);
             
+            const formData = new FormData(); 
+            formData.append('file', input.files[0]); 
+            formData.append('phone', currentChat);
+            
+            let type = 'document';
+            if (input.files[0].type.startsWith('image/')) type = 'image';
+            else if (input.files[0].type.startsWith('audio/')) type = 'audio';
+            else if (input.files[0].type.startsWith('video/')) type = 'video';
+            
+            formData.append('type', type);
             showToast("Enviando archivo... ⏳");
-            // Delegamos el dibujo al WebSocket, evitamos duplicados
-            await fetch('/api/chat/upload-send', { method: 'POST', body: formData });
+            
+            await fetch('/api/chat/upload-send', { method: 'POST', body: formData }); 
             input.value = ''; 
         }
 
@@ -1143,190 +1451,471 @@
             if(!txt) return; 
             document.getElementById('msg-input').value = ''; 
             
-            // Enviamos el mensaje en silencio. El WebSocket nos devolverá la orden de renderizarlo al instante.
-            await fetch('/api/chat/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, message: txt }) }); 
+            await fetch('/api/chat/send', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ phone: currentChat, message: txt }) 
+            }); 
         }
 
-        function checkEnter(e) { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
-        async function toggleBotActive() { const active = document.getElementById('bot-switch').checked; await fetch('/api/chat/toggle-bot', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, active }) }); showToast(active ? "🤖 ICBOT Activado" : "⏸️ ICBOT Pausado"); }
+        function checkEnter(e) { 
+            if(e.key === 'Enter' && !e.shiftKey) { 
+                e.preventDefault(); 
+                sendMessage(); 
+            } 
+        }
+
+        async function toggleBotActive() { 
+            const active = document.getElementById('bot-switch').checked; 
+            
+            await fetch('/api/chat/toggle-bot', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ phone: currentChat, active }) 
+            }); 
+            
+            showToast(active ? "🤖 ICBOT Activado" : "⏸️ ICBOT Pausado"); 
+        }
         
         async function loadLeadDataToCRM(phone) { 
-            document.getElementById('crm-name').value=""; 
-            document.getElementById('crm-city').value=""; 
-            document.getElementById('crm-dept').value=""; 
-            document.getElementById('crm-email').value=""; 
-            document.getElementById('crm-interest').value=""; 
-            document.getElementById('crm-executive').value="Pendiente"; 
-
+            document.getElementById('crm-name').value = ""; 
+            document.getElementById('crm-city').value = ""; 
+            document.getElementById('crm-dept').value = ""; 
+            document.getElementById('crm-email').value = ""; 
+            document.getElementById('crm-interest').value = ""; 
+            document.getElementById('crm-executive').value = "Pendiente"; 
+            
             const res = await fetch('/api/data/leads'); 
             const leads = await res.json(); 
             const lead = leads.find(l => l.phone === phone); 
             
             if(lead) { 
-                document.getElementById('crm-name').value = lead.nombre||""; 
-                document.getElementById('crm-city').value = lead.ciudad||""; 
-                document.getElementById('crm-dept').value = lead.departamento||""; 
-                document.getElementById('crm-email').value = lead.correo||""; 
+                document.getElementById('crm-name').value = lead.nombre || ""; 
+                document.getElementById('crm-city').value = lead.ciudad || ""; 
+                document.getElementById('crm-dept').value = lead.departamento || ""; 
+                document.getElementById('crm-email').value = lead.correo || ""; 
                 
-                let interestSelect = document.getElementById('crm-interest');
+                let interestSelect = document.getElementById('crm-interest'); 
                 let foundInterest = false;
-                if(lead.interes) {
-                    for(let opt of interestSelect.options) {
-                        if(opt.value.toUpperCase() === lead.interes.toUpperCase()) {
-                            interestSelect.value = opt.value;
-                            foundInterest = true; break;
-                        }
-                    }
-                    if(!foundInterest) interestSelect.value = "Consultando";
+                
+                if(lead.interes) { 
+                    for(let opt of interestSelect.options) { 
+                        if(opt.value.toUpperCase() === lead.interes.toUpperCase()) { 
+                            interestSelect.value = opt.value; 
+                            foundInterest = true; 
+                            break; 
+                        } 
+                    } 
+                    if(!foundInterest) interestSelect.value = "Consultando"; 
                 }
-
-                let execSelect = document.getElementById('crm-executive');
-                if (lead.etiqueta && executivesMap[lead.etiqueta]) {
-                    execSelect.value = lead.etiqueta;
-                } else {
-                    execSelect.value = "Pendiente";
+                
+                let execSelect = document.getElementById('crm-executive'); 
+                if (lead.etiqueta && executivesMap[lead.etiqueta]) { 
+                    execSelect.value = lead.etiqueta; 
+                } else { 
+                    execSelect.value = "Pendiente"; 
                 }
             } 
         }
 
         async function saveLeadManual() { 
             if(!currentChat) return; 
+            
             const res = await fetch('/api/data/leads'); 
             const leads = await res.json(); 
             const lead = leads.find(l => l.phone === currentChat); 
             const id = lead ? lead.id : null; 
             
             if(id) { 
-                const updates = [
-                    {field:'nombre', value:document.getElementById('crm-name').value},
-                    {field:'ciudad', value:document.getElementById('crm-city').value},
-                    {field:'correo', value:document.getElementById('crm-email').value},
-                    {field:'interes', value:document.getElementById('crm-interest').value},
-                    {field:'etiqueta', value:document.getElementById('crm-executive').value}
+                const updates = [ 
+                    {field:'nombre', value:document.getElementById('crm-name').value}, 
+                    {field:'ciudad', value:document.getElementById('crm-city').value}, 
+                    {field:'correo', value:document.getElementById('crm-email').value}, 
+                    {field:'interes', value:document.getElementById('crm-interest').value}, 
+                    {field:'etiqueta', value:document.getElementById('crm-executive').value} 
                 ]; 
-                for(let u of updates) {
-                    await fetch('/api/leads/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id, field: u.field, value: u.value }) }); 
+                
+                for(let u of updates) { 
+                    await fetch('/api/leads/update', { 
+                        method: 'POST', 
+                        headers: {'Content-Type': 'application/json'}, 
+                        body: JSON.stringify({ id, field: u.field, value: u.value }) 
+                    }); 
                 }
+                
                 showToast("✅ Base de Datos Actualizada"); 
                 refreshLeads(); 
             } else { 
                 showToast("⚠️ Espera un primer mensaje del cliente."); 
             } 
         }
-        
+
         function downloadExcel() { 
             const rows = [['Fecha', 'Fuente', 'Nombre', 'Telefono', 'Ciudad', 'Departamento', 'Correo', 'Interes', 'Ejecutivo ID', 'Etiqueta Comercial']]; 
             const table = document.getElementById('leads-body'); 
             
             for (let tr of table.rows) { 
-                const cells = Array.from(tr.cells);
-                const rowData = [
-                    cells[0].innerText,
-                    cells[1].innerText,
-                    cells[2].innerText,
-                    cells[3].innerText,
-                    cells[4].innerText,
-                    cells[5].innerText,
-                    cells[6].innerText,
-                    cells[7].innerText,
-                    tr.getAttribute('data-exec-id'),
-                    cells[9].innerText
-                ];
+                const cells = Array.from(tr.cells); 
+                const rowData = [ 
+                    cells[0].innerText, 
+                    cells[1].innerText, 
+                    cells[2].innerText, 
+                    cells[3].innerText, 
+                    cells[4].innerText, 
+                    cells[5].innerText, 
+                    cells[6].innerText, 
+                    cells[7].innerText, 
+                    tr.getAttribute('data-exec-id'), 
+                    cells[9].innerText 
+                ]; 
                 rows.push(rowData); 
             } 
             
-            let csvContent = "\uFEFF";
+            let csvContent = "\uFEFF"; 
             csvContent += rows.map(e => e.map(v => `"${v ? String(v).replace(/"/g, '""') : ''}"`).join(",")).join("\n"); 
             
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); 
             const link = document.createElement("a"); 
-            link.href = URL.createObjectURL(blob);
+            link.href = URL.createObjectURL(blob); 
             link.download = "leads_icbot.csv"; 
             document.body.appendChild(link); 
             link.click(); 
         }
 
-        function loadTags(phone) { fetch('/api/data/tags').then(r=>r.json()).then(t => renderCRMTags(t)); }
-        function renderCRMTags(tags) { const chat = chatsData.find(c => c.id === currentChat); const activeTags = chat ? chat.labels : []; document.getElementById('tag-list').innerHTML = tags.map(t => { const isActive = activeTags && activeTags.some(at => normalizeTag(at).text === t.name); return `<span class="tag ${isActive ? 'selected' : ''}" style="border-color:${t.color}; color:${isActive?'#fff':t.color}; background:${isActive?t.color:'transparent'}" onclick="toggleChatTag('${t.name}', '${t.color}')">${t.name}</span>`; }).join(''); }
-        async function toggleChatTag(name, color) { if(!currentChat) return; const chat = chatsData.find(c => c.id === currentChat); let labels = chat.labels || []; const exists = labels.some(l => normalizeTag(l).text === name); if(exists) labels = labels.filter(l => normalizeTag(l).text !== name); else labels.push({text: name, color}); await fetch('/api/chat/action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, action: 'set_labels', value: labels }) }); const res = await fetch('/api/data/leads'); const leads = await res.json(); const lead = leads.find(l => l.phone === currentChat); if(lead) { const newStatus = exists ? (labels.length > 0 ? labels[0].text : "Sin Etiqueta") : name; await fetch('/api/leads/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id: lead.id, field: 'status_tag', value: newStatus }) }); } syncChats(); setTimeout(() => { loadTags(currentChat); refreshLeads(); }, 300); }
+        function loadTags(phone) { 
+            fetch('/api/data/tags')
+            .then(r => r.json())
+            .then(t => renderCRMTags(t)); 
+        }
+
+        function renderCRMTags(tags) { 
+            const chat = chatsData.find(c => c.id === currentChat); 
+            const activeTags = chat ? chat.labels : []; 
+            
+            document.getElementById('tag-list').innerHTML = tags.map(t => { 
+                const isActive = activeTags && activeTags.some(at => normalizeTag(at).text === t.name); 
+                return `<span class="tag ${isActive ? 'selected' : ''}" style="border-color:${t.color}; color:${isActive?'#fff':t.color}; background:${isActive?t.color:'transparent'}" onclick="toggleChatTag('${t.name}', '${t.color}')">${t.name}</span>`; 
+            }).join(''); 
+        }
+
+        async function toggleChatTag(name, color) { 
+            if(!currentChat) return; 
+            
+            const chat = chatsData.find(c => c.id === currentChat); 
+            let labels = chat.labels || []; 
+            const exists = labels.some(l => normalizeTag(l).text === name); 
+            
+            if(exists) {
+                labels = labels.filter(l => normalizeTag(l).text !== name); 
+            } else {
+                labels.push({text: name, color}); 
+            }
+            
+            await fetch('/api/chat/action', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ phone: currentChat, action: 'set_labels', value: labels }) 
+            }); 
+            
+            const res = await fetch('/api/data/leads'); 
+            const leads = await res.json(); 
+            const lead = leads.find(l => l.phone === currentChat); 
+            
+            if(lead) { 
+                const newStatus = exists ? (labels.length > 0 ? labels[0].text : "Sin Etiqueta") : name; 
+                await fetch('/api/leads/update', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ id: lead.id, field: 'status_tag', value: newStatus }) 
+                }); 
+            } 
+            
+            syncChats(); 
+            
+            setTimeout(() => { 
+                loadTags(currentChat); 
+                refreshLeads(); 
+            }, 300); 
+        }
+        
         async function loadAllConfig() { 
             const res = await fetch('/api/data/config'); 
             const cfg = await res.json(); 
+            
             document.getElementById('prompt-editor').value = cfg.prompt || ''; 
+            document.getElementById('prompt-readonly').innerText = cfg.prompt || 'Sin personalidad configurada.'; 
             document.getElementById('biz-name').value = cfg.biz_profile?.name || ''; 
             document.getElementById('biz-hours').value = cfg.biz_profile?.hours || ''; 
+            
             renderWebList(); 
             renderRulesList(cfg.tech_rules); 
-            fetch('/api/data/tags').then(r=>r.json()).then(t => renderConfigTags(t)); 
-            fetch('/api/data/shortcuts').then(r=>r.json()).then(s => renderConfigShortcuts(s)); 
             
-            // LÍNEA COMENTADA PARA EVITAR QUE EL LOGO DE ICC REEMPLACE A VALENTINA
-            // if(cfg.logo_url) document.getElementById('logo-preview').style.backgroundImage = `url('${cfg.logo_url}')`; 
+            fetch('/api/data/tags')
+            .then(r => r.json())
+            .then(t => renderConfigTags(t)); 
+            
+            fetch('/api/data/shortcuts')
+            .then(r => r.json())
+            .then(s => renderConfigShortcuts(s)); 
             
             loadInventoryPreview();
         }
-        async function saveBizConfig() { await fetch('/api/config/biz/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: document.getElementById('biz-name').value, hours: document.getElementById('biz-hours').value }) }); showToast("Perfil Comercial Actualizado"); }
-        async function savePrompt() { await fetch('/api/config/prompt', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ prompt: document.getElementById('prompt-editor').value }) }); showToast("Comportamiento IA Guardado"); }
-        async function uploadLogo(input) { const fd = new FormData(); fd.append('file', input.files[0]); await fetch('/api/config/logo', { method: 'POST', body: fd }); showToast("Logo Actualizado Exitosamente"); loadAllConfig(); }
+        
+        /* --- FUNCIONES PROMPT --- */
+        function openPromptEdit() {
+            document.getElementById('prompt-edit-modal').classList.add('show');
+        }
+
+        async function savePrompt() { 
+            const newPrompt = document.getElementById('prompt-editor').value;
+            await fetch('/api/config/prompt', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ prompt: newPrompt }) 
+            }); 
+            document.getElementById('prompt-readonly').innerText = newPrompt;
+            closeModal('prompt-edit-modal');
+            showToast("Personalidad Actualizada"); 
+        }
+
+        async function saveBizConfig() { 
+            await fetch('/api/config/biz/save', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ 
+                    name: document.getElementById('biz-name').value, 
+                    hours: document.getElementById('biz-hours').value 
+                }) 
+            }); 
+            showToast("Perfil Comercial Actualizado"); 
+        }
+
+        async function uploadLogo(input) { 
+            const fd = new FormData(); 
+            fd.append('file', input.files[0]); 
+            await fetch('/api/config/logo', { method: 'POST', body: fd }); 
+            showToast("Logo Actualizado Exitosamente"); 
+            loadAllConfig(); 
+        }
+
         async function uploadCSV() { 
             const input = document.getElementById('csv-upload'); 
             if(!input.files[0]) return alert("Por favor, selecciona un archivo CSV o Excel"); 
+            
             const fd = new FormData(); 
             fd.append('file', input.files[0]); 
+            
             await fetch('/api/knowledge/csv', { method: 'POST', body: fd }); 
             showToast("Inventario Cargado con Éxito"); 
-            loadInventoryPreview();
+            loadInventoryPreview(); 
         }
-        async function clearInventory() { if(!confirm("¿Estás 100% seguro de borrar TODO el inventario?")) return; await fetch('/api/knowledge/clear', { method: 'POST' }); showToast("Inventario Eliminado"); loadInventoryPreview(); }
+
+        async function clearInventory() { 
+            if(!confirm("¿Estás 100% seguro de borrar TODO el inventario?")) return; 
+            await fetch('/api/knowledge/clear', { method: 'POST' }); 
+            showToast("Inventario Eliminado"); 
+            loadInventoryPreview(); 
+        }
         
-        async function renderWebList() { const res = await fetch('/api/data/web-knowledge'); const list = await res.json(); document.getElementById('web-knowledge-list').innerHTML = list.map(i => `<li class="config-item"><span style="max-width:200px; overflow:hidden; text-overflow:ellipsis;">${i.url}</span><div style="display:flex; gap:5px;"><button class="btn-small btn-blue" onclick="showWebInfo('${encodeURIComponent(i.summary)}')"><i class="fas fa-eye"></i></button><button class="btn-small btn-red" onclick="deleteWeb('${i.id}')"><i class="fas fa-trash"></i></button></div></li>`).join(''); }
+        /* --- FUNCIONES WEB KNOWLEDGE --- */
+        async function renderWebList() { 
+            const res = await fetch('/api/data/web-knowledge'); 
+            const list = await res.json(); 
+            
+            document.getElementById('web-knowledge-list').innerHTML = list.map(i => `
+            <li class="config-item">
+                <span style="max-width:200px; overflow:hidden; text-overflow:ellipsis;">${i.url}</span>
+                <div style="display:flex; gap:5px;">
+                    <button class="btn-small btn-blue" onclick="showWebInfo('${i.id}', '${encodeURIComponent(i.summary)}')"><i class="fas fa-eye"></i></button>
+                    <button class="btn-small btn-red" onclick="deleteWeb('${i.id}')"><i class="fas fa-trash"></i></button>
+                </div>
+            </li>`).join(''); 
+        }
         
-        // --- FUNCIÓN MODIFICADA PARA USAR EL MODAL EN LUGAR DE ALERT() ---
-        function showWebInfo(summary) { 
-            document.getElementById('web-audit-text').innerText = decodeURIComponent(summary);
+        function showWebInfo(id, summary) { 
+            document.getElementById('edit-web-id').value = id;
+            document.getElementById('web-audit-text').value = decodeURIComponent(summary);
             document.getElementById('web-audit-modal').classList.add('show');
         }
+
+        async function saveWebEdit() {
+            const id = document.getElementById('edit-web-id').value;
+            const newSummary = document.getElementById('web-audit-text').value;
+            
+            await fetch('/api/data/web-knowledge/update', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ id, summary: newSummary }) 
+            });
+            
+            closeModal('web-audit-modal');
+            showToast("Información Web corregida");
+            renderWebList();
+        }
         
-        async function scanWeb() { const url = document.getElementById('web-url-input').value; const summary = prompt("Ingresa un resumen corto para esta página:"); if(summary) { await fetch('/api/data/web-knowledge', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url, summary }) }); document.getElementById('web-url-input').value = ""; renderWebList(); } }
-        async function deleteWeb(id) { await fetch('/api/data/web-knowledge/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) }); renderWebList(); }
-        function renderRulesList(rules) { document.getElementById('rules-list').innerHTML = (rules || []).map((r, i) => `<li class="config-item"><span>${r}</span><button class="btn-small btn-red" onclick="deleteRule(${i})"><i class="fas fa-trash"></i></button></li>`).join(''); }
-        async function addRule() { const r = document.getElementById('rule-input').value; if(!r) return; const res = await fetch('/api/config/rules/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ rule: r }) }); const data = await res.json(); renderRulesList(data.rules); document.getElementById('rule-input').value = ""; }
-        async function deleteRule(i) { const res = await fetch('/api/config/rules/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ index: i }) }); const data = await res.json(); renderRulesList(data.rules); }
+        async function scanWeb() { 
+            const url = document.getElementById('web-url-input').value; 
+            const summary = prompt("Ingresa un resumen corto para esta página:"); 
+            
+            if(summary) { 
+                await fetch('/api/data/web-knowledge', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ url, summary }) 
+                }); 
+                document.getElementById('web-url-input').value = ""; 
+                renderWebList(); 
+            } 
+        }
+
+        async function deleteWeb(id) { 
+            await fetch('/api/data/web-knowledge/delete', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ id }) 
+            }); 
+            renderWebList(); 
+        }
         
-        // --- TAG CRUD ---
+        function renderRulesList(rules) { 
+            document.getElementById('rules-list').innerHTML = (rules || []).map((r, i) => `
+            <li class="config-item">
+                <span>${r}</span>
+                <button class="btn-small btn-red" onclick="deleteRule(${i})"><i class="fas fa-trash"></i></button>
+            </li>`).join(''); 
+        }
+
+        async function addRule() { 
+            const r = document.getElementById('rule-input').value; 
+            if(!r) return; 
+            
+            const res = await fetch('/api/config/rules/add', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ rule: r }) 
+            }); 
+            
+            const data = await res.json(); 
+            renderRulesList(data.rules); 
+            document.getElementById('rule-input').value = ""; 
+        }
+
+        async function deleteRule(i) { 
+            const res = await fetch('/api/config/rules/delete', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ index: i }) 
+            }); 
+            
+            const data = await res.json(); 
+            renderRulesList(data.rules); 
+        }
+        
         function renderConfigTags(tags) { 
-            document.getElementById('config-tags-list').innerHTML = tags.map(t => `<li class="config-item">
+            document.getElementById('config-tags-list').innerHTML = tags.map(t => `
+            <li class="config-item">
                 <span style="color:${t.color};font-weight:600;"><i class="fas fa-circle" style="font-size:0.6rem; vertical-align:middle; margin-right:5px;"></i> ${t.name}</span>
                 <div style="display:flex; gap:5px;">
                     <button class="btn-small btn-blue" onclick="editTag(${t.id}, '${t.name}', '${t.color}')"><i class="fas fa-pencil-alt"></i></button>
                     <button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button>
                 </div>
             </li>`).join(''); 
+            
             renderCRMTags(tags); 
         }
-        async function addTag() { const name = document.getElementById('tag-name').value; const color = document.getElementById('tag-color').value; if(!name) return; await fetch('/api/tags/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name, color }) }); loadAllConfig(); document.getElementById('tag-name').value = ""; }
-        async function deleteTag(id) { await fetch('/api/tags/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) }); loadAllConfig(); }
-        
-        function editTag(id, name, color) {
-            document.getElementById('edit-tag-id').value = id;
-            document.getElementById('edit-tag-name').value = name;
-            document.getElementById('edit-tag-color').value = color;
-            document.getElementById('tag-edit-modal').classList.add('show');
-        }
-        async function saveTagEdit() {
-            const id = document.getElementById('edit-tag-id').value;
-            const name = document.getElementById('edit-tag-name').value;
-            const color = document.getElementById('edit-tag-color').value;
-            await fetch('/api/tags/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id, name, color }) });
-            closeModal('tag-edit-modal');
-            loadAllConfig();
-            showToast("Etiqueta actualizada correctamente");
+
+        async function addTag() { 
+            const name = document.getElementById('tag-name').value; 
+            const color = document.getElementById('tag-color').value; 
+            
+            if(!name) return; 
+            
+            await fetch('/api/tags/add', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ name, color }) 
+            }); 
+            
+            loadAllConfig(); 
+            document.getElementById('tag-name').value = ""; 
         }
 
-        function renderConfigShortcuts(shortcuts) { const list = shortcuts.map(s => `<li class="config-item"><span style="color:var(--primary);"><b>${s.keyword}</b></span><button class="btn-small btn-red" onclick="deleteShortcut(${s.id})"><i class="fas fa-trash"></i></button></li>`).join(''); document.getElementById('config-shortcuts-list').innerHTML = list; document.getElementById('shortcuts-list').innerHTML = shortcuts.map(s => `<span class="tag" style="background:var(--panel); border-color:var(--primary); color:var(--primary);" onclick="insertShortcut('${s.text}')">${s.keyword}</span>`).join(''); }
-        async function addShortcut() { const k = document.getElementById('short-key').value; const t = document.getElementById('short-text').value; if(!k || !t) return; await fetch('/api/shortcuts/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ keyword: k, text: t }) }); loadAllConfig(); document.getElementById('short-key').value = ""; document.getElementById('short-text').value = ""; }
-        async function deleteShortcut(id) { await fetch('/api/shortcuts/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id }) }); loadAllConfig(); }
-        function insertShortcut(text) { document.getElementById('msg-input').value += text; }
+        async function deleteTag(id) { 
+            await fetch('/api/tags/delete', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ id }) 
+            }); 
+            
+            loadAllConfig(); 
+        }
+
+        function editTag(id, name, color) { 
+            document.getElementById('edit-tag-id').value = id; 
+            document.getElementById('edit-tag-name').value = name; 
+            document.getElementById('edit-tag-color').value = color; 
+            document.getElementById('tag-edit-modal').classList.add('show'); 
+        }
+
+        async function saveTagEdit() { 
+            const id = document.getElementById('edit-tag-id').value; 
+            const name = document.getElementById('edit-tag-name').value; 
+            const color = document.getElementById('edit-tag-color').value; 
+            
+            await fetch('/api/tags/update', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ id, name, color }) 
+            }); 
+            
+            closeModal('tag-edit-modal'); 
+            loadAllConfig(); 
+            showToast("Etiqueta actualizada correctamente"); 
+        }
+
+        function renderConfigShortcuts(shortcuts) { 
+            const list = shortcuts.map(s => `
+            <li class="config-item">
+                <span style="color:var(--primary);"><b>${s.keyword}</b></span>
+                <button class="btn-small btn-red" onclick="deleteShortcut(${s.id})"><i class="fas fa-trash"></i></button>
+            </li>`).join(''); 
+            
+            document.getElementById('config-shortcuts-list').innerHTML = list; 
+            
+            document.getElementById('shortcuts-list').innerHTML = shortcuts.map(s => `
+            <span class="tag" style="background:var(--panel); border-color:var(--primary); color:var(--primary);" onclick="insertShortcut('${s.text}')">${s.keyword}</span>`).join(''); 
+        }
+
+        async function addShortcut() { 
+            const k = document.getElementById('short-key').value; 
+            const t = document.getElementById('short-text').value; 
+            
+            if(!k || !t) return; 
+            
+            await fetch('/api/shortcuts/add', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ keyword: k, text: t }) 
+            }); 
+            
+            loadAllConfig(); 
+            document.getElementById('short-key').value = ""; 
+            document.getElementById('short-text').value = ""; 
+        }
+
+        async function deleteShortcut(id) { 
+            await fetch('/api/shortcuts/delete', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ id }) 
+            }); 
+            
+            loadAllConfig(); 
+        }
+
+        function insertShortcut(text) { 
+            document.getElementById('msg-input').value += text; 
+        }
         
         async function refreshLeads() { 
             const res = await fetch('/api/data/leads'); 
@@ -1334,7 +1923,8 @@
             
             document.getElementById('leads-body').innerHTML = leads.map(l => {
                 const execName = executivesMap[l.etiqueta] || l.etiqueta || 'Pendiente';
-                return `<tr data-exec-id="${l.etiqueta || 'Pendiente'}">
+                return `
+                <tr data-exec-id="${l.etiqueta || 'Pendiente'}">
                     <td>${new Date(l.fecha).toLocaleDateString()}</td>
                     <td><span class="lead-source-tag ${l.source==='Web'?'lead-source-web':(l.source==='Tienda Virtual'?'lead-source-store':'')}">${l.source||'Orgánico'}</span></td>
                     <td style="font-weight:600; color:var(--text);">${l.nombre||'-'}</td>
@@ -1346,7 +1936,7 @@
                     <td style="color:var(--primary);">${execName}</td>
                     <td><span class="tag" style="background:var(--panel); color:var(--text); border-color:var(--border);">${l.status_tag||'-'}</span></td>
                     <td>
-                        <button class="nav-btn" style="height:30px; margin-right:5px; border:1px solid var(--border);" onclick="viewLeadDetails('${l.phone}')" title="Ver toda la info del Lead"><i class="fas fa-eye"></i></button>
+                        <button class="nav-btn" style="height:30px; margin-right:5px; border:1px solid var(--border);" onclick="viewLeadDetails('${l.phone}')" title="Ver info"><i class="fas fa-eye"></i></button>
                         <button class="nav-btn" style="height:30px; border:1px solid var(--border);" onclick="openChat('${l.phone}', '${l.nombre}', '')" title="Ir al Chat"><i class="fas fa-comment"></i></button>
                     </td>
                 </tr>`;
@@ -1354,26 +1944,31 @@
         }
 
         async function loadInventoryPreview() {
-            const list = document.getElementById('inventory-list');
+            const list = document.getElementById('inventory-list'); 
             const countLabel = document.getElementById('inventory-count');
+            
             try {
-                const res = await fetch('/api/data/knowledge');
+                const res = await fetch('/api/data/knowledge'); 
                 currentInventory = await res.json();
+                
                 countLabel.innerText = `${currentInventory.length} items registrados`;
-                if(currentInventory.length === 0) {
-                    list.innerHTML = '<li style="text-align:center; color:var(--text-muted); padding:15px; font-size:0.9rem;"><i class="fas fa-box-open fa-2x" style="margin-bottom:10px; color:var(--border);"></i><br>No hay inventario cargado.</li>';
-                    return;
+                
+                if(currentInventory.length === 0) { 
+                    list.innerHTML = '<li style="text-align:center; color:var(--text-muted); padding:15px; font-size:0.9rem;"><i class="fas fa-box-open fa-2x" style="margin-bottom:10px; color:var(--border);"></i><br>No hay inventario cargado.</li>'; 
+                    return; 
                 }
+                
                 list.innerHTML = currentInventory.map(item => {
                     let display = "Producto desconocido";
                     try {
                         const obj = JSON.parse(item.raw_data);
-                        const nombre = obj.nombre || obj.name || obj.producto || "Sin Nombre";
-                        const precio = obj.precio || obj.price || "";
-                        display = `<b style="color:var(--text);">${nombre}</b> <span style="color:var(--primary); font-weight:600;">${precio ? `($${precio})` : ''}</span>`;
-                    } catch(e) { display = item.searchable.substring(0, 30) + "..."; }
+                        display = `<b style="color:var(--text);">${obj.nombre || obj.name || obj.producto || "Sin Nombre"}</b> <span style="color:var(--primary); font-weight:600;">${(obj.precio || obj.price) ? `($${obj.precio || obj.price})` : ''}</span>`;
+                    } catch(e) { 
+                        display = item.searchable.substring(0, 30) + "..."; 
+                    }
                     
-                    return `<li class="config-item" style="font-size:0.9rem;">
+                    return `
+                    <li class="config-item" style="font-size:0.9rem;">
                         <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:65%;">${display}</span>
                         <div style="display:flex; gap:5px;">
                             <button class="btn-small btn-blue" onclick="openEditModal(${item.id})"><i class="fas fa-pencil-alt"></i></button>
@@ -1381,49 +1976,57 @@
                         </div>
                     </li>`;
                 }).join('');
-            } catch(e) { console.error(e); }
+            } catch(e) { 
+                console.error(e); 
+            }
         }
 
         function openEditModal(id) {
-            const item = currentInventory.find(i => i.id === id);
+            const item = currentInventory.find(i => i.id === id); 
             if(!item) return;
+            
             try {
                 const data = JSON.parse(item.raw_data);
-                document.getElementById('edit-id').value = id;
-                document.getElementById('edit-nombre').value = data.nombre || data.name || data.producto || "";
-                document.getElementById('edit-precio').value = data.precio || data.price || "";
-                document.getElementById('edit-stock').value = data.stock || data.cantidad || "";
+                document.getElementById('edit-id').value = id; 
+                document.getElementById('edit-nombre').value = data.nombre || data.name || data.producto || ""; 
+                document.getElementById('edit-precio').value = data.precio || data.price || ""; 
+                document.getElementById('edit-stock').value = data.stock || data.cantidad || ""; 
                 document.getElementById('edit-desc').value = data.descripcion || data.desc || "";
+                
                 document.getElementById('edit-modal').classList.add('show');
-            } catch(e) { alert("Error al leer datos del producto."); }
+            } catch(e) {}
         }
 
         async function saveEditInventory() {
             const id = document.getElementById('edit-id').value;
-            const newData = {
-                nombre: document.getElementById('edit-nombre').value,
-                precio: document.getElementById('edit-precio').value,
-                stock: document.getElementById('edit-stock').value,
-                descripcion: document.getElementById('edit-desc').value
+            const newData = { 
+                nombre: document.getElementById('edit-nombre').value, 
+                precio: document.getElementById('edit-precio').value, 
+                stock: document.getElementById('edit-stock').value, 
+                descripcion: document.getElementById('edit-desc').value 
             };
-            await fetch('/api/knowledge/update', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ id, data: newData })
+            
+            await fetch('/api/knowledge/update', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ id, data: newData }) 
             });
-            closeModal('edit-modal');
-            showToast("Producto actualizado exitosamente");
+            
+            closeModal('edit-modal'); 
+            showToast("Producto actualizado exitosamente"); 
             loadInventoryPreview();
         }
 
-        async function deleteInventoryItem(id) {
-            if(!confirm("¿Borrar este producto definitivamente?")) return;
+        async function deleteInventoryItem(id) { 
+            if(!confirm("¿Borrar este producto definitivamente?")) return; 
+            
             await fetch('/api/knowledge/delete', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
                 body: JSON.stringify({ id }) 
-            });
-            loadInventoryPreview();
+            }); 
+            
+            loadInventoryPreview(); 
         }
     </script>
 </body>
