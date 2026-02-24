@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v30.1 (ICBOT + WEBSOCKETS REALTIME)
+ * SERVER BACKEND - v30.2 (ICBOT + WEBSOCKETS REALTIME)
  * ============================================================
  * 1. FIX: Renombrado oficial a ICBOT completado.
  * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone).
@@ -8,9 +8,9 @@
  * 5. ADD: Sistema Anti-bucle (Auto-apagado del bot).
  * 6. FIX: Prioridad absoluta al nombre dado por el cliente.
  * 7. ADD: WEBSOCKETS (Socket.io) para eliminar el Polling del frontend.
- * 8. MOD: Respuesta estratégica inteligente a archivos adjuntos.
- * 9. MOD: Cronjob seguimiento 7:00 AM (2 días) + Cierre automático.
- * 10.MOD: Segmentación de Categoría vs Producto Específico.
+ * 8. MOD: Cronjob seguimiento 7:00 AM (2 días) + Cierre automático.
+ * 9. MOD: Segmentación de Categoría vs Producto Específico.
+ * 10.FIX: Se eliminó el bloqueo duro de archivos adjuntos para que la IA los procese.
  * ============================================================
  */
 
@@ -145,7 +145,7 @@ let db, globalKnowledge = [], serverInstance;
 
         const PORT = process.env.PORT || 10000;
         // <-- WEBSOCKETS: Ahora usamos server.listen en lugar de app.listen
-        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v30.1 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
+        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v30.2 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -381,31 +381,6 @@ async function procesarConICBOT(dbMsg, aiMsg, phone, name = "Cliente", isFile = 
     if (bot && bot.active === 0) { return null; }
 
     const lead = await db.get("SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1", [phone]);
-
-    // === ESTRATEGIA DE ADJUNTOS ===
-    if (isFile) {
-        let faltante = "";
-        // Priorizamos los datos más importantes primero
-        if (!lead || !lead.nombre || lead.nombre === phone) faltante = "su nombre completo";
-        else if (!lead.ciudad) faltante = "la ciudad donde se encuentra";
-        else if (!lead.correo) faltante = "su correo electrónico";
-        else if (!lead.interes || lead.interes === "Consultando") faltante = "qué maquinaria o servicio busca exactamente";
-
-        let rFile = "";
-        if (faltante !== "") {
-            rFile = `Lo tendré en cuenta para su solicitud, sin embargo para poder compartirlo con un ejecutivo comercial necesito ${faltante}.`;
-        } else {
-            rFile = `He recibido su archivo. Lo adjuntaré a su expediente para que el ejecutivo lo revise junto con su solicitud. ¿Hay algo más en lo que le pueda ayudar mientras es asignado?`;
-        }
-
-        const timestamp = new Date().toISOString();
-        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', rFile, timestamp]);
-        
-        io.emit('new_message', { phone: phone, role: 'bot', text: rFile, time: timestamp });
-        io.emit('update_chats_list');
-
-        return rFile; 
-    }
 
     let promptUsuario = await getCfg('bot_prompt');
     const configUsar = (promptUsuario && promptUsuario.length > 5) ? promptUsuario : DEFAULT_PROMPT;
