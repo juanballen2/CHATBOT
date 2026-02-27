@@ -540,7 +540,12 @@
                     </select>
 
                     <button class="btn-small btn-green" style="width:100%; margin-top:15px;" onclick="saveLeadManual()"><i class="fas fa-save"></i> Guardar Cambios</button>
-                </div>
+                    
+                    <div id="sf-alert-container" style="margin-top: 15px; display:none; background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; padding: 10px; border-radius: 6px; color: #ef4444; font-size: 0.85rem; font-weight: 600; text-align: center;">
+                        <i class="fas fa-exclamation-circle"></i> ESTE CANDIDATO YA EXISTE EN SALESFORCE.<br><span style="font-size:0.75rem; font-weight:normal;">Debe gestionarse directamente en el CRM.</span>
+                    </div>
+                    <button id="btn-push-sf" class="btn-small btn-blue" style="width:100%; margin-top:10px; border-color:#00a1e0; color:#00a1e0;" onclick="pushSingleToSalesforce()"><i class="fas fa-cloud-upload-alt"></i> Subir a Salesforce</button>
+                    </div>
 
                 <div class="crm-section"><div class="crm-title"><i class="fas fa-tags"></i> Etiqueta Comercial</div><div class="tag-container" id="tag-list"></div></div>
                 <div class="crm-section"><div class="crm-title"><i class="fas fa-bolt"></i> Respuestas Rápidas</div><div class="tag-container" id="shortcuts-list"></div></div>
@@ -552,13 +557,30 @@
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <h2><i class="fas fa-users" style="color:var(--primary);"></i> Base de Leads</h2>
                     <div style="display:flex; gap:10px;">
+                        <button class="btn-small btn-green" style="background:#00a1e0; border-color:#00a1e0;" onclick="bulkPushToSalesforce()"><i class="fas fa-cloud-upload-alt"></i> Subir a Salesforce</button>
+                        
                         <button class="btn-small btn-green" onclick="downloadExcel()"><i class="fas fa-file-excel"></i> Descargar CSV</button>
                         <button class="btn-small btn-blue" onclick="refreshLeads()"><i class="fas fa-sync"></i> Actualizar</button>
                     </div>
                 </div>
                 <div class="table-responsive">
                     <table class="data-table">
-                        <thead><tr><th>Fecha</th><th>Fuente</th><th>Nombre</th><th>Teléfono</th><th>Ciudad</th><th>Departamento</th><th>Correo</th><th>Interés</th><th>Ejecutivo</th><th>Etiqueta Comercial</th><th>Acciones</th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAllLeads" onclick="toggleAllLeads(this)" style="cursor:pointer; width:16px; height:16px;"></th>
+                                <th>Fecha</th>
+                                <th>Fuente</th>
+                                <th>Nombre</th>
+                                <th>Teléfono</th>
+                                <th>Ciudad</th>
+                                <th>Departamento</th>
+                                <th>Correo</th>
+                                <th>Interés</th>
+                                <th>Ejecutivo</th>
+                                <th>Etiqueta Comercial</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
                         <tbody id="leads-body"></tbody>
                     </table>
                 </div>
@@ -1515,7 +1537,19 @@
                 } else { 
                     execSelect.value = "Pendiente"; 
                 }
-            } 
+
+                // LÓGICA DE SALESFORCE
+                if (lead.sf_id) {
+                    document.getElementById('sf-alert-container').style.display = 'block';
+                    document.getElementById('btn-push-sf').style.display = 'none';
+                } else {
+                    document.getElementById('sf-alert-container').style.display = 'none';
+                    document.getElementById('btn-push-sf').style.display = 'block';
+                }
+            } else {
+                document.getElementById('sf-alert-container').style.display = 'none';
+                document.getElementById('btn-push-sf').style.display = 'block';
+            }
         }
 
         async function saveLeadManual() { 
@@ -1550,6 +1584,90 @@
             } 
         }
 
+        /* --- FUNCIONES SALESFORCE --- */
+        async function pushSingleToSalesforce() {
+            if(!currentChat) return;
+            const res = await fetch('/api/data/leads');
+            const leads = await res.json();
+            const lead = leads.find(l => l.phone === currentChat);
+            if(!lead || !lead.id) return alert("Guarda el lead primero antes de subirlo.");
+
+            const ownerId = document.getElementById('crm-executive').value;
+            if(ownerId === "Pendiente") {
+                if(!confirm("No has asignado un ejecutivo. ¿Subir de todos modos (se asignará al dueño por defecto en CRM)?")) return;
+            }
+
+            const btn = document.getElementById('btn-push-sf');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+            btn.disabled = true;
+
+            try {
+                const pushRes = await fetch('/api/salesforce/push', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ leads: [{ id: lead.id, ownerId: ownerId === 'Pendiente' ? null : ownerId }] })
+                });
+                const data = await pushRes.json();
+                
+                if(data.results[0].status === 'duplicate') {
+                    alert("¡Atención! Este candidato ya existe en Salesforce.\nDebe gestionarse directamente en el CRM.");
+                    loadLeadDataToCRM(currentChat);
+                    refreshLeads();
+                } else if(data.results[0].status === 'success') {
+                    showToast("☁️ Cargado en Salesforce correctamente.");
+                    loadLeadDataToCRM(currentChat);
+                    refreshLeads();
+                } else {
+                    alert("Error subiendo a Salesforce: " + data.results[0].message);
+                }
+            } catch(e) {
+                showToast("❌ Error de conexión con el servidor.");
+            }
+            
+            btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Subir a Salesforce';
+            btn.disabled = false;
+        }
+
+        async function bulkPushToSalesforce() {
+            const checkboxes = document.querySelectorAll('.lead-cb:checked');
+            if(checkboxes.length === 0) return alert("Selecciona al menos un lead para subir.");
+
+            const leadsToPush = Array.from(checkboxes).map(cb => {
+                const tr = cb.closest('tr');
+                const ownerIdRaw = tr.getAttribute('data-exec-id');
+                // Si el ownerIdRaw no es "Pendiente" y tiene la longitud típica de Salesforce (18 chars), lo enviamos
+                const isSfId = ownerIdRaw && ownerIdRaw !== 'Pendiente' && ownerIdRaw.length > 10;
+                return { id: cb.value, ownerId: isSfId ? ownerIdRaw : null };
+            });
+
+            if(!confirm(`¿Estás seguro de subir ${leadsToPush.length} leads a Salesforce?`)) return;
+
+            showToast("Subiendo leads masivamente... ⏳");
+            
+            try {
+                const pushRes = await fetch('/api/salesforce/push', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ leads: leadsToPush })
+                });
+                const data = await pushRes.json();
+                
+                let successCount = data.results.filter(r => r.status === 'success').length;
+                let dupCount = data.results.filter(r => r.status === 'duplicate').length;
+                
+                alert(`Resultado Salesforce:\n✅ ${successCount} nuevos subidos.\n⚠️ ${dupCount} ya existían (bloqueados).`);
+                refreshLeads();
+            } catch(e) {
+                showToast("❌ Error crítico en cargue masivo.");
+            }
+        }
+        
+        function toggleAllLeads(source) {
+            const checkboxes = document.querySelectorAll('.lead-cb');
+            checkboxes.forEach(cb => cb.checked = source.checked);
+        }
+        /* -------------------------- */
+
         function downloadExcel() { 
             const rows = [['Fecha', 'Fuente', 'Nombre', 'Telefono', 'Ciudad', 'Departamento', 'Correo', 'Interes', 'Ejecutivo ID', 'Etiqueta Comercial']]; 
             const table = document.getElementById('leads-body'); 
@@ -1557,16 +1675,16 @@
             for (let tr of table.rows) { 
                 const cells = Array.from(tr.cells); 
                 const rowData = [ 
-                    cells[0].innerText, 
                     cells[1].innerText, 
                     cells[2].innerText, 
-                    cells[3].innerText, 
+                    cells[3].innerText.replace('Este lead ya existe', '').trim(), 
                     cells[4].innerText, 
                     cells[5].innerText, 
                     cells[6].innerText, 
                     cells[7].innerText, 
+                    cells[8].innerText, 
                     tr.getAttribute('data-exec-id'), 
-                    cells[9].innerText 
+                    cells[10].innerText 
                 ]; 
                 rows.push(rowData); 
             } 
@@ -1647,6 +1765,10 @@
             document.getElementById('biz-name').value = cfg.biz_profile?.name || ''; 
             document.getElementById('biz-hours').value = cfg.biz_profile?.hours || ''; 
             
+            if (cfg.logo_url) {
+                document.getElementById('logo-preview').style.backgroundImage = `url('${cfg.logo_url}')`;
+            }
+
             renderWebList(); 
             renderRulesList(cfg.tech_rules); 
             
@@ -1921,13 +2043,20 @@
             const res = await fetch('/api/data/leads'); 
             const leads = await res.json(); 
             
+            // Si el lead está en Salesforce, mostramos alerta y quitamos checkbox
             document.getElementById('leads-body').innerHTML = leads.map(l => {
                 const execName = executivesMap[l.etiqueta] || l.etiqueta || 'Pendiente';
+                const isSf = !!l.sf_id;
+                
+                const sfWarning = isSf ? `<div style="color:#ef4444; font-size:0.75rem; font-weight:bold; margin-top:4px;"><i class="fas fa-exclamation-circle"></i> Este lead ya existe</div>` : '';
+                const checkboxHtml = isSf ? `<i class="fas fa-check-circle" style="color:#10b981; opacity:0.7;" title="Ya cargado en Salesforce"></i>` : `<input type="checkbox" class="lead-cb" value="${l.id}" style="cursor:pointer; width:16px; height:16px;">`;
+                
                 return `
                 <tr data-exec-id="${l.etiqueta || 'Pendiente'}">
+                    <td style="text-align:center;">${checkboxHtml}</td>
                     <td>${new Date(l.fecha).toLocaleDateString()}</td>
                     <td><span class="lead-source-tag ${l.source==='Web'?'lead-source-web':(l.source==='Tienda Virtual'?'lead-source-store':'')}">${l.source||'Orgánico'}</span></td>
-                    <td style="font-weight:600; color:var(--text);">${l.nombre||'-'}</td>
+                    <td style="font-weight:600; color:var(--text);">${l.nombre||'-'}${sfWarning}</td>
                     <td>${l.phone}</td>
                     <td>${l.ciudad||'-'}</td>
                     <td>${l.departamento||'-'}</td>
