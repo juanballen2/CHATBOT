@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v30.2 (ICBOT + WEBSOCKETS REALTIME)
+ * SERVER BACKEND - v30.2 (ICBOT + WEBSOCKETS REALTIME + SALESFORCE CRM)
  * ============================================================
  * 1. FIX: Renombrado oficial a ICBOT completado.
  * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone).
@@ -11,6 +11,7 @@
  * 8. MOD: Cronjob seguimiento 7:00 AM (2 días) + Cierre automático.
  * 9. MOD: Segmentación de Categoría vs Producto Específico.
  * 10.FIX: Se eliminó el bloqueo duro de archivos adjuntos para que la IA los procese.
+ * 11.ADD: Integración nativa Salesforce CRM (Duplicados + Cargue Masivo + Cache Token).
  * ============================================================
  */
 
@@ -111,7 +112,7 @@ let db, globalKnowledge = [], serverInstance;
 
         const tables = [
             `history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT)`,
-            `leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT UNIQUE, nombre TEXT, interes TEXT, producto_especifico TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, departamento TEXT, correo TEXT, source TEXT DEFAULT 'Organico', status_tag TEXT, farewell_sent INTEGER DEFAULT 0, followup_day INTEGER DEFAULT 0)`,
+            `leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT UNIQUE, nombre TEXT, interes TEXT, producto_especifico TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, departamento TEXT, correo TEXT, source TEXT DEFAULT 'Organico', status_tag TEXT, farewell_sent INTEGER DEFAULT 0, followup_day INTEGER DEFAULT 0, sf_id TEXT)`,
             `metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0, photoUrl TEXT, archived INTEGER DEFAULT 0, unreadCount INTEGER DEFAULT 0, last_interaction TEXT)`,
             `bot_status (phone TEXT PRIMARY KEY, active INTEGER DEFAULT 1)`,
             `inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, searchable TEXT UNIQUE, raw_data TEXT)`,
@@ -134,7 +135,8 @@ let db, globalKnowledge = [], serverInstance;
             "ALTER TABLE config ADD COLUMN logoUrl TEXT",
             "ALTER TABLE leads ADD COLUMN departamento TEXT",
             "ALTER TABLE leads ADD COLUMN producto_especifico TEXT",
-            "ALTER TABLE leads ADD COLUMN followup_day INTEGER DEFAULT 0"
+            "ALTER TABLE leads ADD COLUMN followup_day INTEGER DEFAULT 0",
+            "ALTER TABLE leads ADD COLUMN sf_id TEXT"
         ];
         for (const m of migrations) { try { await db.exec(m); } catch(e){} }
 
@@ -250,6 +252,54 @@ function obtenerDepartamento(ciudad) {
         "tunja": "Boyacá", "duitama": "Boyacá", "sogamoso": "Boyacá", "chiquinquira": "Boyacá", "paipa": "Boyacá"
     };
     return mapa[c] || null;
+}
+
+// --- 6.5 INTEGRACIÓN SALESFORCE ---
+let sfTokenCache = null;
+let sfInstanceUrl = null;
+let sfTokenExpires = 0;
+
+async function getSalesforceToken() {
+    if (sfTokenCache && Date.now() < sfTokenExpires) {
+        return { token: sfTokenCache, instanceUrl: sfInstanceUrl };
+    }
+    if (!SF_CLIENT_ID || !SF_PASSWORD) throw new Error("Credenciales de Salesforce no configuradas en entorno.");
+    
+    const params = new URLSearchParams();
+    params.append('grant_type', 'password');
+    params.append('client_id', SF_CLIENT_ID);
+    params.append('client_secret', SF_CLIENT_SECRET);
+    params.append('username', SF_USERNAME);
+    params.append('password', SF_PASSWORD);
+
+    const res = await axios.post(`${SF_URL}/services/oauth2/token`, params, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    
+    sfTokenCache = res.data.access_token;
+    sfInstanceUrl = res.data.instance_url;
+    sfTokenExpires = Date.now() + (2 * 60 * 60 * 1000); // El token vive 2 horas, lo cacheamos para eficiencia
+    return { token: sfTokenCache, instanceUrl: sfInstanceUrl };
+}
+
+async function checkSalesforceLead(phone) {
+    try {
+        const { token, instanceUrl } = await getSalesforceToken();
+        const cleanPhone = phone.replace(/\D/g, ''); // Limpiamos para la consulta SOQL
+        
+        // Buscamos si el teléfono está en Phone o MobilePhone en Salesforce
+        const query = `SELECT Id FROM Lead WHERE Phone = '${cleanPhone}' OR MobilePhone = '${cleanPhone}' LIMIT 1`;
+        const url = `${instanceUrl}/services/data/v58.0/query/?q=${encodeURIComponent(query)}`;
+        
+        const res = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (res.data.records && res.data.records.length > 0) {
+            return res.data.records[0].Id;
+        }
+        return null; // No existe
+    } catch (e) {
+        console.error("❌ Error SOQL Salesforce (Check):", e.response ? JSON.stringify(e.response.data) : e.message);
+        return null;
+    }
 }
 
 // --- 7. META API ---
@@ -581,6 +631,7 @@ app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirna
 
 app.get('/api/data/:type', proteger, async (req, res) => {
     const t = req.params.type;
+    // En leads, el "SELECT *" ahora incluirá automáticamente nuestra nueva columna sf_id, no hay que tocar nada.
     if (t === 'leads') res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
     else if (t === 'tags') res.json(await db.all("SELECT * FROM global_tags"));
     else if (t === 'shortcuts') res.json(await db.all("SELECT * FROM shortcuts"));
@@ -651,9 +702,10 @@ app.get('/api/chats-full', proteger, async (req, res) => {
         let params = [];
         if (search) { whereClause += ` AND (m.contactName LIKE ? OR h.phone LIKE ? OR h.text LIKE ?)`; params.push(search, search, search); }
         
-        const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, b.active as botActive, l.source, l.status_tag FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN leads l ON h.phone = l.phone WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 50`;
+        // MOD: Agregué l.sf_id al select para que el front sepa si ya está en CRM
+        const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, b.active as botActive, l.source, l.status_tag, l.sf_id FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN leads l ON h.phone = l.phone WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 50`;
         const rows = await db.all(query, params);
-        res.json(rows.map(r => ({ id: r.id, name: r.contactName || r.id, lastMessage: { text: r.lastText, time: r.timestamp }, botActive: r.botActive !== 0, pinned: r.pinned === 1, archived: r.archived === 1, unreadCount: r.unreadCount || 0, labels: JSON.parse(r.labels || "[]"), photoUrl: r.photoUrl, timestamp: r.timestamp, source: r.source, statusTag: r.status_tag })));
+        res.json(rows.map(r => ({ id: r.id, name: r.contactName || r.id, lastMessage: { text: r.lastText, time: r.timestamp }, botActive: r.botActive !== 0, pinned: r.pinned === 1, archived: r.archived === 1, unreadCount: r.unreadCount || 0, labels: JSON.parse(r.labels || "[]"), photoUrl: r.photoUrl, timestamp: r.timestamp, source: r.source, statusTag: r.status_tag, sfId: r.sf_id })));
     } catch(e) { res.status(500).json([]); }
 });
 
@@ -729,6 +781,94 @@ app.post('/api/chat/send', proteger, async (req, res) => {
         } else res.status(500).json({ error: "Error enviando" }); 
     } catch(e) { res.status(500).json({ error: "Error interno" }); } 
 });
+
+// --- ENPOINTS NUEVOS: SALESFORCE ---
+// 1. Verificar existencia por teléfono en tiempo real
+app.get('/api/salesforce/check/:phone', proteger, async (req, res) => {
+    try {
+        const cleanPhone = req.params.phone.replace(/\D/g, '');
+        const sfId = await checkSalesforceLead(cleanPhone);
+        
+        if (sfId) {
+            // Actualizamos la base local de una vez por si no lo sabíamos
+            await db.run("UPDATE leads SET sf_id = ? WHERE phone = ?", [sfId, cleanPhone]);
+            res.json({ exists: true, sf_id: sfId });
+        } else {
+            res.json({ exists: false });
+        }
+    } catch (e) {
+        res.status(500).json({ error: "Error consultando a Salesforce" });
+    }
+});
+
+// 2. Cargue Masivo / Individual
+app.post('/api/salesforce/push', proteger, async (req, res) => {
+    const { leads } = req.body; 
+    // leads debe ser un array de objetos, ej: [{ id: 10, ownerId: '005...' }]
+    
+    if (!leads || !Array.isArray(leads)) return res.status(400).json({error: "Se requiere un array de leads."});
+    
+    let results = [];
+    try {
+        const { token, instanceUrl } = await getSalesforceToken();
+        
+        for (const item of leads) {
+            const leadId = item.id;
+            const ownerId = item.ownerId || null;
+            
+            const lead = await db.get("SELECT * FROM leads WHERE id = ?", [leadId]);
+            if (!lead) {
+                results.push({ id: leadId, status: 'error', message: 'No encontrado en la base local.' });
+                continue;
+            }
+            
+            // Paso A: Validar Duplicado en Salesforce
+            const existingSfId = await checkSalesforceLead(lead.phone);
+            if (existingSfId) {
+                // Ya existe: Solo marcamos la BD local, NO lo subimos
+                await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [existingSfId, leadId]);
+                results.push({ id: leadId, status: 'duplicate', sf_id: existingSfId, message: 'Ya existe en Salesforce.' });
+                continue; 
+            }
+            
+            // Paso B: Crear en Salesforce si no existe
+            const sfData = {
+                LastName: lead.nombre || "Sin Nombre (WhatsApp)",
+                Company: "Lead WhatsApp Bot",
+                Phone: lead.phone,
+                Email: lead.correo || "",
+                City: lead.ciudad || "",
+                State: lead.departamento || "",
+                Description: `Interés: ${lead.interes || ''} | Producto: ${lead.producto_especifico || ''} | Origen: ${lead.source || 'Bot'}`
+            };
+            
+            // Asignación de ejecutivo si el frontend lo mandó
+            if (ownerId) {
+                sfData.OwnerId = ownerId; 
+            }
+
+            try {
+                const sfRes = await axios.post(`${instanceUrl}/services/data/v58.0/sobjects/Lead/`, sfData, {
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+                });
+                
+                const newSfId = sfRes.data.id;
+                // Guardamos el ID de Salesforce en nuestra base de datos SQLite
+                await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [newSfId, leadId]);
+                
+                results.push({ id: leadId, status: 'success', sf_id: newSfId });
+            } catch (err) {
+                console.error(`❌ Error POST Lead ${lead.phone}:`, err.response ? JSON.stringify(err.response.data) : err.message);
+                results.push({ id: leadId, status: 'error', message: 'Rechazado por Salesforce.' });
+            }
+        }
+        res.json({ success: true, results });
+    } catch (e) {
+        console.error("❌ Error General Salesforce Endpoint:", e.message);
+        res.status(500).json({ error: "Error crítico de conexión con Salesforce." });
+    }
+});
+// -----------------------------------
 
 // --- WEBHOOK BLINDADO ---
 app.get('/webhook', (req, res) => {
@@ -839,4 +979,3 @@ app.post('/webhook', async (req, res) => {
 
 process.on('SIGTERM', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
 process.on('SIGINT', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
-
