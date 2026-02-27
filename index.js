@@ -6,12 +6,12 @@
  * 3. ADD: Cronjob de Limpieza robusto 'media_cache'.
  * 4. FIX: Audios/Videos con soporte Range 206 (codecs=opus).
  * 5. ADD: Sistema Anti-bucle (Auto-apagado del bot).
- * 6. FIX: Prioridad absoluta al nombre dado por el cliente.
+ * 6. FIX: Prioridad absoluta al nombre dado por el cliente (No asume nombre de perfil).
  * 7. ADD: WEBSOCKETS (Socket.io) para eliminar el Polling del frontend.
  * 8. MOD: Cronjob seguimiento 7:00 AM (2 días) + Cierre automático.
  * 9. MOD: Segmentación de Categoría vs Producto Específico.
  * 10.FIX: Se eliminó el bloqueo duro de archivos adjuntos para que la IA los procese.
- * 11.ADD: Integración nativa Salesforce CRM (Duplicados + Cargue Masivo + Cache Token).
+ * 11.ADD: Integración nativa Salesforce CRM (Duplicados + Cargue Masivo + Cache Token + Fix Campos Obligatorios).
  * ============================================================
  */
 
@@ -60,7 +60,8 @@ const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = "icbot-secure-v29-final"; 
 const VERIFY_TOKEN = "ICC_2025"; 
 
-const DEFAULT_PROMPT = `Eres ICBOT, un asistente virtual comercial de Importadora Casa Colombia. Tu objetivo principal es atender al cliente, resolver sus dudas y perfilarlo recopilando sus datos para pasarlo a un asesor humano.`;
+const DEFAULT_PROMPT = `Eres ICBOT, un asistente virtual comercial de Importadora Casa Colombia. Tu objetivo principal es atender al cliente, resolver sus dudas y perfilarlo recopilando sus datos para pasarlo a un asesor humano. 
+REGLA OBLIGATORIA: Nunca asumas el nombre del cliente. Si no te ha dicho su nombre explícitamente, pregúntaselo antes de finalizar.`;
 
 // --- VARIABLES DE SALESFORCE ---
 const SF_CLIENT_ID = process.env.SF_CLIENT_ID;
@@ -474,7 +475,7 @@ Historial reciente: ${JSON.stringify(history)}
 
 === INSTRUCCIÓN FUNCIONAL (SISTEMA OBLIGATORIO) ===
 1. Responde al cliente de forma natural basándote ÚNICAMENTE en tu personalidad.
-2. REGLA DE NOMBRE: Si el cliente escribe su nombre en la conversación (ej. "Soy Carlos"), ESE NOMBRE TIENE PRIORIDAD ABSOLUTA. Asígnalo en el JSON.
+2. REGLA DE NOMBRE: Si el cliente no ha dicho su nombre (ej. "Soy Carlos"), ESE NOMBRE TIENE PRIORIDAD ABSOLUTA. Pregúntalo para el registro oficial.
 3. REGLA DE AUTO-APAGADO (ANTI-BUCLES): Tu objetivo final es conseguir Nombre, Correo, Ciudad, Categoría y el PRODUCTO ESPECÍFICO en el que está interesado (ej. "Excavadora Volvo 50 tons"). 
    - SI YA TIENES LOS DATOS, envía ESTE EXACTO MENSAJE de despedida: "Perfecto, [Nombre]. Ya pasé sus datos y su solicitud. Pronto un ejecutivo comercial se contactará con usted. Recuerde que los datos brindados serán usados de acuerdo a nuestra política de protección de datos: https://www.importadoracasacolombia.com/aviso-de-privacidad".
    - SOLO DESPUÉS de dar esa despedida, OBLIGATORIAMENTE pon "apagar_bot": true en tu JSON.
@@ -804,7 +805,6 @@ app.get('/api/salesforce/check/:phone', proteger, async (req, res) => {
 // 2. Cargue Masivo / Individual
 app.post('/api/salesforce/push', proteger, async (req, res) => {
     const { leads } = req.body; 
-    // leads debe ser un array de objetos, ej: [{ id: 10, ownerId: '005...' }]
     
     if (!leads || !Array.isArray(leads)) return res.status(400).json({error: "Se requiere un array de leads."});
     
@@ -814,7 +814,7 @@ app.post('/api/salesforce/push', proteger, async (req, res) => {
         
         for (const item of leads) {
             const leadId = item.id;
-            const ownerId = item.ownerId || null;
+            const ownerId = item.ownerId || '005Dn000007H1EUIA0'; // Asignado a Marketing ICC por defecto
             
             const lead = await db.get("SELECT * FROM leads WHERE id = ?", [leadId]);
             if (!lead) {
@@ -831,25 +831,33 @@ app.post('/api/salesforce/push', proteger, async (req, res) => {
                 continue; 
             }
             
-            // Paso B: Crear en Salesforce si no existe
+            // Paso B: Mapeo estricto para evitar Error 400
+            const fullName = lead.nombre || "Cliente WhatsApp";
+            const nameParts = fullName.trim().split(' ');
+            const firstName = nameParts[0];
+            const lastName = nameParts.slice(1).join(' ') || "Sin Apellido";
+
             const sfData = {
-                LastName: lead.nombre || "Sin Nombre (WhatsApp)",
-                Company: "Lead WhatsApp Bot",
-                Phone: lead.phone,
+                Salutation: 'Mr.',
+                FirstName: firstName,
+                LastName: lastName,
+                Company: fullName, // Obligatorio en Salesforce
+                Phone: lead.phone.replace(/\D/g, ''),
                 Email: lead.correo || "",
                 City: lead.ciudad || "",
                 State: lead.departamento || "",
-                Description: `Interés: ${lead.interes || ''} | Producto: ${lead.producto_especifico || ''} | Origen: ${lead.source || 'Bot'}`
+                Status: 'Nuevo candidato',
+                ProductInterest__c: lead.interes || 'Otros',
+                Description: `Interés: ${lead.producto_especifico || ''} | Origen: ${lead.source || 'Bot'}`,
+                OwnerId: ownerId 
             };
-            
-            // Asignación de ejecutivo si el frontend lo mandó
-            if (ownerId) {
-                sfData.OwnerId = ownerId; 
-            }
 
             try {
                 const sfRes = await axios.post(`${instanceUrl}/services/data/v58.0/sobjects/Lead/`, sfData, {
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
                 });
                 
                 const newSfId = sfRes.data.id;
