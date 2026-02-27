@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v30.6 (ICBOT FULL PRODUCTION - NO CUTS)
+ * SERVER BACKEND - v30.7 (ICBOT FULL PRODUCTION - TOTAL INTEGRITY + SF DEBUG)
  * ============================================================
  * 1. FIX: Renombrado oficial a ICBOT completado.
  * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone).
@@ -13,6 +13,7 @@
  * 10.FIX: Se eliminó el bloqueo duro de archivos adjuntos para que la IA los procese.
  * 11.ADD: Integración nativa Salesforce CRM (Duplicados + Cargue Masivo + Cache Token).
  * 12.FIX: Parche Error 400 Salesforce (Split Names, Company mandatory, OwnerId, Salutation).
+ * 13.ADD: SF Token Debugger ("El Parcero Chismoso") para aislar fallos de autenticación 400.
  * ============================================================
  */
 
@@ -156,7 +157,7 @@ let db, globalKnowledge = [], serverInstance;
 
         const PORT = process.env.PORT || 10000;
         // <-- WEBSOCKETS: Ahora usamos server.listen en lugar de app.listen
-        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v30.6 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
+        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v30.7 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -256,7 +257,7 @@ function obtenerDepartamento(ciudad) {
     return mapa[c] || null;
 }
 
-// --- 6.5 INTEGRACIÓN SALESFORCE ---
+// --- 6.5 INTEGRACIÓN SALESFORCE (PARCERO CHISMOSO AÑADIDO) ---
 let sfTokenCache = null;
 let sfInstanceUrl = null;
 let sfTokenExpires = 0;
@@ -274,14 +275,20 @@ async function getSalesforceToken() {
     params.append('username', SF_USERNAME);
     params.append('password', SF_PASSWORD);
 
-    const res = await axios.post(`${SF_URL}/services/oauth2/token`, params, {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
-    
-    sfTokenCache = res.data.access_token;
-    sfInstanceUrl = res.data.instance_url;
-    sfTokenExpires = Date.now() + (2 * 60 * 60 * 1000); // El token vive 2 horas, lo cacheamos para eficiencia
-    return { token: sfTokenCache, instanceUrl: sfInstanceUrl };
+    try {
+        const res = await axios.post(`${SF_URL}/services/oauth2/token`, params, {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+        
+        sfTokenCache = res.data.access_token;
+        sfInstanceUrl = res.data.instance_url;
+        sfTokenExpires = Date.now() + (2 * 60 * 60 * 1000); // El token vive 2 horas, lo cacheamos para eficiencia
+        return { token: sfTokenCache, instanceUrl: sfInstanceUrl };
+    } catch (error) {
+        // AQUÍ ESTÁ EL CHISMOSO: Nos dirá exactamente qué falla en el Login
+        console.error("🔐 ❌ ERROR LOGIN SALESFORCE:", error.response ? JSON.stringify(error.response.data) : error.message);
+        throw new Error("Fallo al obtener el token de Salesforce.");
+    }
 }
 
 async function checkSalesforceLead(phone) {
@@ -803,7 +810,7 @@ app.get('/api/salesforce/check/:phone', proteger, async (req, res) => {
     }
 });
 
-// 2. Cargue Masivo / Individual
+// 2. Cargue Masivo / Individual (PARCHE APLICADO)
 app.post('/api/salesforce/push', proteger, async (req, res) => {
     const { leads } = req.body; 
     
@@ -815,7 +822,7 @@ app.post('/api/salesforce/push', proteger, async (req, res) => {
         
         for (const item of leads) {
             const leadId = item.id;
-            const ownerId = item.ownerId || '005Dn000007H1EUIA0'; // ID de Marketing por defecto si no hay uno
+            const ownerId = item.ownerId || '005Dn000007H1EUIA0'; // ID de Marketing por defecto
             
             const lead = await db.get("SELECT * FROM leads WHERE id = ?", [leadId]);
             if (!lead) {
@@ -832,7 +839,7 @@ app.post('/api/salesforce/push', proteger, async (req, res) => {
                 continue; 
             }
             
-            // Paso B: Crear en Salesforce si no existe (Mapeo Estricto)
+            // Paso B: Crear en Salesforce si no existe (MAPEO ESTRICTO PARA EVITAR ERROR 400)
             const fullName = lead.nombre || "Cliente WhatsApp";
             const nameParts = fullName.trim().split(' ');
             const firstName = nameParts[0];
@@ -867,10 +874,8 @@ app.post('/api/salesforce/push', proteger, async (req, res) => {
                 
                 results.push({ id: leadId, status: 'success', sf_id: newSfId });
             } catch (err) {
-                // Registro detallado del error 400
-                const errorDetail = err.response ? JSON.stringify(err.response.data) : err.message;
-                console.error(`❌ Error POST Lead ${lead.phone}:`, errorDetail);
-                results.push({ id: leadId, status: 'error', message: 'Rechazado por Salesforce.', detail: errorDetail });
+                console.error(`❌ Error POST Lead ${lead.phone}:`, err.response ? JSON.stringify(err.response.data) : err.message);
+                results.push({ id: leadId, status: 'error', message: 'Rechazado por Salesforce.' });
             }
         }
         res.json({ success: true, results });
