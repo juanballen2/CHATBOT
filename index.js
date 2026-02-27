@@ -61,6 +61,13 @@ const VERIFY_TOKEN = "ICC_2025";
 
 const DEFAULT_PROMPT = `Eres ICBOT, un asistente virtual comercial de Importadora Casa Colombia. Tu objetivo principal es atender al cliente, resolver sus dudas y perfilarlo recopilando sus datos para pasarlo a un asesor humano.`;
 
+// --- VARIABLES DE SALESFORCE ---
+const SF_CLIENT_ID = process.env.SF_CLIENT_ID;
+const SF_CLIENT_SECRET = process.env.SF_CLIENT_SECRET;
+const SF_USERNAME = process.env.SF_USERNAME;
+const SF_PASSWORD = process.env.SF_PASSWORD;
+const SF_URL = process.env.SF_URL;
+
 // --- 3. SESIONES ---
 app.use(session({
     name: 'icc_session_id', 
@@ -832,3 +839,4 @@ app.post('/webhook', async (req, res) => {
 
 process.on('SIGTERM', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
 process.on('SIGINT', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
+
