@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v30.7 (ICBOT FULL PRODUCTION - TOTAL INTEGRITY + SF DEBUG)
+ * SERVER BACKEND - v30.8 (ICBOT FULL PRODUCTION - TOTAL INTEGRITY + SF DEBUG)
  * ============================================================
  * 1. FIX: Renombrado oficial a ICBOT completado.
  * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone).
@@ -14,6 +14,9 @@
  * 11.ADD: Integración nativa Salesforce CRM (Duplicados + Cargue Masivo + Cache Token).
  * 12.FIX: Parche Error 400 Salesforce (Split Names, Company mandatory, OwnerId, Salutation).
  * 13.ADD: SF Token Debugger ("El Parcero Chismoso") para aislar fallos de autenticación 400.
+ * 14.MOD: Aumento de límite de chats visibles de 50 a 1000 en /api/chats-full.
+ * 15.MOD: Inclusión de 'interes', 'producto_especifico' y 'phone' en el JSON de /api/chats-full.
+ * 16.FIX: Parche (*) en /api/chat-history para evitar cuelgues con IDs extraños de WhatsApp.
  * ============================================================
  */
 
@@ -157,7 +160,7 @@ let db, globalKnowledge = [], serverInstance;
 
         const PORT = process.env.PORT || 10000;
         // <-- WEBSOCKETS: Ahora usamos server.listen en lugar de app.listen
-        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v30.7 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
+        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v30.8 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -711,16 +714,43 @@ app.get('/api/chats-full', proteger, async (req, res) => {
         let params = [];
         if (search) { whereClause += ` AND (m.contactName LIKE ? OR h.phone LIKE ? OR h.text LIKE ?)`; params.push(search, search, search); }
         
-        // MOD: Agregué l.sf_id al select para que el front sepa si ya está en CRM
-        const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, b.active as botActive, l.source, l.status_tag, l.sf_id FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN leads l ON h.phone = l.phone WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 50`;
+        // MOD: Se aumentó el límite a 1000 y se agregaron l.interes, l.producto_especifico
+        const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, b.active as botActive, l.source, l.status_tag, l.sf_id, l.interes, l.producto_especifico FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN leads l ON h.phone = l.phone WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 1000`;
         const rows = await db.all(query, params);
-        res.json(rows.map(r => ({ id: r.id, name: r.contactName || r.id, lastMessage: { text: r.lastText, time: r.timestamp }, botActive: r.botActive !== 0, pinned: r.pinned === 1, archived: r.archived === 1, unreadCount: r.unreadCount || 0, labels: JSON.parse(r.labels || "[]"), photoUrl: r.photoUrl, timestamp: r.timestamp, source: r.source, statusTag: r.status_tag, sfId: r.sf_id })));
+        
+        // MOD: Agregamos phone, interes y producto_especifico a la respuesta
+        res.json(rows.map(r => ({ 
+            id: r.id, 
+            phone: r.id,
+            name: r.contactName || r.id, 
+            lastMessage: { text: r.lastText, time: r.timestamp }, 
+            botActive: r.botActive !== 0, 
+            pinned: r.pinned === 1, 
+            archived: r.archived === 1, 
+            unreadCount: r.unreadCount || 0, 
+            labels: JSON.parse(r.labels || "[]"), 
+            photoUrl: r.photoUrl, 
+            timestamp: r.timestamp, 
+            source: r.source, 
+            statusTag: r.status_tag, 
+            sfId: r.sf_id,
+            interes: r.interes,
+            producto_especifico: r.producto_especifico
+        })));
     } catch(e) { res.status(500).json([]); }
 });
 
-app.get('/api/chat-history/:phone', proteger, async (req, res) => {
-    await db.run("UPDATE metadata SET unreadCount = 0 WHERE phone = ?", [req.params.phone]);
-    res.json(await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [req.params.phone]));
+// FIX: Parche (*) añadido para soportar cualquier ID de teléfono extraño
+app.get('/api/chat-history/:phone(*)', proteger, async (req, res) => {
+    try {
+        const phone = req.params.phone;
+        await db.run("UPDATE metadata SET unreadCount = 0 WHERE phone = ?", [phone]);
+        const historial = await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [phone]);
+        res.json(historial || []);
+    } catch (e) {
+        console.error(`❌ Error al abrir el chat ${req.params.phone}:`, e);
+        res.status(500).json([]);
+    }
 });
 
 app.post('/api/contacts/bulk-update', proteger, async (req, res) => {
