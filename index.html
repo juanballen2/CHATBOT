@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICBOT V29.0 </title>
+    <title>ICBOT V30.0 </title>
     <link rel="icon" href="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" type="image/svg+xml">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -507,6 +507,8 @@
                 <div class="crm-section">
                     <div class="crm-title"><i class="fas fa-user-edit"></i> Datos del Contacto</div>
                     <input id="crm-name" class="crm-input" placeholder="Nombre Completo">
+                    <input id="crm-phone" class="crm-input" placeholder="Teléfono" readonly title="No editable. Se copia para el Ejecutivo." style="background:var(--panel); cursor:text; font-family: monospace; font-size: 1rem;">
+                    
                     <input id="crm-email" class="crm-input" type="email" placeholder="Correo Electrónico">
                     <input id="crm-city" class="crm-input" placeholder="Ciudad">
                     <input id="crm-dept" class="crm-input" placeholder="Departamento" readonly title="Automático" style="background:var(--panel); cursor:not-allowed;">
@@ -525,6 +527,7 @@
                         <option value="Otro">Otro</option>
                         <option value="Consultando">Consultando</option>
                     </select>
+                    <input id="crm-specific-interest" class="crm-input" placeholder="Detalle (Ej: Volvo 50 tons, Retro John Deere...)">
 
                     <div class="crm-title" style="margin-top:20px;"><i class="fas fa-user-tie"></i> Ejecutivo Asignado</div>
                     <select id="crm-executive" class="crm-input">
@@ -575,9 +578,10 @@
                                 <th>Ciudad</th>
                                 <th>Departamento</th>
                                 <th>Correo</th>
-                                <th>Interés</th>
+                                <th>Categoría Interés</th>
+                                <th>Producto/Detalle</th>
                                 <th>Ejecutivo</th>
-                                <th>Etiqueta Comercial</th>
+                                <th>Etiquetas Visuales</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -1505,6 +1509,8 @@
             document.getElementById('crm-dept').value = ""; 
             document.getElementById('crm-email').value = ""; 
             document.getElementById('crm-interest').value = ""; 
+            document.getElementById('crm-specific-interest').value = ""; 
+            document.getElementById('crm-phone').value = phone ? "+" + phone : ""; // Llenamos el teléfono para copiar
             document.getElementById('crm-executive').value = "Pendiente"; 
             
             const res = await fetch('/api/data/leads'); 
@@ -1516,6 +1522,7 @@
                 document.getElementById('crm-city').value = lead.ciudad || ""; 
                 document.getElementById('crm-dept').value = lead.departamento || ""; 
                 document.getElementById('crm-email').value = lead.correo || ""; 
+                document.getElementById('crm-specific-interest').value = lead.producto_especifico || ""; 
                 
                 let interestSelect = document.getElementById('crm-interest'); 
                 let foundInterest = false;
@@ -1566,6 +1573,7 @@
                     {field:'ciudad', value:document.getElementById('crm-city').value}, 
                     {field:'correo', value:document.getElementById('crm-email').value}, 
                     {field:'interes', value:document.getElementById('crm-interest').value}, 
+                    {field:'producto_especifico', value:document.getElementById('crm-specific-interest').value}, 
                     {field:'etiqueta', value:document.getElementById('crm-executive').value} 
                 ]; 
                 
@@ -1635,7 +1643,6 @@
             const leadsToPush = Array.from(checkboxes).map(cb => {
                 const tr = cb.closest('tr');
                 const ownerIdRaw = tr.getAttribute('data-exec-id');
-                // Si el ownerIdRaw no es "Pendiente" y tiene la longitud típica de Salesforce (18 chars), lo enviamos
                 const isSfId = ownerIdRaw && ownerIdRaw !== 'Pendiente' && ownerIdRaw.length > 10;
                 return { id: cb.value, ownerId: isSfId ? ownerIdRaw : null };
             });
@@ -1669,11 +1676,25 @@
         /* -------------------------- */
 
         function downloadExcel() { 
-            const rows = [['Fecha', 'Fuente', 'Nombre', 'Telefono', 'Ciudad', 'Departamento', 'Correo', 'Interes', 'Ejecutivo ID', 'Etiqueta Comercial']]; 
+            // MOD: Modificadas las cabeceras para incluir Etiquetas Múltiples y Producto Específico
+            const rows = [['Fecha', 'Fuente', 'Nombre', 'Telefono', 'Ciudad', 'Departamento', 'Correo', 'Categoria Interes', 'Producto/Detalle', 'Ejecutivo ID', 'Etiquetas Comerciales']]; 
             const table = document.getElementById('leads-body'); 
             
             for (let tr of table.rows) { 
                 const cells = Array.from(tr.cells); 
+                
+                // Extraer todas las etiquetas (los tags de colores) y unirlas con comas
+                const tagsCell = cells[11];
+                let etiquetasTexto = "";
+                if(tagsCell) {
+                    const tagSpans = tagsCell.querySelectorAll('.tag');
+                    if(tagSpans.length > 0) {
+                        etiquetasTexto = Array.from(tagSpans).map(span => span.innerText).join(', ');
+                    } else {
+                        etiquetasTexto = tagsCell.innerText.trim();
+                    }
+                }
+
                 const rowData = [ 
                     cells[1].innerText, 
                     cells[2].innerText, 
@@ -1683,8 +1704,9 @@
                     cells[6].innerText, 
                     cells[7].innerText, 
                     cells[8].innerText, 
+                    cells[9].innerText, 
                     tr.getAttribute('data-exec-id'), 
-                    cells[10].innerText 
+                    etiquetasTexto 
                 ]; 
                 rows.push(rowData); 
             } 
@@ -2043,7 +2065,6 @@
             const res = await fetch('/api/data/leads'); 
             const leads = await res.json(); 
             
-            // Si el lead está en Salesforce, mostramos alerta y quitamos checkbox
             document.getElementById('leads-body').innerHTML = leads.map(l => {
                 const execName = executivesMap[l.etiqueta] || l.etiqueta || 'Pendiente';
                 const isSf = !!l.sf_id;
@@ -2051,6 +2072,20 @@
                 const sfWarning = isSf ? `<div style="color:#ef4444; font-size:0.75rem; font-weight:bold; margin-top:4px;"><i class="fas fa-exclamation-circle"></i> Este lead ya existe</div>` : '';
                 const checkboxHtml = isSf ? `<i class="fas fa-check-circle" style="color:#10b981; opacity:0.7;" title="Ya cargado en Salesforce"></i>` : `<input type="checkbox" class="lead-cb" value="${l.id}" style="cursor:pointer; width:16px; height:16px;">`;
                 
+                // Mapear etiquetas del chat a la tabla de leads
+                let tagListHtml = "-";
+                // Buscamos las etiquetas en chatsData (que viene de metadata) cruzando por el teléfono
+                const chatData = chatsData.find(c => c.id === l.phone);
+                if (chatData && chatData.labels && chatData.labels.length > 0) {
+                    tagListHtml = chatData.labels.map(lbl => {
+                        const tag = normalizeTag(lbl);
+                        return `<span class="tag" style="background:${tag.color}20; color:${tag.color}; border-color:${tag.color}50; margin-right:4px;">${tag.text}</span>`;
+                    }).join('');
+                } else if (l.status_tag) {
+                    // Fallback a la etiqueta de texto simple si metadata no está cargada aún
+                    tagListHtml = `<span class="tag" style="background:var(--panel); color:var(--text); border-color:var(--border);">${l.status_tag}</span>`;
+                }
+
                 return `
                 <tr data-exec-id="${l.etiqueta || 'Pendiente'}">
                     <td style="text-align:center;">${checkboxHtml}</td>
@@ -2062,8 +2097,9 @@
                     <td>${l.departamento||'-'}</td>
                     <td>${l.correo||'-'}</td>
                     <td><strong>${l.interes||'-'}</strong></td>
+                    <td style="color:var(--text-muted); font-size:0.85rem;">${l.producto_especifico||'-'}</td>
                     <td style="color:var(--primary);">${execName}</td>
-                    <td><span class="tag" style="background:var(--panel); color:var(--text); border-color:var(--border);">${l.status_tag||'-'}</span></td>
+                    <td>${tagListHtml}</td>
                     <td>
                         <button class="nav-btn" style="height:30px; margin-right:5px; border:1px solid var(--border);" onclick="viewLeadDetails('${l.phone}')" title="Ver info"><i class="fas fa-eye"></i></button>
                         <button class="nav-btn" style="height:30px; border:1px solid var(--border);" onclick="openChat('${l.phone}', '${l.nombre}', '')" title="Ir al Chat"><i class="fas fa-comment"></i></button>
