@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICBOT V30.0 </title>
+    <title>ICBOT V31.0 </title>
     <link rel="icon" href="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" type="image/svg+xml">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -484,6 +484,7 @@
                 <div class="messages" id="messages-container"></div>
                 
                 <div class="input-area">
+                    <button class="attach-btn" onclick="openTemplateModal()" title="Enviar Plantilla (Marketing/Retoma)"><i class="fas fa-bullhorn"></i></button>
                     <button class="attach-btn" onclick="document.getElementById('file-upload').click()"><i class="fas fa-paperclip"></i></button>
                     <input type="file" id="file-upload" hidden onchange="uploadFile()" accept="image/*,video/*,audio/*,application/pdf">
                     <textarea class="input-box" id="msg-input" placeholder="Escribe un mensaje aquí..." onkeypress="checkEnter(event)"></textarea>
@@ -707,6 +708,23 @@
         </div>
     </div>
 
+    <div id="template-modal" class="modal-overlay" onclick="closeModal('template-modal')">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-title"><i class="fas fa-bullhorn" style="color:var(--primary);"></i> Enviar Plantilla Oficial</div>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-top:-5px; margin-bottom:10px;">Dispara una plantilla pre-aprobada por Meta para abrir la ventana de 24 horas.</p>
+            <div class="modal-form">
+                <label>Nombre de la Plantilla (Exacto)</label>
+                <input type="text" id="tpl-name" placeholder="Ej: plantilla_de_retoma">
+                <label>Variables del Mensaje (Opcional)</label>
+                <input type="text" id="tpl-vars" placeholder="Ej: Juan, 15% de Descuento (Separa por comas)">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-small btn-red" onclick="closeModal('template-modal')">Cancelar</button>
+                <button class="btn-small btn-green" onclick="sendTemplate()"><i class="fas fa-paper-plane"></i> Enviar Plantilla</button>
+            </div>
+        </div>
+    </div>
+
     <div id="prompt-edit-modal" class="modal-overlay" onclick="closeModal('prompt-edit-modal')">
         <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 600px;">
             <div class="modal-title"><i class="fas fa-brain" style="color:var(--primary);"></i> Editar Personalidad</div>
@@ -826,6 +844,9 @@
         let bulkMode = false;
         let selectedChats = new Set();
         let msgToForward = null;
+        
+        // CACHE GLOBAL PARA TAGS (OPTIMISTIC UI)
+        window._cachedTags = []; 
 
         const executivesMap = {
             "005Dn000007mWFhIAM": "Luz",
@@ -913,6 +934,71 @@
 
         function closeModal(id) { 
             document.getElementById(id).classList.remove('show'); 
+        }
+        
+        // --- OPTIMISTIC UI: ETIQUETAS ---
+        function updateTagsOptimistic(phone, tagObj, remove = false) {
+            // Actualizar chatsData localmente
+            const chat = chatsData.find(c => c.id === phone);
+            if (chat) {
+                if (!chat.labels) chat.labels = [];
+                if (remove) {
+                    chat.labels = chat.labels.filter(l => l.text !== tagObj.text);
+                } else {
+                    if (!chat.labels.find(l => l.text === tagObj.text)) {
+                        chat.labels.push(tagObj);
+                    }
+                }
+                renderChatList();
+            }
+        }
+
+        // --- PLANTILLAS META ---
+        function openTemplateModal() {
+            if(!currentChat) return showToast("Abre un chat primero para enviar una plantilla.");
+            document.getElementById('tpl-name').value = "";
+            document.getElementById('tpl-vars').value = "";
+            document.getElementById('template-modal').classList.add('show');
+        }
+
+        async function sendTemplate() {
+            if(!currentChat) return;
+            const name = document.getElementById('tpl-name').value.trim();
+            const varsInput = document.getElementById('tpl-vars').value;
+            
+            if(!name) return showToast("⚠️ El nombre exacto de la plantilla es obligatorio.");
+
+            let components = [];
+            if(varsInput) {
+                const varsArr = varsInput.split(',').map(v => v.trim());
+                const parameters = varsArr.map(v => ({ type: "text", text: v }));
+                components.push({ type: "body", parameters: parameters });
+            }
+
+            closeModal('template-modal');
+            showToast("Enviando plantilla a Meta... ⏳");
+
+            try {
+                const res = await fetch('/api/chat/send-template', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        phone: currentChat,
+                        templateName: name,
+                        language: "es", // Puede ser es_CO dependiendo de como se aprobó en Facebook
+                        components: components
+                    })
+                });
+                
+                const data = await res.json();
+                if(data.success) {
+                    showToast("✅ Plantilla enviada con éxito");
+                } else {
+                    showToast("❌ Error enviando plantilla: " + (data.error || "Desconocido"));
+                }
+            } catch(e) {
+                showToast("❌ Fallo de red al conectar con el servidor.");
+            }
         }
         
         function openLightbox(url, type) {
@@ -1005,6 +1091,7 @@
             try { 
                 const tagsResponse = await fetch('/api/data/tags');
                 const tags = await tagsResponse.json(); 
+                window._cachedTags = tags; // Guardar en cache global
                 
                 const html = '<option value="">Todas las etiquetas</option>' + tags.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
                 document.getElementById('tag-filter').innerHTML = html;
@@ -1088,6 +1175,9 @@
                 if (!valStr) return alert("Selecciona una etiqueta");
                 value = JSON.parse(valStr); 
                 action = 'add_label';
+                
+                // Optimistic UI update para bulk
+                selectedChats.forEach(phone => updateTagsOptimistic(phone, value, false));
             }
             
             if (!confirm(`¿Aplicar acción a ${selectedChats.size} chats?`)) return;
@@ -1222,7 +1312,13 @@
             document.getElementById('bot-switch').checked = chatInfo ? chatInfo.botActive : true; 
             
             loadLeadDataToCRM(phone); 
-            loadTags(phone); 
+            
+            if (window._cachedTags && window._cachedTags.length > 0) {
+                renderCRMTags(window._cachedTags);
+            } else {
+                loadTags(phone); 
+            }
+
             await loadMessages(phone, true); 
         }
         
@@ -1306,7 +1402,7 @@
             } 
             
             const safeText = m.text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            const isAlert = text.includes('[ALERTA:');
+            const isAlert = text.includes('[ALERTA:') || text.includes('[PLANTILLA');
             
             return `
             <div class="msg ${isAlert ? 'alert' : m.role}">
@@ -1510,7 +1606,7 @@
             document.getElementById('crm-email').value = ""; 
             document.getElementById('crm-interest').value = ""; 
             document.getElementById('crm-specific-interest').value = ""; 
-            document.getElementById('crm-phone').value = phone ? "+" + phone : ""; // Llenamos el teléfono para copiar
+            document.getElementById('crm-phone').value = phone ? "+" + phone : ""; 
             document.getElementById('crm-executive').value = "Pendiente"; 
             
             const res = await fetch('/api/data/leads'); 
@@ -1629,256 +1725,546 @@
                     alert("Error subiendo a Salesforce: " + data.results[0].message);
                 }
             } catch(e) {
-                showToast("❌ Error de conexión con el servidor.");
+                alert("Error crítico conectando con el servidor.");
+            } finally {
+                btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Subir a Salesforce';
+                btn.disabled = false;
             }
-            
-            btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Subir a Salesforce';
-            btn.disabled = false;
         }
 
         async function bulkPushToSalesforce() {
-            const checkboxes = document.querySelectorAll('.lead-cb:checked');
-            if(checkboxes.length === 0) return alert("Selecciona al menos un lead para subir.");
+            const checkboxes = document.querySelectorAll('.lead-checkbox:checked');
+            if (checkboxes.length === 0) return alert('Selecciona al menos un lead para subir.');
 
-            const leadsToPush = Array.from(checkboxes).map(cb => {
-                const tr = cb.closest('tr');
-                const ownerIdRaw = tr.getAttribute('data-exec-id');
-                const isSfId = ownerIdRaw && ownerIdRaw !== 'Pendiente' && ownerIdRaw.length > 10;
-                return { id: cb.value, ownerId: isSfId ? ownerIdRaw : null };
+            const res = await fetch('/api/data/leads');
+            const allLeads = await res.json();
+            
+            let payloadLeads = [];
+            checkboxes.forEach(cb => {
+                const id = parseInt(cb.value);
+                const leadData = allLeads.find(l => l.id === id);
+                if (leadData && !leadData.sf_id) {
+                    let ownerId = null;
+                    if (leadData.etiqueta && executivesMap[leadData.etiqueta] && leadData.etiqueta !== "Pendiente") {
+                        ownerId = leadData.etiqueta;
+                    }
+                    payloadLeads.push({ id: id, ownerId: ownerId });
+                }
             });
 
-            if(!confirm(`¿Estás seguro de subir ${leadsToPush.length} leads a Salesforce?`)) return;
+            if (payloadLeads.length === 0) return alert('Los leads seleccionados ya están en Salesforce.');
 
-            showToast("Subiendo leads masivamente... ⏳");
-            
+            if (!confirm(`¿Estás seguro de subir ${payloadLeads.length} leads a Salesforce?`)) return;
+
+            showToast(`Subiendo ${payloadLeads.length} leads a Salesforce... ⏳`);
+
             try {
                 const pushRes = await fetch('/api/salesforce/push', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ leads: leadsToPush })
+                    body: JSON.stringify({ leads: payloadLeads })
                 });
                 const data = await pushRes.json();
                 
-                let successCount = data.results.filter(r => r.status === 'success').length;
-                let dupCount = data.results.filter(r => r.status === 'duplicate').length;
-                
-                alert(`Resultado Salesforce:\n✅ ${successCount} nuevos subidos.\n⚠️ ${dupCount} ya existían (bloqueados).`);
+                let successCount = 0;
+                let dupCount = 0;
+                let errorCount = 0;
+
+                data.results.forEach(r => {
+                    if (r.status === 'success') successCount++;
+                    else if (r.status === 'duplicate') dupCount++;
+                    else errorCount++;
+                });
+
+                alert(`Resumen de Carga Salesforce:\n\n✅ Subidos con éxito: ${successCount}\n⚠️ Duplicados (Ignorados): ${dupCount}\n❌ Errores: ${errorCount}`);
                 refreshLeads();
             } catch(e) {
-                showToast("❌ Error crítico en cargue masivo.");
+                alert("Error crítico conectando con el servidor durante la subida masiva.");
             }
         }
-        
+
         function toggleAllLeads(source) {
-            const checkboxes = document.querySelectorAll('.lead-cb');
-            checkboxes.forEach(cb => cb.checked = source.checked);
-        }
-        /* -------------------------- */
-
-        function downloadExcel() { 
-            // MOD: Modificadas las cabeceras para incluir Etiquetas Múltiples y Producto Específico
-            const rows = [['Fecha', 'Fuente', 'Nombre', 'Telefono', 'Ciudad', 'Departamento', 'Correo', 'Categoria Interes', 'Producto/Detalle', 'Ejecutivo ID', 'Etiquetas Comerciales']]; 
-            const table = document.getElementById('leads-body'); 
-            
-            for (let tr of table.rows) { 
-                const cells = Array.from(tr.cells); 
-                
-                // Extraer todas las etiquetas (los tags de colores) y unirlas con comas
-                const tagsCell = cells[11];
-                let etiquetasTexto = "";
-                if(tagsCell) {
-                    const tagSpans = tagsCell.querySelectorAll('.tag');
-                    if(tagSpans.length > 0) {
-                        etiquetasTexto = Array.from(tagSpans).map(span => span.innerText).join(', ');
-                    } else {
-                        etiquetasTexto = tagsCell.innerText.trim();
-                    }
-                }
-
-                const rowData = [ 
-                    cells[1].innerText, 
-                    cells[2].innerText, 
-                    cells[3].innerText.replace('Este lead ya existe', '').trim(), 
-                    cells[4].innerText, 
-                    cells[5].innerText, 
-                    cells[6].innerText, 
-                    cells[7].innerText, 
-                    cells[8].innerText, 
-                    cells[9].innerText, 
-                    tr.getAttribute('data-exec-id'), 
-                    etiquetasTexto 
-                ]; 
-                rows.push(rowData); 
-            } 
-            
-            let csvContent = "\uFEFF"; 
-            csvContent += rows.map(e => e.map(v => `"${v ? String(v).replace(/"/g, '""') : ''}"`).join(",")).join("\n"); 
-            
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); 
-            const link = document.createElement("a"); 
-            link.href = URL.createObjectURL(blob); 
-            link.download = "leads_icbot.csv"; 
-            document.body.appendChild(link); 
-            link.click(); 
+            checkboxes = document.querySelectorAll('.lead-checkbox');
+            for (let i = 0; i < checkboxes.length; i++) {
+                checkboxes[i].checked = source.checked;
+            }
         }
 
         function loadTags(phone) { 
-            fetch('/api/data/tags')
-            .then(r => r.json())
-            .then(t => renderCRMTags(t)); 
+            const container = document.getElementById('tag-list'); 
+            container.innerHTML = "Cargando..."; 
+            renderCRMTags(window._cachedTags || []);
         }
 
-        function renderCRMTags(tags) { 
+        function renderCRMTags(tags) {
+            const container = document.getElementById('tag-list');
             const chat = chatsData.find(c => c.id === currentChat); 
-            const activeTags = chat ? chat.labels : []; 
-            
-            document.getElementById('tag-list').innerHTML = tags.map(t => { 
-                const isActive = activeTags && activeTags.some(at => normalizeTag(at).text === t.name); 
-                return `<span class="tag ${isActive ? 'selected' : ''}" style="border-color:${t.color}; color:${isActive?'#fff':t.color}; background:${isActive?t.color:'transparent'}" onclick="toggleChatTag('${t.name}', '${t.color}')">${t.name}</span>`; 
+            const activeTags = chat ? (chat.labels || []) : []; 
+
+            container.innerHTML = tags.map(t => { 
+                const isActive = activeTags.find(l => l.text === t.name); 
+                return `<div class="tag ${isActive ? 'selected' : ''}" style="${isActive ? `background:${t.color}; border-color:${t.color};` : ''}" onclick="toggleTagLocal('${t.name}', '${t.color}')">${t.name}</div>`; 
             }).join(''); 
         }
 
-        async function toggleChatTag(name, color) { 
+        async function toggleTagLocal(name, color) { 
             if(!currentChat) return; 
             
-            const chat = chatsData.find(c => c.id === currentChat); 
-            let labels = chat.labels || []; 
-            const exists = labels.some(l => normalizeTag(l).text === name); 
+            // 1. Ejecutamos el Optimistic Update
+            const chat = chatsData.find(c => c.id === currentChat);
+            const activeTags = chat ? (chat.labels || []) : [];
+            const exists = activeTags.find(l => l.text === name);
             
-            if(exists) {
-                labels = labels.filter(l => normalizeTag(l).text !== name); 
-            } else {
-                labels.push({text: name, color}); 
-            }
+            const tagObj = { text: name, color: color };
+            updateTagsOptimistic(currentChat, tagObj, !!exists);
             
-            await fetch('/api/chat/action', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ phone: currentChat, action: 'set_labels', value: labels }) 
-            }); 
+            // Re-renderizamos los tags en el CRM Inmediatamente
+            renderCRMTags(window._cachedTags);
             
-            const res = await fetch('/api/data/leads'); 
-            const leads = await res.json(); 
-            const lead = leads.find(l => l.phone === currentChat); 
-            
-            if(lead) { 
-                const newStatus = exists ? (labels.length > 0 ? labels[0].text : "Sin Etiqueta") : name; 
-                await fetch('/api/leads/update', { 
+            // 2. Ejecutamos el Backend call silenciosamente
+            try {
+                let newTags = [...activeTags]; 
+                if(exists) { 
+                    newTags = newTags.filter(l => l.text !== name); 
+                } else { 
+                    newTags.push(tagObj); 
+                } 
+                
+                await fetch('/api/chat/action', { 
                     method: 'POST', 
                     headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({ id: lead.id, field: 'status_tag', value: newStatus }) 
-                }); 
-            } 
-            
-            syncChats(); 
-            
-            setTimeout(() => { 
-                loadTags(currentChat); 
-                refreshLeads(); 
-            }, 300); 
-        }
-        
-        async function loadAllConfig() { 
-            const res = await fetch('/api/data/config'); 
-            const cfg = await res.json(); 
-            
-            document.getElementById('prompt-editor').value = cfg.prompt || ''; 
-            document.getElementById('prompt-readonly').innerText = cfg.prompt || 'Sin personalidad configurada.'; 
-            document.getElementById('biz-name').value = cfg.biz_profile?.name || ''; 
-            document.getElementById('biz-hours').value = cfg.biz_profile?.hours || ''; 
-            
-            if (cfg.logo_url) {
-                document.getElementById('logo-preview').style.backgroundImage = `url('${cfg.logo_url}')`;
+                    body: JSON.stringify({ phone: currentChat, action: 'set_labels', value: newTags }) 
+                });
+            } catch(e) {
+                // Si falla el backend, deberíamos revertir el optimistic update (opcional)
+                showToast("Error guardando etiqueta.");
             }
-
-            renderWebList(); 
-            renderRulesList(cfg.tech_rules); 
-            
-            fetch('/api/data/tags')
-            .then(r => r.json())
-            .then(t => renderConfigTags(t)); 
-            
-            fetch('/api/data/shortcuts')
-            .then(r => r.json())
-            .then(s => renderConfigShortcuts(s)); 
-            
-            loadInventoryPreview();
         }
-        
-        /* --- FUNCIONES PROMPT --- */
-        function openPromptEdit() {
+
+        async function refreshLeads() { 
+            const res = await fetch('/api/data/leads'); 
+            const data = await res.json(); 
+            const tbody = document.getElementById('leads-body'); 
+            
+            tbody.innerHTML = data.map(l => { 
+                const d = new Date(l.fecha); 
+                const f = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`; 
+                
+                let sfBadge = l.sf_id ? `<span class="badge" style="background:#00a1e0; color:#fff; font-size:0.7rem;" title="ID: ${l.sf_id}">SF</span>` : '';
+                
+                let sourceHTML = l.source || '-';
+                if(l.source && l.source.includes('Ads')) sourceHTML = `<span class="lead-source-tag" style="background:rgba(239, 68, 68, 0.1); color:#ef4444; border: 1px solid #ef4444;">META ADS</span>`;
+                else if(l.source === 'Web') sourceHTML = `<span class="lead-source-tag lead-source-web">WEB</span>`;
+                else if(l.source === 'Tienda Virtual') sourceHTML = `<span class="lead-source-tag lead-source-store">TIENDA</span>`;
+                else if(l.source === 'Organico') sourceHTML = `<span class="lead-source-tag" style="background:rgba(16, 185, 129, 0.1); color:#10b981; border: 1px solid #10b981;">ORGÁNICO</span>`;
+
+                let visualTagsHTML = '';
+                if(l.status_tag && l.status_tag !== "Sin Etiqueta") {
+                    visualTagsHTML = `<span class="mini-tag" style="background:var(--panel); border:1px solid var(--border); color:var(--text);">${l.status_tag}</span>`;
+                }
+
+                const execName = executivesMap[l.etiqueta] || l.etiqueta || 'Pendiente';
+
+                return `<tr>
+                    <td><input type="checkbox" class="lead-checkbox" value="${l.id}" style="cursor:pointer; width:16px; height:16px;"></td>
+                    <td>${f}</td>
+                    <td>${sourceHTML}</td>
+                    <td style="font-weight:600; cursor:pointer; color:var(--primary);" onclick="viewLeadDetails('${l.phone}')">${l.nombre || '-'} ${sfBadge}</td>
+                    <td><a href="https://wa.me/${l.phone}" target="_blank" style="color:var(--text); text-decoration:none;"><i class="fab fa-whatsapp" style="color:#25D366;"></i> +${l.phone}</a></td>
+                    <td>${l.ciudad || '-'}</td>
+                    <td>${l.departamento || '-'}</td>
+                    <td>${l.correo || '-'}</td>
+                    <td style="font-weight:600; color:var(--text);">${l.interes || '-'}</td>
+                    <td>${l.producto_especifico || '-'}</td>
+                    <td><span class="badge" style="background:${execName === 'Pendiente (Sin Asignar)' ? '#ef4444' : '#10b981'}">${execName}</span></td>
+                    <td>${visualTagsHTML}</td>
+                    <td>
+                        <button class="btn-small btn-red" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>`; 
+            }).join(''); 
+        }
+
+        async function deleteLead(id) { 
+            if(confirm("¿Eliminar lead permanentemente?")) { 
+                await fetch('/api/leads/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) }); 
+                refreshLeads(); 
+            } 
+        }
+
+        async function downloadExcel() { 
+            const res = await fetch('/api/data/leads'); 
+            const data = await res.json(); 
+            
+            if(data.length === 0) return alert("No hay datos para descargar"); 
+            
+            let csv = "ID,Fecha,Fuente,Nombre,Telefono,Ciudad,Departamento,Correo,Interes_Categoria,Producto_Especifico,Ejecutivo,ID_Salesforce\n"; 
+            data.forEach(l => { 
+                const execName = executivesMap[l.etiqueta] || l.etiqueta || 'Pendiente';
+                csv += `${l.id},${l.fecha},"${l.source || ''}","${l.nombre || ''}","${l.phone || ''}","${l.ciudad || ''}","${l.departamento || ''}","${l.correo || ''}","${l.interes || ''}","${l.producto_especifico || ''}","${execName}","${l.sf_id || ''}"\n`; 
+            }); 
+            
+            const blob = new Blob([csv], { type: 'text/csv' }); 
+            const url = window.URL.createObjectURL(blob); 
+            const a = document.createElement('a'); 
+            a.href = url; 
+            a.download = `Leads_ICBOT_${new Date().toLocaleDateString()}.csv`; 
+            a.click(); 
+        }
+
+        async function loadAllConfig() {
+            try {
+                const res = await fetch('/api/data/config');
+                const configData = await res.json();
+                
+                const ptRes = await fetch('/api/config/prompt');
+                const ptData = await ptRes.json();
+                document.getElementById('prompt-readonly').innerText = ptData.prompt;
+
+                const rules = configData.tech_rules || [];
+                document.getElementById('rules-list').innerHTML = rules.map((r, i) => `
+                    <li class="config-item">
+                        <span><i class="fas fa-check-circle" style="color:var(--primary); margin-right:8px;"></i> ${r}</span>
+                        <button class="btn-small btn-red" onclick="deleteRule(${i})"><i class="fas fa-times"></i></button>
+                    </li>
+                `).join('');
+
+                const biz = configData.biz_profile || {};
+                document.getElementById('biz-name').value = biz.name || '';
+                document.getElementById('biz-hours').value = biz.hours || '';
+
+                if(configData.logo_url) {
+                    document.getElementById('logo-preview').style.backgroundImage = `url(${configData.logo_url})`;
+                }
+
+                const tagsRes = await fetch('/api/data/tags');
+                const tags = await tagsRes.json();
+                document.getElementById('config-tags-list').innerHTML = tags.map(t => `
+                    <li class="config-item">
+                        <span style="display:flex; align-items:center; gap:10px;"><div style="width:15px;height:15px;border-radius:50%;background:${t.color};"></div> ${t.name}</span>
+                        <div style="display:flex; gap:5px;">
+                            <button class="btn-small btn-blue" onclick="openTagEdit(${t.id}, '${t.name}', '${t.color}')"><i class="fas fa-pencil-alt"></i></button>
+                            <button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </li>
+                `).join('');
+
+                const shortRes = await fetch('/api/data/shortcuts');
+                const shortcuts = await shortRes.json();
+                
+                const crmShortcuts = document.getElementById('shortcuts-list');
+                crmShortcuts.innerHTML = shortcuts.map(s => `
+                    <div class="tag" style="border-color:var(--border);" onclick="insertShortcut('${s.text.replace(/'/g, "\\'")}')" title="${s.text}">${s.keyword}</div>
+                `).join('');
+
+                document.getElementById('config-shortcuts-list').innerHTML = shortcuts.map(s => `
+                    <li class="config-item" style="flex-direction:column; align-items:flex-start; gap:5px;">
+                        <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                            <strong>${s.keyword}</strong>
+                            <button class="btn-small btn-red" onclick="deleteShortcut(${s.id})"><i class="fas fa-trash"></i></button>
+                        </div>
+                        <span style="font-size:0.8rem; color:var(--text-muted);">${s.text}</span>
+                    </li>
+                `).join('');
+
+                const webRes = await fetch('/api/data/web-knowledge');
+                const webSources = await webRes.json();
+                document.getElementById('web-knowledge-list').innerHTML = webSources.map(w => `
+                    <li class="config-item" style="flex-direction:column; align-items:flex-start; gap:8px;">
+                        <div style="display:flex; justify-content:space-between; width:100%;">
+                            <a href="${w.url}" target="_blank" style="color:var(--primary); font-weight:600; text-decoration:none;"><i class="fas fa-link"></i> ${w.url}</a>
+                            <div style="display:flex; gap:5px;">
+                                <button class="btn-small btn-blue" onclick="openWebEdit(${w.id}, \`${w.summary.replace(/`/g, "\\`")}\`)"><i class="fas fa-eye"></i> Ver/Editar</button>
+                                <button class="btn-small btn-red" onclick="deleteWeb(${w.id})"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <span style="font-size:0.75rem; color:var(--text-muted);">Escaneado el: ${w.date}</span>
+                    </li>
+                `).join('');
+
+            } catch(e) { console.error("Error cargando configuración:", e); }
+        }
+
+        async function openPromptEdit() {
+            const res = await fetch('/api/config/prompt');
+            const data = await res.json();
+            document.getElementById('prompt-editor').value = data.prompt;
             document.getElementById('prompt-edit-modal').classList.add('show');
         }
 
-        async function savePrompt() { 
+        async function savePrompt() {
             const newPrompt = document.getElementById('prompt-editor').value;
-            await fetch('/api/config/prompt', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ prompt: newPrompt }) 
-            }); 
+            await fetch('/api/config/prompt', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: newPrompt}) });
             document.getElementById('prompt-readonly').innerText = newPrompt;
             closeModal('prompt-edit-modal');
-            showToast("Personalidad Actualizada"); 
+            showToast("Personalidad Actualizada");
         }
 
-        async function saveBizConfig() { 
-            await fetch('/api/config/biz/save', { 
+        async function addRule() {
+            const input = document.getElementById('rule-input');
+            if(!input.value) return;
+            await fetch('/api/config/rules/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({rule: input.value}) });
+            input.value = '';
+            loadAllConfig();
+        }
+
+        async function deleteRule(index) {
+            await fetch('/api/config/rules/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({index}) });
+            loadAllConfig();
+        }
+
+        async function saveBizConfig() {
+            const name = document.getElementById('biz-name').value;
+            const hours = document.getElementById('biz-hours').value;
+            await fetch('/api/config/biz/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, hours}) });
+            showToast("Perfil guardado");
+        }
+
+        async function uploadLogo(input) {
+            if(!input.files[0]) return;
+            const formData = new FormData();
+            formData.append('file', input.files[0]);
+            await fetch('/api/config/logo', { method: 'POST', body: formData });
+            showToast("Logo actualizado (Recarga para ver cambios)");
+        }
+
+        async function addTag() {
+            const name = document.getElementById('tag-name').value;
+            const color = document.getElementById('tag-color').value;
+            if(!name) return;
+            await fetch('/api/tags/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, color}) });
+            document.getElementById('tag-name').value = '';
+            loadAllConfig();
+            loadTagFilterOptions(); 
+        }
+
+        async function deleteTag(id) {
+            if(!confirm("¿Eliminar etiqueta?")) return;
+            await fetch('/api/tags/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id}) });
+            loadAllConfig();
+            loadTagFilterOptions(); 
+        }
+        
+        function openTagEdit(id, name, color) {
+            document.getElementById('edit-tag-id').value = id;
+            document.getElementById('edit-tag-name').value = name;
+            document.getElementById('edit-tag-color').value = color;
+            document.getElementById('tag-edit-modal').classList.add('show');
+        }
+
+        async function saveTagEdit() {
+            const id = document.getElementById('edit-tag-id').value;
+            const name = document.getElementById('edit-tag-name').value;
+            const color = document.getElementById('edit-tag-color').value;
+            
+            await fetch('/api/tags/update', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ 
-                    name: document.getElementById('biz-name').value, 
-                    hours: document.getElementById('biz-hours').value 
-                }) 
-            }); 
-            showToast("Perfil Comercial Actualizado"); 
-        }
-
-        async function uploadLogo(input) { 
-            const fd = new FormData(); 
-            fd.append('file', input.files[0]); 
-            await fetch('/api/config/logo', { method: 'POST', body: fd }); 
-            showToast("Logo Actualizado Exitosamente"); 
-            loadAllConfig(); 
-        }
-
-        async function uploadCSV() { 
-            const input = document.getElementById('csv-upload'); 
-            if(!input.files[0]) return alert("Por favor, selecciona un archivo CSV o Excel"); 
+                body: JSON.stringify({id, name, color}) 
+            });
             
-            const fd = new FormData(); 
-            fd.append('file', input.files[0]); 
-            
-            await fetch('/api/knowledge/csv', { method: 'POST', body: fd }); 
-            showToast("Inventario Cargado con Éxito"); 
-            loadInventoryPreview(); 
+            closeModal('tag-edit-modal');
+            loadAllConfig();
+            loadTagFilterOptions();
         }
 
-        async function clearInventory() { 
-            if(!confirm("¿Estás 100% seguro de borrar TODO el inventario?")) return; 
-            await fetch('/api/knowledge/clear', { method: 'POST' }); 
-            showToast("Inventario Eliminado"); 
-            loadInventoryPreview(); 
+        async function addShortcut() {
+            const keyword = document.getElementById('short-key').value;
+            const text = document.getElementById('short-text').value;
+            if(!keyword || !text) return;
+            await fetch('/api/shortcuts/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({keyword, text}) });
+            document.getElementById('short-key').value = '';
+            document.getElementById('short-text').value = '';
+            loadAllConfig();
+        }
+
+        async function deleteShortcut(id) {
+            await fetch('/api/shortcuts/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id}) });
+            loadAllConfig();
+        }
+
+        function insertShortcut(text) {
+            const input = document.getElementById('msg-input');
+            input.value = text;
+            input.focus();
+        }
+
+        async function uploadCSV() {
+            const file = document.getElementById('csv-upload').files[0];
+            if(!file) return alert('Selecciona un archivo');
+            
+            const btn = event.target;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
+            btn.disabled = true;
+            
+            const fd = new FormData();
+            fd.append('file', file);
+            try {
+                const res = await fetch('/api/knowledge/csv', { method:'POST', body: fd });
+                const result = await res.json();
+                if(result.success) {
+                    showToast(`✅ ${result.count} productos cargados`);
+                    loadInventoryPreview();
+                }
+            } catch(e) {
+                alert("Error procesando el archivo. Asegúrate de que sea un CSV o Excel válido.");
+            } finally {
+                btn.innerHTML = '<i class="fas fa-upload"></i> Cargar Archivo';
+                btn.disabled = false;
+                document.getElementById('csv-upload').value = '';
+            }
         }
         
-        /* --- FUNCIONES WEB KNOWLEDGE --- */
-        async function renderWebList() { 
-            const res = await fetch('/api/data/web-knowledge'); 
-            const list = await res.json(); 
-            
-            document.getElementById('web-knowledge-list').innerHTML = list.map(i => `
-            <li class="config-item">
-                <span style="max-width:200px; overflow:hidden; text-overflow:ellipsis;">${i.url}</span>
-                <div style="display:flex; gap:5px;">
-                    <button class="btn-small btn-blue" onclick="showWebInfo('${i.id}', '${encodeURIComponent(i.summary)}')"><i class="fas fa-eye"></i></button>
-                    <button class="btn-small btn-red" onclick="deleteWeb('${i.id}')"><i class="fas fa-trash"></i></button>
-                </div>
-            </li>`).join(''); 
+        async function loadInventoryPreview() {
+            try {
+                const res = await fetch('/api/data/knowledge');
+                currentInventory = await res.json();
+                
+                document.getElementById('inventory-count').innerText = `${currentInventory.length} items`;
+                
+                if(currentInventory.length === 0) {
+                    document.getElementById('inventory-list').innerHTML = '<li style="text-align:center; color:var(--text-muted); padding:10px;">Inventario vacío. Sube un archivo CSV o Excel.</li>';
+                    return;
+                }
+
+                let html = '';
+                // Mostrar solo los primeros 100 para no bloquear el navegador
+                const limit = Math.min(currentInventory.length, 100);
+                
+                for(let i = 0; i < limit; i++) {
+                    const item = currentInventory[i];
+                    let data;
+                    try { data = JSON.parse(item.raw_data); } catch(e) { data = {}; }
+                    
+                    const nombre = data.nombre || data.producto || data.name || data.descripcion || "Item sin nombre";
+                    const precio = data.precio || data.price || "N/A";
+                    
+                    html += `
+                    <li class="config-item" style="flex-direction:column; align-items:flex-start; gap:5px;">
+                        <div style="display:flex; justify-content:space-between; width:100%;">
+                            <strong style="font-size:0.9rem;">${nombre}</strong>
+                            <div style="display:flex; gap:5px;">
+                                <span class="badge" style="background:var(--panel); color:var(--text); border:1px solid var(--border);">$${precio}</span>
+                                <button class="btn-small btn-blue" style="padding:4px 8px;" onclick='openEditInventory(${item.id}, ${JSON.stringify(item.raw_data)})'><i class="fas fa-pencil-alt"></i></button>
+                                <button class="btn-small btn-red" style="padding:4px 8px;" onclick="deleteInventoryItem(${item.id})"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <span style="font-size:0.75rem; color:var(--text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%; display: inline-block;">
+                            Búsqueda: ${item.searchable}
+                        </span>
+                    </li>`;
+                }
+                
+                if(currentInventory.length > 100) {
+                    html += `<li style="text-align:center; padding:10px; color:var(--text-muted); font-size:0.85rem;">... y ${currentInventory.length - 100} items más. Mostrando solo los primeros 100.</li>`;
+                }
+                
+                document.getElementById('inventory-list').innerHTML = html;
+            } catch(e) {
+                console.error("Error cargando inventario:", e);
+            }
         }
         
-        function showWebInfo(id, summary) { 
+        function openEditInventory(id, rawDataStr) {
+            try {
+                const data = JSON.parse(rawDataStr);
+                document.getElementById('edit-id').value = id;
+                document.getElementById('edit-nombre').value = data.nombre || data.producto || data.name || data.descripcion || "";
+                document.getElementById('edit-precio').value = data.precio || data.price || "";
+                document.getElementById('edit-stock').value = data.stock || data.disponibilidad || "";
+                document.getElementById('edit-desc').value = data.descripcion_larga || data.detalle || "";
+                document.getElementById('edit-modal').classList.add('show');
+            } catch(e) {
+                alert("Error abriendo editor");
+            }
+        }
+        
+        async function saveEditInventory() {
+            const id = document.getElementById('edit-id').value;
+            
+            const item = currentInventory.find(i => i.id == id);
+            let data = {};
+            if(item) {
+                try { data = JSON.parse(item.raw_data); } catch(e){}
+            }
+            
+            data.nombre = document.getElementById('edit-nombre').value;
+            data.precio = document.getElementById('edit-precio').value;
+            data.stock = document.getElementById('edit-stock').value;
+            data.descripcion_larga = document.getElementById('edit-desc').value;
+            
+            await fetch('/api/knowledge/update', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id, data })
+            });
+            
+            closeModal('edit-modal');
+            showToast("Producto actualizado");
+            loadInventoryPreview();
+        }
+
+        async function deleteInventoryItem(id) {
+            if(!confirm("¿Eliminar este producto?")) return;
+            await fetch('/api/knowledge/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) });
+            loadInventoryPreview();
+        }
+
+        async function clearInventory() {
+            if(!confirm("⚠️ ¡PELIGRO! ¿Estás seguro de querer BORRAR TODO EL INVENTARIO? Esta acción no se puede deshacer.")) return;
+            const res = await fetch('/api/knowledge/clear', { method: 'POST' });
+            if(res.ok) {
+                showToast("Inventario borrado por completo");
+                loadInventoryPreview();
+            }
+        }
+
+        async function scanWeb() {
+            const urlInput = document.getElementById('web-url-input');
+            const url = urlInput.value.trim();
+            if(!url) return;
+            
+            const btn = event.target;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Escaneando...';
+            btn.disabled = true;
+            
+            try {
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                const response = await fetch(proxyUrl);
+                const data = await response.json();
+                const htmlText = data.contents;
+                
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlText, "text/html");
+                
+                doc.querySelectorAll('script, style, nav, footer, iframe, img, svg').forEach(el => el.remove());
+                let rawText = doc.body.innerText;
+                
+                rawText = rawText.replace(/\s+/g, ' ').trim();
+                
+                const summary = `Contenido de ${url}:\n` + rawText.substring(0, 3000); 
+
+                await fetch('/api/data/web-knowledge', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ url: url, summary: summary })
+                });
+
+                showToast("✅ Página escaneada y memorizada");
+                urlInput.value = '';
+                loadAllConfig();
+            } catch(error) {
+                console.error(error);
+                alert("No se pudo escanear la página. Es posible que tenga bloqueos de seguridad.");
+            } finally {
+                btn.innerHTML = '<i class="fas fa-plus"></i> Añadir';
+                btn.disabled = false;
+            }
+        }
+
+        function openWebEdit(id, text) {
             document.getElementById('edit-web-id').value = id;
-            document.getElementById('web-audit-text').value = decodeURIComponent(summary);
+            document.getElementById('web-audit-text').value = text;
             document.getElementById('web-audit-modal').classList.add('show');
         }
 
@@ -1886,313 +2272,23 @@
             const id = document.getElementById('edit-web-id').value;
             const newSummary = document.getElementById('web-audit-text').value;
             
-            await fetch('/api/data/web-knowledge/update', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ id, summary: newSummary }) 
+            await fetch('/api/data/web-knowledge/update', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id, summary: newSummary })
             });
             
             closeModal('web-audit-modal');
-            showToast("Información Web corregida");
-            renderWebList();
-        }
-        
-        async function scanWeb() { 
-            const url = document.getElementById('web-url-input').value; 
-            const summary = prompt("Ingresa un resumen corto para esta página:"); 
-            
-            if(summary) { 
-                await fetch('/api/data/web-knowledge', { 
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({ url, summary }) 
-                }); 
-                document.getElementById('web-url-input').value = ""; 
-                renderWebList(); 
-            } 
+            showToast("Conocimiento web actualizado");
+            loadAllConfig();
         }
 
-        async function deleteWeb(id) { 
-            await fetch('/api/data/web-knowledge/delete', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ id }) 
-            }); 
-            renderWebList(); 
-        }
-        
-        function renderRulesList(rules) { 
-            document.getElementById('rules-list').innerHTML = (rules || []).map((r, i) => `
-            <li class="config-item">
-                <span>${r}</span>
-                <button class="btn-small btn-red" onclick="deleteRule(${i})"><i class="fas fa-trash"></i></button>
-            </li>`).join(''); 
+        async function deleteWeb(id) {
+            if(!confirm("¿Olvidar esta página web?")) return;
+            await fetch('/api/data/web-knowledge/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) });
+            loadAllConfig();
         }
 
-        async function addRule() { 
-            const r = document.getElementById('rule-input').value; 
-            if(!r) return; 
-            
-            const res = await fetch('/api/config/rules/add', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ rule: r }) 
-            }); 
-            
-            const data = await res.json(); 
-            renderRulesList(data.rules); 
-            document.getElementById('rule-input').value = ""; 
-        }
-
-        async function deleteRule(i) { 
-            const res = await fetch('/api/config/rules/delete', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ index: i }) 
-            }); 
-            
-            const data = await res.json(); 
-            renderRulesList(data.rules); 
-        }
-        
-        function renderConfigTags(tags) { 
-            document.getElementById('config-tags-list').innerHTML = tags.map(t => `
-            <li class="config-item">
-                <span style="color:${t.color};font-weight:600;"><i class="fas fa-circle" style="font-size:0.6rem; vertical-align:middle; margin-right:5px;"></i> ${t.name}</span>
-                <div style="display:flex; gap:5px;">
-                    <button class="btn-small btn-blue" onclick="editTag(${t.id}, '${t.name}', '${t.color}')"><i class="fas fa-pencil-alt"></i></button>
-                    <button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button>
-                </div>
-            </li>`).join(''); 
-            
-            renderCRMTags(tags); 
-        }
-
-        async function addTag() { 
-            const name = document.getElementById('tag-name').value; 
-            const color = document.getElementById('tag-color').value; 
-            
-            if(!name) return; 
-            
-            await fetch('/api/tags/add', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ name, color }) 
-            }); 
-            
-            loadAllConfig(); 
-            document.getElementById('tag-name').value = ""; 
-        }
-
-        async function deleteTag(id) { 
-            await fetch('/api/tags/delete', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ id }) 
-            }); 
-            
-            loadAllConfig(); 
-        }
-
-        function editTag(id, name, color) { 
-            document.getElementById('edit-tag-id').value = id; 
-            document.getElementById('edit-tag-name').value = name; 
-            document.getElementById('edit-tag-color').value = color; 
-            document.getElementById('tag-edit-modal').classList.add('show'); 
-        }
-
-        async function saveTagEdit() { 
-            const id = document.getElementById('edit-tag-id').value; 
-            const name = document.getElementById('edit-tag-name').value; 
-            const color = document.getElementById('edit-tag-color').value; 
-            
-            await fetch('/api/tags/update', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ id, name, color }) 
-            }); 
-            
-            closeModal('tag-edit-modal'); 
-            loadAllConfig(); 
-            showToast("Etiqueta actualizada correctamente"); 
-        }
-
-        function renderConfigShortcuts(shortcuts) { 
-            const list = shortcuts.map(s => `
-            <li class="config-item">
-                <span style="color:var(--primary);"><b>${s.keyword}</b></span>
-                <button class="btn-small btn-red" onclick="deleteShortcut(${s.id})"><i class="fas fa-trash"></i></button>
-            </li>`).join(''); 
-            
-            document.getElementById('config-shortcuts-list').innerHTML = list; 
-            
-            document.getElementById('shortcuts-list').innerHTML = shortcuts.map(s => `
-            <span class="tag" style="background:var(--panel); border-color:var(--primary); color:var(--primary);" onclick="insertShortcut('${s.text}')">${s.keyword}</span>`).join(''); 
-        }
-
-        async function addShortcut() { 
-            const k = document.getElementById('short-key').value; 
-            const t = document.getElementById('short-text').value; 
-            
-            if(!k || !t) return; 
-            
-            await fetch('/api/shortcuts/add', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ keyword: k, text: t }) 
-            }); 
-            
-            loadAllConfig(); 
-            document.getElementById('short-key').value = ""; 
-            document.getElementById('short-text').value = ""; 
-        }
-
-        async function deleteShortcut(id) { 
-            await fetch('/api/shortcuts/delete', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ id }) 
-            }); 
-            
-            loadAllConfig(); 
-        }
-
-        function insertShortcut(text) { 
-            document.getElementById('msg-input').value += text; 
-        }
-        
-        async function refreshLeads() { 
-            const res = await fetch('/api/data/leads'); 
-            const leads = await res.json(); 
-            
-            document.getElementById('leads-body').innerHTML = leads.map(l => {
-                const execName = executivesMap[l.etiqueta] || l.etiqueta || 'Pendiente';
-                const isSf = !!l.sf_id;
-                
-                const sfWarning = isSf ? `<div style="color:#ef4444; font-size:0.75rem; font-weight:bold; margin-top:4px;"><i class="fas fa-exclamation-circle"></i> Este lead ya existe</div>` : '';
-                const checkboxHtml = isSf ? `<i class="fas fa-check-circle" style="color:#10b981; opacity:0.7;" title="Ya cargado en Salesforce"></i>` : `<input type="checkbox" class="lead-cb" value="${l.id}" style="cursor:pointer; width:16px; height:16px;">`;
-                
-                // Mapear etiquetas del chat a la tabla de leads
-                let tagListHtml = "-";
-                // Buscamos las etiquetas en chatsData (que viene de metadata) cruzando por el teléfono
-                const chatData = chatsData.find(c => c.id === l.phone);
-                if (chatData && chatData.labels && chatData.labels.length > 0) {
-                    tagListHtml = chatData.labels.map(lbl => {
-                        const tag = normalizeTag(lbl);
-                        return `<span class="tag" style="background:${tag.color}20; color:${tag.color}; border-color:${tag.color}50; margin-right:4px;">${tag.text}</span>`;
-                    }).join('');
-                } else if (l.status_tag) {
-                    // Fallback a la etiqueta de texto simple si metadata no está cargada aún
-                    tagListHtml = `<span class="tag" style="background:var(--panel); color:var(--text); border-color:var(--border);">${l.status_tag}</span>`;
-                }
-
-                return `
-                <tr data-exec-id="${l.etiqueta || 'Pendiente'}">
-                    <td style="text-align:center;">${checkboxHtml}</td>
-                    <td>${new Date(l.fecha).toLocaleDateString()}</td>
-                    <td><span class="lead-source-tag ${l.source==='Web'?'lead-source-web':(l.source==='Tienda Virtual'?'lead-source-store':'')}">${l.source||'Orgánico'}</span></td>
-                    <td style="font-weight:600; color:var(--text);">${l.nombre||'-'}${sfWarning}</td>
-                    <td>${l.phone}</td>
-                    <td>${l.ciudad||'-'}</td>
-                    <td>${l.departamento||'-'}</td>
-                    <td>${l.correo||'-'}</td>
-                    <td><strong>${l.interes||'-'}</strong></td>
-                    <td style="color:var(--text-muted); font-size:0.85rem;">${l.producto_especifico||'-'}</td>
-                    <td style="color:var(--primary);">${execName}</td>
-                    <td>${tagListHtml}</td>
-                    <td>
-                        <button class="nav-btn" style="height:30px; margin-right:5px; border:1px solid var(--border);" onclick="viewLeadDetails('${l.phone}')" title="Ver info"><i class="fas fa-eye"></i></button>
-                        <button class="nav-btn" style="height:30px; border:1px solid var(--border);" onclick="openChat('${l.phone}', '${l.nombre}', '')" title="Ir al Chat"><i class="fas fa-comment"></i></button>
-                    </td>
-                </tr>`;
-            }).join(''); 
-        }
-
-        async function loadInventoryPreview() {
-            const list = document.getElementById('inventory-list'); 
-            const countLabel = document.getElementById('inventory-count');
-            
-            try {
-                const res = await fetch('/api/data/knowledge'); 
-                currentInventory = await res.json();
-                
-                countLabel.innerText = `${currentInventory.length} items registrados`;
-                
-                if(currentInventory.length === 0) { 
-                    list.innerHTML = '<li style="text-align:center; color:var(--text-muted); padding:15px; font-size:0.9rem;"><i class="fas fa-box-open fa-2x" style="margin-bottom:10px; color:var(--border);"></i><br>No hay inventario cargado.</li>'; 
-                    return; 
-                }
-                
-                list.innerHTML = currentInventory.map(item => {
-                    let display = "Producto desconocido";
-                    try {
-                        const obj = JSON.parse(item.raw_data);
-                        display = `<b style="color:var(--text);">${obj.nombre || obj.name || obj.producto || "Sin Nombre"}</b> <span style="color:var(--primary); font-weight:600;">${(obj.precio || obj.price) ? `($${obj.precio || obj.price})` : ''}</span>`;
-                    } catch(e) { 
-                        display = item.searchable.substring(0, 30) + "..."; 
-                    }
-                    
-                    return `
-                    <li class="config-item" style="font-size:0.9rem;">
-                        <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:65%;">${display}</span>
-                        <div style="display:flex; gap:5px;">
-                            <button class="btn-small btn-blue" onclick="openEditModal(${item.id})"><i class="fas fa-pencil-alt"></i></button>
-                            <button class="btn-small btn-red" onclick="deleteInventoryItem(${item.id})"><i class="fas fa-trash"></i></button>
-                        </div>
-                    </li>`;
-                }).join('');
-            } catch(e) { 
-                console.error(e); 
-            }
-        }
-
-        function openEditModal(id) {
-            const item = currentInventory.find(i => i.id === id); 
-            if(!item) return;
-            
-            try {
-                const data = JSON.parse(item.raw_data);
-                document.getElementById('edit-id').value = id; 
-                document.getElementById('edit-nombre').value = data.nombre || data.name || data.producto || ""; 
-                document.getElementById('edit-precio').value = data.precio || data.price || ""; 
-                document.getElementById('edit-stock').value = data.stock || data.cantidad || ""; 
-                document.getElementById('edit-desc').value = data.descripcion || data.desc || "";
-                
-                document.getElementById('edit-modal').classList.add('show');
-            } catch(e) {}
-        }
-
-        async function saveEditInventory() {
-            const id = document.getElementById('edit-id').value;
-            const newData = { 
-                nombre: document.getElementById('edit-nombre').value, 
-                precio: document.getElementById('edit-precio').value, 
-                stock: document.getElementById('edit-stock').value, 
-                descripcion: document.getElementById('edit-desc').value 
-            };
-            
-            await fetch('/api/knowledge/update', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ id, data: newData }) 
-            });
-            
-            closeModal('edit-modal'); 
-            showToast("Producto actualizado exitosamente"); 
-            loadInventoryPreview();
-        }
-
-        async function deleteInventoryItem(id) { 
-            if(!confirm("¿Borrar este producto definitivamente?")) return; 
-            
-            await fetch('/api/knowledge/delete', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ id }) 
-            }); 
-            
-            loadInventoryPreview(); 
-        }
     </script>
 </body>
 </html>
