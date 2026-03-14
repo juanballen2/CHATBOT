@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v31.0 (ICBOT FULL PRODUCTION - PATCH TEMPLATES & CLEANUP)
+ * SERVER BACKEND - v32.0 (ICBOT FULL PRODUCTION - CAMPAIGN ENGINE)
  * ============================================================
  * 1. FIX: Renombrado oficial a ICBOT completado.
  * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone).
@@ -13,7 +13,7 @@
  * 10.FIX: Se eliminó el bloqueo duro de archivos adjuntos para que la IA los procese.
  * 11.DEL: EXTIRPADO SALESFORCE (Limpieza de código fallido para estabilidad).
  * 12.ADD: Soporte nativo para 'Template Messages' en enviarWhatsApp.
- * 13.ADD: Nuevo Endpoint masivo/individual /api/chat/send-template.
+ * 13.MOD: Endpoint /api/chat/send-template preparado para imágenes dinámicas y PreviewText.
  * ============================================================
  */
 
@@ -116,7 +116,6 @@ let db, globalKnowledge = [], serverInstance;
             `shortcuts (id INTEGER PRIMARY KEY AUTOINCREMENT, keyword TEXT UNIQUE, text TEXT)`,
             `global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT)`,
             `knowledge_sources (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, url TEXT, summary TEXT, active INTEGER DEFAULT 1, date TEXT)`,
-            // Nueva tabla por si a futuro quieres guardar plantillas en BD
             `templates (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, category TEXT, language TEXT, data TEXT)`
         ];
 
@@ -151,7 +150,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v31.0 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
+        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v32.0 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -253,7 +252,6 @@ async function enviarWhatsApp(to, content, type = "text") {
         if (type === "text") { 
             payload.text = { body: content }; 
         } else if (type === "template") { 
-            // NUEVO: Soporte directo para las plantillas de Meta
             payload.template = content; 
         } else if (content.id) { 
             payload[type] = { id: content.id }; 
@@ -501,7 +499,6 @@ function iniciarCronJobs() {
     setInterval(async () => {
         try {
             const horaBogota = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Bogota"}));
-            // Disparamos solo si son las 7 AM (entre 7:00 y 7:14)
             if (horaBogota.getHours() === 7 && horaBogota.getMinutes() < 15) {
                 const todayStr = horaBogota.toISOString().split('T')[0];
                 const lastRun = await getCfg('last_followup_date');
@@ -526,16 +523,15 @@ function iniciarCronJobs() {
                         let sent = false;
                         const nombreCliente = l.nombre && l.nombre.trim() !== "" ? l.nombre : "Cliente";
 
-                        // PARCHE: Si pasaron > 24 hrs OBLIGATORIO usar plantilla aprobada.
                         if (fDay === 1 || fDay === 2) {
                             const templatePayload = {
-                                name: "plantilla_de_retoma", // El nombre exacto en Meta
-                                language: { code: "es_CO" }, // Ajusta si la creaste solo como "es"
+                                name: "plantilla_de_retoma", 
+                                language: { code: "es_CO" }, 
                                 components: [
                                     {
                                         type: "body",
                                         parameters: [
-                                            { type: "text", text: nombreCliente } // Variable {{1}}
+                                            { type: "text", text: nombreCliente } 
                                         ]
                                     }
                                 ]
@@ -545,13 +541,13 @@ function iniciarCronJobs() {
                             
                             if (sent) {
                                 const timestamp = new Date().toISOString();
-                                const msgGuardado = `[PLANTILLA ENVIADA: plantilla_de_retoma]`;
+                                // GUARDADO LIMPIO PARA EL DASHBOARD
+                                const msgGuardado = `[CAMPAÑA]\n📢 Plantilla: plantilla_de_retoma\n📝 Variables: ${nombreCliente}`;
                                 await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [l.phone, 'bot', msgGuardado, timestamp]);
                                 io.emit('new_message', { phone: l.phone, role: 'bot', text: msgGuardado, time: timestamp });
                             }
 
                         } else if (fDay >= 3) {
-                            // Al día 3 cerramos el ticket, no enviamos más para no hacer spam.
                             cerrar = true;
                         }
 
@@ -754,14 +750,14 @@ app.post('/api/chat/send', proteger, async (req, res) => {
 
 // --- NUEVO: ENDPOINT PARA ENVIAR PLANTILLAS MANUALES/MASIVAS ---
 app.post('/api/chat/send-template', proteger, async (req, res) => {
-    // req.body espera: { phone: "57...", templateName: "nombre_plantilla", language: "es", components: [...] }
-    const { phone, templateName, language, components } = req.body;
+    // req.body ahora recibe el "previewText" para el renderizado bonito en el dashboard
+    const { phone, templateName, language, components, previewText } = req.body;
     const cleanPhone = phone.replace(/\D/g, '');
 
     try {
         const payload = {
             name: templateName,
-            language: { code: language || "es" },
+            language: { code: language || "es_CO" },
             components: components || []
         };
 
@@ -769,7 +765,8 @@ app.post('/api/chat/send-template', proteger, async (req, res) => {
         
         if (sent) {
             const timestamp = new Date().toISOString();
-            const logMsg = `[PLANTILLA ENVIADA: ${templateName}]`;
+            // Usamos el preview que mandó el Frontend, o un fallback
+            const logMsg = previewText || `[CAMPAÑA]\n📢 Plantilla: ${templateName}`;
             
             await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', logMsg, timestamp]);
             await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount, last_interaction) VALUES (?, ?, 1, 0, 0, ?) ON CONFLICT(phone) DO UPDATE SET last_interaction=excluded.last_interaction`, [cleanPhone, cleanPhone, timestamp]);
