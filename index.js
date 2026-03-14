@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v32.0 (ICBOT FULL PRODUCTION - CAMPAIGN ENGINE)
+ * SERVER BACKEND - v33.0 (ICBOT FULL PRODUCTION - EXCEL BULK CAMPAIGNS)
  * ============================================================
  * 1. FIX: Renombrado oficial a ICBOT completado.
  * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone).
@@ -13,7 +13,8 @@
  * 10.FIX: Se eliminó el bloqueo duro de archivos adjuntos para que la IA los procese.
  * 11.DEL: EXTIRPADO SALESFORCE (Limpieza de código fallido para estabilidad).
  * 12.ADD: Soporte nativo para 'Template Messages' en enviarWhatsApp.
- * 13.MOD: Endpoint /api/chat/send-template preparado para imágenes dinámicas y PreviewText.
+ * 13.MOD: Endpoint /api/chat/send-template preparado para imágenes dinámicas y FormData.
+ * 14.ADD: Endpoint /api/chat/bulk-excel (Motor de campañas con Rate Limiting 250ms).
  * ============================================================
  */
 
@@ -150,7 +151,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v32.0 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
+        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v33.0 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -541,7 +542,6 @@ function iniciarCronJobs() {
                             
                             if (sent) {
                                 const timestamp = new Date().toISOString();
-                                // GUARDADO LIMPIO PARA EL DASHBOARD
                                 const msgGuardado = `[CAMPAÑA]\n📢 Plantilla: plantilla_de_retoma\n📝 Variables: ${nombreCliente}`;
                                 await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [l.phone, 'bot', msgGuardado, timestamp]);
                                 io.emit('new_message', { phone: l.phone, role: 'bot', text: msgGuardado, time: timestamp });
@@ -748,24 +748,46 @@ app.post('/api/chat/send', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({ error: "Error interno" }); } 
 });
 
-// --- NUEVO: ENDPOINT PARA ENVIAR PLANTILLAS MANUALES/MASIVAS ---
-app.post('/api/chat/send-template', proteger, async (req, res) => {
-    // req.body ahora recibe el "previewText" para el renderizado bonito en el dashboard
-    const { phone, templateName, language, components, previewText } = req.body;
+// --- NUEVO: ENDPOINT PARA ENVIAR PLANTILLAS MANUALES/MASIVAS (SOPORTE DE ARCHIVOS) ---
+app.post('/api/chat/send-template', proteger, upload.single('file'), async (req, res) => {
+    const phone = req.body.phone;
+    if (!phone) return res.status(400).json({ error: "Falta teléfono" });
+    
     const cleanPhone = phone.replace(/\D/g, '');
+    const templateName = req.body.templateName;
+    const language = req.body.language || "es_CO";
+    const previewText = req.body.previewText;
+
+    // Como enviamos por FormData (archivos), components llega como un string JSON
+    let components = [];
+    if (req.body.components) {
+        try { components = JSON.parse(req.body.components); } catch(e) {}
+    }
 
     try {
+        // Magia Senior: Si viene un archivo, lo subimos a Meta para sacar el ID
+        if (req.file) {
+            const mediaId = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname);
+            if (mediaId) {
+                components.push({
+                    type: "header",
+                    parameters: [{ type: "image", image: { id: mediaId } }]
+                });
+            } else {
+                return res.status(500).json({ error: "Meta rechazó la carga de la imagen." });
+            }
+        }
+
         const payload = {
             name: templateName,
-            language: { code: language || "es_CO" },
-            components: components || []
+            language: { code: language },
+            components: components
         };
 
         const sent = await enviarWhatsApp(cleanPhone, payload, 'template');
         
         if (sent) {
             const timestamp = new Date().toISOString();
-            // Usamos el preview que mandó el Frontend, o un fallback
             const logMsg = previewText || `[CAMPAÑA]\n📢 Plantilla: ${templateName}`;
             
             await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', logMsg, timestamp]);
@@ -781,6 +803,105 @@ app.post('/api/chat/send-template', proteger, async (req, res) => {
     } catch (e) {
         console.error("Error Endpoint Plantilla:", e);
         res.status(500).json({ error: "Error interno enviando plantilla" });
+    }
+});
+
+// --- NUEVO: ENDPOINT PARA ENVÍOS MASIVOS DESDE EXCEL ---
+app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCount: 1 }, { name: 'image', maxCount: 1 }]), async (req, res) => {
+    try {
+        if (!req.files || !req.files.excel) return res.status(400).json({ error: "Falta el archivo Excel" });
+        
+        const templateName = req.body.templateName;
+        const language = req.body.language || "es_CO";
+        
+        if (!templateName) return res.status(400).json({ error: "Falta el nombre de la plantilla" });
+
+        // 1. Subir imagen a Meta si existe (una sola vez para toda la campaña)
+        let mediaId = null;
+        if (req.files.image && req.files.image[0]) {
+            const imgFile = req.files.image[0];
+            mediaId = await uploadToMeta(imgFile.buffer, imgFile.mimetype, imgFile.originalname);
+            if (!mediaId) return res.status(500).json({ error: "Error al subir la imagen a Meta" });
+        }
+
+        // 2. Leer Excel
+        const workbook = XLSX.read(req.files.excel[0].buffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+        let successCount = 0;
+        let errorCount = 0;
+
+        // 3. Procesar cada fila
+        for (const row of rows) {
+            let phoneVal = null;
+            let nameVal = "Cliente";
+
+            // Búsqueda flexible de columnas
+            for (const key in row) {
+                const k = key.toLowerCase().trim();
+                if (k.includes('telefono') || k.includes('celular') || k.includes('phone') || k === 'tel') phoneVal = row[key];
+                if (k.includes('nombre') || k.includes('name') || k.includes('cliente')) nameVal = row[key];
+            }
+
+            if (!phoneVal) continue;
+            const cleanPhone = phoneVal.toString().replace(/\D/g, '');
+            if (cleanPhone.length < 10) continue; // Validación básica
+
+            let components = [];
+            if (mediaId) {
+                components.push({
+                    type: "header",
+                    parameters: [{ type: "image", image: { id: mediaId } }]
+                });
+            }
+            
+            components.push({
+                type: "body",
+                parameters: [{ type: "text", text: nameVal.toString() }]
+            });
+
+            const payload = {
+                name: templateName,
+                language: { code: language },
+                components: components
+            };
+
+            try {
+                const sent = await enviarWhatsApp(cleanPhone, payload, 'template');
+                if (sent) {
+                    successCount++;
+                    const timestamp = new Date().toISOString();
+                    const logMsg = `[CAMPAÑA EXCEL]\n📢 Plantilla: ${templateName}\n📝 Variable: ${nameVal}${mediaId ? '\n🖼️ [Imagen Adjunta]' : ''}`;
+                    
+                    await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', logMsg, timestamp]);
+                    await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount, last_interaction) VALUES (?, ?, 1, 0, 0, ?) ON CONFLICT(phone) DO UPDATE SET last_interaction=excluded.last_interaction`, [cleanPhone, nameVal, timestamp]);
+
+                    // Registrar en leads si no existe
+                    const existingLead = await db.get("SELECT id FROM leads WHERE phone = ?", [cleanPhone]);
+                    if (!existingLead) {
+                        await db.run(`INSERT INTO leads (phone, nombre, source, etiqueta, fecha, status_tag, farewell_sent, followup_day) VALUES (?, ?, ?, ?, ?, ?, 0, 0)`, 
+                            [cleanPhone, nameVal, 'Campaña Excel', 'Pendiente', timestamp, 'PROMO']);
+                    }
+
+                    io.emit('new_message', { phone: cleanPhone, role: 'manual', text: logMsg, time: timestamp });
+                } else {
+                    errorCount++;
+                }
+            } catch(e) {
+                errorCount++;
+            }
+
+            // Retraso de seguridad Anti-Baneo (Rate Limit de Meta)
+            await new Promise(r => setTimeout(r, 250));
+        }
+
+        io.emit('update_chats_list');
+        res.json({ success: true, sent: successCount, failed: errorCount });
+
+    } catch (error) {
+        console.error("Error en bulk-excel:", error);
+        res.status(500).json({ error: "Error procesando el archivo Excel" });
     }
 });
 
