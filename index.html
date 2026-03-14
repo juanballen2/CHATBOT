@@ -132,6 +132,7 @@
         .msg.user { background: var(--incoming); align-self: flex-start; border-top-left-radius: 0; color: #FFF; }
         .msg.bot, .msg.manual { background: var(--outgoing); align-self: flex-end; border-top-right-radius: 0; color: #FFF; }
         
+        /* NUEVO: ESTILO PARA BURBUJAS DE CAMPAÑA */
         .msg.campaign { background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%); align-self: flex-end; border-top-right-radius: 0; color: #FFF; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3); }
         .msg.campaign a { color: #a5b4fc; }
         
@@ -290,9 +291,11 @@
                             <option value="">Etiquetar como...</option>
                         </select>
                         <button class="btn-small btn-green" onclick="executeBulkAction('set_label')" style="margin-right: 10px;">Aplicar</button>
+                        
                         <button class="btn-small btn-green" onclick="openTemplateModal(true)" style="margin-right: 10px; background: #4f46e5; border-color: #4f46e5;" title="Envío Masivo de Plantillas">
                             <i class="fas fa-bullhorn"></i> Masivo
                         </button>
+                        
                         <button class="btn-small btn-blue" onclick="executeBulkAction('toggle_archive')" title="Archivar/Desarchivar"><i class="fas fa-archive"></i></button>
                     </div>
                 </div>
@@ -1372,14 +1375,12 @@
             
             // Detección de tipos de mensajes especiales
             const isAlert = text.includes('[ALERTA:');
-            const isCampaign = text.startsWith('[CAMPAÑA');
+            const isCampaign = text.startsWith('[CAMPAÑA]');
             
             if (isCampaign) {
-                // Formateamos los links para que sean clickeables en la tarjeta morada
                 text = text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="text-decoration:underline;">$1</a>');
             }
             
-            // Asignamos la clase correcta (Campaña, Alerta o Normal)
             const bubbleClass = isAlert ? 'alert' : (isCampaign ? 'campaign' : m.role);
             
             return `
@@ -1763,10 +1764,13 @@
             
             if(data.length === 0) return alert("No hay datos para descargar"); 
             
-            let csv = "ID,Fecha,Fuente,Nombre,Telefono,Ciudad,Departamento,Correo,Interes_Categoria,Producto_Especifico,Ejecutivo\n"; 
+            let csv = "ID,Fecha,Fuente,Nombre,Telefono,Ciudad,Departamento,Correo,Interes_Categoria,Producto_Especifico,Ejecutivo,Etiqueta_Comercial\n"; 
+            
             data.forEach(l => { 
                 const execName = executivesMap[l.etiqueta] || l.etiqueta || 'Pendiente';
-                csv += `${l.id},${l.fecha},"${l.source || ''}","${l.nombre || ''}","${l.phone || ''}","${l.ciudad || ''}","${l.departamento || ''}","${l.correo || ''}","${l.interes || ''}","${l.producto_especifico || ''}","${execName}"\n`; 
+                const tagVisual = l.status_tag && l.status_tag !== "Sin Etiqueta" ? l.status_tag : '';
+                
+                csv += `${l.id},${l.fecha},"${l.source || ''}","${l.nombre || ''}","${l.phone || ''}","${l.ciudad || ''}","${l.departamento || ''}","${l.correo || ''}","${l.interes || ''}","${l.producto_especifico || ''}","${execName}","${tagVisual}"\n`; 
             }); 
             
             const blob = new Blob([csv], { type: 'text/csv' }); 
