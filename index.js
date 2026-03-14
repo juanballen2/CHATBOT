@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v30.8 (ICBOT FULL PRODUCTION - TOTAL INTEGRITY + SF DEBUG)
+ * SERVER BACKEND - v31.0 (ICBOT FULL PRODUCTION - PATCH TEMPLATES & CLEANUP)
  * ============================================================
  * 1. FIX: Renombrado oficial a ICBOT completado.
  * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone).
@@ -8,21 +8,18 @@
  * 5. ADD: Sistema Anti-bucle (Auto-apagado del bot).
  * 6. FIX: Prioridad absoluta al nombre dado por el cliente.
  * 7. ADD: WEBSOCKETS (Socket.io) para eliminar el Polling del frontend.
- * 8. MOD: Cronjob seguimiento 7:00 AM (2 días) + Cierre automático.
+ * 8. MOD: Cronjob seguimiento inteligente (Uso de Plantilla si > 24h).
  * 9. MOD: Segmentación de Categoría vs Producto Específico.
  * 10.FIX: Se eliminó el bloqueo duro de archivos adjuntos para que la IA los procese.
- * 11.ADD: Integración nativa Salesforce CRM (Duplicados + Cargue Masivo + Cache Token).
- * 12.FIX: Parche Error 400 Salesforce (Split Names, Company mandatory, OwnerId, Salutation).
- * 13.ADD: SF Token Debugger ("El Parcero Chismoso") para aislar fallos de autenticación 400.
- * 14.MOD: Aumento de límite de chats visibles de 50 a 1000 en /api/chats-full.
- * 15.MOD: Inclusión de 'interes', 'producto_especifico' y 'phone' en el JSON de /api/chats-full.
- * 16.FIX: Parche (*) en /api/chat-history para evitar cuelgues con IDs extraños de WhatsApp.
+ * 11.DEL: EXTIRPADO SALESFORCE (Limpieza de código fallido para estabilidad).
+ * 12.ADD: Soporte nativo para 'Template Messages' en enviarWhatsApp.
+ * 13.ADD: Nuevo Endpoint masivo/individual /api/chat/send-template.
  * ============================================================
  */
 
 const express = require('express');
-const http = require('http'); // <-- WEBSOCKETS: Necesitamos el server nativo
-const { Server } = require('socket.io'); // <-- WEBSOCKETS: La librería mágica
+const http = require('http'); 
+const { Server } = require('socket.io'); 
 const session = require('express-session');
 const fs = require('fs');
 const path = require('path');
@@ -37,8 +34,8 @@ const { open } = require('sqlite');
 
 // --- 1. CONFIGURACIÓN DEL SERVIDOR ---
 const app = express();
-const server = http.createServer(app); // <-- WEBSOCKETS: Envolvemos Express
-const io = new Server(server, {        // <-- WEBSOCKETS: Iniciamos el Túnel
+const server = http.createServer(app); 
+const io = new Server(server, {        
     cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
@@ -67,13 +64,6 @@ const VERIFY_TOKEN = "ICC_2025";
 
 const DEFAULT_PROMPT = `Eres ICBOT, un asistente virtual comercial de Importadora Casa Colombia. Tu objetivo principal es atender al cliente, resolver sus dudas y perfilarlo recopilando sus datos para pasarlo a un asesor humano.
 REGLA DE ORO: NUNCA ASUMAS EL NOMBRE DEL CLIENTE. Si el cliente no te ha dicho explícitamente "Me llamo X", debes preguntárselo obligatoriamente (Nombre y Apellido) para su registro.`;
-
-// --- VARIABLES DE SALESFORCE ---
-const SF_CLIENT_ID = process.env.SF_CLIENT_ID;
-const SF_CLIENT_SECRET = process.env.SF_CLIENT_SECRET;
-const SF_USERNAME = process.env.SF_USERNAME;
-const SF_PASSWORD = process.env.SF_PASSWORD;
-const SF_URL = process.env.SF_URL;
 
 // --- 3. SESIONES ---
 app.use(session({
@@ -125,7 +115,9 @@ let db, globalKnowledge = [], serverInstance;
             `config (key TEXT PRIMARY KEY, value TEXT)`,
             `shortcuts (id INTEGER PRIMARY KEY AUTOINCREMENT, keyword TEXT UNIQUE, text TEXT)`,
             `global_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, color TEXT)`,
-            `knowledge_sources (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, url TEXT, summary TEXT, active INTEGER DEFAULT 1, date TEXT)`
+            `knowledge_sources (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, url TEXT, summary TEXT, active INTEGER DEFAULT 1, date TEXT)`,
+            // Nueva tabla por si a futuro quieres guardar plantillas en BD
+            `templates (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, category TEXT, language TEXT, data TEXT)`
         ];
 
         for (const t of tables) await db.exec(`CREATE TABLE IF NOT EXISTS ${t}`);
@@ -159,8 +151,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        // <-- WEBSOCKETS: Ahora usamos server.listen en lugar de app.listen
-        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v30.8 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
+        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v31.0 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -227,91 +218,16 @@ function obtenerDepartamento(ciudad) {
     if (!ciudad) return null;
     const c = ciudad.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
     const mapa = {
-        "medellin": "Antioquia", "bello": "Antioquia", "itagui": "Antioquia", "envigado": "Antioquia", "rionegro": "Antioquia", "apartado": "Antioquia", "caucasia": "Antioquia",
-        "bogota": "Bogotá D.C.", "soacha": "Cundinamarca", "chia": "Cundinamarca", "zipaquira": "Cundinamarca", "girardot": "Cundinamarca", "facatativa": "Cundinamarca", "mosquera": "Cundinamarca",
-        "cali": "Valle del Cauca", "palmira": "Valle del Cauca", "buenaventura": "Valle del Cauca", "tulua": "Valle del Cauca", "cartago": "Valle del Cauca", "yumbo": "Valle del Cauca", "jamundi": "Valle del Cauca",
-        "barranquilla": "Atlántico", "soledad": "Atlántico", "malambo": "Atlántico", "sabanagrande": "Atlántico",
-        "cartagena": "Bolívar", "magangue": "Bolívar", "turbaco": "Bolívar", "arona": "Bolívar",
-        "bucaramanga": "Santander", "floridablanca": "Santander", "giron": "Santander", "piedecuesta": "Santander", "barrancabermeja": "Santander", "san gil": "Santander",
-        "pereira": "Risaralda", "dosquebradas": "Risaralda", "santa rosa de cabal": "Risaralda",
-        "manizales": "Caldas", "chinchina": "Caldas", "la dorada": "Caldas", "villamaria": "Caldas",
-        "armenia": "Quindío", "calarca": "Quindío", "quimbaya": "Quindío",
-        "cucuta": "Norte de Santander", "ocana": "Norte de Santander", "villa del rosario": "Norte de Santander", "pamplona": "Norte de Santander",
-        "ibague": "Tolima", "espinal": "Tolima", "melgar": "Tolima", "honda": "Tolima",
-        "villavicencio": "Meta", "acacias": "Meta", "granada": "Meta", "puerto lopez": "Meta",
-        "neiva": "Huila", "pitalito": "Huila", "garzon": "Huila", "la plata": "Huila",
-        "santa marta": "Magdalena", "cienaga": "Magdalena", "fundacion": "Magdalena",
-        "pasto": "Nariño", "tumaco": "Nariño", "ipiales": "Nariño",
-        "popayan": "Cauca", "santander de quilichao": "Cauca", "piendamo": "Cauca",
-        "valledupar": "Cesar", "aguachica": "Cesar", "codazzi": "Cesar",
-        "monteria": "Córdoba", "cerete": "Córdoba", "lorica": "Córdoba", "sahagun": "Córdoba",
-        "sincelejo": "Sucre", "corozal": "Sucre", "san marcos": "Sucre",
-        "riohacha": "La Guajira", "maicao": "La Guajira", "uribia": "La Guajira",
-        "florencia": "Caquetá", "san vicente del caguan": "Caquetá",
-        "yopal": "Casanare", "aguazul": "Casanare", "villanueva": "Casanare",
-        "quibdo": "Chocó", "istmina": "Chocó",
-        "arauca": "Arauca", "saravena": "Arauca", "tame": "Arauca",
-        "mocoa": "Putumayo", "puerto asis": "Putumayo", "orito": "Putumayo",
-        "leticia": "Amazonas",
-        "san andres": "San Andrés y Providencia",
-        "san jose del guaviare": "Guaviare",
-        "tunja": "Boyacá", "duitama": "Boyacá", "sogamoso": "Boyacá", "chiquinquira": "Boyacá", "paipa": "Boyacá"
+        "medellin": "Antioquia", "bogota": "Bogotá D.C.", "cali": "Valle del Cauca", "barranquilla": "Atlántico",
+        "cartagena": "Bolívar", "bucaramanga": "Santander", "pereira": "Risaralda", "manizales": "Caldas",
+        "armenia": "Quindío", "cucuta": "Norte de Santander", "ibague": "Tolima", "villavicencio": "Meta",
+        "neiva": "Huila", "santa marta": "Magdalena", "pasto": "Nariño", "popayan": "Cauca",
+        "valledupar": "Cesar", "monteria": "Córdoba", "sincelejo": "Sucre", "riohacha": "La Guajira",
+        "florencia": "Caquetá", "yopal": "Casanare", "quibdo": "Chocó", "arauca": "Arauca",
+        "mocoa": "Putumayo", "leticia": "Amazonas", "san andres": "San Andrés y Providencia",
+        "san jose del guaviare": "Guaviare", "tunja": "Boyacá"
     };
     return mapa[c] || null;
-}
-
-// --- 6.5 INTEGRACIÓN SALESFORCE (PARCERO CHISMOSO AÑADIDO) ---
-let sfTokenCache = null;
-let sfInstanceUrl = null;
-let sfTokenExpires = 0;
-
-async function getSalesforceToken() {
-    if (sfTokenCache && Date.now() < sfTokenExpires) {
-        return { token: sfTokenCache, instanceUrl: sfInstanceUrl };
-    }
-    if (!SF_CLIENT_ID || !SF_PASSWORD) throw new Error("Credenciales de Salesforce no configuradas en entorno.");
-    
-    const params = new URLSearchParams();
-    params.append('grant_type', 'password');
-    params.append('client_id', SF_CLIENT_ID);
-    params.append('client_secret', SF_CLIENT_SECRET);
-    params.append('username', SF_USERNAME);
-    params.append('password', SF_PASSWORD);
-
-    try {
-        const res = await axios.post(`${SF_URL}/services/oauth2/token`, params, {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-        });
-        
-        sfTokenCache = res.data.access_token;
-        sfInstanceUrl = res.data.instance_url;
-        sfTokenExpires = Date.now() + (2 * 60 * 60 * 1000); // El token vive 2 horas, lo cacheamos para eficiencia
-        return { token: sfTokenCache, instanceUrl: sfInstanceUrl };
-    } catch (error) {
-        // AQUÍ ESTÁ EL CHISMOSO: Nos dirá exactamente qué falla en el Login
-        console.error("🔐 ❌ ERROR LOGIN SALESFORCE:", error.response ? JSON.stringify(error.response.data) : error.message);
-        throw new Error("Fallo al obtener el token de Salesforce.");
-    }
-}
-
-async function checkSalesforceLead(phone) {
-    try {
-        const { token, instanceUrl } = await getSalesforceToken();
-        const cleanPhone = phone.replace(/\D/g, ''); // Limpiamos para la consulta SOQL
-        
-        // Buscamos si el teléfono está en Phone o MobilePhone en Salesforce
-        const query = `SELECT Id FROM Lead WHERE Phone = '${cleanPhone}' OR MobilePhone = '${cleanPhone}' LIMIT 1`;
-        const url = `${instanceUrl}/services/data/v58.0/query/?q=${encodeURIComponent(query)}`;
-        
-        const res = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (res.data.records && res.data.records.length > 0) {
-            return res.data.records[0].Id;
-        }
-        return null; // No existe
-    } catch (e) {
-        console.error("❌ Error SOQL Salesforce (Check):", e.response ? JSON.stringify(e.response.data) : e.message);
-        return null;
-    }
 }
 
 // --- 7. META API ---
@@ -333,9 +249,18 @@ async function uploadToMeta(buffer, mime, name) {
 async function enviarWhatsApp(to, content, type = "text") {
     try {
         const payload = { messaging_product: "whatsapp", to, type };
-        if (type === "text") { payload.text = { body: content }; } 
-        else if (content.id) { payload[type] = { id: content.id }; if(type === 'document') payload[type].filename = 'Archivo Adjunto.pdf'; } 
-        else { payload[type] = { link: content }; }
+        
+        if (type === "text") { 
+            payload.text = { body: content }; 
+        } else if (type === "template") { 
+            // NUEVO: Soporte directo para las plantillas de Meta
+            payload.template = content; 
+        } else if (content.id) { 
+            payload[type] = { id: content.id }; 
+            if(type === 'document') payload[type].filename = 'Archivo Adjunto.pdf'; 
+        } else { 
+            payload[type] = { link: content }; 
+        }
         
         await axios.post(`https://graph.facebook.com/v21.0/${PHONE_ID}/messages`, payload, { 
             headers: { 'Authorization': `Bearer ${META_TOKEN}` } 
@@ -553,7 +478,7 @@ async function gestionarLead(phone, info, fbName, oldLead) {
 }
 
 function iniciarCronJobs() {
-    // 1. CronJob Existente de limpieza de medios
+    // 1. Limpieza de medios
     setInterval(() => {
         try {
             const cacheDir = path.join(__dirname, 'data', 'media_cache');
@@ -572,7 +497,7 @@ function iniciarCronJobs() {
         } catch(e) { console.error("Error limpiando cache:", e); }
     }, 60000 * 30);
 
-    // 2. NUEVO CRONJOB: Seguimiento a las 7:00 AM Hora Bogotá (Chequeo cada 10 mins)
+    // 2. CRONJOB DE SEGUIMIENTO (PARCHE DE PLANTILLAS 24H)
     setInterval(async () => {
         try {
             const horaBogota = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Bogota"}));
@@ -581,7 +506,6 @@ function iniciarCronJobs() {
                 const todayStr = horaBogota.toISOString().split('T')[0];
                 const lastRun = await getCfg('last_followup_date');
                 
-                // Evitamos que se ejecute dos veces en la misma mañana
                 if (lastRun === todayStr) return; 
 
                 await setCfg('last_followup_date', todayStr);
@@ -598,41 +522,52 @@ function iniciarCronJobs() {
                     if (horasInactivo >= 24) {
                         let fDay = l.followup_day || 0;
                         fDay++;
-
-                        let msg = "";
                         let cerrar = false;
+                        let sent = false;
+                        const nombreCliente = l.nombre && l.nombre.trim() !== "" ? l.nombre : "Cliente";
 
-                        if (fDay === 1) {
-                            msg = "¡Hola! 👋 Notamos que tu solicitud quedó pendiente. ¿Podemos ayudarte a finalizarla para asignarte un ejecutivo comercial?";
-                        } else if (fDay === 2) {
-                            msg = "Hola de nuevo. Queremos asegurarnos de que recibas la mejor atención. ¿Aún te encuentras interesado en nuestra maquinaria o servicios?";
+                        // PARCHE: Si pasaron > 24 hrs OBLIGATORIO usar plantilla aprobada.
+                        if (fDay === 1 || fDay === 2) {
+                            const templatePayload = {
+                                name: "plantilla_de_retoma", // El nombre exacto en Meta
+                                language: { code: "es_CO" }, // Ajusta si la creaste solo como "es"
+                                components: [
+                                    {
+                                        type: "body",
+                                        parameters: [
+                                            { type: "text", text: nombreCliente } // Variable {{1}}
+                                        ]
+                                    }
+                                ]
+                            };
+                            
+                            sent = await enviarWhatsApp(l.phone, templatePayload, 'template');
+                            
+                            if (sent) {
+                                const timestamp = new Date().toISOString();
+                                const msgGuardado = `[PLANTILLA ENVIADA: plantilla_de_retoma]`;
+                                await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [l.phone, 'bot', msgGuardado, timestamp]);
+                                io.emit('new_message', { phone: l.phone, role: 'bot', text: msgGuardado, time: timestamp });
+                            }
+
                         } else if (fDay >= 3) {
-                            msg = "En vista de no completada su solicitud procedemos a cerrar su ticket. Si deseas retomar la consulta en el futuro, no dudes en escribirnos.";
+                            // Al día 3 cerramos el ticket, no enviamos más para no hacer spam.
                             cerrar = true;
                         }
 
-                        if (msg) {
-                            const sent = await enviarWhatsApp(l.phone, msg);
-                            if (sent) {
-                                const timestamp = new Date().toISOString();
-                                await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [l.phone, 'bot', msg, timestamp]);
-                                io.emit('new_message', { phone: l.phone, role: 'bot', text: msg, time: timestamp });
-                            }
-
-                            if (cerrar) {
-                                await db.run("UPDATE leads SET etiqueta = 'Perdido', followup_day = ? WHERE id = ?", [fDay, l.id]);
-                                await db.run("INSERT OR REPLACE INTO bot_status (phone, active) VALUES (?, 0)", [l.phone]);
-                                console.log(`🔒 Ticket cerrado para ${l.phone} por inactividad.`);
-                            } else {
-                                await db.run("UPDATE leads SET followup_day = ? WHERE id = ?", [fDay, l.id]);
-                            }
+                        if (cerrar) {
+                            await db.run("UPDATE leads SET etiqueta = 'Perdido', followup_day = ? WHERE id = ?", [fDay, l.id]);
+                            await db.run("INSERT OR REPLACE INTO bot_status (phone, active) VALUES (?, 0)", [l.phone]);
+                            console.log(`🔒 Ticket cerrado para ${l.phone} por inactividad.`);
+                        } else {
+                            await db.run("UPDATE leads SET followup_day = ? WHERE id = ?", [fDay, l.id]);
                         }
                     }
                 }
                 io.emit('update_chats_list');
             }
         } catch (e) { console.error("Error en CronJob 7AM:", e); }
-    }, 10 * 60 * 1000); // Se verifica cada 10 minutos
+    }, 10 * 60 * 1000); 
 }
 
 // --- 11. RUTAS API ---
@@ -643,7 +578,6 @@ app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirna
 
 app.get('/api/data/:type', proteger, async (req, res) => {
     const t = req.params.type;
-    // En leads, el "SELECT *" ahora incluirá automáticamente nuestra nueva columna sf_id, no hay que tocar nada.
     if (t === 'leads') res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
     else if (t === 'tags') res.json(await db.all("SELECT * FROM global_tags"));
     else if (t === 'shortcuts') res.json(await db.all("SELECT * FROM shortcuts"));
@@ -714,11 +648,9 @@ app.get('/api/chats-full', proteger, async (req, res) => {
         let params = [];
         if (search) { whereClause += ` AND (m.contactName LIKE ? OR h.phone LIKE ? OR h.text LIKE ?)`; params.push(search, search, search); }
         
-        // MOD: Se aumentó el límite a 1000 y se agregaron l.interes, l.producto_especifico
         const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, b.active as botActive, l.source, l.status_tag, l.sf_id, l.interes, l.producto_especifico FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN leads l ON h.phone = l.phone WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 1000`;
         const rows = await db.all(query, params);
         
-        // MOD: Agregamos phone, interes y producto_especifico a la respuesta
         res.json(rows.map(r => ({ 
             id: r.id, 
             phone: r.id,
@@ -740,7 +672,6 @@ app.get('/api/chats-full', proteger, async (req, res) => {
     } catch(e) { res.status(500).json([]); }
 });
 
-// FIX: Parche (*) añadido para soportar cualquier ID de teléfono extraño
 app.get('/api/chat-history/:phone(*)', proteger, async (req, res) => {
     try {
         const phone = req.params.phone;
@@ -821,100 +752,40 @@ app.post('/api/chat/send', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({ error: "Error interno" }); } 
 });
 
-// --- ENPOINTS NUEVOS: SALESFORCE ---
-// 1. Verificar existencia por teléfono en tiempo real
-app.get('/api/salesforce/check/:phone', proteger, async (req, res) => {
+// --- NUEVO: ENDPOINT PARA ENVIAR PLANTILLAS MANUALES/MASIVAS ---
+app.post('/api/chat/send-template', proteger, async (req, res) => {
+    // req.body espera: { phone: "57...", templateName: "nombre_plantilla", language: "es", components: [...] }
+    const { phone, templateName, language, components } = req.body;
+    const cleanPhone = phone.replace(/\D/g, '');
+
     try {
-        const cleanPhone = req.params.phone.replace(/\D/g, '');
-        const sfId = await checkSalesforceLead(cleanPhone);
+        const payload = {
+            name: templateName,
+            language: { code: language || "es" },
+            components: components || []
+        };
+
+        const sent = await enviarWhatsApp(cleanPhone, payload, 'template');
         
-        if (sfId) {
-            // Actualizamos la base local de una vez por si no lo sabíamos
-            await db.run("UPDATE leads SET sf_id = ? WHERE phone = ?", [sfId, cleanPhone]);
-            res.json({ exists: true, sf_id: sfId });
+        if (sent) {
+            const timestamp = new Date().toISOString();
+            const logMsg = `[PLANTILLA ENVIADA: ${templateName}]`;
+            
+            await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', logMsg, timestamp]);
+            await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount, last_interaction) VALUES (?, ?, 1, 0, 0, ?) ON CONFLICT(phone) DO UPDATE SET last_interaction=excluded.last_interaction`, [cleanPhone, cleanPhone, timestamp]);
+            
+            io.emit('new_message', { phone: cleanPhone, role: 'manual', text: logMsg, time: timestamp });
+            io.emit('update_chats_list');
+
+            res.json({ success: true });
         } else {
-            res.json({ exists: false });
+            res.status(500).json({ error: "Error enviando plantilla en Meta" });
         }
     } catch (e) {
-        res.status(500).json({ error: "Error consultando a Salesforce" });
+        console.error("Error Endpoint Plantilla:", e);
+        res.status(500).json({ error: "Error interno enviando plantilla" });
     }
 });
-
-// 2. Cargue Masivo / Individual (PARCHE APLICADO)
-app.post('/api/salesforce/push', proteger, async (req, res) => {
-    const { leads } = req.body; 
-    
-    if (!leads || !Array.isArray(leads)) return res.status(400).json({error: "Se requiere un array de leads."});
-    
-    let results = [];
-    try {
-        const { token, instanceUrl } = await getSalesforceToken();
-        
-        for (const item of leads) {
-            const leadId = item.id;
-            const ownerId = item.ownerId || '005Dn000007H1EUIA0'; // ID de Marketing por defecto
-            
-            const lead = await db.get("SELECT * FROM leads WHERE id = ?", [leadId]);
-            if (!lead) {
-                results.push({ id: leadId, status: 'error', message: 'No encontrado en la base local.' });
-                continue;
-            }
-            
-            // Paso A: Validar Duplicado en Salesforce
-            const existingSfId = await checkSalesforceLead(lead.phone);
-            if (existingSfId) {
-                // Ya existe: Solo marcamos la BD local, NO lo subimos
-                await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [existingSfId, leadId]);
-                results.push({ id: leadId, status: 'duplicate', sf_id: existingSfId, message: 'Ya existe en Salesforce.' });
-                continue; 
-            }
-            
-            // Paso B: Crear en Salesforce si no existe (MAPEO ESTRICTO PARA EVITAR ERROR 400)
-            const fullName = lead.nombre || "Cliente WhatsApp";
-            const nameParts = fullName.trim().split(' ');
-            const firstName = nameParts[0];
-            const lastName = nameParts.slice(1).join(' ') || "Sin Apellido";
-
-            const sfData = {
-                Salutation: 'Mr.',
-                FirstName: firstName,
-                LastName: lastName,
-                Company: fullName, // Obligatorio en Salesforce
-                Phone: lead.phone.replace(/\D/g, ''),
-                Email: lead.correo || "",
-                City: lead.ciudad || "",
-                State: lead.departamento || "",
-                Status: 'Nuevo candidato',
-                ProductInterest__c: lead.interes || 'Otros',
-                Description: `Interés: ${lead.producto_especifico || ''} | Origen: ${lead.source || 'Bot'}`,
-                OwnerId: ownerId 
-            };
-
-            try {
-                const sfRes = await axios.post(`${instanceUrl}/services/data/v58.0/sobjects/Lead/`, sfData, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                const newSfId = sfRes.data.id;
-                // Guardamos el ID de Salesforce en nuestra base de datos SQLite
-                await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [newSfId, leadId]);
-                
-                results.push({ id: leadId, status: 'success', sf_id: newSfId });
-            } catch (err) {
-                console.error(`❌ Error POST Lead ${lead.phone}:`, err.response ? JSON.stringify(err.response.data) : err.message);
-                results.push({ id: leadId, status: 'error', message: 'Rechazado por Salesforce.' });
-            }
-        }
-        res.json({ success: true, results });
-    } catch (e) {
-        console.error("❌ Error General Salesforce Endpoint:", e.message);
-        res.status(500).json({ error: "Error crítico de conexión con Salesforce." });
-    }
-});
-// -----------------------------------
 
 // --- WEBHOOK BLINDADO ---
 app.get('/webhook', (req, res) => {
