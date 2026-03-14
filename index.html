@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICBOT V31.0 - Clean UI</title>
+    <title>ICBOT V32.0 - Campañas & Masivos</title>
     <link rel="icon" href="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" type="image/svg+xml">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -130,12 +130,17 @@
         .msg { max-width: 65%; padding: 8px 12px; border-radius: 8px; font-size: 0.95rem; line-height: 1.4; position: relative; word-wrap: break-word; box-shadow: 0 1px 2px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
         .msg.user { background: var(--incoming); align-self: flex-start; border-top-left-radius: 0; color: #FFF; }
         .msg.bot, .msg.manual { background: var(--outgoing); align-self: flex-end; border-top-right-radius: 0; color: #FFF; }
+        
+        /* NUEVO: ESTILO PARA BURBUJAS DE CAMPAÑA */
+        .msg.campaign { background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%); align-self: flex-end; border-top-right-radius: 0; color: #FFF; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3); }
+        .msg.campaign a { color: #a5b4fc; }
+        
         .msg.alert { background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #D32F2F; align-self: center; border-radius: 8px; width: 85%; max-width: 85%; text-align: center; font-weight: 500; font-size: 0.85rem; }
         .msg-time { font-size: 0.65rem; opacity: 0.7; align-self: flex-end; margin-top: 4px; }
         
         .msg-forward-btn { position: absolute; top: 5px; right: -35px; background: var(--bg-main); color: var(--primary); border: 1px solid var(--border); border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.85rem; opacity: 0; visibility: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: opacity 0.3s ease 1.5s, visibility 0.3s ease 1.5s, transform 0.2s, background 0.2s; }
         .msg:hover .msg-forward-btn { opacity: 1; visibility: visible; transition-delay: 0s; }
-        .msg.bot:hover .msg-forward-btn { left: -35px; right: auto; }
+        .msg.bot:hover .msg-forward-btn, .msg.campaign:hover .msg-forward-btn { left: -35px; right: auto; }
         .msg-forward-btn:hover { background: var(--primary); color: #FFF; transform: scale(1.1); }
 
         .audio-wrapper { display: flex; align-items: center; gap: 12px; padding: 6px; background: rgba(255,255,255,0.15); border-radius: 12px; min-width: 250px; }
@@ -284,7 +289,12 @@
                         <select id="bulk-tag-select" class="tag-filter-select" style="flex:1; margin-right: 10px;">
                             <option value="">Etiquetar como...</option>
                         </select>
-                        <button class="btn-small btn-green" onclick="executeBulkAction('set_label')">Aplicar</button>
+                        <button class="btn-small btn-green" onclick="executeBulkAction('set_label')" style="margin-right: 10px;">Aplicar</button>
+                        
+                        <button class="btn-small btn-green" onclick="openTemplateModal(true)" style="margin-right: 10px; background: #4f46e5; border-color: #4f46e5;" title="Envío Masivo de Plantillas">
+                            <i class="fas fa-bullhorn"></i> Masivo
+                        </button>
+                        
                         <button class="btn-small btn-blue" onclick="executeBulkAction('toggle_archive')" title="Archivar/Desarchivar"><i class="fas fa-archive"></i></button>
                     </div>
                 </div>
@@ -306,7 +316,7 @@
                 <div class="messages" id="messages-container"></div>
                 
                 <div class="input-area">
-                    <button class="attach-btn" onclick="openTemplateModal()" title="Enviar Plantilla (Marketing/Retoma)"><i class="fas fa-bullhorn"></i></button>
+                    <button class="attach-btn" onclick="openTemplateModal(false)" title="Enviar Plantilla (Marketing/Retoma)"><i class="fas fa-bullhorn"></i></button>
                     <button class="attach-btn" onclick="document.getElementById('file-upload').click()"><i class="fas fa-paperclip"></i></button>
                     <input type="file" id="file-upload" hidden onchange="uploadFile()" accept="image/*,video/*,audio/*,application/pdf">
                     <textarea class="input-box" id="msg-input" placeholder="Escribe un mensaje aquí..." onkeypress="checkEnter(event)"></textarea>
@@ -525,22 +535,30 @@
 
     <div id="template-modal" class="modal-overlay" onclick="closeModal('template-modal')">
         <div class="modal-content" onclick="event.stopPropagation()">
-            <div class="modal-title"><i class="fas fa-bullhorn" style="color:var(--primary);"></i> Enviar Plantilla Oficial</div>
-            <p style="font-size:0.85rem; color:var(--text-muted); margin-top:-5px; margin-bottom:10px;">Dispara una plantilla pre-aprobada por Meta para abrir la ventana de 24 horas.</p>
+            <div class="modal-title" id="tpl-modal-title"><i class="fas fa-bullhorn" style="color:var(--primary);"></i> Enviar Plantilla</div>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-top:-5px; margin-bottom:10px;" id="tpl-modal-desc">Dispara una plantilla pre-aprobada por Meta.</p>
+            
+            <input type="hidden" id="tpl-is-bulk" value="false">
+            
             <div class="modal-form">
-                <label>Selecciona la Plantilla</label>
-                <select id="tpl-name">
-                    <option value="">Selecciona una plantilla...</option>
-                    <option value="plantilla_de_retoma">Retomar Cotización (plantilla_de_retoma)</option>
-                    <option value="tu_plantilla_promo">Promoción de Repuestos (Campaña)</option>
-                </select>
-                <label>Variables del Mensaje (Opcional)</label>
-                <input type="text" id="tpl-vars" placeholder="Ej: Juan, 15% de Descuento (Separa por comas)">
-                <span style="font-size:0.75rem; color:var(--text-muted);">Si la plantilla usa {{1}}, escribe un valor. Si usa {{1}} y {{2}}, escribe los dos separados por coma.</span>
+                <label>Nombre de la Plantilla en Meta</label>
+                <input list="template-names" id="tpl-name" placeholder="Ej: plantilla_de_retoma" required>
+                <datalist id="template-names">
+                    <option value="plantilla_de_retoma">
+                    <option value="tu_plantilla_promo">
+                </datalist>
+
+                <label>URL de Imagen (Si la plantilla usa Imagen Variable)</label>
+                <input type="url" id="tpl-img" placeholder="https://ejemplo.com/imagen.jpg">
+
+                <label>Variables de Texto (Opcional)</label>
+                <input type="text" id="tpl-vars" placeholder="Ej: Carlos, 15% Descuento (Separar por comas)">
+                <span style="font-size:0.75rem; color:var(--text-muted);">Aplica solo si el cuerpo del mensaje tiene {{1}}, {{2}}</span>
             </div>
+            
             <div class="modal-actions">
                 <button class="btn-small btn-red" onclick="closeModal('template-modal')">Cancelar</button>
-                <button class="btn-small btn-green" onclick="sendTemplate()"><i class="fas fa-paper-plane"></i> Enviar Plantilla</button>
+                <button class="btn-small btn-green" onclick="processTemplateSubmit()" id="btn-tpl-send"><i class="fas fa-paper-plane"></i> Enviar</button>
             </div>
         </div>
     </div>
@@ -770,51 +788,116 @@
             }
         }
 
-        function openTemplateModal() {
-            if(!currentChat) return showToast("Abre un chat primero para enviar una plantilla.");
+        // --- SISTEMA DE PLANTILLAS Y MASIVOS ---
+        function openTemplateModal(isBulk = false) {
+            if(!isBulk && !currentChat) return showToast("Abre un chat para envío individual.");
+            if(isBulk && selectedChats.size === 0) return showToast("Selecciona al menos un chat para envío masivo.");
+            
             document.getElementById('tpl-name').value = "";
+            document.getElementById('tpl-img').value = "";
             document.getElementById('tpl-vars').value = "";
+            document.getElementById('tpl-is-bulk').value = isBulk ? "true" : "false";
+            
+            const title = document.getElementById('tpl-modal-title');
+            const desc = document.getElementById('tpl-modal-desc');
+            const btn = document.getElementById('btn-tpl-send');
+            
+            if (isBulk) {
+                title.innerHTML = `<i class="fas fa-bullhorn" style="color:var(--primary);"></i> Envío Masivo (${selectedChats.size} chats)`;
+                desc.innerText = "Dispara una plantilla a todos los contactos seleccionados de forma escalonada.";
+                btn.innerHTML = '<i class="fas fa-rocket"></i> Iniciar Envío Masivo';
+            } else {
+                title.innerHTML = `<i class="fas fa-bullhorn" style="color:var(--primary);"></i> Enviar Plantilla`;
+                desc.innerText = "Dispara una plantilla pre-aprobada por Meta.";
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar';
+            }
+
             document.getElementById('template-modal').classList.add('show');
         }
 
-        async function sendTemplate() {
-            if(!currentChat) return;
-            const name = document.getElementById('tpl-name').value;
-            const varsInput = document.getElementById('tpl-vars').value;
+        async function processTemplateSubmit() {
+            const name = document.getElementById('tpl-name').value.trim();
+            const imgUrl = document.getElementById('tpl-img').value.trim();
+            const varsInput = document.getElementById('tpl-vars').value.trim();
+            const isBulk = document.getElementById('tpl-is-bulk').value === "true";
             
-            if(!name) return showToast("⚠️ Debes seleccionar una plantilla del menú.");
+            if(!name) return showToast("⚠️ El nombre de la plantilla es obligatorio.");
 
             let components = [];
-            if(varsInput) {
+            
+            // Si mandó una imagen, empaquetamos el componente Header Multimedia
+            if (imgUrl) {
+                components.push({
+                    type: "header",
+                    parameters: [{ type: "image", image: { link: imgUrl } }]
+                });
+            }
+            
+            // Si mandó variables de texto, empaquetamos el componente Body
+            if (varsInput) {
                 const varsArr = varsInput.split(',').map(v => v.trim());
                 const parameters = varsArr.map(v => ({ type: "text", text: v }));
                 components.push({ type: "body", parameters: parameters });
             }
 
-            closeModal('template-modal');
-            showToast("Enviando plantilla a Meta... ⏳");
+            // Construimos el Preview visual para nuestro dashboard
+            let previewText = `[CAMPAÑA]\n📢 Plantilla: ${name}`;
+            if (imgUrl) previewText += `\n🖼️ Imagen: ${imgUrl}`;
+            if (varsInput) previewText += `\n📝 Variables: ${varsInput}`;
 
+            closeModal('template-modal');
+
+            if (isBulk) {
+                await executeBulkTemplates(name, components, previewText);
+            } else {
+                await executeSingleTemplate(currentChat, name, components, previewText);
+            }
+        }
+
+        async function executeSingleTemplate(phone, name, components, previewText) {
+            showToast("Enviando plantilla a Meta... ⏳");
             try {
                 const res = await fetch('/api/chat/send-template', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        phone: currentChat,
-                        templateName: name,
-                        language: "es_CO", // FIX APLICADO AQUÍ
-                        components: components
-                    })
+                    body: JSON.stringify({ phone: phone, templateName: name, language: "es_CO", components: components, previewText: previewText })
                 });
-                
                 const data = await res.json();
-                if(data.success) {
-                    showToast("✅ Plantilla enviada con éxito");
-                } else {
-                    showToast("❌ Error enviando plantilla: " + (data.error || "Desconocido"));
-                }
+                if(data.success) showToast("✅ Plantilla enviada con éxito");
+                else showToast("❌ Error Meta: " + (data.error || "Desconocido"));
             } catch(e) {
                 showToast("❌ Fallo de red al conectar con el servidor.");
             }
+        }
+
+        async function executeBulkTemplates(name, components, previewText) {
+            const phones = Array.from(selectedChats);
+            showToast(`🚀 Iniciando envío masivo a ${phones.length} contactos...`);
+            
+            let successCount = 0;
+            let errorCount = 0;
+            
+            // Motor asíncrono con retraso anti-baneo de 250ms
+            for (let i = 0; i < phones.length; i++) {
+                const phone = phones[i];
+                try {
+                    const res = await fetch('/api/chat/send-template', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ phone: phone, templateName: name, language: "es_CO", components: components, previewText: previewText })
+                    });
+                    if (res.ok) successCount++;
+                    else errorCount++;
+                } catch(e) {
+                    errorCount++;
+                }
+                
+                // El retraso mágico de Senior (Rate Limiting)
+                await new Promise(r => setTimeout(r, 250));
+            }
+            
+            alert(`Resumen de Campaña Masiva:\n\n✅ Enviados: ${successCount}\n❌ Errores: ${errorCount}`);
+            toggleBulkMode(); // Cierra el modo masivo
         }
         
         function openLightbox(url, type) {
@@ -1150,6 +1233,7 @@
             return `${dateStr} ${timeStr}`;
         }
 
+        // --- RENDERIZADO DEL MENSAJE DE CAMPAÑA ---
         function buildMessageHTML(m) {
             let text = m.text; 
             let isMedia = false; 
@@ -1217,11 +1301,22 @@
             } 
             
             const safeText = m.text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            const isAlert = text.includes('[ALERTA:') || text.includes('[PLANTILLA');
+            
+            // Detección de tipos de mensajes especiales
+            const isAlert = text.includes('[ALERTA:');
+            const isCampaign = text.startsWith('[CAMPAÑA]');
+            
+            if (isCampaign) {
+                // Formateamos los links para que sean clickeables en la tarjeta morada
+                text = text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="text-decoration:underline;">$1</a>');
+            }
+            
+            // Asignamos la clase correcta (Campaña, Alerta o Normal)
+            const bubbleClass = isAlert ? 'alert' : (isCampaign ? 'campaign' : m.role);
             
             return `
-            <div class="msg ${isAlert ? 'alert' : m.role}">
-                ${text}
+            <div class="msg ${bubbleClass}">
+                ${text.replace(/\n/g, '<br>')}
                 <div class="msg-time">${formatSmartTime(m.time)}</div>
                 ${!isAlert ? `
                 <div class="msg-forward-btn" onclick="openForwardModal('${safeText}', ${isMedia}, '${mediaId}')" title="Reenviar Mensaje">
