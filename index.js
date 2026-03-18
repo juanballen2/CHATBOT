@@ -1,20 +1,21 @@
 /*
  * SERVER BACKEND - v33.0 (ICBOT FULL PRODUCTION - EXCEL BULK CAMPAIGNS)
  * ============================================================
- * 1. FIX: Renombrado oficial a ICBOT completado.
+ * 1. FIX: Renombrado oficial a ICBOT completado (Asistente Lorena).
  * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone).
  * 3. ADD: Cronjob de Limpieza robusto 'media_cache'.
  * 4. FIX: Audios/Videos con soporte Range 206 (codecs=opus).
  * 5. ADD: Sistema Anti-bucle (Auto-apagado del bot).
  * 6. FIX: Prioridad absoluta al nombre dado por el cliente.
  * 7. ADD: WEBSOCKETS (Socket.io) para eliminar el Polling del frontend.
- * 8. MOD: Cronjob seguimiento inteligente (Uso de Plantilla si > 24h).
+ * 8. MOD: Cronjob seguimiento inteligente (Fix: Plantilla sin parámetros).
  * 9. MOD: Segmentación de Categoría vs Producto Específico.
  * 10.FIX: Se eliminó el bloqueo duro de archivos adjuntos para que la IA los procese.
  * 11.DEL: EXTIRPADO SALESFORCE (Limpieza de código fallido para estabilidad).
  * 12.ADD: Soporte nativo para 'Template Messages' en enviarWhatsApp.
  * 13.MOD: Endpoint /api/chat/send-template preparado para imágenes dinámicas y FormData.
  * 14.ADD: Endpoint /api/chat/bulk-excel (Motor de campañas con Rate Limiting 250ms).
+ * 15.FIX: Integración nativa Gemini (System Instructions + JSON estricto + Fusión de roles).
  * ============================================================
  */
 
@@ -63,10 +64,11 @@ const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = "icbot-secure-v29-final"; 
 const VERIFY_TOKEN = "ICC_2025"; 
 
-const DEFAULT_PROMPT = `Eres ICBOT, un asistente virtual comercial de Importadora Casa Colombia. Tu objetivo principal es atender al cliente, resolver sus dudas y perfilarlo recopilando sus datos para pasarlo a un asesor humano.
+const DEFAULT_PROMPT = `Eres Lorena, Asistente Comercial de Importadora Casa Colombia. Tu objetivo principal es atender al cliente, resolver sus dudas y perfilarlo recopilando sus datos para pasarlo a un asesor humano.
 REGLA DE ORO: NUNCA ASUMAS EL NOMBRE DEL CLIENTE. Si el cliente no te ha dicho explícitamente "Me llamo X", debes preguntárselo obligatoriamente (Nombre y Apellido) para su registro.`;
 
 // --- 3. SESIONES ---
+// Nota: MemoryStore reinicia sesiones en reinicios del servidor. Afecta solo al dashboard web, no al bot.
 app.use(session({
     name: 'icc_session_id', 
     secret: SESSION_SECRET, 
@@ -353,11 +355,6 @@ app.get('/rescate', async (req, res) => {
 });
 
 // --- 9. LÓGICA IA ---
-function limpiarRespuesta(txt) {
-    let clean = txt.replace(/```json([\s\S]*?)```/gi, "");
-    clean = clean.replace(/\{"es_lead"[\s\S]*?\}/gi, ""); 
-    return clean.replace(/[\r\n]+/g, "\n").trim();
-}
 
 async function procesarConICBOT(dbMsg, aiMsg, phone, name = "Cliente", isFile = false) {
     const fuenteDetectada = analizarTextoFuente(dbMsg);
@@ -396,7 +393,8 @@ async function procesarConICBOT(dbMsg, aiMsg, phone, name = "Cliente", isFile = 
     const busqueda = aiMsg.toLowerCase().split(" ").slice(0,3).join(" ");
     const stock = globalKnowledge.filter(i => (i.searchable||"").toLowerCase().includes(busqueda)).slice(0,5);
 
-    const promptFinal = `
+    // 1. System Prompt Exclusivo (Reglas)
+    const promptSistema = `
 ${configUsar}
 
 === DATOS DE CONTEXTO DEL SISTEMA ===
@@ -406,34 +404,67 @@ Contexto Web: ${webContext}
 Memoria del cliente actual: 
 ${memoriaDatos}
 Inventario: ${JSON.stringify(stock)}
-Historial reciente: ${JSON.stringify(history)}
 
-=== INSTRUCCIÓN FUNCIONAL (SISTEMA OBLIGATORIO) ===
-1. Responde al cliente de forma natural basándote ÚNICAMENTE en tu personalidad.
-2. REGLA DE NOMBRE: Si el cliente escribe su nombre en la conversación (ej. "Soy Carlos"), ESE NOMBRE TIENE PRIORIDAD ABSOLUTA. Asígnalo en el JSON.
-3. REGLA DE AUTO-APAGADO (ANTI-BUCLES): Tu objetivo final es conseguir Nombre, Correo, Ciudad, Categoría y el PRODUCTO ESPECÍFICO en el que está interesado (ej. "Excavadora Volvo 50 tons"). 
-   - SI YA TIENES LOS DATOS, envía ESTE EXACTO MENSAJE de despedida: "Perfecto, [Nombre]. Ya pasé sus datos y su solicitud. Pronto un ejecutivo comercial se contactará con usted. Recuerde que los datos brindados serán usados de acuerdo a nuestra política de protección de datos: https://www.importadoracasacolombia.com/aviso-de-privacidad".
-   - SOLO DESPUÉS de dar esa despedida, OBLIGATORIAMENTE pon "apagar_bot": true en tu JSON.
-4. SIEMPRE al final de tu respuesta, añade el siguiente bloque JSON estructurado:
-\`\`\`json
-{"es_lead": true_o_false, "nombre":"...", "categoria_interes":"...", "producto_especifico":"...", "ciudad":"...", "correo":"...", "etiqueta":"Lead", "apagar_bot": false_o_true}
-\`\`\`
-(Categorías permitidas: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos Hidráulicos, Brazos largos, Accesorios, Repuestos, Servicio, Otro, Consultando).
+=== INSTRUCCIÓN FUNCIONAL ===
+1. Responde al cliente de forma natural. NUNCA repitas tu saludo inicial si ya te presentaste en la conversación actual.
+2. REGLA DE NOMBRE: Si el cliente da su nombre explícitamente, asígnalo en el campo correspondiente.
+3. AUTO-APAGADO (ANTI-BUCLES): Si ya tienes el Nombre, Ciudad, Categoría y PRODUCTO ESPECÍFICO, envía ESTE EXACTO MENSAJE: "Perfecto, [Nombre]. Ya pasé sus datos y su solicitud. Pronto un ejecutivo comercial se contactará con usted. Recuerde que los datos brindados serán usados de acuerdo a nuestra política de protección de datos: https://www.importadoracasacolombia.com/aviso-de-privacidad". SOLO DESPUÉS de dar esa despedida, pon "apagar_bot" en true.
+4. Tu salida DEBE SER ESTRICTAMENTE un JSON con la siguiente estructura exacta:
+{
+  "mensaje_para_cliente": "Tu respuesta directa y conversacional para el cliente aquí. Sin justificaciones ni pensamientos internos.",
+  "datos_internos": {
+    "es_lead": false,
+    "nombre": "...",
+    "categoria_interes": "...",
+    "producto_especifico": "...",
+    "ciudad": "...",
+    "correo": "...",
+    "etiqueta": "Lead",
+    "apagar_bot": false
+  }
+}
+Categorías permitidas: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos Hidráulicos, Brazos largos, Accesorios, Repuestos, Servicio, Otro, Consultando.
     `;
 
-    try {
-        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`, { contents: [{ parts: [{ text: promptFinal }] }] });
-        const raw = r.data.candidates[0].content.parts[0].text;
+    // 2. Convertir historial a formato Gemini (Colapsando roles consecutivos para evitar Crash 400)
+    const chatContents = [];
+    for (const msg of history) {
+        const mappedRole = (msg.role === 'bot' || msg.role === 'manual') ? 'model' : 'user';
         
-        const match = raw.match(/```json([\s\S]*?)```|{([\s\S]*?)}/);
-        if (match) {
-            try {
-                const info = JSON.parse((match[1]||match[0]).replace(/```json|```/g, "").trim());
-                await gestionarLead(phone, info, name, lead); 
-            } catch(e) {}
+        if (chatContents.length > 0 && chatContents[chatContents.length - 1].role === mappedRole) {
+            // Fusión de mensajes consecutivos del mismo rol
+            chatContents[chatContents.length - 1].parts[0].text += `\n${msg.text}`;
+        } else {
+            // Nuevo turno
+            chatContents.push({
+                role: mappedRole,
+                parts: [{ text: msg.text }]
+            });
         }
+    }
+
+    // Prevención de arrays vacíos
+    if (chatContents.length === 0) {
+        chatContents.push({ role: 'user', parts: [{ text: aiMsg }] });
+    }
+
+    try {
+        const requestBody = {
+            system_instruction: { parts: [{ text: promptSistema }] },
+            contents: chatContents,
+            generationConfig: {
+                responseMimeType: "application/json"
+            }
+        };
+
+        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`, requestBody);
         
-        let reply = limpiarRespuesta(raw);
+        const rawText = r.data.candidates[0].content.parts[0].text;
+        const infoIA = JSON.parse(rawText);
+        
+        await gestionarLead(phone, infoIA.datos_internos, name, lead); 
+        
+        let reply = infoIA.mensaje_para_cliente;
         if (!reply || reply.length < 2) reply = "¿En qué te puedo ayudar?";
         
         const timestamp = new Date().toISOString();
@@ -444,11 +475,13 @@ Historial reciente: ${JSON.stringify(history)}
 
         return reply;
     } catch (e) { 
+        console.error("❌ Error procesando IA:", e.response ? JSON.stringify(e.response.data) : e.message);
         return "Dame un momento, estoy verificando esa información."; 
     }
 }
 
 async function gestionarLead(phone, info, fbName, oldLead) {
+    if (!info) return; // Validación de seguridad
     const limpiarDato = (d) => (!d || /^(unknown|null|n\/a|no menciona|cliente|pend)$/i.test(d.toString().trim())) ? null : d.trim();
     
     let name = limpiarDato(info.nombre) || (oldLead && oldLead.nombre && oldLead.nombre !== fbName ? oldLead.nombre : fbName);
@@ -522,27 +555,19 @@ function iniciarCronJobs() {
                         fDay++;
                         let cerrar = false;
                         let sent = false;
-                        const nombreCliente = l.nombre && l.nombre.trim() !== "" ? l.nombre : "Cliente";
 
                         if (fDay === 1 || fDay === 2) {
                             const templatePayload = {
                                 name: "plantilla_de_retoma", 
-                                language: { code: "es_CO" }, 
-                                components: [
-                                    {
-                                        type: "body",
-                                        parameters: [
-                                            { type: "text", text: nombreCliente } 
-                                        ]
-                                    }
-                                ]
+                                language: { code: "es_CO" } 
+                                // FIX: Componentes eliminados para evitar el error OAuthException code 132000
                             };
                             
                             sent = await enviarWhatsApp(l.phone, templatePayload, 'template');
                             
                             if (sent) {
                                 const timestamp = new Date().toISOString();
-                                const msgGuardado = `[CAMPAÑA]\n📢 Plantilla: plantilla_de_retoma\n📝 Variables: ${nombreCliente}`;
+                                const msgGuardado = `[CAMPAÑA]\n📢 Plantilla: plantilla_de_retoma enviada exitosamente`;
                                 await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [l.phone, 'bot', msgGuardado, timestamp]);
                                 io.emit('new_message', { phone: l.phone, role: 'bot', text: msgGuardado, time: timestamp });
                             }
@@ -748,7 +773,6 @@ app.post('/api/chat/send', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({ error: "Error interno" }); } 
 });
 
-// --- NUEVO: ENDPOINT PARA ENVIAR PLANTILLAS MANUALES/MASIVAS (SOPORTE DE ARCHIVOS) ---
 app.post('/api/chat/send-template', proteger, upload.single('file'), async (req, res) => {
     const phone = req.body.phone;
     if (!phone) return res.status(400).json({ error: "Falta teléfono" });
@@ -758,14 +782,12 @@ app.post('/api/chat/send-template', proteger, upload.single('file'), async (req,
     const language = req.body.language || "es_CO";
     const previewText = req.body.previewText;
 
-    // Como enviamos por FormData (archivos), components llega como un string JSON
     let components = [];
     if (req.body.components) {
         try { components = JSON.parse(req.body.components); } catch(e) {}
     }
 
     try {
-        // Magia Senior: Si viene un archivo, lo subimos a Meta para sacar el ID
         if (req.file) {
             const mediaId = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname);
             if (mediaId) {
@@ -806,7 +828,6 @@ app.post('/api/chat/send-template', proteger, upload.single('file'), async (req,
     }
 });
 
-// --- NUEVO: ENDPOINT PARA ENVÍOS MASIVOS DESDE EXCEL ---
 app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCount: 1 }, { name: 'image', maxCount: 1 }]), async (req, res) => {
     try {
         if (!req.files || !req.files.excel) return res.status(400).json({ error: "Falta el archivo Excel" });
@@ -816,7 +837,6 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
         
         if (!templateName) return res.status(400).json({ error: "Falta el nombre de la plantilla" });
 
-        // 1. Subir imagen a Meta si existe (una sola vez para toda la campaña)
         let mediaId = null;
         if (req.files.image && req.files.image[0]) {
             const imgFile = req.files.image[0];
@@ -824,7 +844,6 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
             if (!mediaId) return res.status(500).json({ error: "Error al subir la imagen a Meta" });
         }
 
-        // 2. Leer Excel
         const workbook = XLSX.read(req.files.excel[0].buffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
@@ -832,12 +851,10 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
         let successCount = 0;
         let errorCount = 0;
 
-        // 3. Procesar cada fila
         for (const row of rows) {
             let phoneVal = null;
             let nameVal = "Cliente";
 
-            // Búsqueda flexible de columnas
             for (const key in row) {
                 const k = key.toLowerCase().trim();
                 if (k.includes('telefono') || k.includes('celular') || k.includes('phone') || k === 'tel') phoneVal = row[key];
@@ -846,7 +863,7 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
 
             if (!phoneVal) continue;
             const cleanPhone = phoneVal.toString().replace(/\D/g, '');
-            if (cleanPhone.length < 10) continue; // Validación básica
+            if (cleanPhone.length < 10) continue; 
 
             let components = [];
             if (mediaId) {
@@ -877,7 +894,6 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
                     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', logMsg, timestamp]);
                     await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount, last_interaction) VALUES (?, ?, 1, 0, 0, ?) ON CONFLICT(phone) DO UPDATE SET last_interaction=excluded.last_interaction`, [cleanPhone, nameVal, timestamp]);
 
-                    // Registrar en leads si no existe
                     const existingLead = await db.get("SELECT id FROM leads WHERE phone = ?", [cleanPhone]);
                     if (!existingLead) {
                         await db.run(`INSERT INTO leads (phone, nombre, source, etiqueta, fecha, status_tag, farewell_sent, followup_day) VALUES (?, ?, ?, ?, ?, ?, 0, 0)`, 
@@ -892,7 +908,6 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
                 errorCount++;
             }
 
-            // Retraso de seguridad Anti-Baneo (Rate Limit de Meta)
             await new Promise(r => setTimeout(r, 250));
         }
 
@@ -968,7 +983,7 @@ app.post('/webhook', async (req, res) => {
                 }
             } 
             
-            // === GUARDADO INDIVIDUAL E INMEDIATO (FIX DE ÁLBUMES) ===
+            // === GUARDADO INDIVIDUAL E INMEDIATO ===
             if (userMsg) {
                 const timestamp = new Date().toISOString();
                 await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', userMsg, timestamp]);
@@ -978,7 +993,7 @@ app.post('/webhook', async (req, res) => {
                 io.emit('update_chats_list');
             }
 
-            // === DEBOUNCE (SISTEMA DE COLA PARA ESPERAR AL CLIENTE) ===
+            // === DEBOUNCE ===
             if (messageQueue.has(phone)) { clearTimeout(messageQueue.get(phone).timer); }
 
             const safeName = val?.contacts?.[0]?.profile?.name || "Cliente";
