@@ -547,8 +547,8 @@
                 <label>Nombre de la Plantilla en Meta</label>
                 <input list="template-names" id="tpl-name" placeholder="Ej: plantilla_de_retoma" required>
                 <datalist id="template-names">
-                    <option value="plantilla_de_retoma">
-                    <option value="tu_plantilla_promo">
+                    <option value="plantilla_de_retoma"></option>
+                    <option value="tu_plantilla_promo"></option>
                 </datalist>
 
                 <label>Imagen de Encabezado (Opcional)</label>
@@ -596,7 +596,7 @@
             <textarea id="prompt-editor" class="prompt-textarea" style="height: 250px;"></textarea>
             <div class="modal-actions">
                 <button class="btn-small btn-red" onclick="closeModal('prompt-edit-modal')">Cancelar</button>
-                <button class="btn-small btn-green" onclick="savePrompt()"><i class="fas fa-save"></i> Guardar Cambios</button>
+                <button class="btn-small btn-green" onclick="savePrompt(event)"><i class="fas fa-save"></i> Guardar Cambios</button>
             </div>
         </div>
     </div>
@@ -608,8 +608,8 @@
             <input type="hidden" id="edit-web-id">
             <textarea id="web-audit-text" class="prompt-textarea" style="height: 200px; font-size: 0.9rem;"></textarea>
             <div class="modal-actions">
-                <button class="btn-small btn-red" onclick="closeModal('web-audit-modal')">Cerrar</button>
-                <button class="btn-small btn-green" onclick="saveWebEdit()"><i class="fas fa-save"></i> Guardar Corrección</button>
+                <button class="btn-small btn-red" onclick="closeModal('web-audit-modal')">Cancelar</button>
+                <button class="btn-small btn-green" onclick="saveWebEdit(event)"><i class="fas fa-save"></i> Guardar Corrección</button>
             </div>
         </div>
     </div>
@@ -1136,6 +1136,7 @@
             renderChatList();
         }
 
+        // FIX: Archivar de forma masiva reconstruido para soportar la limitación del backend
         async function executeBulkAction(action) {
             if (selectedChats.size === 0) return alert("Selecciona al menos un chat");
             
@@ -1151,17 +1152,29 @@
             
             if (!confirm(`¿Aplicar acción a ${selectedChats.size} chats?`)) return;
             
-            await fetch('/api/contacts/bulk-update', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ 
-                    phones: Array.from(selectedChats), 
-                    action: action, 
-                    value: value 
-                }) 
-            });
+            if (action === 'toggle_archive') {
+                // El backend actual no soporta toggle_archive en bulk-update, iteramos la accion
+                const promises = Array.from(selectedChats).map(phone => 
+                    fetch('/api/chat/action', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ phone: phone, action: 'toggle_archive', value: true })
+                    })
+                );
+                await Promise.all(promises);
+            } else {
+                await fetch('/api/contacts/bulk-update', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ 
+                        phones: Array.from(selectedChats), 
+                        action: action, 
+                        value: value 
+                    }) 
+                });
+            }
             
-            showToast("Acción masiva completada"); 
+            showToast("✅ Acción masiva completada"); 
             toggleBulkMode(); 
             syncChats();
         }
@@ -1191,7 +1204,7 @@
                 const isSelected = selectedChats.has(c.id);
 
                 return `
-                <div id="chat-${c.id}" class="chat-item ${currentChat === c.id ? 'active' : ''} ${c.archived ? 'archived' : ''}" onclick="openChat('${c.id}', '${c.name}', '${c.photoUrl || ''}')" oncontextmenu="showContextMenu(event, '${c.id}', ${c.pinned}, ${c.archived})">
+                <div id="chat-${c.id}" class="chat-item ${currentChat === c.id ? 'active' : ''} ${c.archived ? 'archived' : ''}" onclick="openChat('${c.id}', decodeURIComponent('${encodeURIComponent(c.name)}'), '${c.photoUrl || ''}')" oncontextmenu="showContextMenu(event, '${c.id}', ${c.pinned}, ${c.archived})">
                     <input type="checkbox" class="bulk-checkbox" ${isSelected ? 'checked' : ''} onclick="toggleChatSelection('${c.id}', event)">
                     <div class="avatar">${c.photoUrl ? `<img src="${c.photoUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fas fa-user"></i>'}</div>
                     <div class="chat-info">
@@ -1304,7 +1317,7 @@
             return `${dateStr} ${timeStr}`;
         }
 
-        // --- RENDERIZADO DEL MENSAJE DE CAMPAÑA ---
+        // FIX: Inyección de HTML segura para Reenviar
         function buildMessageHTML(m) {
             let text = m.text; 
             let isMedia = false; 
@@ -1371,9 +1384,6 @@
                 }
             } 
             
-            const safeText = m.text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            
-            // Detección de tipos de mensajes especiales
             const isAlert = text.includes('[ALERTA:');
             const isCampaign = text.startsWith('[CAMPAÑA]');
             
@@ -1388,7 +1398,7 @@
                 ${text.replace(/\n/g, '<br>')}
                 <div class="msg-time">${formatSmartTime(m.time)}</div>
                 ${!isAlert ? `
-                <div class="msg-forward-btn" onclick="openForwardModal('${safeText}', ${isMedia}, '${mediaId}')" title="Reenviar Mensaje">
+                <div class="msg-forward-btn" onclick="openForwardModal(decodeURIComponent('${encodeURIComponent(m.text)}'), ${isMedia}, '${mediaId}')" title="Reenviar Mensaje">
                     <i class="fas fa-share"></i>
                 </div>` : ''}
             </div>`;
@@ -1656,7 +1666,7 @@
         }
 
         function toggleAllLeads(source) {
-            checkboxes = document.querySelectorAll('.lead-checkbox');
+            let checkboxes = document.querySelectorAll('.lead-checkbox');
             for (let i = 0; i < checkboxes.length; i++) {
                 checkboxes[i].checked = source.checked;
             }
@@ -1675,7 +1685,7 @@
 
             container.innerHTML = tags.map(t => { 
                 const isActive = activeTags.find(l => l.text === t.name); 
-                return `<div class="tag ${isActive ? 'selected' : ''}" style="${isActive ? `background:${t.color}; border-color:${t.color};` : ''}" onclick="toggleTagLocal('${t.name}', '${t.color}')">${t.name}</div>`; 
+                return `<div class="tag ${isActive ? 'selected' : ''}" style="${isActive ? `background:${t.color}; border-color:${t.color};` : ''}" onclick="toggleTagLocal(decodeURIComponent('${encodeURIComponent(t.name)}'), '${t.color}')">${t.name}</div>`; 
             }).join(''); 
         }
 
@@ -1781,6 +1791,7 @@
             a.click(); 
         }
 
+        // FIX: Inyección HTML segura usando encodeURIComponent para prevenir Crash del UI.
         async function loadAllConfig() {
             try {
                 const res = await fetch('/api/data/config');
@@ -1812,7 +1823,7 @@
                     <li class="config-item">
                         <span style="display:flex; align-items:center; gap:10px;"><div style="width:15px;height:15px;border-radius:50%;background:${t.color};"></div> ${t.name}</span>
                         <div style="display:flex; gap:5px;">
-                            <button class="btn-small btn-blue" onclick="openTagEdit(${t.id}, '${t.name}', '${t.color}')"><i class="fas fa-pencil-alt"></i></button>
+                            <button class="btn-small btn-blue" onclick="openTagEdit(${t.id}, decodeURIComponent('${encodeURIComponent(t.name)}'), '${t.color}')"><i class="fas fa-pencil-alt"></i></button>
                             <button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button>
                         </div>
                     </li>
@@ -1823,7 +1834,7 @@
                 
                 const crmShortcuts = document.getElementById('shortcuts-list');
                 crmShortcuts.innerHTML = shortcuts.map(s => `
-                    <div class="tag" style="border-color:var(--border);" onclick="insertShortcut('${s.text.replace(/'/g, "\\'")}')" title="${s.text}">${s.keyword}</div>
+                    <div class="tag" style="border-color:var(--border);" onclick="insertShortcut(decodeURIComponent('${encodeURIComponent(s.text)}'))" title="${s.text}">${s.keyword}</div>
                 `).join('');
 
                 document.getElementById('config-shortcuts-list').innerHTML = shortcuts.map(s => `
@@ -1843,7 +1854,7 @@
                         <div style="display:flex; justify-content:space-between; width:100%;">
                             <a href="${w.url}" target="_blank" style="color:var(--primary); font-weight:600; text-decoration:none;"><i class="fas fa-link"></i> ${w.url}</a>
                             <div style="display:flex; gap:5px;">
-                                <button class="btn-small btn-blue" onclick="openWebEdit(${w.id}, \`${w.summary.replace(/`/g, "\\`")}\`)"><i class="fas fa-eye"></i> Ver/Editar</button>
+                                <button class="btn-small btn-blue" onclick="openWebEdit(${w.id}, decodeURIComponent('${encodeURIComponent(w.url)}'), decodeURIComponent('${encodeURIComponent(w.summary)}'))"><i class="fas fa-eye"></i> Ver/Editar</button>
                                 <button class="btn-small btn-red" onclick="deleteWeb(${w.id})"><i class="fas fa-trash"></i></button>
                             </div>
                         </div>
@@ -1861,12 +1872,35 @@
             document.getElementById('prompt-edit-modal').classList.add('show');
         }
 
-        async function savePrompt() {
+        // FIX: Feedback visual y manejo de promesas al guardar el Prompt
+        async function savePrompt(event) {
             const newPrompt = document.getElementById('prompt-editor').value;
-            await fetch('/api/config/prompt', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: newPrompt}) });
-            document.getElementById('prompt-readonly').innerText = newPrompt;
-            closeModal('prompt-edit-modal');
-            showToast("Personalidad Actualizada");
+            const btn = event.currentTarget;
+            const originalHTML = btn.innerHTML;
+            
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/config/prompt', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({prompt: newPrompt}) 
+                });
+                
+                if (res.ok) {
+                    document.getElementById('prompt-readonly').innerText = newPrompt;
+                    closeModal('prompt-edit-modal');
+                    showToast("✅ Personalidad Actualizada en el Servidor");
+                } else {
+                    showToast("❌ Fallo al guardar en base de datos");
+                }
+            } catch (e) {
+                showToast("❌ Error de red");
+            } finally {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }
         }
 
         async function addRule() {
@@ -1984,6 +2018,7 @@
             }
         }
         
+        // FIX: Inyección Segura para Editores Dinámicos
         async function loadInventoryPreview() {
             try {
                 const res = await fetch('/api/data/knowledge');
@@ -2013,7 +2048,7 @@
                             <strong style="font-size:0.9rem;">${nombre}</strong>
                             <div style="display:flex; gap:5px;">
                                 <span class="badge" style="background:var(--panel); color:var(--text); border:1px solid var(--border);">$${precio}</span>
-                                <button class="btn-small btn-blue" style="padding:4px 8px;" onclick='openEditInventory(${item.id}, ${JSON.stringify(item.raw_data)})'><i class="fas fa-pencil-alt"></i></button>
+                                <button class="btn-small btn-blue" style="padding:4px 8px;" onclick="openEditInventory(${item.id}, decodeURIComponent('${encodeURIComponent(item.raw_data)}'))"><i class="fas fa-pencil-alt"></i></button>
                                 <button class="btn-small btn-red" style="padding:4px 8px;" onclick="deleteInventoryItem(${item.id})"><i class="fas fa-trash"></i></button>
                             </div>
                         </div>
@@ -2130,25 +2165,44 @@
             }
         }
 
-        function openWebEdit(id, text) {
+        // FIX: El modal guarda la URL para poder reconstruirla
+        function openWebEdit(id, url, text) {
             document.getElementById('edit-web-id').value = id;
+            document.getElementById('edit-web-id').dataset.url = url;
             document.getElementById('web-audit-text').value = text;
             document.getElementById('web-audit-modal').classList.add('show');
         }
 
-        async function saveWebEdit() {
+        // FIX: Reconstrucción de la web, tu backend no tenía endpoint '/update'
+        async function saveWebEdit(event) {
             const id = document.getElementById('edit-web-id').value;
+            const url = document.getElementById('edit-web-id').dataset.url;
             const newSummary = document.getElementById('web-audit-text').value;
             
-            await fetch('/api/data/web-knowledge/update', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ id, summary: newSummary })
-            });
-            
-            closeModal('web-audit-modal');
-            showToast("Conocimiento web actualizado");
-            loadAllConfig();
+            const btn = event.currentTarget;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+            btn.disabled = true;
+
+            try {
+                // Como no hay endpoint update en el backend, borramos y volvemos a crear
+                await fetch('/api/data/web-knowledge/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) });
+                
+                await fetch('/api/data/web-knowledge', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ url: url, summary: newSummary })
+                });
+                
+                closeModal('web-audit-modal');
+                showToast("✅ Conocimiento web actualizado");
+                loadAllConfig();
+            } catch (e) {
+                showToast("❌ Error actualizando la web");
+            } finally {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }
         }
 
         async function deleteWeb(id) {
