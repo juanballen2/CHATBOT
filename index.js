@@ -236,7 +236,7 @@ function obtenerDepartamento(ciudad) {
 async function uploadToMeta(buffer, mime, name) {
     try {
         const form = new FormData();
-        const type = mime.includes('audio') || mime.includes('ogg') ? 'audio' : (mime.includes('image') ? 'image' : (mime.includes('video') ? 'video' : 'document'));
+        const type = mime.includes('audio') || mime.includes('ogg') ? 'audio' : (mime.includes('image') ? 'image' : (mime.includes('video') ? 'document'));
         form.append('file', buffer, { filename: name, contentType: mime });
         form.append('type', type); 
         form.append('messaging_product', 'whatsapp');
@@ -721,6 +721,8 @@ app.post('/api/contacts/bulk-update', proteger, async (req, res) => {
                 if (!labels.find(l => l.text === value.text)) {
                     labels.push(value);
                     await db.run("UPDATE metadata SET labels = ? WHERE phone = ?", [JSON.stringify(labels), cleanPhone]);
+                    // FIX: Sincronizar el status_tag concatenado para que en Excel salgan todas
+                    await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [labels.map(l => l.text).join(', '), cleanPhone]);
                 }
             }
         }
@@ -735,7 +737,11 @@ app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
     const cleanPhone = phone.replace(/\D/g, ''); 
     if(action === 'delete') { for(const t of ['history','metadata','bot_status','leads']) await db.run(`DELETE FROM ${t} WHERE phone=?`,[cleanPhone]); }
-    else if(action === 'set_labels') { await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, JSON.stringify(value)]); await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [value.length > 0 ? value[0].text : "Sin Etiqueta", cleanPhone]); }
+    else if(action === 'set_labels') { 
+        await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, JSON.stringify(value)]); 
+        // FIX: Guardamos todas las etiquetas concatenadas con coma para el Excel
+        await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [value.length > 0 ? value.map(v => v.text).join(', ') : "Sin Etiqueta", cleanPhone]); 
+    }
     else if(action === 'toggle_pin') { await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET pinned = CASE WHEN pinned = 1 THEN 0 ELSE 1 END", [cleanPhone]); }
     else if(action === 'toggle_archive') { await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET archived = CASE WHEN archived = 1 THEN 0 ELSE 1 END", [cleanPhone]); }
     res.json({success:true});
@@ -955,19 +961,14 @@ app.post('/webhook', async (req, res) => {
                 
                 const existeLead = await db.get("SELECT id FROM leads WHERE phone = ?", [phone]);
                 if (existeLead) {
-                    await db.run("UPDATE leads SET source = ?, status_tag = 'REDES' WHERE phone = ?", [refSource, phone]);
+                    // FIX: Solo actualizamos la fuente (source), no tocamos status_tag para no borrar las etiquetas de Lorena.
+                    await db.run("UPDATE leads SET source = ? WHERE phone = ?", [refSource, phone]);
                 } else {
-                    await db.run(`INSERT INTO leads (phone, nombre, source, etiqueta, fecha, status_tag, farewell_sent, followup_day) VALUES (?, ?, ?, ?, ?, ?, 0, 0)`, 
-                        [phone, val?.contacts?.[0]?.profile?.name || "Cliente Ads", refSource, "Pendiente", new Date().toISOString(), "REDES"]);
+                    // FIX: Insertamos sin forzar "REDES" en el status_tag.
+                    await db.run(`INSERT INTO leads (phone, nombre, source, etiqueta, fecha, farewell_sent, followup_day) VALUES (?, ?, ?, ?, ?, 0, 0)`, 
+                        [phone, val?.contacts?.[0]?.profile?.name || "Cliente Ads", refSource, "Pendiente", new Date().toISOString()]);
                 }
-
-                const meta = await db.get("SELECT labels FROM metadata WHERE phone = ?", [phone]);
-                let labels = meta ? JSON.parse(meta.labels || "[]") : [];
-                
-                if (!labels.find(l => l.text === 'REDES')) {
-                    labels.push({ text: 'REDES', color: '#ff0000' }); 
-                    await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [phone, JSON.stringify(labels)]);
-                }
+                // FIX: Eliminado el código que metía 'REDES' a la fuerza en el array de etiquetas visuales.
             }
 
             let userMsg = msg.text?.body || ""; 
