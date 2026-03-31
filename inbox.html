@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ICBOT - Bandeja Omnicanal</title>
+    
+    <link rel="icon" href="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" type="image/svg+xml">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="inbox.css">
+    
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body data-theme="light">
+
+    <nav class="sidebar">
+        <div class="sidebar-logo">
+            <img src="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" alt="ICBOT">
+        </div>
+        <div class="nav-links">
+            <a href="/" class="nav-btn" title="Volver al Panel Principal"><i class="fas fa-home"></i></a>
+            <button class="nav-btn active" title="Bandeja Omnicanal"><i class="fas fa-inbox"></i></button>
+        </div>
+        <div class="nav-bottom">
+            <button class="nav-btn" id="theme-toggle" title="Cambiar Tema"><i class="fas fa-moon"></i></button>
+            <a href="/logout" class="nav-btn" title="Salir"><i class="fas fa-sign-out-alt"></i></a>
+        </div>
+    </nav>
+
+    <main class="main-container">
+        
+        <aside class="chat-list">
+            <header class="list-header">
+                <h2>Bandeja de Entrada</h2>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="chat-search" placeholder="Buscar por nombre o ID...">
+                </div>
+                <div class="filters">
+                    <button class="filter-btn active" data-filter="all">Todos</button>
+                    <button class="filter-btn" data-filter="instagram"><i class="fab fa-instagram"></i></button>
+                    <button class="filter-btn" data-filter="messenger"><i class="fab fa-facebook-messenger"></i></button>
+                </div>
+            </header>
+            
+            <div class="chat-items-container" id="chat-items-list">
+                <div class="loading-state">
+                    <i class="fas fa-circle-notch fa-spin"></i>
+                    <p>Sincronizando mensajes...</p>
+                </div>
+            </div>
+        </aside>
+
+        <section class="conversation-area" id="conversation-empty">
+            <div class="empty-state">
+                <i class="fas fa-comments"></i>
+                <h3>Selecciona una conversación</h3>
+                <p>Aquí aparecerán los mensajes de Instagram y Messenger listos para ser gestionados.</p>
+            </div>
+        </section>
+
+        <section class="conversation-area" id="conversation-active" style="display: none;">
+            <header class="chat-header">
+                <div class="user-info">
+                    <div class="user-avatar" id="active-avatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="user-details">
+                        <h3 id="active-name">Cargando...</h3>
+                        <span id="active-source"><i class="fab fa-instagram"></i> Instagram Direct</span>
+                    </div>
+                </div>
+                <div class="chat-actions">
+                    <button class="action-icon" title="Ver Perfil en CRM" onclick="toggleCRM()"><i class="fas fa-id-card"></i></button>
+                </div>
+            </header>
+
+            <div class="messages-viewport" id="messages-container">
+                </div>
+
+            <footer class="input-area">
+                <div class="input-wrapper">
+                    <button class="attach-btn" title="Adjuntar archivo"><i class="fas fa-paperclip"></i></button>
+                    <textarea id="msg-input" placeholder="Escribe una respuesta (Ctrl + Enter para enviar)..." rows="1"></textarea>
+                    <div class="input-tools">
+                        <span class="shortcut-hint">Usa <b>/</b> para respuestas rápidas</span>
+                    </div>
+                </div>
+                <button class="send-btn" id="btn-send"><i class="fas fa-paper-plane"></i></button>
+            </footer>
+        </section>
+
+        <aside class="info-panel" id="crm-panel">
+            <header class="info-header">
+                <h3>Detalles del Lead</h3>
+                <button onclick="toggleCRM()">&times;</button>
+            </header>
+            <div class="info-content">
+                <div class="info-group">
+                    <label>Nombre Comercial</label>
+                    <input type="text" id="crm-name" placeholder="Nombre del cliente">
+                </div>
+                <div class="info-group">
+                    <label>ID / Usuario</label>
+                    <input type="text" id="crm-id" readonly>
+                </div>
+                <div class="info-group">
+                    <label>Etiqueta de Seguimiento</label>
+                    <select id="crm-tag">
+                        <option value="nuevo">Nuevo</option>
+                        <option value="seguimiento">En Seguimiento</option>
+                        <option value="cotizado">Cotizado</option>
+                        <option value="cerrado">Venta Cerrada</option>
+                    </select>
+                </div>
+                <button class="save-btn" onclick="saveCRMData()">Actualizar Datos</button>
+            </div>
+        </aside>
+
+    </main>
+
+    <div id="toast-container"></div>
+
+    <script src="inbox.js"></script>
+</body>
+</html>
