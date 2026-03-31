@@ -1,8 +1,23 @@
 /*
- * SERVER BACKEND - v33.1 (ICBOT FULL PRODUCTION + OMNICANAL META)
+ * SERVER BACKEND - v33.2 (ICBOT FULL PRODUCTION + OMNICANAL META + SALESFORCE SYNC)
  * ============================================================
- * [Tus logs anteriores...]
- * 16. ADD: Endpoint /api/omnicanal/webhook para Messenger e Instagram (Bypass IA).
+ * 1. FIX: Renombrado oficial a ICBOT completado (Asistente Lorena).
+ * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone).
+ * 3. ADD: Cronjob de Limpieza robusto 'media_cache'.
+ * 4. FIX: Audios/Videos con soporte Range 206 (codecs=opus).
+ * 5. ADD: Sistema Anti-bucle (Auto-apagado del bot).
+ * 6. FIX: Prioridad absoluta al nombre dado por el cliente.
+ * 7. ADD: WEBSOCKETS (Socket.io) para eliminar el Polling del frontend.
+ * 8. MOD: Cronjob seguimiento inteligente (Fix: Plantilla sin parámetros).
+ * 9. MOD: Segmentación de Categoría vs Producto Específico.
+ * 10.FIX: Se eliminó el bloqueo duro de archivos adjuntos para que la IA los procese.
+ * 11.DEL: EXTIRPADO SALESFORCE (Limpieza de código fallido para estabilidad).
+ * 12.ADD: Soporte nativo para 'Template Messages' en enviarWhatsApp.
+ * 13.MOD: Endpoint /api/chat/send-template preparado para imágenes dinámicas y FormData.
+ * 14.ADD: Endpoint /api/chat/bulk-excel (Motor de campañas con Rate Limiting 250ms).
+ * 15.FIX: Integración nativa Gemini (System Instructions + JSON estricto + Fusión de roles).
+ * 16.ADD: Endpoint /api/omnicanal/webhook para Messenger e Instagram (Bypass IA).
+ * 17.ADD: Endpoints /api/salesforce/sync-lead y /sync-bulk (Preparados para API Real).
  * ============================================================
  */
 
@@ -139,7 +154,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v33.1 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
+        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v33.2 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -922,13 +937,11 @@ app.get('/api/omnicanal/webhook', (req, res) => {
 });
 
 app.post('/api/omnicanal/webhook', async (req, res) => {
-    // Meta exige un 200 OK inmediato para no bloquear el canal
     res.sendStatus(200); 
     
     try {
         const body = req.body;
 
-        // Detección de Messenger e Instagram
         if (body.object === 'page' || body.object === 'instagram') {
             const entries = body.entry || [];
             
@@ -936,20 +949,15 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                 const messagingEvents = entry.messaging || [];
                 
                 for (let event of messagingEvents) {
-                    // Evitamos procesar los mensajes que nosotros mismos enviamos (is_echo)
                     if (event.message && !event.message.is_echo) {
                         const senderId = event.sender.id;
                         const text = event.message.text || "[Multimedia/Adjunto]";
                         const source = body.object === 'page' ? 'Messenger' : 'Instagram';
                         const timestamp = new Date().toISOString();
 
-                        // Guardado directo a la BD (Bypass de IA)
-                        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [senderId, 'user', text, timestamp]);
-                        
-                        // Aseguramos que el cliente exista en la metadata para el panel
+                        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [senderId, 'user', `[${source}] ${text}`, timestamp]);
                         await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [senderId, timestamp]);
                         
-                        // Emitimos al Frontend para Lore
                         io.emit('new_message', { phone: senderId, role: 'user', text: `[${source}] ${text}`, time: timestamp });
                         io.emit('update_chats_list');
 
@@ -982,7 +990,6 @@ app.post('/webhook', async (req, res) => {
         const val = changes?.value; 
         const msg = val?.messages?.[0]; 
         
-        // --- ANTI-BUCLE ---
         if (msg && msg.from === PHONE_ID) {
              return;
         }
@@ -994,7 +1001,6 @@ app.post('/webhook', async (req, res) => {
         if(msg) { 
             const phone = msg.from; 
             
-            // --- AUTO-ETIQUETADO REDES ---
             if (msg.referral) {
                 const refSource = `Meta Ads: ${msg.referral.source_url || 'N/A'}`;
                 
@@ -1020,7 +1026,6 @@ app.post('/webhook', async (req, res) => {
                 }
             } 
             
-            // === GUARDADO INDIVIDUAL E INMEDIATO ===
             if (userMsg) {
                 const timestamp = new Date().toISOString();
                 await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', userMsg, timestamp]);
@@ -1030,7 +1035,6 @@ app.post('/webhook', async (req, res) => {
                 io.emit('update_chats_list');
             }
 
-            // === DEBOUNCE ===
             if (messageQueue.has(phone)) { clearTimeout(messageQueue.get(phone).timer); }
 
             const safeName = val?.contacts?.[0]?.profile?.name || "Cliente";
@@ -1062,6 +1066,80 @@ app.post('/webhook', async (req, res) => {
             messageQueue.set(phone, currentData);
         } 
     } catch(e) { console.error("Webhook Error", e); } 
+});
+
+// ============================================================
+// 10. INTEGRACIÓN SALESFORCE (API)
+// ============================================================
+
+// Endpoint para sincronizar 1 solo Lead (Desde el panel lateral CRM)
+app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ success: false, message: "Falta el número de teléfono" });
+
+    try {
+        const lead = await db.get("SELECT * FROM leads WHERE phone = ?", [phone]);
+        if (!lead) return res.status(404).json({ success: false, message: "Lead no encontrado en la base de datos" });
+
+        // =========================================================
+        // TODO: AQUI VA TU LLAMADA REAL A SALESFORCE VÍA AXIOS
+        // Ejemplo de cómo será cuando tengamos las credenciales:
+        //
+        // const sfResponse = await axios.post('https://tu-dominio.my.salesforce.com/services/data/vXX.X/sobjects/Lead/', {
+        //     LastName: lead.nombre,
+        //     Phone: lead.phone,
+        //     City: lead.ciudad,
+        //     Company: 'ICBOT Lead',
+        //     // ... otros campos
+        // }, { headers: { Authorization: `Bearer ${SF_TOKEN}` }});
+        //
+        // const newSfId = sfResponse.data.id;
+        // =========================================================
+
+        // SIMULACIÓN (Por ahora, inventamos un ID exitoso de Salesforce)
+        const fakeSfId = "00Q" + Math.random().toString(36).substring(2, 10).toUpperCase();
+
+        // 1. Actualizamos tu Base de Datos SQLite marcando que ya se sincronizó
+        await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [fakeSfId, lead.id]);
+
+        // 2. Le respondemos al Frontend que fue un éxito
+        res.json({ success: true, sfId: fakeSfId });
+
+    } catch (error) {
+        console.error("❌ Error en Salesforce Sync:", error);
+        res.status(500).json({ success: false, message: "Error interno contactando a Salesforce" });
+    }
+});
+
+// Endpoint para sincronizar Masivamente (El botón de la tabla de Leads)
+app.post('/api/salesforce/sync-bulk', proteger, async (req, res) => {
+    try {
+        // Buscamos todos los leads que no tengan sf_id todavía
+        const leadsPendientes = await db.all("SELECT * FROM leads WHERE sf_id IS NULL OR sf_id = ''");
+        
+        if (leadsPendientes.length === 0) {
+            return res.json({ success: true, count: 0, message: "Todos los leads ya están sincronizados." });
+        }
+
+        let successCount = 0;
+        
+        for (const lead of leadsPendientes) {
+            // TODO: Aquí irá el ciclo de inserción real a Salesforce
+            
+            // Simulación de respuesta exitosa:
+            const fakeSfId = "00Q" + Math.random().toString(36).substring(2, 10).toUpperCase();
+            
+            // Actualizamos el SQLite
+            await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [fakeSfId, lead.id]);
+            successCount++;
+        }
+
+        res.json({ success: true, count: successCount });
+
+    } catch (error) {
+        console.error("❌ Error en Salesforce Bulk Sync:", error);
+        res.status(500).json({ success: false, message: "Error sincronizando masivamente" });
+    }
 });
 
 process.on('SIGTERM', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
