@@ -18,6 +18,7 @@
  * 15.FIX: Integración nativa Gemini (System Instructions + JSON estricto + Fusión de roles).
  * 16.ADD: Endpoint /api/omnicanal/webhook para Messenger e Instagram (Bypass IA).
  * 17.ADD: Endpoints /api/salesforce/sync-lead y /sync-bulk (Preparados para API Real).
+ * 18.FIX: Rutas /inbox añadidas para el frontend omnicanal.
  * ============================================================
  */
 
@@ -597,6 +598,11 @@ app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login'
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 
+// 🔥 RUTAS DE LA BANDEJA OMNICANAL 🔥
+app.get('/inbox', proteger, (req, res) => res.sendFile(path.join(__dirname, 'inbox.html')));
+app.get('/inbox.css', (req, res) => res.sendFile(path.join(__dirname, 'inbox.css')));
+app.get('/inbox.js', (req, res) => res.sendFile(path.join(__dirname, 'inbox.js')));
+
 app.get('/api/data/:type', proteger, async (req, res) => {
     const t = req.params.type;
     if (t === 'leads') res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
@@ -937,11 +943,13 @@ app.get('/api/omnicanal/webhook', (req, res) => {
 });
 
 app.post('/api/omnicanal/webhook', async (req, res) => {
+    // Meta exige un 200 OK inmediato para no bloquear el canal
     res.sendStatus(200); 
     
     try {
         const body = req.body;
 
+        // Detección de Messenger e Instagram
         if (body.object === 'page' || body.object === 'instagram') {
             const entries = body.entry || [];
             
@@ -949,15 +957,20 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                 const messagingEvents = entry.messaging || [];
                 
                 for (let event of messagingEvents) {
+                    // Evitamos procesar los mensajes que nosotros mismos enviamos (is_echo)
                     if (event.message && !event.message.is_echo) {
                         const senderId = event.sender.id;
                         const text = event.message.text || "[Multimedia/Adjunto]";
                         const source = body.object === 'page' ? 'Messenger' : 'Instagram';
                         const timestamp = new Date().toISOString();
 
+                        // Guardado directo a la BD (Bypass de IA)
                         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [senderId, 'user', `[${source}] ${text}`, timestamp]);
+                        
+                        // Aseguramos que el cliente exista en la metadata para el panel
                         await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [senderId, timestamp]);
                         
+                        // Emitimos al Frontend para Lore
                         io.emit('new_message', { phone: senderId, role: 'user', text: `[${source}] ${text}`, time: timestamp });
                         io.emit('update_chats_list');
 
@@ -990,6 +1003,7 @@ app.post('/webhook', async (req, res) => {
         const val = changes?.value; 
         const msg = val?.messages?.[0]; 
         
+        // --- ANTI-BUCLE ---
         if (msg && msg.from === PHONE_ID) {
              return;
         }
@@ -1001,6 +1015,7 @@ app.post('/webhook', async (req, res) => {
         if(msg) { 
             const phone = msg.from; 
             
+            // --- AUTO-ETIQUETADO REDES ---
             if (msg.referral) {
                 const refSource = `Meta Ads: ${msg.referral.source_url || 'N/A'}`;
                 
@@ -1026,6 +1041,7 @@ app.post('/webhook', async (req, res) => {
                 }
             } 
             
+            // === GUARDADO INDIVIDUAL E INMEDIATO ===
             if (userMsg) {
                 const timestamp = new Date().toISOString();
                 await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', userMsg, timestamp]);
@@ -1035,6 +1051,7 @@ app.post('/webhook', async (req, res) => {
                 io.emit('update_chats_list');
             }
 
+            // === DEBOUNCE ===
             if (messageQueue.has(phone)) { clearTimeout(messageQueue.get(phone).timer); }
 
             const safeName = val?.contacts?.[0]?.profile?.name || "Cliente";
@@ -1081,21 +1098,6 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
         const lead = await db.get("SELECT * FROM leads WHERE phone = ?", [phone]);
         if (!lead) return res.status(404).json({ success: false, message: "Lead no encontrado en la base de datos" });
 
-        // =========================================================
-        // TODO: AQUI VA TU LLAMADA REAL A SALESFORCE VÍA AXIOS
-        // Ejemplo de cómo será cuando tengamos las credenciales:
-        //
-        // const sfResponse = await axios.post('https://tu-dominio.my.salesforce.com/services/data/vXX.X/sobjects/Lead/', {
-        //     LastName: lead.nombre,
-        //     Phone: lead.phone,
-        //     City: lead.ciudad,
-        //     Company: 'ICBOT Lead',
-        //     // ... otros campos
-        // }, { headers: { Authorization: `Bearer ${SF_TOKEN}` }});
-        //
-        // const newSfId = sfResponse.data.id;
-        // =========================================================
-
         // SIMULACIÓN (Por ahora, inventamos un ID exitoso de Salesforce)
         const fakeSfId = "00Q" + Math.random().toString(36).substring(2, 10).toUpperCase();
 
@@ -1124,8 +1126,6 @@ app.post('/api/salesforce/sync-bulk', proteger, async (req, res) => {
         let successCount = 0;
         
         for (const lead of leadsPendientes) {
-            // TODO: Aquí irá el ciclo de inserción real a Salesforce
-            
             // Simulación de respuesta exitosa:
             const fakeSfId = "00Q" + Math.random().toString(36).substring(2, 10).toUpperCase();
             
