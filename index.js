@@ -1,21 +1,8 @@
 /*
- * SERVER BACKEND - v33.0 (ICBOT FULL PRODUCTION - EXCEL BULK CAMPAIGNS)
+ * SERVER BACKEND - v33.1 (ICBOT FULL PRODUCTION + OMNICANAL META)
  * ============================================================
- * 1. FIX: Renombrado oficial a ICBOT completado (Asistente Lorena).
- * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone).
- * 3. ADD: Cronjob de Limpieza robusto 'media_cache'.
- * 4. FIX: Audios/Videos con soporte Range 206 (codecs=opus).
- * 5. ADD: Sistema Anti-bucle (Auto-apagado del bot).
- * 6. FIX: Prioridad absoluta al nombre dado por el cliente.
- * 7. ADD: WEBSOCKETS (Socket.io) para eliminar el Polling del frontend.
- * 8. MOD: Cronjob seguimiento inteligente (Fix: Plantilla sin parámetros).
- * 9. MOD: Segmentación de Categoría vs Producto Específico.
- * 10.FIX: Se eliminó el bloqueo duro de archivos adjuntos para que la IA los procese.
- * 11.DEL: EXTIRPADO SALESFORCE (Limpieza de código fallido para estabilidad).
- * 12.ADD: Soporte nativo para 'Template Messages' en enviarWhatsApp.
- * 13.MOD: Endpoint /api/chat/send-template preparado para imágenes dinámicas y FormData.
- * 14.ADD: Endpoint /api/chat/bulk-excel (Motor de campañas con Rate Limiting 250ms).
- * 15.FIX: Integración nativa Gemini (System Instructions + JSON estricto + Fusión de roles).
+ * [Tus logs anteriores...]
+ * 16. ADD: Endpoint /api/omnicanal/webhook para Messenger e Instagram (Bypass IA).
  * ============================================================
  */
 
@@ -68,7 +55,6 @@ const DEFAULT_PROMPT = `Eres Lorena, Asistente Comercial de Importadora Casa Col
 REGLA DE ORO: NUNCA ASUMAS EL NOMBRE DEL CLIENTE. Si el cliente no te ha dicho explícitamente "Me llamo X", debes preguntárselo obligatoriamente (Nombre y Apellido) para su registro.`;
 
 // --- 3. SESIONES ---
-// Nota: MemoryStore reinicia sesiones en reinicios del servidor. Afecta solo al dashboard web, no al bot.
 app.use(session({
     name: 'icc_session_id', 
     secret: SESSION_SECRET, 
@@ -153,7 +139,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v33.0 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
+        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v33.1 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -560,7 +546,6 @@ function iniciarCronJobs() {
                             const templatePayload = {
                                 name: "plantilla_de_retoma", 
                                 language: { code: "es_CO" } 
-                                // FIX: Componentes eliminados para evitar el error OAuthException code 132000
                             };
                             
                             sent = await enviarWhatsApp(l.phone, templatePayload, 'template');
@@ -924,7 +909,63 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
     }
 });
 
-// --- WEBHOOK BLINDADO ---
+// ============================================================
+// NUEVO WEBHOOK OMNICANAL (BANDEJA HUMANA - BYPASS IA)
+// ============================================================
+
+app.get('/api/omnicanal/webhook', (req, res) => {
+    if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
+        res.send(req.query['hub.challenge']);
+    } else {
+        res.sendStatus(403);
+    }
+});
+
+app.post('/api/omnicanal/webhook', async (req, res) => {
+    // Meta exige un 200 OK inmediato para no bloquear el canal
+    res.sendStatus(200); 
+    
+    try {
+        const body = req.body;
+
+        // Detección de Messenger e Instagram
+        if (body.object === 'page' || body.object === 'instagram') {
+            const entries = body.entry || [];
+            
+            for (let entry of entries) {
+                const messagingEvents = entry.messaging || [];
+                
+                for (let event of messagingEvents) {
+                    // Evitamos procesar los mensajes que nosotros mismos enviamos (is_echo)
+                    if (event.message && !event.message.is_echo) {
+                        const senderId = event.sender.id;
+                        const text = event.message.text || "[Multimedia/Adjunto]";
+                        const source = body.object === 'page' ? 'Messenger' : 'Instagram';
+                        const timestamp = new Date().toISOString();
+
+                        // Guardado directo a la BD (Bypass de IA)
+                        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [senderId, 'user', text, timestamp]);
+                        
+                        // Aseguramos que el cliente exista en la metadata para el panel
+                        await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [senderId, timestamp]);
+                        
+                        // Emitimos al Frontend para Lore
+                        io.emit('new_message', { phone: senderId, role: 'user', text: `[${source}] ${text}`, time: timestamp });
+                        io.emit('update_chats_list');
+
+                        console.log(`💬 ${source} - De: ${senderId} | Msj: ${text}`);
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error("❌ Error en Webhook Omnicanal:", error);
+    }
+});
+
+// ============================================================
+// WEBHOOK ORIGINAL BLINDADO (SOLO WHATSAPP - CON IA)
+// ============================================================
 app.get('/webhook', (req, res) => {
     if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
         res.send(req.query['hub.challenge']);
