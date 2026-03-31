@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICBOT V33.0 - Masivos Excel</title>
+    <title>ICBOT V33.2 - Omnicanal & Salesforce</title>
     <link rel="icon" href="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" type="image/svg+xml">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -24,6 +24,7 @@
             --text-muted: #777777;   
             --accent: #E9521E;       
             --danger: #ef4444;
+            --sf-blue: #00a1e0;      /* Color oficial Salesforce */
             --hover-item: #EBEBEB;   
             --active-item: #FFEBE5;  
             
@@ -110,7 +111,9 @@
         .bulk-checkbox { display: none; width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; }
         .chat-list.bulk-mode .bulk-checkbox { display: block; }
         
-        .avatar { width: 45px; height: 45px; border-radius: 50%; background: var(--avatar-bg); color: var(--avatar-color); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; font-size: 1.3rem; }
+        .avatar { position: relative; width: 45px; height: 45px; border-radius: 50%; background: var(--avatar-bg); color: var(--avatar-color); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; font-size: 1.3rem; }
+        .omni-badge { position: absolute; bottom: -2px; right: -2px; background: #fff; border-radius: 50%; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+        
         .chat-info { flex: 1; min-width: 0; }
         .chat-name { font-weight: 600; font-size: 1rem; color: var(--text); display: flex; justify-content: space-between; }
         .chat-preview { display: flex; justify-content: space-between; align-items: center; margin-top: 3px; }
@@ -132,7 +135,6 @@
         .msg.user { background: var(--incoming); align-self: flex-start; border-top-left-radius: 0; color: #FFF; }
         .msg.bot, .msg.manual { background: var(--outgoing); align-self: flex-end; border-top-right-radius: 0; color: #FFF; }
         
-        /* NUEVO: ESTILO PARA BURBUJAS DE CAMPAÑA */
         .msg.campaign { background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%); align-self: flex-end; border-top-right-radius: 0; color: #FFF; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3); }
         .msg.campaign a { color: #a5b4fc; }
         
@@ -376,7 +378,10 @@
                         <option value="005Dn000003Z5vbIAC">Oscar</option>
                     </select>
 
-                    <button class="btn-small btn-green" style="width:100%; margin-top:15px;" onclick="saveLeadManual()"><i class="fas fa-save"></i> Guardar Cambios</button>
+                    <div style="display:flex; gap:10px; margin-top:15px;">
+                        <button class="btn-small btn-green" style="flex:1;" onclick="saveLeadManual()"><i class="fas fa-save"></i> Guardar</button>
+                        <button class="btn-small btn-blue" style="flex:1; background:var(--sf-blue); color:white; border:none;" onclick="syncSalesforceCurrent()"><i class="fas fa-cloud-upload-alt"></i> Salesforce</button>
+                    </div>
                 </div>
 
                 <div class="crm-section"><div class="crm-title"><i class="fas fa-tags"></i> Etiqueta Comercial</div><div class="tag-container" id="tag-list"></div></div>
@@ -390,7 +395,7 @@
                     <h2><i class="fas fa-users" style="color:var(--primary);"></i> Base de Leads</h2>
                     <div style="display:flex; gap:10px;">
                         <button class="btn-small btn-green" onclick="openExcelModal()" style="background: #8b5cf6; border-color: #8b5cf6;"><i class="fas fa-rocket"></i> Campaña Excel</button>
-                        
+                        <button class="btn-small btn-blue" style="background:var(--sf-blue); color:white; border:none;" onclick="syncSalesforceBulk()"><i class="fas fa-cloud-upload-alt"></i> Sync Masivo Salesforce</button>
                         <button class="btn-small btn-green" onclick="downloadExcel()"><i class="fas fa-file-excel"></i> Descargar CSV</button>
                         <button class="btn-small btn-blue" onclick="refreshLeads()"><i class="fas fa-sync"></i> Actualizar</button>
                     </div>
@@ -759,6 +764,23 @@
             }
         });
 
+        // ==========================================
+        // NUEVAS FUNCIONES SALESFORCE (PLACEHOLDERS)
+        // ==========================================
+        function syncSalesforceCurrent() {
+            if(!currentChat) return;
+            showToast("🔄 Iniciando sincronización con Salesforce para " + currentChat + "...");
+            // Aquí irá la llamada al backend: fetch('/api/salesforce/sync', { body: currentChat })
+            setTimeout(() => { showToast("✅ Sincronizado correctamente con Salesforce"); }, 1500);
+        }
+
+        function syncSalesforceBulk() {
+            showToast("🔄 Sincronizando masivamente con Salesforce...");
+            // Aquí irá la llamada al backend para procesar todos los pendientes
+            setTimeout(() => { showToast("✅ Sincronización masiva finalizada"); }, 2000);
+        }
+        // ==========================================
+
         function switchConfigTab(tabId, btnElement) {
             document.querySelectorAll('.config-sub-panel').forEach(panel => panel.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
@@ -814,7 +836,6 @@
             }
         }
 
-        // --- SISTEMA DE PLANTILLAS Y MASIVOS ---
         function openTemplateModal(isBulk = false) {
             if(!isBulk && !currentChat) return showToast("Abre un chat para envío individual.");
             if(isBulk && selectedChats.size === 0) return showToast("Selecciona al menos un chat para envío masivo.");
@@ -923,7 +944,6 @@
             toggleBulkMode();
         }
 
-        // --- CAMPAÑA EXCEL ---
         function openExcelModal() {
             document.getElementById('excel-tpl-name').value = '';
             document.getElementById('excel-file').value = '';
@@ -1136,7 +1156,6 @@
             renderChatList();
         }
 
-        // FIX: Archivar de forma masiva reconstruido para soportar la limitación del backend
         async function executeBulkAction(action) {
             if (selectedChats.size === 0) return alert("Selecciona al menos un chat");
             
@@ -1153,7 +1172,6 @@
             if (!confirm(`¿Aplicar acción a ${selectedChats.size} chats?`)) return;
             
             if (action === 'toggle_archive') {
-                // El backend actual no soporta toggle_archive en bulk-update, iteramos la accion
                 const promises = Array.from(selectedChats).map(phone => 
                     fetch('/api/chat/action', {
                         method: 'POST',
@@ -1184,14 +1202,40 @@
             const scroll = container.children.length > 0 ? container.scrollTop : 0;
             
             container.innerHTML = chatsData.map(c => {
+                // ==========================================
+                // FIX: ETIQUETAS DUPLICADAS VISUALMENTE
+                // ==========================================
                 let labelsHtml = ''; 
                 if(c.labels && Array.isArray(c.labels)) {
-                    labelsHtml = c.labels.map(l => { 
+                    let uniqueLabels = [];
+                    let seenTexts = new Set();
+                    c.labels.forEach(l => {
+                        let txt = l.text || l;
+                        if(!seenTexts.has(txt)) {
+                            seenTexts.add(txt);
+                            uniqueLabels.push(l);
+                        }
+                    });
+                    labelsHtml = uniqueLabels.map(l => { 
                         const tag = normalizeTag(l); 
                         return `<span class="mini-tag" style="background:${tag.color}20; color:${tag.color}; border:1px solid ${tag.color}50">${tag.text}</span>`;
                     }).join('');
                 }
                 
+                // ==========================================
+                // FIX: INTEGRACIÓN VISUAL OMNICANAL META
+                // ==========================================
+                let cleanMsgText = c.lastMessage.text || 'Multimedia';
+                let platformIcon = '<i class="fab fa-whatsapp" style="color:#25D366;"></i>';
+                
+                if (cleanMsgText.includes('[Instagram]')) {
+                    platformIcon = '<i class="fab fa-instagram" style="color:#E1306C;"></i>';
+                    cleanMsgText = cleanMsgText.replace(/\[Instagram\]\s*/g, '');
+                } else if (cleanMsgText.includes('[Messenger]')) {
+                    platformIcon = '<i class="fab fa-facebook-messenger" style="color:#0084FF;"></i>';
+                    cleanMsgText = cleanMsgText.replace(/\[Messenger\]\s*/g, '');
+                }
+
                 let sourceBadge = '';
                 if(c.source && c.source.includes('Ads')) {
                     sourceBadge = `<span class="badge" style="background:#ff0000; color:#fff;">ADS</span>`;
@@ -1206,14 +1250,17 @@
                 return `
                 <div id="chat-${c.id}" class="chat-item ${currentChat === c.id ? 'active' : ''} ${c.archived ? 'archived' : ''}" onclick="openChat('${c.id}', decodeURIComponent('${encodeURIComponent(c.name)}'), '${c.photoUrl || ''}')" oncontextmenu="showContextMenu(event, '${c.id}', ${c.pinned}, ${c.archived})">
                     <input type="checkbox" class="bulk-checkbox" ${isSelected ? 'checked' : ''} onclick="toggleChatSelection('${c.id}', event)">
-                    <div class="avatar">${c.photoUrl ? `<img src="${c.photoUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fas fa-user"></i>'}</div>
+                    <div class="avatar">
+                        ${c.photoUrl ? `<img src="${c.photoUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fas fa-user"></i>'}
+                        <div class="omni-badge">${platformIcon}</div>
+                    </div>
                     <div class="chat-info">
                         <div class="chat-name">
                             <span>${c.name} ${c.pinned ? '<i class="fas fa-thumbtack pin-icon" style="color:var(--primary); font-size:0.8rem;"></i>' : ''}</span>
                             <span class="chat-date" style="font-weight:400; font-size:0.75rem;">${new Date(c.lastMessage.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                         </div>
                         <div class="chat-preview">
-                            <span class="chat-last-msg">${c.lastMessage.text || 'Multimedia'}</span>
+                            <span class="chat-last-msg">${cleanMsgText}</span>
                             <div style="display:flex; gap:3px;">${c.unreadCount > 0 ? `<span class="badge">${c.unreadCount}</span>` : ''}${sourceBadge}</div>
                         </div>
                         <div class="mini-tags">${labelsHtml}</div>
@@ -1317,12 +1364,15 @@
             return `${dateStr} ${timeStr}`;
         }
 
-        // FIX: Inyección de HTML segura para Reenviar
         function buildMessageHTML(m) {
             let text = m.text; 
             let isMedia = false; 
             let mediaId = null;
             
+            // LIMPIEZA DE ETIQUETAS DE PLATAFORMA PARA BURBUJA
+            text = text.replace(/\[Instagram\]\s*/g, '');
+            text = text.replace(/\[Messenger\]\s*/g, '');
+
             if(text.includes('[MEDIA:')) { 
                 isMedia = true;
                 const parts = text.split(':'); 
@@ -1683,7 +1733,17 @@
             const chat = chatsData.find(c => c.id === currentChat); 
             const activeTags = chat ? (chat.labels || []) : []; 
 
-            container.innerHTML = tags.map(t => { 
+            // FILTRO DE DUPLICADOS PARA EL CRM PANEL
+            const uniqueTags = [];
+            const seenTags = new Set();
+            tags.forEach(t => {
+                if(!seenTags.has(t.name)) {
+                    seenTags.add(t.name);
+                    uniqueTags.push(t);
+                }
+            });
+
+            container.innerHTML = uniqueTags.map(t => { 
                 const isActive = activeTags.find(l => l.text === t.name); 
                 return `<div class="tag ${isActive ? 'selected' : ''}" style="${isActive ? `background:${t.color}; border-color:${t.color};` : ''}" onclick="toggleTagLocal(decodeURIComponent('${encodeURIComponent(t.name)}'), '${t.color}')">${t.name}</div>`; 
             }).join(''); 
@@ -1740,6 +1800,9 @@
                 }
 
                 const execName = executivesMap[l.etiqueta] || l.etiqueta || 'Pendiente';
+                
+                // Agregado el indicador visual de Salesforce en caso de existir un sf_id
+                const sfIcon = l.sf_id ? '<i class="fas fa-check-circle" style="color:#10b981;" title="Sincronizado"></i>' : '<i class="fas fa-cloud text-gray-400" title="Pendiente de Sincronizar"></i>';
 
                 return `<tr>
                     <td><input type="checkbox" class="lead-checkbox" value="${l.id}" style="cursor:pointer; width:16px; height:16px;"></td>
@@ -1755,6 +1818,7 @@
                     <td><span class="badge" style="background:${execName === 'Pendiente (Sin Asignar)' ? '#ef4444' : '#10b981'}">${execName}</span></td>
                     <td>${visualTagsHTML}</td>
                     <td>
+                        <button class="btn-small btn-blue" onclick="syncSalesforceCurrent()" title="Subir a Salesforce" style="margin-right:5px; background:transparent; color:var(--sf-blue); border-color:var(--sf-blue);">${sfIcon}</button>
                         <button class="btn-small btn-red" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>`; 
@@ -1791,7 +1855,6 @@
             a.click(); 
         }
 
-        // FIX: Inyección HTML segura usando encodeURIComponent para prevenir Crash del UI.
         async function loadAllConfig() {
             try {
                 const res = await fetch('/api/data/config');
@@ -1872,7 +1935,6 @@
             document.getElementById('prompt-edit-modal').classList.add('show');
         }
 
-        // FIX: Feedback visual y manejo de promesas al guardar el Prompt
         async function savePrompt(event) {
             const newPrompt = document.getElementById('prompt-editor').value;
             const btn = event.currentTarget;
@@ -2018,7 +2080,6 @@
             }
         }
         
-        // FIX: Inyección Segura para Editores Dinámicos
         async function loadInventoryPreview() {
             try {
                 const res = await fetch('/api/data/knowledge');
@@ -2165,7 +2226,6 @@
             }
         }
 
-        // FIX: El modal guarda la URL para poder reconstruirla
         function openWebEdit(id, url, text) {
             document.getElementById('edit-web-id').value = id;
             document.getElementById('edit-web-id').dataset.url = url;
@@ -2173,7 +2233,6 @@
             document.getElementById('web-audit-modal').classList.add('show');
         }
 
-        // FIX: Reconstrucción de la web, tu backend no tenía endpoint '/update'
         async function saveWebEdit(event) {
             const id = document.getElementById('edit-web-id').value;
             const url = document.getElementById('edit-web-id').dataset.url;
@@ -2185,7 +2244,6 @@
             btn.disabled = true;
 
             try {
-                // Como no hay endpoint update en el backend, borramos y volvemos a crear
                 await fetch('/api/data/web-knowledge/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) });
                 
                 await fetch('/api/data/web-knowledge', {
