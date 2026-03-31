@@ -255,6 +255,9 @@
     <div class="sidebar">
         <div style="width: 40px; height: 40px; background: url('https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg') no-repeat center/contain; border-radius: 50%; margin-bottom: 30px;" id="logo-preview"></div>
         <button class="nav-btn active" onclick="switchTab('chat')" title="Chats"><i class="fas fa-comments"></i></button>
+        
+        <a href="/inbox" class="nav-btn" title="Bandeja Omnicanal" style="text-decoration: none;"><i class="fas fa-inbox" style="color: #8b5cf6;"></i></a>
+        
         <button class="nav-btn" onclick="switchTab('leads')" title="Base de Leads"><i class="fas fa-database"></i></button>
         <button class="nav-btn" onclick="switchTab('config')" title="Configuración"><i class="fas fa-sliders-h"></i></button>
         <div class="nav-bottom">
@@ -765,19 +768,45 @@
         });
 
         // ==========================================
-        // NUEVAS FUNCIONES SALESFORCE (PLACEHOLDERS)
+        // NUEVAS FUNCIONES SALESFORCE (CON FETCH REAL)
         // ==========================================
-        function syncSalesforceCurrent() {
+        async function syncSalesforceCurrent() {
             if(!currentChat) return;
-            showToast("🔄 Iniciando sincronización con Salesforce para " + currentChat + "...");
-            // Aquí irá la llamada al backend: fetch('/api/salesforce/sync', { body: currentChat })
-            setTimeout(() => { showToast("✅ Sincronizado correctamente con Salesforce"); }, 1500);
+            showToast("🔄 Sincronizando con Salesforce...");
+            try {
+                const res = await fetch('/api/salesforce/sync-lead', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ phone: currentChat })
+                });
+                const data = await res.json();
+                if(data.success) {
+                    showToast("✅ Subido a Salesforce (ID: " + data.sfId + ")");
+                    refreshLeads();
+                } else {
+                    showToast("❌ Error: " + data.message);
+                }
+            } catch(e) {
+                showToast("❌ Fallo de red con el servidor");
+            }
         }
 
-        function syncSalesforceBulk() {
+        async function syncSalesforceBulk() {
             showToast("🔄 Sincronizando masivamente con Salesforce...");
-            // Aquí irá la llamada al backend para procesar todos los pendientes
-            setTimeout(() => { showToast("✅ Sincronización masiva finalizada"); }, 2000);
+            try {
+                const res = await fetch('/api/salesforce/sync-bulk', {
+                    method: 'POST'
+                });
+                const data = await res.json();
+                if(data.success) {
+                    showToast("✅ " + data.count + " leads sincronizados");
+                    refreshLeads();
+                } else {
+                    showToast("❌ Error: " + data.message);
+                }
+            } catch(e) {
+                showToast("❌ Fallo de red con el servidor");
+            }
         }
         // ==========================================
 
@@ -1744,7 +1773,7 @@
             });
 
             container.innerHTML = uniqueTags.map(t => { 
-                const isActive = activeTags.find(l => l.text === t.name); 
+                const isActive = activeTags.find(l => (l.text || l) === t.name); 
                 return `<div class="tag ${isActive ? 'selected' : ''}" style="${isActive ? `background:${t.color}; border-color:${t.color};` : ''}" onclick="toggleTagLocal(decodeURIComponent('${encodeURIComponent(t.name)}'), '${t.color}')">${t.name}</div>`; 
             }).join(''); 
         }
