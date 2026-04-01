@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.2 (ICBOT FULL PRODUCTION + OMNICANAL META + SALESFORCE SYNC)
+ * SERVER BACKEND - v33.3 (ICBOT FULL PRODUCTION + OMNICANAL AISLADO)
  * ============================================================
  * 1. FIX: Renombrado oficial a ICBOT completado (Asistente Lorena).
  * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone).
@@ -19,6 +19,7 @@
  * 16.ADD: Endpoint /api/omnicanal/webhook para Messenger e Instagram (Bypass IA).
  * 17.ADD: Endpoints /api/salesforce/sync-lead y /sync-bulk (Preparados para API Real).
  * 18.FIX: Rutas /inbox añadidas para el frontend omnicanal.
+ * 19.FIX: Aislamiento total DB (Columna 'channel') para separar WhatsApp de Redes.
  * ============================================================
  */
 
@@ -111,10 +112,11 @@ let db, globalKnowledge = [], serverInstance;
         await db.exec("PRAGMA synchronous = NORMAL;");
         console.log("📂 Base de Datos Conectada (WAL Mode).");
 
+        // ACTUALIZACIÓN DE ESTRUCTURA: Se agrega el campo 'channel'
         const tables = [
             `history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT)`,
             `leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT UNIQUE, nombre TEXT, interes TEXT, producto_especifico TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, departamento TEXT, correo TEXT, source TEXT DEFAULT 'Organico', status_tag TEXT, farewell_sent INTEGER DEFAULT 0, followup_day INTEGER DEFAULT 0, sf_id TEXT)`,
-            `metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0, photoUrl TEXT, archived INTEGER DEFAULT 0, unreadCount INTEGER DEFAULT 0, last_interaction TEXT)`,
+            `metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0, photoUrl TEXT, archived INTEGER DEFAULT 0, unreadCount INTEGER DEFAULT 0, last_interaction TEXT, channel TEXT DEFAULT 'whatsapp')`,
             `bot_status (phone TEXT PRIMARY KEY, active INTEGER DEFAULT 1)`,
             `inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, searchable TEXT UNIQUE, raw_data TEXT)`,
             `config (key TEXT PRIMARY KEY, value TEXT)`,
@@ -131,6 +133,7 @@ let db, globalKnowledge = [], serverInstance;
             "ALTER TABLE metadata ADD COLUMN archived INTEGER DEFAULT 0",
             "ALTER TABLE metadata ADD COLUMN unreadCount INTEGER DEFAULT 0",
             "ALTER TABLE metadata ADD COLUMN last_interaction TEXT",
+            "ALTER TABLE metadata ADD COLUMN channel TEXT DEFAULT 'whatsapp'",
             "ALTER TABLE leads ADD COLUMN source TEXT DEFAULT 'Organico'",
             "ALTER TABLE leads ADD COLUMN status_tag TEXT",
             "ALTER TABLE leads ADD COLUMN farewell_sent INTEGER DEFAULT 0",
@@ -155,7 +158,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v33.2 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
+        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v33.3 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -395,7 +398,6 @@ async function procesarConICBOT(dbMsg, aiMsg, phone, name = "Cliente", isFile = 
     const busqueda = aiMsg.toLowerCase().split(" ").slice(0,3).join(" ");
     const stock = globalKnowledge.filter(i => (i.searchable||"").toLowerCase().includes(busqueda)).slice(0,5);
 
-    // 1. System Prompt Exclusivo (Reglas)
     const promptSistema = `
 ${configUsar}
 
@@ -428,16 +430,13 @@ Inventario: ${JSON.stringify(stock)}
 Categorías permitidas: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos Hidráulicos, Brazos largos, Accesorios, Repuestos, Servicio, Otro, Consultando.
     `;
 
-    // 2. Convertir historial a formato Gemini (Colapsando roles consecutivos para evitar Crash 400)
     const chatContents = [];
     for (const msg of history) {
         const mappedRole = (msg.role === 'bot' || msg.role === 'manual') ? 'model' : 'user';
         
         if (chatContents.length > 0 && chatContents[chatContents.length - 1].role === mappedRole) {
-            // Fusión de mensajes consecutivos del mismo rol
             chatContents[chatContents.length - 1].parts[0].text += `\n${msg.text}`;
         } else {
-            // Nuevo turno
             chatContents.push({
                 role: mappedRole,
                 parts: [{ text: msg.text }]
@@ -445,7 +444,6 @@ Categorías permitidas: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos
         }
     }
 
-    // Prevención de arrays vacíos
     if (chatContents.length === 0) {
         chatContents.push({ role: 'user', parts: [{ text: aiMsg }] });
     }
@@ -483,7 +481,7 @@ Categorías permitidas: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos
 }
 
 async function gestionarLead(phone, info, fbName, oldLead) {
-    if (!info) return; // Validación de seguridad
+    if (!info) return; 
     const limpiarDato = (d) => (!d || /^(unknown|null|n\/a|no menciona|cliente|pend)$/i.test(d.toString().trim())) ? null : d.trim();
     
     let name = limpiarDato(info.nombre) || (oldLead && oldLead.nombre && oldLead.nombre !== fbName ? oldLead.nombre : fbName);
@@ -512,7 +510,6 @@ async function gestionarLead(phone, info, fbName, oldLead) {
 }
 
 function iniciarCronJobs() {
-    // 1. Limpieza de medios
     setInterval(() => {
         try {
             const cacheDir = path.join(__dirname, 'data', 'media_cache');
@@ -531,7 +528,6 @@ function iniciarCronJobs() {
         } catch(e) { console.error("Error limpiando cache:", e); }
     }, 60000 * 30);
 
-    // 2. CRONJOB DE SEGUIMIENTO (PARCHE DE PLANTILLAS 24H)
     setInterval(async () => {
         try {
             const horaBogota = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Bogota"}));
@@ -675,7 +671,8 @@ app.get('/api/chats-full', proteger, async (req, res) => {
         let params = [];
         if (search) { whereClause += ` AND (m.contactName LIKE ? OR h.phone LIKE ? OR h.text LIKE ?)`; params.push(search, search, search); }
         
-        const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, b.active as botActive, l.source, l.status_tag, l.sf_id, l.interes, l.producto_especifico FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN leads l ON h.phone = l.phone WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 1000`;
+        // ACTUALIZACIÓN: Incluimos m.channel en la consulta
+        const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, m.channel, b.active as botActive, l.source, l.status_tag, l.sf_id, l.interes, l.producto_especifico FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN leads l ON h.phone = l.phone WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 1000`;
         const rows = await db.all(query, params);
         
         res.json(rows.map(r => ({ 
@@ -694,7 +691,8 @@ app.get('/api/chats-full', proteger, async (req, res) => {
             statusTag: r.status_tag, 
             sfId: r.sf_id,
             interes: r.interes,
-            producto_especifico: r.producto_especifico
+            producto_especifico: r.producto_especifico,
+            channel: r.channel || 'whatsapp' // Aseguramos que por defecto sea whatsapp si está vacío
         })));
     } catch(e) { res.status(500).json([]); }
 });
@@ -943,13 +941,11 @@ app.get('/api/omnicanal/webhook', (req, res) => {
 });
 
 app.post('/api/omnicanal/webhook', async (req, res) => {
-    // Meta exige un 200 OK inmediato para no bloquear el canal
     res.sendStatus(200); 
     
     try {
         const body = req.body;
 
-        // Detección de Messenger e Instagram
         if (body.object === 'page' || body.object === 'instagram') {
             const entries = body.entry || [];
             
@@ -957,24 +953,23 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                 const messagingEvents = entry.messaging || [];
                 
                 for (let event of messagingEvents) {
-                    // Evitamos procesar los mensajes que nosotros mismos enviamos (is_echo)
                     if (event.message && !event.message.is_echo) {
                         const senderId = event.sender.id;
                         const text = event.message.text || "[Multimedia/Adjunto]";
-                        const source = body.object === 'page' ? 'Messenger' : 'Instagram';
+                        const source = body.object === 'page' ? 'messenger' : 'instagram';
                         const timestamp = new Date().toISOString();
 
-                        // Guardado directo a la BD (Bypass de IA)
-                        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [senderId, 'user', `[${source}] ${text}`, timestamp]);
+                        // ALMACENAMOS EL CANAL DIRECTAMENTE EN LA BD
+                        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [senderId, 'user', text, timestamp]);
+                        await db.run(`INSERT INTO metadata (phone, archived, unreadCount, last_interaction, channel) 
+                                      VALUES (?, 0, 1, ?, ?) 
+                                      ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction, channel=excluded.channel`, 
+                                      [senderId, timestamp, source]);
                         
-                        // Aseguramos que el cliente exista en la metadata para el panel
-                        await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [senderId, timestamp]);
-                        
-                        // Emitimos al Frontend para Lore
-                        io.emit('new_message', { phone: senderId, role: 'user', text: `[${source}] ${text}`, time: timestamp });
+                        io.emit('new_message', { phone: senderId, role: 'user', text: text, time: timestamp });
                         io.emit('update_chats_list');
 
-                        console.log(`💬 ${source} - De: ${senderId} | Msj: ${text}`);
+                        console.log(`💬 ${source.toUpperCase()} - De: ${senderId} | Msj: ${text}`);
                     }
                 }
             }
@@ -1003,7 +998,6 @@ app.post('/webhook', async (req, res) => {
         const val = changes?.value; 
         const msg = val?.messages?.[0]; 
         
-        // --- ANTI-BUCLE ---
         if (msg && msg.from === PHONE_ID) {
              return;
         }
@@ -1015,7 +1009,6 @@ app.post('/webhook', async (req, res) => {
         if(msg) { 
             const phone = msg.from; 
             
-            // --- AUTO-ETIQUETADO REDES ---
             if (msg.referral) {
                 const refSource = `Meta Ads: ${msg.referral.source_url || 'N/A'}`;
                 
@@ -1041,9 +1034,9 @@ app.post('/webhook', async (req, res) => {
                 }
             } 
             
-            // === GUARDADO INDIVIDUAL E INMEDIATO ===
             if (userMsg) {
                 const timestamp = new Date().toISOString();
+                // LOS MENSAJES DE WHATSAPP CONSERVAN SU COMPORTAMIENTO ORIGINAL
                 await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', userMsg, timestamp]);
                 await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [phone, timestamp]);
                 
@@ -1051,7 +1044,6 @@ app.post('/webhook', async (req, res) => {
                 io.emit('update_chats_list');
             }
 
-            // === DEBOUNCE ===
             if (messageQueue.has(phone)) { clearTimeout(messageQueue.get(phone).timer); }
 
             const safeName = val?.contacts?.[0]?.profile?.name || "Cliente";
@@ -1089,7 +1081,6 @@ app.post('/webhook', async (req, res) => {
 // 10. INTEGRACIÓN SALESFORCE (API)
 // ============================================================
 
-// Endpoint para sincronizar 1 solo Lead (Desde el panel lateral CRM)
 app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ success: false, message: "Falta el número de teléfono" });
@@ -1098,13 +1089,8 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
         const lead = await db.get("SELECT * FROM leads WHERE phone = ?", [phone]);
         if (!lead) return res.status(404).json({ success: false, message: "Lead no encontrado en la base de datos" });
 
-        // SIMULACIÓN (Por ahora, inventamos un ID exitoso de Salesforce)
         const fakeSfId = "00Q" + Math.random().toString(36).substring(2, 10).toUpperCase();
-
-        // 1. Actualizamos tu Base de Datos SQLite marcando que ya se sincronizó
         await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [fakeSfId, lead.id]);
-
-        // 2. Le respondemos al Frontend que fue un éxito
         res.json({ success: true, sfId: fakeSfId });
 
     } catch (error) {
@@ -1113,10 +1099,8 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
     }
 });
 
-// Endpoint para sincronizar Masivamente (El botón de la tabla de Leads)
 app.post('/api/salesforce/sync-bulk', proteger, async (req, res) => {
     try {
-        // Buscamos todos los leads que no tengan sf_id todavía
         const leadsPendientes = await db.all("SELECT * FROM leads WHERE sf_id IS NULL OR sf_id = ''");
         
         if (leadsPendientes.length === 0) {
@@ -1126,10 +1110,7 @@ app.post('/api/salesforce/sync-bulk', proteger, async (req, res) => {
         let successCount = 0;
         
         for (const lead of leadsPendientes) {
-            // Simulación de respuesta exitosa:
             const fakeSfId = "00Q" + Math.random().toString(36).substring(2, 10).toUpperCase();
-            
-            // Actualizamos el SQLite
             await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [fakeSfId, lead.id]);
             successCount++;
         }
