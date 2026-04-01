@@ -1,35 +1,28 @@
 /**
  * ICBOT - Lógica del Frontend para Bandeja Omnicanal (Meta)
- * Maneja WebSockets, renderizado de chats y atajos de teclado.
+ * Versión v33.3 - Aislamiento por Columna 'channel'
  */
 
-// 1. Inicialización y Estado Global
 const socket = io();
 let currentChat = null;
-let currentPlatform = 'all'; // all, messenger, instagram
-let omniChats = []; // Almacenará solo chats de IG y Messenger
+let currentPlatform = 'all'; 
+let omniChats = []; 
 
-// Elementos del DOM
 const chatItemsList = document.getElementById('chat-items-list');
 const messagesContainer = document.getElementById('messages-container');
 const msgInput = document.getElementById('msg-input');
 const btnSend = document.getElementById('btn-send');
 const searchInput = document.getElementById('chat-search');
 
-// 2. Eventos al cargar la página
 document.addEventListener('DOMContentLoaded', () => {
-    // Inicializar tema
     const savedTheme = localStorage.getItem('theme') || 'light';
     document.body.setAttribute('data-theme', savedTheme);
     updateThemeIcon(savedTheme);
 
-    // Cargar chats iniciales
     loadOmniChats();
 
-    // Configurar Atajos de Teclado en el input
     msgInput.addEventListener('keydown', handleKeyboardShortcuts);
     
-    // Configurar Filtros
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
@@ -39,68 +32,78 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Búsqueda en vivo
     searchInput.addEventListener('input', (e) => {
         renderChatList(e.target.value.toLowerCase());
     });
 });
 
-// 3. WebSockets: Escuchando mensajes en tiempo real
 socket.on('update_chats_list', () => {
-    loadOmniChats(); // Refrescar la lista de la izquierda
+    loadOmniChats(); 
 });
 
 socket.on('new_message', (msg) => {
-    // Si el mensaje es del chat que tenemos abierto actualmente, lo pintamos
     if (currentChat === msg.phone) {
         appendMessage(msg);
         scrollToBottom();
     }
 });
 
-// 4. Lógica de Datos (Llamadas al Backend)
 async function loadOmniChats() {
     try {
-        // Usamos tu mismo endpoint, pero filtraremos en el Front los que son de Meta (Redes)
         const res = await fetch('/api/chats-full?view=active');
         const allChats = await res.json();
         
-        // Filtramos: Solo queremos mostrar los que entraron por Instagram o Messenger
-        // Asumimos que guardamos el 'source' en la BD cuando llegan por el nuevo Webhook
-        omniChats = allChats.filter(chat => {
-            // Revisa en tu historial si hay un mensaje que empiece con [Instagram] o [Messenger]
-            return chat.lastMessage && (chat.lastMessage.text.includes('[Instagram]') || chat.lastMessage.text.includes('[Messenger]'));
+        // --- CÁLCULO DE GLOBOS (BADGES) ---
+        let waUnread = 0;
+        let omniUnread = 0;
+        
+        allChats.forEach(c => {
+            const ch = c.channel || 'whatsapp';
+            if (c.unreadCount > 0) {
+                if (ch === 'whatsapp') waUnread += c.unreadCount;
+                else omniUnread += c.unreadCount;
+            }
         });
+        
+        // Actualizamos los numeritos en el menú
+        const badgeWa = document.getElementById('badge-wa');
+        const badgeOmni = document.getElementById('badge-omni');
+        
+        if(badgeWa) {
+            badgeWa.innerText = waUnread;
+            badgeWa.style.display = waUnread > 0 ? 'block' : 'none';
+        }
+        if(badgeOmni) {
+            badgeOmni.innerText = omniUnread;
+            badgeOmni.style.display = omniUnread > 0 ? 'block' : 'none';
+        }
+        
+        // --- FILTRO DEFINITIVO: Solo Redes Sociales ---
+        // Ahora usamos la columna 'channel' enviada por el backend
+        omniChats = allChats.filter(c => c.channel === 'instagram' || c.channel === 'messenger');
 
         renderChatList();
     } catch (error) {
         console.error('Error cargando chats omnicanal:', error);
-        chatItemsList.innerHTML = '<div class="empty-state">Error al cargar los mensajes.</div>';
     }
 }
 
 async function loadChatHistory(phone, name, platform) {
     currentChat = phone;
     
-    // Cambiar vistas
     document.getElementById('conversation-empty').style.display = 'none';
     document.getElementById('conversation-active').style.display = 'flex';
-    
-    // Actualizar Cabecera
     document.getElementById('active-name').innerText = name;
     
-    const sourceIcon = platform.includes('Instagram') ? '<i class="fab fa-instagram"></i> Instagram Direct' : '<i class="fab fa-facebook-messenger"></i> Messenger';
+    const sourceIcon = platform === 'instagram' ? '<i class="fab fa-instagram"></i> Instagram Direct' : '<i class="fab fa-facebook-messenger"></i> Messenger';
     document.getElementById('active-source').innerHTML = sourceIcon;
 
-    // Resaltar chat en la lista
     document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
     const clickedItem = document.getElementById(`chat-${phone}`);
     if (clickedItem) clickedItem.classList.add('active');
 
-    // Cargar historial del backend
     try {
         messagesContainer.innerHTML = '<div class="loading-state"><i class="fas fa-circle-notch fa-spin"></i></div>';
-        
         const res = await fetch(`/api/chat-history/${phone}`);
         const history = await res.json();
         
@@ -109,18 +112,15 @@ async function loadChatHistory(phone, name, platform) {
         
         scrollToBottom();
         msgInput.focus();
-        loadLeadDataToCRM(phone); // Carga datos en el panel derecho
-        
+        loadLeadDataToCRM(phone); 
     } catch (error) {
         console.error('Error cargando historial:', error);
-        showToast("No se pudo cargar el historial de este chat.");
     }
 }
 
-// 5. Renderizado de Interfaz
 function renderChatList(searchTerm = '') {
     if (omniChats.length === 0) {
-        chatItemsList.innerHTML = '<div class="empty-state">No hay mensajes nuevos en redes sociales.</div>';
+        chatItemsList.innerHTML = '<div class="empty-state">No hay mensajes de redes sociales.</div>';
         return;
     }
 
@@ -129,26 +129,21 @@ function renderChatList(searchTerm = '') {
         const matchesSearch = textToSearch.includes(searchTerm);
         
         let matchesPlatform = true;
-        if (currentPlatform === 'instagram') {
-            matchesPlatform = chat.lastMessage.text.includes('[Instagram]');
-        } else if (currentPlatform === 'messenger') {
-            matchesPlatform = chat.lastMessage.text.includes('[Messenger]');
-        }
+        if (currentPlatform === 'instagram') matchesPlatform = chat.channel === 'instagram';
+        else if (currentPlatform === 'messenger') matchesPlatform = chat.channel === 'messenger';
         
         return matchesSearch && matchesPlatform;
     });
 
     chatItemsList.innerHTML = filteredChats.map(c => {
-        // Detectamos la plataforma basándonos en la marca que dejó el Webhook backend
-        const isIg = c.lastMessage.text.includes('[Instagram]');
+        const isIg = c.channel === 'instagram';
         const platformIcon = isIg ? '<i class="fab fa-instagram" style="color: #E1306C;"></i>' : '<i class="fab fa-facebook-messenger" style="color: #0084FF;"></i>';
-        const platformText = isIg ? 'Instagram' : 'Messenger';
         
-        // Limpiamos la marca [Plataforma] para que no se vea fea en el preview
-        const cleanMsg = c.lastMessage.text.replace(/\[Instagram\] |\[Messenger\] /g, '');
+        // Limpiamos etiquetas de texto viejas si existen
+        const cleanMsg = c.lastMessage.text ? c.lastMessage.text.replace(/\[Instagram\] |\[Messenger\] /g, '') : 'Multimedia';
 
         return `
-            <div class="chat-item ${currentChat === c.id ? 'active' : ''}" id="chat-${c.id}" onclick="loadChatHistory('${c.id}', '${c.name.replace(/'/g, "\\'")}', '${platformText}')">
+            <div class="chat-item ${currentChat === c.id ? 'active' : ''}" id="chat-${c.id}" onclick="loadChatHistory('${c.id}', '${c.name.replace(/'/g, "\\'")}', '${c.channel}')">
                 <div class="chat-avatar">
                     ${c.photoUrl ? `<img src="${c.photoUrl}">` : '<i class="fas fa-user"></i>'}
                     <div class="platform-badge">${platformIcon}</div>
@@ -169,11 +164,8 @@ function renderChatList(searchTerm = '') {
 }
 
 function appendMessage(msg) {
-    // Limpiamos las etiquetas internas del texto antes de mostrarlo
+    // Limpiamos el texto de etiquetas de plataforma para que Lore vea el mensaje puro
     let text = msg.text.replace(/\[Instagram\] |\[Messenger\] /g, '');
-    
-    // Determinar de qué lado va la burbuja
-    // Si es 'user' va a la izquierda. Si es 'bot' o 'manual' (Lorena), a la derecha.
     const bubbleClass = msg.role === 'user' ? 'msg-incoming' : 'msg-outgoing';
     
     const msgHTML = `
@@ -182,20 +174,16 @@ function appendMessage(msg) {
             <div class="message-time">${formatTime(msg.time)}</div>
         </div>
     `;
-    
     messagesContainer.insertAdjacentHTML('beforeend', msgHTML);
 }
 
-// 6. Acciones del Usuario (Envío y Atajos)
 async function sendMessage() {
     const text = msgInput.value.trim();
     if (!text || !currentChat) return;
 
-    // Limpiamos el input y devolvemos el foco
     msgInput.value = '';
     msgInput.focus();
 
-    // Enviamos al backend (usamos el mismo endpoint de envío manual que ya tienes)
     try {
         await fetch('/api/chat/send', {
             method: 'POST',
@@ -203,29 +191,23 @@ async function sendMessage() {
             body: JSON.stringify({ phone: currentChat, message: text })
         });
     } catch (error) {
-        showToast("Error al enviar el mensaje. Revisa tu conexión.");
+        showToast("Error al enviar el mensaje.");
     }
 }
 
 btnSend.addEventListener('click', sendMessage);
 
-// --- ATAJOS DE TECLADO (Requerimiento de Lore) ---
 function handleKeyboardShortcuts(e) {
-    // 1. Enviar con Ctrl + Enter (o Cmd + Enter en Mac)
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault(); // Evita que haga un salto de línea
+        e.preventDefault();
         sendMessage();
-        return;
     }
-    
-    // 2. Abrir/Cerrar panel CRM con Alt + 1
     if (e.altKey && e.key === '1') {
         e.preventDefault();
         toggleCRM();
     }
 }
 
-// 7. Utilidades (Formateo de fechas, CRM, Temas)
 function formatTime(isoString) {
     if (!isoString) return '';
     const d = new Date(isoString);
@@ -237,25 +219,20 @@ function scrollToBottom() {
 }
 
 function toggleCRM() {
-    const panel = document.getElementById('crm-panel');
-    panel.classList.toggle('open');
+    document.getElementById('crm-panel').classList.toggle('open');
 }
 
 function showToast(message) {
     const container = document.getElementById('toast-container');
+    if(!container) return alert(message);
     const toast = document.createElement('div');
     toast.className = 'toast show';
     toast.innerText = message;
     container.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3000);
 }
 
-// Tema Oscuro/Claro
-document.getElementById('theme-toggle').addEventListener('click', () => {
+document.getElementById('theme-toggle')?.addEventListener('click', () => {
     const currentTheme = document.body.getAttribute('data-theme');
     const newTheme = currentTheme === 'light' ? 'dark' : 'light';
     document.body.setAttribute('data-theme', newTheme);
@@ -265,28 +242,19 @@ document.getElementById('theme-toggle').addEventListener('click', () => {
 
 function updateThemeIcon(theme) {
     const icon = document.querySelector('#theme-toggle i');
-    if (theme === 'dark') {
-        icon.className = 'fas fa-sun';
-    } else {
-        icon.className = 'fas fa-moon';
-    }
+    if (!icon) return;
+    icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
 }
 
-// Función stub para cargar datos en el CRM lateral
 async function loadLeadDataToCRM(phone) {
     try {
         const res = await fetch('/api/data/leads');
         const leads = await res.json();
         const lead = leads.find(l => l.phone === phone);
-        
         document.getElementById('crm-id').value = phone;
         if (lead) {
             document.getElementById('crm-name').value = lead.nombre || '';
             document.getElementById('crm-tag').value = lead.status_tag || 'nuevo';
-        } else {
-            document.getElementById('crm-name').value = '';
         }
-    } catch(e) {
-        console.error("Error cargando CRM:", e);
-    }
+    } catch(e) { console.error(e); }
 }
