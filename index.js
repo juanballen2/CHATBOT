@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.3 (ICBOT FULL PRODUCTION + OMNICANAL AISLADO)
+ * SERVER BACKEND - v33.4 (ICBOT FULL PRODUCTION + OMNICANAL AISLADO + IA FANTASMA)
  * ============================================================
  * 1. FIX: Renombrado oficial a ICBOT completado (Asistente Lorena).
  * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone).
@@ -20,6 +20,7 @@
  * 17.ADD: Endpoints /api/salesforce/sync-lead y /sync-bulk (Preparados para API Real).
  * 18.FIX: Rutas /inbox añadidas para el frontend omnicanal.
  * 19.FIX: Aislamiento total DB (Columna 'channel') para separar WhatsApp de Redes.
+ * 20.ADD: IA Fantasma (/api/chat/analyze-lead) para auto-llenar CRM leyendo el chat.
  * ============================================================
  */
 
@@ -158,7 +159,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v33.3 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
+        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v33.4 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -485,7 +486,6 @@ async function gestionarLead(phone, info, fbName, oldLead) {
     const limpiarDato = (d) => (!d || /^(unknown|null|n\/a|no menciona|cliente|pend)$/i.test(d.toString().trim())) ? null : d.trim();
     
     let name = limpiarDato(info.nombre) || (oldLead && oldLead.nombre && oldLead.nombre !== fbName ? oldLead.nombre : fbName);
-    
     let ciudadLimpia = limpiarDato(info.ciudad); 
     let dpto = obtenerDepartamento(ciudadLimpia) || (oldLead ? oldLead.departamento : null);
     let interesLimpio = limpiarDato(info.categoria_interes) || limpiarDato(info.interes) || (oldLead ? oldLead.interes : "Consultando");
@@ -534,14 +534,12 @@ function iniciarCronJobs() {
             if (horaBogota.getHours() === 7 && horaBogota.getMinutes() < 15) {
                 const todayStr = horaBogota.toISOString().split('T')[0];
                 const lastRun = await getCfg('last_followup_date');
-                
                 if (lastRun === todayStr) return; 
 
                 await setCfg('last_followup_date', todayStr);
                 console.log("⏰ Ejecutando CronJob de Seguimiento 7:00 AM...");
 
                 const leadsPendientes = await db.all("SELECT * FROM leads WHERE LOWER(etiqueta) = 'pendiente'");
-                
                 for (const l of leadsPendientes) {
                     const meta = await db.get("SELECT last_interaction FROM metadata WHERE phone = ?", [l.phone]);
                     if (!meta || !meta.last_interaction) continue;
@@ -555,20 +553,14 @@ function iniciarCronJobs() {
                         let sent = false;
 
                         if (fDay === 1 || fDay === 2) {
-                            const templatePayload = {
-                                name: "plantilla_de_retoma", 
-                                language: { code: "es_CO" } 
-                            };
-                            
+                            const templatePayload = { name: "plantilla_de_retoma", language: { code: "es_CO" } };
                             sent = await enviarWhatsApp(l.phone, templatePayload, 'template');
-                            
                             if (sent) {
                                 const timestamp = new Date().toISOString();
                                 const msgGuardado = `[CAMPAÑA]\n📢 Plantilla: plantilla_de_retoma enviada exitosamente`;
                                 await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [l.phone, 'bot', msgGuardado, timestamp]);
                                 io.emit('new_message', { phone: l.phone, role: 'bot', text: msgGuardado, time: timestamp });
                             }
-
                         } else if (fDay >= 3) {
                             cerrar = true;
                         }
@@ -659,6 +651,57 @@ app.get('/api/config/prompt', proteger, async (req, res) => res.json({ prompt: a
 app.post('/api/data/web-knowledge', proteger, async (req, res) => { await db.run("INSERT INTO knowledge_sources (type, url, summary, date) VALUES (?, ?, ?, ?)", ['web', req.body.url, req.body.summary, new Date().toLocaleString()]); res.json({success:true}); });
 app.get('/api/data/web-knowledge', proteger, async (req, res) => { res.json(await db.all("SELECT * FROM knowledge_sources ORDER BY id DESC")); });
 app.post('/api/data/web-knowledge/delete', proteger, async (req, res) => { await db.run("DELETE FROM knowledge_sources WHERE id = ?", [req.body.id]); res.json({success:true}); });
+
+// ============================================================
+// 🔥 IA FANTASMA: AUTO-LLENADO DE CRM (SIN HABLAR CON EL CLIENTE)
+// ============================================================
+app.post('/api/chat/analyze-lead', proteger, async (req, res) => {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: "Falta teléfono" });
+
+    try {
+        // 1. Extraemos los últimos 50 mensajes de esa conversación
+        const history = await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id ASC LIMIT 50", [phone]);
+        if (!history || history.length === 0) return res.json({ success: false, message: "No hay historial para analizar." });
+
+        // 2. Formateamos el texto para que la IA entienda quién dijo qué
+        let convoText = history.map(h => `${h.role === 'user' ? 'Cliente' : 'Asesor'}: ${h.text}`).join('\n');
+
+        // 3. El Prompt estricto (Modo Lector)
+        const promptEstractor = `
+        Actúa como un analista de datos experto. Lee la siguiente conversación entre un cliente y un asesor de ventas de maquinaria pesada.
+        Tu ÚNICO objetivo es extraer los datos del cliente para llenar el CRM. No respondas nada más.
+        NUNCA inventes información. Si el cliente no ha dicho un dato, déjalo como string vacío "".
+
+        Conversación:
+        ${convoText}
+
+        Devuelve ESTRICTAMENTE un JSON con esta estructura exacta:
+        {
+          "nombre": "Nombre del cliente si lo dijo",
+          "ciudad": "Ciudad si la mencionó",
+          "correo": "Correo electrónico si lo dio",
+          "categoria_interes": "Una de: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos Hidráulicos, Brazos largos, Accesorios, Repuestos, Servicio, Otro, Consultando",
+          "producto_especifico": "Modelo exacto o detalle de lo que busca"
+        }`;
+
+        const requestBody = {
+            contents: [{ role: 'user', parts: [{ text: promptEstractor }] }],
+            generationConfig: { responseMimeType: "application/json" }
+        };
+
+        // 4. Llamamos a Gemini en secreto
+        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`, requestBody);
+        const rawText = r.data.candidates[0].content.parts[0].text;
+        const extractedData = JSON.parse(rawText);
+
+        // 5. Devolvemos los datos al frontend
+        res.json({ success: true, data: extractedData });
+    } catch (error) {
+        console.error("❌ Error en auto-análisis IA:", error.response ? error.response.data : error.message);
+        res.status(500).json({ success: false, error: "Error analizando chat" });
+    }
+});
 
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
