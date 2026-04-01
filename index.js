@@ -1121,48 +1121,164 @@ app.post('/webhook', async (req, res) => {
 });
 
 // ============================================================
-// 10. INTEGRACIÓN SALESFORCE (API)
+// 10. INTEGRACIÓN SALESFORCE (API REAL)
 // ============================================================
 
+// Utilidad interna: Obtener Token de Salesforce
+async function getSalesforceToken() {
+    const params = new URLSearchParams();
+    params.append('grant_type', 'password');
+    params.append('client_id', process.env.SF_CLIENT_ID);
+    params.append('client_secret', process.env.SF_CLIENT_SECRET);
+    params.append('username', process.env.SF_USERNAME);
+    params.append('password', process.env.SF_PASSWORD);
+
+    const url = `${process.env.SF_URL}/services/oauth2/token`;
+    
+    try {
+        const res = await axios.post(url, params, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+        return { token: res.data.access_token, instanceUrl: res.data.instance_url };
+    } catch (error) {
+        console.error("❌ Error autenticando con Salesforce:", error.response ? error.response.data : error.message);
+        throw new Error("Credenciales de Salesforce inválidas o expiradas.");
+    }
+}
+
+// Endpoint para sincronizar 1 solo Lead (Desde el panel lateral CRM)
 app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ success: false, message: "Falta el número de teléfono" });
 
     try {
         const lead = await db.get("SELECT * FROM leads WHERE phone = ?", [phone]);
-        if (!lead) return res.status(404).json({ success: false, message: "Lead no encontrado en la base de datos" });
+        if (!lead) return res.status(404).json({ success: false, message: "Lead no encontrado en la base local" });
 
-        const fakeSfId = "00Q" + Math.random().toString(36).substring(2, 10).toUpperCase();
-        await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [fakeSfId, lead.id]);
-        res.json({ success: true, sfId: fakeSfId });
+        // 1. Nos autenticamos
+        const sfAuth = await getSalesforceToken();
+        const headers = { 'Authorization': `Bearer ${sfAuth.token}`, 'Content-Type': 'application/json' };
+
+        // 2. BUSCAR DUPLICADOS (Detective)
+        let query = `SELECT Id FROM Lead WHERE Phone = '${lead.phone}'`;
+        if (lead.correo && lead.correo.includes('@')) {
+            query += ` OR Email = '${lead.correo}'`;
+        }
+        
+        const searchUrl = `${sfAuth.instanceUrl}/services/data/v60.0/query/?q=${encodeURIComponent(query)}`;
+        const searchRes = await axios.get(searchUrl, { headers });
+
+        if (searchRes.data.totalSize > 0) {
+            // EL LEAD YA EXISTE
+            const existingSfId = searchRes.data.records[0].Id;
+            await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [existingSfId, lead.id]);
+            return res.json({ success: true, sfId: existingSfId, message: "El lead ya existía en Salesforce. Se ha vinculado." });
+        }
+
+        // 3. CREAR NUEVO LEAD (Aplicando las Reglas de Oro)
+        let nameParts = lead.nombre ? lead.nombre.trim().split(' ') : [];
+        let firstName = nameParts.length > 0 ? nameParts[0] : ".";
+        let lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : firstName; // Comodín: Apellido = Nombre si falta
+        
+        const sfPayload = {
+            FirstName: firstName,
+            LastName: lastName,
+            Company: lead.nombre || ".", // Empresa obligatoria = Nombre o "."
+            Phone: lead.phone || ".",
+            Email: lead.correo && lead.correo.includes('@') ? lead.correo : null, // El email no acepta ".", mandamos null
+            City: lead.ciudad || ".",
+            State: lead.departamento || ".",
+            Description: `[Lead capturado por ICBOT]\nInterés: ${lead.interes || '.'}\nDetalle: ${lead.producto_especifico || '.'}`
+        };
+
+        const createUrl = `${sfAuth.instanceUrl}/services/data/v60.0/sobjects/Lead/`;
+        const createRes = await axios.post(createUrl, sfPayload, { headers });
+
+        if (createRes.data.success) {
+            const newSfId = createRes.data.id;
+            await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [newSfId, lead.id]);
+            return res.json({ success: true, sfId: newSfId, message: "Lead creado exitosamente en Salesforce." });
+        } else {
+            throw new Error("Salesforce devolvió un error desconocido al crear.");
+        }
 
     } catch (error) {
-        console.error("❌ Error en Salesforce Sync:", error);
-        res.status(500).json({ success: false, message: "Error interno contactando a Salesforce" });
+        console.error("❌ Error en Salesforce Sync:", error.response ? JSON.stringify(error.response.data) : error.message);
+        
+        let errorMsg = "Error interno contactando a Salesforce.";
+        if (error.response && error.response.data && error.response.data[0]) {
+            errorMsg = `Rechazado por SF: ${error.response.data[0].message}`;
+        } else if (error.message) {
+            errorMsg = error.message;
+        }
+
+        res.status(500).json({ success: false, message: errorMsg });
     }
 });
 
+// Endpoint para sincronizar Masivamente
 app.post('/api/salesforce/sync-bulk', proteger, async (req, res) => {
     try {
         const leadsPendientes = await db.all("SELECT * FROM leads WHERE sf_id IS NULL OR sf_id = ''");
-        
         if (leadsPendientes.length === 0) {
             return res.json({ success: true, count: 0, message: "Todos los leads ya están sincronizados." });
         }
 
+        const sfAuth = await getSalesforceToken();
+        const headers = { 'Authorization': `Bearer ${sfAuth.token}`, 'Content-Type': 'application/json' };
+
         let successCount = 0;
-        
+        let errorCount = 0;
+
         for (const lead of leadsPendientes) {
-            const fakeSfId = "00Q" + Math.random().toString(36).substring(2, 10).toUpperCase();
-            await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [fakeSfId, lead.id]);
-            successCount++;
+            try {
+                // Buscar duplicados
+                let query = `SELECT Id FROM Lead WHERE Phone = '${lead.phone}'`;
+                if (lead.correo && lead.correo.includes('@')) query += ` OR Email = '${lead.correo}'`;
+                const searchRes = await axios.get(`${sfAuth.instanceUrl}/services/data/v60.0/query/?q=${encodeURIComponent(query)}`, { headers });
+
+                if (searchRes.data.totalSize > 0) {
+                    await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [searchRes.data.records[0].Id, lead.id]);
+                    successCount++;
+                    continue;
+                }
+
+                // Crear Nuevo
+                let nameParts = lead.nombre ? lead.nombre.trim().split(' ') : [];
+                let firstName = nameParts.length > 0 ? nameParts[0] : ".";
+                let lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : firstName;
+                
+                const sfPayload = {
+                    FirstName: firstName,
+                    LastName: lastName,
+                    Company: lead.nombre || ".",
+                    Phone: lead.phone || ".",
+                    Email: lead.correo && lead.correo.includes('@') ? lead.correo : null,
+                    City: lead.ciudad || ".",
+                    State: lead.departamento || ".",
+                    Description: `[Lead masivo ICBOT]\nInterés: ${lead.interes || '.'}\nDetalle: ${lead.producto_especifico || '.'}`
+                };
+
+                const createRes = await axios.post(`${sfAuth.instanceUrl}/services/data/v60.0/sobjects/Lead/`, sfPayload, { headers });
+                
+                if (createRes.data.success) {
+                    await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [createRes.data.id, lead.id]);
+                    successCount++;
+                } else {
+                    errorCount++;
+                }
+            } catch (err) {
+                console.error(`Error masivo lead ${lead.phone}:`, err.response ? err.response.data : err.message);
+                errorCount++;
+            }
+            
+            // Pausa para no saturar la API
+            await new Promise(r => setTimeout(r, 200));
         }
 
-        res.json({ success: true, count: successCount });
+        res.json({ success: true, count: successCount, message: `Completado: ${successCount} subidos/encontrados. ${errorCount} errores.` });
 
     } catch (error) {
-        console.error("❌ Error en Salesforce Bulk Sync:", error);
-        res.status(500).json({ success: false, message: "Error sincronizando masivamente" });
+        console.error("❌ Error Crítico Bulk:", error.message);
+        res.status(500).json({ success: false, message: "Fallo al iniciar sincronización masiva." });
     }
 });
 
