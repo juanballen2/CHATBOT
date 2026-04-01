@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICBOT V33.2 - Omnicanal & Salesforce</title>
+    <title>ICBOT V33.3 - Panel Principal & Salesforce</title>
     <link rel="icon" href="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" type="image/svg+xml">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -77,10 +77,27 @@
         ::-webkit-scrollbar-thumb:hover { background: var(--incoming); }
 
         .sidebar { width: 60px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 100; flex-shrink: 0; }
-        .nav-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: transparent; color: var(--icon-color); font-size: 1.2rem; cursor: pointer; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; }
+        
+        /* Modificado para que los badges se posicionen bien */
+        .nav-btn { position: relative; width: 40px; height: 40px; border-radius: 50%; border: none; background: transparent; color: var(--icon-color); font-size: 1.2rem; cursor: pointer; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; }
         .nav-btn:hover { background: var(--hover-item); color: var(--primary); }
         .nav-btn.active { background: var(--bg-main); color: var(--primary); box-shadow: 0 0 10px rgba(233, 82, 30, 0.3); border: 1px solid var(--border); }
         .nav-bottom { margin-top: auto; padding-bottom: 20px; display: flex; flex-direction: column; gap: 10px;}
+
+        /* Estilos de los Badges */
+        .badge-nav {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #ef4444;
+            color: white;
+            border-radius: 50%;
+            padding: 2px 6px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            display: none; 
+        }
 
         .main-area { flex: 1; display: flex; position: relative; overflow: hidden; background: var(--bg-main); }
         .view-panel { display: none; width: 100%; height: 100%; }
@@ -248,21 +265,6 @@
             #back-btn { display: flex !important; margin-right: 15px; font-size: 1.2rem; cursor: pointer; color: var(--icon-color); align-items: center; justify-content: center; width: 30px; height: 30px;}
         }
         #back-btn { display: none; }
-
-        /* Estilos para los Badges de Notificación */
-        .badge-nav {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            background: #ef4444;
-            color: white;
-            border-radius: 50%;
-            padding: 2px 6px;
-            font-size: 0.7rem;
-            font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            display: none; /* Se oculta por defecto hasta que JS cuente */
-        }
     </style>
 </head>
 <body data-theme="light">
@@ -275,14 +277,13 @@
             <span class="badge-nav" id="badge-wa">0</span>
         </button>
         
-        <a href="/inbox" class="nav-btn" title="Bandeja Omnicanal (IG/FB)" style="text-decoration: none;">
+        <a href="/inbox" class="nav-btn" title="Bandeja Omnicanal" style="text-decoration: none;">
             <i class="fas fa-inbox" style="color: #8b5cf6;"></i>
             <span class="badge-nav" id="badge-omni">0</span>
         </a>
         
         <button class="nav-btn" onclick="switchTab('leads')" title="Base de Leads"><i class="fas fa-database"></i></button>
         <button class="nav-btn" onclick="switchTab('config')" title="Configuración"><i class="fas fa-sliders-h"></i></button>
-        
         <div class="nav-bottom">
             <button class="nav-btn" onclick="toggleTheme()" title="Cambiar Tema"><i class="fas fa-moon" id="theme-icon"></i></button>
             <button class="nav-btn" onclick="location.href='/logout'" title="Salir"><i class="fas fa-sign-out-alt"></i></button>
@@ -1157,8 +1158,8 @@
                 allChats.forEach(c => {
                     const ch = c.channel || 'whatsapp';
                     if (c.unreadCount > 0) {
-                        if (ch === 'whatsapp') waUnread += 1; // Cuenta 1 por cada chat con mensajes sin leer
-                        else omniUnread += 1; // Cuenta 1 por cada chat en redes con mensajes sin leer
+                        if (ch === 'whatsapp') waUnread += 1;
+                        else omniUnread += 1;
                     }
                 });
                 
