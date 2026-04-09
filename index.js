@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.4 (ICBOT FULL PRODUCTION + OMNICANAL AISLADO + IA FANTASMA)
+ * SERVER BACKEND - v33.5 (ICBOT FULL PRODUCTION + OMNICANAL AISLADO + IA FANTASMA + FIX CAMPAÑAS)
  * ============================================================
  * 1. FIX: Renombrado oficial a ICBOT completado (Asistente Lorena).
  * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone).
@@ -21,6 +21,7 @@
  * 18.FIX: Rutas /inbox añadidas para el frontend omnicanal.
  * 19.FIX: Aislamiento total DB (Columna 'channel') para separar WhatsApp de Redes.
  * 20.ADD: IA Fantasma (/api/chat/analyze-lead) para auto-llenar CRM leyendo el chat.
+ * 21.FIX: Motor de campañas Excel reparado (Eliminada variable forzada, Auto-57 añadido, Fix nombres de imagen).
  * ============================================================
  */
 
@@ -159,7 +160,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v33.4 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
+        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v33.5 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -243,7 +244,11 @@ async function uploadToMeta(buffer, mime, name) {
     try {
         const form = new FormData();
         const type = mime.includes('audio') || mime.includes('ogg') ? 'audio' : (mime.includes('image') ? 'image' : (mime.includes('video') ? 'video' : 'document'));
-        form.append('file', buffer, { filename: name, contentType: mime });
+        
+        // ⚠️ FIX DE ARCHIVOS: Limpiamos caracteres raros y espacios para que Meta no rebote la imagen
+        const safeName = name.replace(/[^a-zA-Z0-9.]/g, '_') || 'imagen.jpg';
+
+        form.append('file', buffer, { filename: safeName, contentType: mime });
         form.append('type', type); 
         form.append('messaging_product', 'whatsapp');
         
@@ -251,7 +256,10 @@ async function uploadToMeta(buffer, mime, name) {
             headers: { 'Authorization': `Bearer ${META_TOKEN}`, ...form.getHeaders() } 
         });
         return r.data.id;
-    } catch (e) { return null; }
+    } catch (e) { 
+        console.error("❌ ERROR SUBIENDO A META:", e.response ? JSON.stringify(e.response.data) : e.message);
+        return null; 
+    }
 }
 
 async function enviarWhatsApp(to, content, type = "text") {
@@ -879,6 +887,7 @@ app.post('/api/chat/send-template', proteger, upload.single('file'), async (req,
     }
 });
 
+// 🔥 CIRUGÍA APLICADA: RUTAS DE CAMPAÑA MASIVA EXCEL REPARADA 🔥
 app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCount: 1 }, { name: 'image', maxCount: 1 }]), async (req, res) => {
     try {
         if (!req.files || !req.files.excel) return res.status(400).json({ error: "Falta el archivo Excel" });
@@ -891,7 +900,9 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
         let mediaId = null;
         if (req.files.image && req.files.image[0]) {
             const imgFile = req.files.image[0];
-            mediaId = await uploadToMeta(imgFile.buffer, imgFile.mimetype, imgFile.originalname);
+            // FIX: Nombre seguro para evitar rechazos de Meta
+            const safeName = imgFile.originalname.replace(/[^a-zA-Z0-9.]/g, '_') || 'imagen.jpg';
+            mediaId = await uploadToMeta(imgFile.buffer, imgFile.mimetype, safeName);
             if (!mediaId) return res.status(500).json({ error: "Error al subir la imagen a Meta" });
         }
 
@@ -913,10 +924,15 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
             }
 
             if (!phoneVal) continue;
-            const cleanPhone = phoneVal.toString().replace(/\D/g, '');
+            let cleanPhone = phoneVal.toString().replace(/\D/g, '');
+            
+            // FIX: Auto-agregar '57' si el número es colombiano y viene sin código
+            if (cleanPhone.length === 10) cleanPhone = '57' + cleanPhone;
+
             if (cleanPhone.length < 10) continue; 
 
             let components = [];
+            
             if (mediaId) {
                 components.push({
                     type: "header",
@@ -924,23 +940,24 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
                 });
             }
             
-            components.push({
-                type: "body",
-                parameters: [{ type: "text", text: nameVal.toString() }]
-            });
+            // ⚠️ ELIMINAMOS LA INYECCIÓN FORZADA DEL BODY TEXT AQUI ⚠️
+            // (La mayoría de plantillas son planas y Meta rechaza si mandamos variables que no existen)
 
             const payload = {
                 name: templateName,
-                language: { code: language },
-                components: components
+                language: { code: language }
             };
+
+            if (components.length > 0) {
+                payload.components = components;
+            }
 
             try {
                 const sent = await enviarWhatsApp(cleanPhone, payload, 'template');
                 if (sent) {
                     successCount++;
                     const timestamp = new Date().toISOString();
-                    const logMsg = `[CAMPAÑA EXCEL]\n📢 Plantilla: ${templateName}\n📝 Variable: ${nameVal}${mediaId ? '\n🖼️ [Imagen Adjunta]' : ''}`;
+                    const logMsg = `[CAMPAÑA EXCEL]\n📢 Plantilla: ${templateName}\n📝 Contacto: ${nameVal}${mediaId ? '\n🖼️ [Imagen Adjunta]' : ''}`;
                     
                     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', logMsg, timestamp]);
                     await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount, last_interaction) VALUES (?, ?, 1, 0, 0, ?) ON CONFLICT(phone) DO UPDATE SET last_interaction=excluded.last_interaction`, [cleanPhone, nameVal, timestamp]);
@@ -953,13 +970,14 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
 
                     io.emit('new_message', { phone: cleanPhone, role: 'manual', text: logMsg, time: timestamp });
                 } else {
+                    console.error(`❌ Meta rechazó el envío para ${cleanPhone}`);
                     errorCount++;
                 }
             } catch(e) {
                 errorCount++;
             }
 
-            await new Promise(r => setTimeout(r, 250));
+            await new Promise(r => setTimeout(r, 250)); // Control de velocidad
         }
 
         io.emit('update_chats_list');
