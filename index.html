@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICBOT V33.3 - Panel Principal & Salesforce</title>
+    <title>ICBOT V33.5 - Panel Principal & Campañas</title>
     <link rel="icon" href="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" type="image/svg+xml">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
     <style>
         :root {
@@ -24,7 +25,7 @@
             --text-muted: #777777;   
             --accent: #E9521E;       
             --danger: #ef4444;
-            --sf-blue: #00a1e0;      /* Color oficial Salesforce */
+            --sf-blue: #00a1e0;      
             --hover-item: #EBEBEB;   
             --active-item: #FFEBE5;  
             
@@ -78,13 +79,11 @@
 
         .sidebar { width: 60px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 100; flex-shrink: 0; }
         
-        /* Modificado para que los badges se posicionen bien */
         .nav-btn { position: relative; width: 40px; height: 40px; border-radius: 50%; border: none; background: transparent; color: var(--icon-color); font-size: 1.2rem; cursor: pointer; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; }
         .nav-btn:hover { background: var(--hover-item); color: var(--primary); }
         .nav-btn.active { background: var(--bg-main); color: var(--primary); box-shadow: 0 0 10px rgba(233, 82, 30, 0.3); border: 1px solid var(--border); }
         .nav-bottom { margin-top: auto; padding-bottom: 20px; display: flex; flex-direction: column; gap: 10px;}
 
-        /* Estilos de los Badges */
         .badge-nav {
             position: absolute;
             top: -5px;
@@ -102,7 +101,7 @@
         .main-area { flex: 1; display: flex; position: relative; overflow: hidden; background: var(--bg-main); }
         .view-panel { display: none; width: 100%; height: 100%; }
         #tab-chat.active { display: flex; flex-direction: row; }
-        #tab-leads.active, #tab-config.active { display: flex; flex-direction: column; overflow-y: auto; }
+        #tab-leads.active, #tab-config.active, #tab-campanas.active { display: flex; flex-direction: column; overflow-y: auto; }
 
         .chat-list { width: 380px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--bg-main); flex-shrink: 0; position: relative; }
         .chat-header { padding: 10px 15px; border-bottom: 1px solid var(--border); background: var(--panel); }
@@ -283,6 +282,11 @@
         </a>
         
         <button class="nav-btn" onclick="switchTab('leads')" title="Base de Leads"><i class="fas fa-database"></i></button>
+        
+        <button class="nav-btn" onclick="switchTab('campanas')" title="Centro de Campañas">
+            <i class="fas fa-bullhorn" style="color: #10b981;"></i>
+        </button>
+
         <button class="nav-btn" onclick="switchTab('config')" title="Configuración"><i class="fas fa-sliders-h"></i></button>
         <div class="nav-bottom">
             <button class="nav-btn" onclick="toggleTheme()" title="Cambiar Tema"><i class="fas fa-moon" id="theme-icon"></i></button>
@@ -421,7 +425,6 @@
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <h2><i class="fas fa-users" style="color:var(--primary);"></i> Base de Leads</h2>
                     <div style="display:flex; gap:10px;">
-                        <button class="btn-small btn-green" onclick="openExcelModal()" style="background: #8b5cf6; border-color: #8b5cf6;"><i class="fas fa-rocket"></i> Campaña Excel</button>
                         <button class="btn-small btn-blue" style="background:var(--sf-blue); color:white; border:none;" onclick="syncSalesforceBulk()"><i class="fas fa-cloud-upload-alt"></i> Sync Masivo Salesforce</button>
                         <button class="btn-small btn-green" onclick="downloadExcel()"><i class="fas fa-file-excel"></i> Descargar CSV</button>
                         <button class="btn-small btn-blue" onclick="refreshLeads()"><i class="fas fa-sync"></i> Actualizar</button>
@@ -448,6 +451,48 @@
                         </thead>
                         <tbody id="leads-body"></tbody>
                     </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-campanas" class="view-panel">
+            <div class="leads-container">
+                <h2><i class="fas fa-rocket" style="color:#10b981;"></i> Lanzador de Campañas Masivas</h2>
+                
+                <div class="config-row" style="display: flex; gap: 20px; align-items: flex-start; margin-top: 20px;">
+                    
+                    <div class="config-card" style="flex: 1; background: var(--bg-main); padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border: 1px solid var(--border);">
+                        <label style="font-weight: bold; color: var(--text);">1. Nombre de la Plantilla (Exacto como en Meta)</label>
+                        <input type="text" id="camp-tpl-name" placeholder="Ej: plantilla_promocional" style="width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-main); color: var(--text);">
+                        
+                        <label style="font-weight: bold; color: var(--text);">2. Idioma de la Plantilla</label>
+                        <select id="camp-tpl-lang" style="width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-main); color: var(--text);">
+                            <option value="es">Español (es)</option>
+                            <option value="es_CO">Español Colombia (es_CO)</option>
+                        </select>
+
+                        <label style="font-weight: bold; color: var(--text);">3. Imagen (Opcional)</label>
+                        <input type="file" id="camp-img" accept="image/jpeg, image/png" style="width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-main); color: var(--text);">
+
+                        <label style="font-weight: bold; color: var(--text);">4. Cargar Base de Datos (Excel)</label>
+                        <input type="file" id="camp-excel" accept=".xlsx, .csv" onchange="previewExcelData()" style="width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border: 1px dashed #10b981; border-radius: 5px; background: rgba(16, 185, 129, 0.05); color: var(--text);">
+
+                        <button id="btn-lanzar-campana" class="btn-small btn-green" style="width: 100%; padding: 15px; font-size: 16px; font-weight: bold; background: #10b981; color: white; border: none; border-radius: 5px; cursor: pointer; opacity: 0.5;" disabled onclick="ejecutarCampanaMasiva()">
+                            <i class="fas fa-paper-plane"></i> Lanzar Campaña
+                        </button>
+                    </div>
+
+                    <div class="config-card" style="flex: 1; background: var(--panel); padding: 20px; border-radius: 8px; border: 1px solid var(--border);">
+                        <h3 style="margin-top: 0; color: var(--primary);"><i class="fas fa-search"></i> Auditoría de Datos</h3>
+                        
+                        <div id="excel-stats" style="margin-top: 15px; padding: 15px; background: var(--bg-main); color: var(--text); border-radius: 5px; border-left: 4px solid var(--border);">
+                            <p style="margin: 0;">Esperando archivo Excel...</p>
+                        </div>
+
+                        <div id="excel-preview-table" style="margin-top: 15px; max-height: 250px; overflow-y: auto; background: var(--bg-main); color: var(--text); border-radius: 5px; border: 1px solid var(--border); display: none;">
+                            </div>
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -594,29 +639,6 @@
             <div class="modal-actions">
                 <button class="btn-small btn-red" onclick="closeModal('template-modal')">Cancelar</button>
                 <button class="btn-small btn-green" onclick="processTemplateSubmit()" id="btn-tpl-send"><i class="fas fa-paper-plane"></i> Enviar</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="excel-modal" class="modal-overlay" onclick="closeModal('excel-modal')">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <div class="modal-title"><i class="fas fa-rocket" style="color:#8b5cf6;"></i> Campaña Masiva desde Excel</div>
-            <p style="font-size:0.85rem; color:var(--text-muted); margin-top:-5px; margin-bottom:10px;">El archivo debe tener una columna <strong>Telefono</strong> (o Celular) y opcionalmente <strong>Nombre</strong>.</p>
-            
-            <div class="modal-form">
-                <label>Nombre de la Plantilla en Meta</label>
-                <input list="template-names" id="excel-tpl-name" placeholder="Ej: promo_repuestos" required>
-
-                <label>Archivo de Contactos (.xlsx, .csv)</label>
-                <input type="file" id="excel-file" accept=".xlsx, .csv" required>
-
-                <label>Imagen de Campaña (Opcional)</label>
-                <input type="file" id="excel-img" accept="image/jpeg, image/png">
-            </div>
-            
-            <div class="modal-actions">
-                <button class="btn-small btn-red" onclick="closeModal('excel-modal')">Cancelar</button>
-                <button class="btn-small btn-green" onclick="sendExcelCampaign()" id="btn-excel-send" style="background:#8b5cf6; border-color:#8b5cf6;"><i class="fas fa-paper-plane"></i> Disparar Campaña</button>
             </div>
         </div>
     </div>
@@ -792,7 +814,153 @@
         });
 
         // ==========================================
-        // NUEVAS FUNCIONES SALESFORCE (CON FETCH REAL)
+        // LÓGICA DEL AUDITOR DE CAMPAÑAS EXCEL
+        // ==========================================
+        let archivoExcelValidado = null;
+
+        function previewExcelData() {
+            const fileInput = document.getElementById('camp-excel');
+            const statsDiv = document.getElementById('excel-stats');
+            const tableDiv = document.getElementById('excel-preview-table');
+            const btnLanzar = document.getElementById('btn-lanzar-campana');
+
+            if (!fileInput.files || !fileInput.files[0]) {
+                btnLanzar.disabled = true;
+                btnLanzar.style.opacity = '0.5';
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(firstSheet);
+
+                if (rows.length === 0) {
+                    statsDiv.innerHTML = `<p style="color: var(--danger); font-weight: bold;">❌ El archivo Excel está vacío.</p>`;
+                    statsDiv.style.borderLeftColor = 'var(--danger)';
+                    tableDiv.style.display = 'none';
+                    btnLanzar.disabled = true;
+                    return;
+                }
+
+                // Analizar columnas
+                let colTelefono = null;
+                let colNombre = null;
+                const primerasClaves = Object.keys(rows[0]);
+
+                primerasClaves.forEach(key => {
+                    const k = key.toLowerCase().trim();
+                    if (k.includes('telefono') || k.includes('celular') || k.includes('phone') || k === 'tel') colTelefono = key;
+                    if (k.includes('nombre') || k.includes('name') || k.includes('cliente')) colNombre = key;
+                });
+
+                if (!colTelefono) {
+                    statsDiv.innerHTML = `
+                        <p style="color: var(--danger); font-weight: bold;">❌ Error Crítico:</p>
+                        <p style="font-size: 14px; margin-top: 5px; color: var(--text);">No se encontró una columna para el teléfono. Nombra la columna como "Telefono" o "Celular".</p>
+                        <p style="font-size: 12px; color: var(--text-muted);">Columnas detectadas: ${primerasClaves.join(', ')}</p>
+                    `;
+                    statsDiv.style.borderLeftColor = 'var(--danger)';
+                    tableDiv.style.display = 'none';
+                    btnLanzar.disabled = true;
+                    return;
+                }
+
+                // Auditar números
+                let validos = 0;
+                let invalidos = 0;
+                let filasHTML = '';
+                const previewRows = rows.slice(0, 5);
+
+                rows.forEach((row, index) => {
+                    let num = row[colTelefono] ? row[colTelefono].toString().replace(/\D/g, '') : '';
+                    let esValido = num.length >= 10;
+                    if(esValido) validos++; else invalidos++;
+
+                    if (index < 5) {
+                        let nomFormateado = colNombre && row[colNombre] ? row[colNombre] : 'N/A';
+                        let numFormateado = esValido ? `<span style="color:#10b981;">✅ ${num}</span>` : `<span style="color:var(--danger);">❌ ${row[colTelefono] || 'Vacío'}</span>`;
+                        filasHTML += `<tr><td style="padding: 5px; border-bottom: 1px solid var(--border); color:var(--text);">${nomFormateado}</td><td style="padding: 5px; border-bottom: 1px solid var(--border);">${numFormateado}</td></tr>`;
+                    }
+                });
+
+                statsDiv.style.borderLeftColor = '#10b981';
+                statsDiv.innerHTML = `
+                    <p style="color: #10b981; font-weight: bold;">✅ Archivo Leído Correctamente</p>
+                    <ul style="font-size: 14px; margin-top: 10px; padding-left: 20px; color: var(--text);">
+                        <li>Total Filas: <strong>${rows.length}</strong></li>
+                        <li>Números Válidos: <strong style="color:#10b981;">${validos}</strong></li>
+                        <li>Números Inválidos/Vacíos: <strong style="color:var(--danger);">${invalidos}</strong></li>
+                    </ul>
+                `;
+
+                tableDiv.innerHTML = `
+                    <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 13px;">
+                        <thead style="background: var(--panel);">
+                            <tr><th style="padding: 8px; color:var(--text);">Col: ${colNombre || '(Sin Nombre)'}</th><th style="padding: 8px; color:var(--text);">Col: ${colTelefono}</th></tr>
+                        </thead>
+                        <tbody>${filasHTML}</tbody>
+                    </table>
+                    ${rows.length > 5 ? `<div style="text-align:center; padding: 5px; font-size: 12px; color:var(--text-muted);">Mostrando 5 de ${rows.length} registros...</div>` : ''}
+                `;
+                tableDiv.style.display = 'block';
+
+                if (validos > 0) {
+                    archivoExcelValidado = file;
+                    btnLanzar.disabled = false;
+                    btnLanzar.style.opacity = '1';
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        async function ejecutarCampanaMasiva() {
+            const tplName = document.getElementById('camp-tpl-name').value.trim();
+            const tplLang = document.getElementById('camp-tpl-lang').value;
+            const imgFile = document.getElementById('camp-img').files[0];
+            const btnLanzar = document.getElementById('btn-lanzar-campana');
+            
+            if(!tplName) return alert("⚠️ Escribe el nombre de la plantilla primero.");
+            if(!archivoExcelValidado) return alert("⚠️ Carga un Excel válido.");
+            
+            if(!confirm(`🚀 ATENCIÓN 🚀\nVas a enviar la plantilla "${tplName}" a los contactos del Excel.\n¿Deseas proceder?`)) return;
+
+            btnLanzar.disabled = true;
+            btnLanzar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando campaña...';
+
+            const fd = new FormData();
+            fd.append('templateName', tplName);
+            fd.append('language', tplLang);
+            fd.append('excel', archivoExcelValidado);
+            if (imgFile) fd.append('image', imgFile);
+
+            try {
+                const res = await fetch('/api/chat/bulk-excel', { method:'POST', body: fd });
+                const data = await res.json();
+                
+                if(data.success) {
+                    alert(`🎉 CAMPAÑA FINALIZADA 🎉\n\n✅ Enviados con éxito: ${data.sent}\n❌ Fallidos: ${data.failed}`);
+                    refreshLeads();
+                } else {
+                    alert("❌ Ocurrió un error: " + data.error);
+                }
+            } catch(e) {
+                alert("❌ Error de red lanzando la campaña.");
+            } finally {
+                btnLanzar.disabled = false;
+                btnLanzar.innerHTML = '<i class="fas fa-paper-plane"></i> Lanzar Campaña';
+            }
+        }
+        // ==========================================
+
+
+        // ==========================================
+        // FUNCIONES SALESFORCE
         // ==========================================
         async function syncSalesforceCurrent() {
             if(!currentChat) return;
@@ -997,53 +1165,6 @@
             toggleBulkMode();
         }
 
-        function openExcelModal() {
-            document.getElementById('excel-tpl-name').value = '';
-            document.getElementById('excel-file').value = '';
-            document.getElementById('excel-img').value = '';
-            document.getElementById('excel-modal').classList.add('show');
-        }
-
-        async function sendExcelCampaign() {
-            const tplName = document.getElementById('excel-tpl-name').value.trim();
-            const excelFile = document.getElementById('excel-file').files[0];
-            const imgFile = document.getElementById('excel-img').files[0];
-
-            if (!tplName || !excelFile) return showToast("⚠️ Nombre de plantilla y archivo Excel son obligatorios.");
-
-            const btn = document.getElementById('btn-excel-send');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
-            btn.disabled = true;
-
-            const fd = new FormData();
-            fd.append('templateName', tplName);
-            fd.append('language', 'es_CO');
-            fd.append('excel', excelFile);
-            if (imgFile) fd.append('image', imgFile);
-
-            try {
-                const res = await fetch('/api/chat/bulk-excel', {
-                    method: 'POST',
-                    body: fd
-                });
-                const data = await res.json();
-                
-                closeModal('excel-modal');
-                if (data.success) {
-                    alert(`✅ Campaña Finalizada\n\nEnviados con éxito: ${data.sent}\nFallidos/Omitidos: ${data.failed}`);
-                    refreshLeads();
-                } else {
-                    alert("❌ Error: " + (data.error || "Error procesando campaña"));
-                }
-            } catch(e) {
-                alert("❌ Fallo de red al conectar con el servidor.");
-            } finally {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }
-        }
-        
         function openLightbox(url, type) {
             const modal = document.getElementById('lightbox-modal');
             const img = document.getElementById('lightbox-img');
@@ -1079,7 +1200,7 @@
                 if(lead) {
                     let html = '<table class="data-table" style="width:100%;">';
                     for(let key in lead) {
-                        html += `<tr><td style="font-weight:600; text-transform:capitalize; width: 35%; border-right: 1px solid var(--border);">${key}</td><td style="white-space:normal; padding-left:15px;">${lead[key] || '-'}</td></tr>`;
+                        html += `<tr><td style="font-weight:600; text-transform:capitalize; width: 35%; border-right: 1px solid var(--border);">${key}</td><td style="white-space:normal; padding-left:15px; color: var(--text);">${lead[key] || '-'}</td></tr>`;
                     }
                     html += '</table>';
                     document.getElementById('lead-details-content').innerHTML = html;
@@ -1093,7 +1214,7 @@
             document.querySelectorAll('.view-panel').forEach(el => el.classList.remove('active'));
             document.getElementById('tab-' + tab).classList.add('active');
             
-            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.sidebar .nav-btn').forEach(el => el.classList.remove('active'));
             event.currentTarget.classList.add('active');
             
             if(tab === 'leads') refreshLeads();
@@ -1282,9 +1403,6 @@
             const scroll = container.children.length > 0 ? container.scrollTop : 0;
             
             container.innerHTML = chatsData.map(c => {
-                // ==========================================
-                // FIX: ETIQUETAS DUPLICADAS VISUALMENTE
-                // ==========================================
                 let labelsHtml = ''; 
                 if(c.labels && Array.isArray(c.labels)) {
                     let uniqueLabels = [];
@@ -1302,9 +1420,6 @@
                     }).join('');
                 }
                 
-                // ==========================================
-                // FIX: INTEGRACIÓN VISUAL OMNICANAL META
-                // ==========================================
                 let cleanMsgText = c.lastMessage.text || 'Multimedia';
                 let platformIcon = '<i class="fab fa-whatsapp" style="color:#25D366;"></i>';
                 
@@ -1449,7 +1564,6 @@
             let isMedia = false; 
             let mediaId = null;
             
-            // LIMPIEZA DE ETIQUETAS DE PLATAFORMA PARA BURBUJA
             text = text.replace(/\[Instagram\]\s*/g, '');
             text = text.replace(/\[Messenger\]\s*/g, '');
 
@@ -1813,7 +1927,6 @@
             const chat = chatsData.find(c => c.id === currentChat); 
             const activeTags = chat ? (chat.labels || []) : []; 
 
-            // FILTRO DE DUPLICADOS PARA EL CRM PANEL
             const uniqueTags = [];
             const seenTags = new Set();
             tags.forEach(t => {
@@ -1881,20 +1994,19 @@
 
                 const execName = executivesMap[l.etiqueta] || l.etiqueta || 'Pendiente';
                 
-                // Agregado el indicador visual de Salesforce en caso de existir un sf_id
                 const sfIcon = l.sf_id ? '<i class="fas fa-check-circle" style="color:#10b981;" title="Sincronizado"></i>' : '<i class="fas fa-cloud text-gray-400" title="Pendiente de Sincronizar"></i>';
 
                 return `<tr>
                     <td><input type="checkbox" class="lead-checkbox" value="${l.id}" style="cursor:pointer; width:16px; height:16px;"></td>
-                    <td>${f}</td>
+                    <td style="color:var(--text);">${f}</td>
                     <td>${sourceHTML}</td>
                     <td style="font-weight:600; cursor:pointer; color:var(--primary);" onclick="viewLeadDetails('${l.phone}')">${l.nombre || '-'}</td>
                     <td><a href="https://wa.me/${l.phone}" target="_blank" style="color:var(--text); text-decoration:none;"><i class="fab fa-whatsapp" style="color:#25D366;"></i> +${l.phone}</a></td>
-                    <td>${l.ciudad || '-'}</td>
-                    <td>${l.departamento || '-'}</td>
-                    <td>${l.correo || '-'}</td>
+                    <td style="color:var(--text);">${l.ciudad || '-'}</td>
+                    <td style="color:var(--text);">${l.departamento || '-'}</td>
+                    <td style="color:var(--text);">${l.correo || '-'}</td>
                     <td style="font-weight:600; color:var(--text);">${l.interes || '-'}</td>
-                    <td>${l.producto_especifico || '-'}</td>
+                    <td style="color:var(--text);">${l.producto_especifico || '-'}</td>
                     <td><span class="badge" style="background:${execName === 'Pendiente (Sin Asignar)' ? '#ef4444' : '#10b981'}">${execName}</span></td>
                     <td>${visualTagsHTML}</td>
                     <td>
@@ -1947,7 +2059,7 @@
                 const rules = configData.tech_rules || [];
                 document.getElementById('rules-list').innerHTML = rules.map((r, i) => `
                     <li class="config-item">
-                        <span><i class="fas fa-check-circle" style="color:var(--primary); margin-right:8px;"></i> ${r}</span>
+                        <span style="color:var(--text);"><i class="fas fa-check-circle" style="color:var(--primary); margin-right:8px;"></i> ${r}</span>
                         <button class="btn-small btn-red" onclick="deleteRule(${i})"><i class="fas fa-times"></i></button>
                     </li>
                 `).join('');
@@ -1964,7 +2076,7 @@
                 const tags = await tagsRes.json();
                 document.getElementById('config-tags-list').innerHTML = tags.map(t => `
                     <li class="config-item">
-                        <span style="display:flex; align-items:center; gap:10px;"><div style="width:15px;height:15px;border-radius:50%;background:${t.color};"></div> ${t.name}</span>
+                        <span style="display:flex; align-items:center; gap:10px; color:var(--text);"><div style="width:15px;height:15px;border-radius:50%;background:${t.color};"></div> ${t.name}</span>
                         <div style="display:flex; gap:5px;">
                             <button class="btn-small btn-blue" onclick="openTagEdit(${t.id}, decodeURIComponent('${encodeURIComponent(t.name)}'), '${t.color}')"><i class="fas fa-pencil-alt"></i></button>
                             <button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button>
@@ -1983,7 +2095,7 @@
                 document.getElementById('config-shortcuts-list').innerHTML = shortcuts.map(s => `
                     <li class="config-item" style="flex-direction:column; align-items:flex-start; gap:5px;">
                         <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                            <strong>${s.keyword}</strong>
+                            <strong style="color:var(--text);">${s.keyword}</strong>
                             <button class="btn-small btn-red" onclick="deleteShortcut(${s.id})"><i class="fas fa-trash"></i></button>
                         </div>
                         <span style="font-size:0.8rem; color:var(--text-muted);">${s.text}</span>
@@ -2186,7 +2298,7 @@
                     html += `
                     <li class="config-item" style="flex-direction:column; align-items:flex-start; gap:5px;">
                         <div style="display:flex; justify-content:space-between; width:100%;">
-                            <strong style="font-size:0.9rem;">${nombre}</strong>
+                            <strong style="font-size:0.9rem; color:var(--text);">${nombre}</strong>
                             <div style="display:flex; gap:5px;">
                                 <span class="badge" style="background:var(--panel); color:var(--text); border:1px solid var(--border);">$${precio}</span>
                                 <button class="btn-small btn-blue" style="padding:4px 8px;" onclick="openEditInventory(${item.id}, decodeURIComponent('${encodeURIComponent(item.raw_data)}'))"><i class="fas fa-pencil-alt"></i></button>
@@ -2341,12 +2453,6 @@
                 btn.innerHTML = originalHTML;
                 btn.disabled = false;
             }
-        }
-
-        async function deleteWeb(id) {
-            if(!confirm("¿Olvidar esta página web?")) return;
-            await fetch('/api/data/web-knowledge/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) });
-            loadAllConfig();
         }
 
     </script>
