@@ -316,8 +316,9 @@
                 <div class="chat-items" id="chat-list-container"></div>
                 
                 <div id="bulk-toolbar">
-                    <div style="color:var(--text); font-size:0.9rem; font-weight:bold;">
-                        <span id="bulk-count">0</span> seleccionados
+                    <div style="color:var(--text); font-size:0.9rem; font-weight:bold; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span><span id="bulk-count">0</span> seleccionados</span>
+                        <button class="btn-small btn-blue" onclick="selectAllBulkChats()" style="padding: 4px 8px; font-size: 0.75rem;"><i class="fas fa-check-square"></i> Seleccionar Todo</button>
                     </div>
                     <div class="bulk-actions-row">
                         <select id="bulk-tag-select" class="tag-filter-select" style="flex:1; margin-right: 10px;">
@@ -1343,6 +1344,25 @@
             }
         }
 
+        // 🔥 NUEVA FUNCIÓN: Seleccionar todos los chats visibles 🔥
+        function selectAllBulkChats() {
+            if (!bulkMode) return;
+            const checkboxes = document.querySelectorAll('.bulk-checkbox');
+            let allChecked = true;
+            checkboxes.forEach(cb => { if (!cb.checked) allChecked = false; });
+
+            checkboxes.forEach(cb => {
+                const phone = cb.closest('.chat-item').id.replace('chat-', '');
+                if (allChecked) {
+                    selectedChats.delete(phone);
+                } else {
+                    selectedChats.add(phone);
+                }
+            });
+            document.getElementById('bulk-count').innerText = selectedChats.size;
+            renderChatList();
+        }
+
         function toggleChatSelection(phone, event) {
             if (!bulkMode) return;
             event.stopPropagation();
@@ -1431,6 +1451,7 @@
                     cleanMsgText = cleanMsgText.replace(/\[Messenger\]\s*/g, '');
                 }
 
+                // 🔥 ETIQUETAS VISUALES ACTUALIZADAS 🔥
                 let sourceBadge = '';
                 if(c.source && c.source.includes('Ads')) {
                     sourceBadge = `<span class="badge" style="background:#ff0000; color:#fff;">ADS</span>`;
@@ -1438,6 +1459,8 @@
                     sourceBadge = `<span class="badge" style="background:#1e3a8a; color:#fff;">WEB</span>`;
                 } else if(c.source === 'Tienda Virtual') {
                     sourceBadge = `<span class="badge" style="background:#a21caf; color:#fff;">TIENDA</span>`;
+                } else if(c.source === 'Campaña Excel') {
+                    sourceBadge = `<span class="badge" style="background:#10b981; color:#fff;">MASIVO</span>`;
                 }
                 
                 const isSelected = selectedChats.has(c.id);
@@ -1981,10 +2004,12 @@
                 const d = new Date(l.fecha); 
                 const f = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`; 
                 
+                // 🔥 ETIQUETAS VISUALES ACTUALIZADAS 🔥
                 let sourceHTML = l.source || '-';
                 if(l.source && l.source.includes('Ads')) sourceHTML = `<span class="lead-source-tag" style="background:rgba(239, 68, 68, 0.1); color:#ef4444; border: 1px solid #ef4444;">META ADS</span>`;
                 else if(l.source === 'Web') sourceHTML = `<span class="lead-source-tag lead-source-web">WEB</span>`;
                 else if(l.source === 'Tienda Virtual') sourceHTML = `<span class="lead-source-tag lead-source-store">TIENDA</span>`;
+                else if(l.source === 'Campaña Excel') sourceHTML = `<span class="lead-source-tag" style="background:rgba(16, 185, 129, 0.1); color:#10b981; border: 1px solid #10b981;">MASIVO</span>`;
                 else if(l.source === 'Organico') sourceHTML = `<span class="lead-source-tag" style="background:rgba(16, 185, 129, 0.1); color:#10b981; border: 1px solid #10b981;">ORGÁNICO</span>`;
 
                 let visualTagsHTML = '';
