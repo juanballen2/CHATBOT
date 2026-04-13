@@ -22,6 +22,7 @@
  * 19.FIX: Aislamiento total DB (Columna 'channel') para separar WhatsApp de Redes.
  * 20.ADD: IA Fantasma (/api/chat/analyze-lead) para auto-llenar CRM leyendo el chat.
  * 21.FIX: Motor de campañas Excel reparado (Eliminada variable forzada, Auto-57 añadido, Fix nombres de imagen).
+ * 22.MOD: Límite de carga de chats aumentado de 1000 a 5000 para envíos masivos.
  * ============================================================
  */
 
@@ -722,8 +723,8 @@ app.get('/api/chats-full', proteger, async (req, res) => {
         let params = [];
         if (search) { whereClause += ` AND (m.contactName LIKE ? OR h.phone LIKE ? OR h.text LIKE ?)`; params.push(search, search, search); }
         
-        // ACTUALIZACIÓN: Incluimos m.channel en la consulta
-        const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, m.channel, b.active as botActive, l.source, l.status_tag, l.sf_id, l.interes, l.producto_especifico FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN leads l ON h.phone = l.phone WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 1000`;
+        // ACTUALIZACIÓN: Incluimos m.channel en la consulta y AUMENTAMOS LÍMITE A 5000
+        const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, m.channel, b.active as botActive, l.source, l.status_tag, l.sf_id, l.interes, l.producto_especifico FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN leads l ON h.phone = l.phone WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 5000`;
         const rows = await db.all(query, params);
         
         res.json(rows.map(r => ({ 
@@ -1057,6 +1058,16 @@ app.post('/webhook', async (req, res) => {
         const entry = req.body.entry?.[0];
         const changes = entry?.changes?.[0];
         const val = changes?.value; 
+        
+        // 🔥 GAFAS DE RAYOS X: Atrapamos los errores silenciosos de Meta 🔥
+        if (val?.statuses && val.statuses[0]) {
+            const status = val.statuses[0];
+            if (status.status === 'failed') {
+                console.error(`🚨 META MATÓ EL MENSAJE PARA ${status.recipient_id}. MOTIVO:`, JSON.stringify(status.errors));
+            }
+            return; // Como es un reporte de estado, paramos el código aquí
+        }
+
         const msg = val?.messages?.[0]; 
         
         if (msg && msg.from === PHONE_ID) {
