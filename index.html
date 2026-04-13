@@ -1054,7 +1054,7 @@
                         chat.labels.push(tagObj);
                     }
                 }
-                renderChatList();
+                updateBulkVisuals();
             }
         }
 
@@ -1340,7 +1340,8 @@
                 panel.classList.remove('bulk-mode'); 
                 toolbar.classList.remove('show'); 
                 selectedChats.clear(); 
-                renderChatList(); 
+                lastCheckedIndex = -1;
+                updateBulkVisuals();
             }
         }
 
@@ -1360,23 +1361,56 @@
                 }
             });
             document.getElementById('bulk-count').innerText = selectedChats.size;
-            renderChatList();
+            updateBulkVisuals();
         }
+
+        // 🔥 FIX: LÓGICA DE SHIFT + CLIC SIN PARPADEOS 🔥
+        let lastCheckedIndex = -1;
 
         function toggleChatSelection(phone, event) {
             if (!bulkMode) return;
             event.stopPropagation();
             
-            if (selectedChats.has(phone)) {
-                selectedChats.delete(phone); 
+            const checkboxes = Array.from(document.querySelectorAll('.bulk-checkbox'));
+            const targetCb = event.target;
+            const currentIndex = checkboxes.indexOf(targetCb);
+            const isChecking = targetCb.checked;
+
+            if (event.shiftKey && lastCheckedIndex !== -1) {
+                const start = Math.min(lastCheckedIndex, currentIndex);
+                const end = Math.max(lastCheckedIndex, currentIndex);
+                
+                for (let i = start; i <= end; i++) {
+                    checkboxes[i].checked = isChecking;
+                    const p = checkboxes[i].closest('.chat-item').id.replace('chat-', '');
+                    if (isChecking) {
+                        selectedChats.add(p);
+                    } else {
+                        selectedChats.delete(p);
+                    }
+                }
             } else {
-                selectedChats.add(phone);
+                if (isChecking) {
+                    selectedChats.add(phone);
+                } else {
+                    selectedChats.delete(phone);
+                }
             }
             
+            lastCheckedIndex = currentIndex;
             document.getElementById('bulk-count').innerText = selectedChats.size;
-            renderChatList();
         }
 
+        // Solo actualiza los chulitos visualmente sin recargar toda la lista
+        function updateBulkVisuals() {
+            document.querySelectorAll('.chat-item').forEach(item => {
+                const p = item.id.replace('chat-', '');
+                const cb = item.querySelector('.bulk-checkbox');
+                if (cb) cb.checked = selectedChats.has(p);
+            });
+        }
+
+        // 🔥 FIX: ARCHIVADO SECUENCIAL PARA NO BLOQUEAR LA BASE DE DATOS 🔥
         async function executeBulkAction(action) {
             if (selectedChats.size === 0) return alert("Selecciona al menos un chat");
             
@@ -1392,15 +1426,20 @@
             
             if (!confirm(`¿Aplicar acción a ${selectedChats.size} chats?`)) return;
             
+            showToast("⏳ Procesando acción masiva, por favor espera...");
+            
             if (action === 'toggle_archive') {
-                const promises = Array.from(selectedChats).map(phone => 
-                    fetch('/api/chat/action', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ phone: phone, action: 'toggle_archive', value: true })
-                    })
-                );
-                await Promise.all(promises);
+                const phones = Array.from(selectedChats);
+                // Procesamos uno por uno en lugar de todos al mismo milisegundo
+                for (let i = 0; i < phones.length; i++) {
+                    try {
+                        await fetch('/api/chat/action', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ phone: phones[i], action: 'toggle_archive', value: true })
+                        });
+                    } catch(e) { console.error(e); }
+                }
             } else {
                 await fetch('/api/contacts/bulk-update', { 
                     method: 'POST', 
@@ -1451,7 +1490,6 @@
                     cleanMsgText = cleanMsgText.replace(/\[Messenger\]\s*/g, '');
                 }
 
-                // 🔥 ETIQUETAS VISUALES ACTUALIZADAS 🔥
                 let sourceBadge = '';
                 if(c.source && c.source.includes('Ads')) {
                     sourceBadge = `<span class="badge" style="background:#ff0000; color:#fff;">ADS</span>`;
