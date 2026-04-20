@@ -23,6 +23,7 @@
  * 20.ADD: IA Fantasma (/api/chat/analyze-lead) para auto-llenar CRM leyendo el chat.
  * 21.FIX: Motor de campañas Excel reparado (Eliminada variable forzada, Auto-57 añadido, Fix nombres de imagen).
  * 22.MOD: Límite de carga de chats aumentado de 1000 a 5000 para envíos masivos.
+ * 23.FIX: Modelo de IA estabilizado a la última versión estable (gemini-2.5-flash).
  * ============================================================
  */
 
@@ -467,7 +468,8 @@ Categorías permitidas: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos
             }
         };
 
-        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`, requestBody);
+        // 🔥 CORRECCIÓN A GEMINI 2.5 FLASH 🔥
+        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, requestBody);
         
         const rawText = r.data.candidates[0].content.parts[0].text;
         const infoIA = JSON.parse(rawText);
@@ -699,8 +701,8 @@ app.post('/api/chat/analyze-lead', proteger, async (req, res) => {
             generationConfig: { responseMimeType: "application/json" }
         };
 
-        // 4. Llamamos a Gemini en secreto
-        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`, requestBody);
+        // 🔥 CORRECCIÓN A GEMINI 2.5 FLASH 🔥
+        const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, requestBody);
         const rawText = r.data.candidates[0].content.parts[0].text;
         const extractedData = JSON.parse(rawText);
 
