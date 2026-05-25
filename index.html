@@ -124,7 +124,7 @@
         .chat-item.active { background: var(--active-item); border-left: 4px solid var(--primary); padding-left: 11px; } 
         .chat-item.archived { opacity: 0.6; }
         
-        .bulk-checkbox { display: none; width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; }
+        .bulk-checkbox { display: none; width: 18px; height: 18px; accent-color: var(--danger); cursor: pointer; margin-right: 5px; }
         .chat-list.bulk-mode .bulk-checkbox { display: block; }
         
         .avatar { position: relative; width: 45px; height: 45px; border-radius: 50%; background: var(--avatar-bg); color: var(--avatar-color); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; font-size: 1.3rem; }
@@ -138,7 +138,7 @@
         .mini-tags { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
         .mini-tag { font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; color: #000; font-weight: 600; }
 
-        #bulk-toolbar { display: none; position: absolute; bottom: 0; left: 0; width: 100%; background: var(--bg-main); border-top: 2px solid var(--primary); padding: 15px; z-index: 50; flex-direction: column; gap: 10px; box-shadow: 0 -5px 20px rgba(0,0,0,0.1); }
+        #bulk-toolbar { display: none; position: absolute; bottom: 0; left: 0; width: 100%; background: var(--bg-main); border-top: 2px solid var(--danger); padding: 15px; z-index: 50; flex-direction: column; gap: 10px; box-shadow: 0 -5px 20px rgba(0,0,0,0.1); }
         #bulk-toolbar.show { display: flex; animation: slideUp 0.3s; }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         .bulk-actions-row { display: flex; justify-content: space-between; align-items: center; }
@@ -330,7 +330,8 @@
                             <i class="fas fa-bullhorn"></i> Masivo
                         </button>
                         
-                        <button class="btn-small btn-blue" onclick="executeBulkAction('toggle_archive')" title="Archivar/Desarchivar"><i class="fas fa-archive"></i></button>
+                        <button class="btn-small btn-blue" onclick="executeBulkAction('toggle_archive')" title="Archivar/Desarchivar" style="margin-right: 10px;"><i class="fas fa-archive"></i></button>
+                        <button class="btn-small btn-red" onclick="executeBulkAction('delete')" title="Eliminar Permanente"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
             </div>
@@ -1372,7 +1373,14 @@
             event.stopPropagation();
             
             const checkboxes = Array.from(document.querySelectorAll('.bulk-checkbox'));
-            const targetCb = event.target;
+            let targetCb = event.target;
+            
+            // Si el clic fue en el div y no directamente en el checkbox, invertimos el valor
+            if (targetCb.tagName !== 'INPUT') {
+                targetCb = document.querySelector(`#chat-${phone} .bulk-checkbox`);
+                targetCb.checked = !targetCb.checked;
+            }
+
             const currentIndex = checkboxes.indexOf(targetCb);
             const isChecking = targetCb.checked;
 
@@ -1410,7 +1418,7 @@
             });
         }
 
-        // 🔥 FIX: ARCHIVADO SECUENCIAL PARA NO BLOQUEAR LA BASE DE DATOS 🔥
+        // 🔥 FIX: BORRADO MASIVO SECUENCIAL PARA NO BLOQUEAR LA BASE DE DATOS 🔥
         async function executeBulkAction(action) {
             if (selectedChats.size === 0) return alert("Selecciona al menos un chat");
             
@@ -1424,11 +1432,16 @@
                 selectedChats.forEach(phone => updateTagsOptimistic(phone, value, false));
             }
             
-            if (!confirm(`¿Aplicar acción a ${selectedChats.size} chats?`)) return;
+            // Advertencia especial si es borrado masivo
+            if (action === 'delete') {
+                if (!confirm(`⚠️ ¡Peligro! Vas a eliminar PERMANENTEMENTE ${selectedChats.size} chats de WhatsApp.\nEsta acción borra todo el historial y no se puede deshacer.\n\n¿Estás seguro?`)) return;
+            } else {
+                if (!confirm(`¿Aplicar acción a ${selectedChats.size} chats?`)) return;
+            }
             
             showToast("⏳ Procesando acción masiva, por favor espera...");
             
-            if (action === 'toggle_archive') {
+            if (action === 'toggle_archive' || action === 'delete') {
                 const phones = Array.from(selectedChats);
                 // Procesamos uno por uno en lugar de todos al mismo milisegundo
                 for (let i = 0; i < phones.length; i++) {
@@ -1436,10 +1449,18 @@
                         await fetch('/api/chat/action', {
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({ phone: phones[i], action: 'toggle_archive', value: true })
+                            body: JSON.stringify({ phone: phones[i], action: action, value: true })
                         });
                     } catch(e) { console.error(e); }
                 }
+                
+                // Si borramos el chat que estábamos viendo, limpiar la pantalla
+                if (action === 'delete' && selectedChats.has(currentChat)) {
+                    currentChat = null;
+                    document.getElementById('conversation-view').style.display = 'none';
+                    document.getElementById('crm-panel').classList.remove('open');
+                }
+                
             } else {
                 await fetch('/api/contacts/bulk-update', { 
                     method: 'POST', 
