@@ -24,6 +24,7 @@
  * 21.FIX: Motor de campañas Excel reparado (Eliminada variable forzada, Auto-57 añadido, Fix nombres de imagen).
  * 22.MOD: Límite de carga de chats aumentado de 1000 a 5000 para envíos masivos.
  * 23.FIX: Modelo de IA estabilizado a la última versión estable (gemini-2.5-flash).
+ * 24.ADD: Soporte para Videos MP4 en campañas masivas (bulk-excel).
  * ============================================================
  */
 
@@ -468,7 +469,6 @@ Categorías permitidas: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos
             }
         };
 
-        // 🔥 CORRECCIÓN A GEMINI 2.5 FLASH 🔥
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, requestBody);
         
         const rawText = r.data.candidates[0].content.parts[0].text;
@@ -701,7 +701,6 @@ app.post('/api/chat/analyze-lead', proteger, async (req, res) => {
             generationConfig: { responseMimeType: "application/json" }
         };
 
-        // 🔥 CORRECCIÓN A GEMINI 2.5 FLASH 🔥
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, requestBody);
         const rawText = r.data.candidates[0].content.parts[0].text;
         const extractedData = JSON.parse(rawText);
@@ -725,7 +724,6 @@ app.get('/api/chats-full', proteger, async (req, res) => {
         let params = [];
         if (search) { whereClause += ` AND (m.contactName LIKE ? OR h.phone LIKE ? OR h.text LIKE ?)`; params.push(search, search, search); }
         
-        // ACTUALIZACIÓN: Incluimos m.channel en la consulta y AUMENTAMOS LÍMITE A 5000
         const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, m.channel, b.active as botActive, l.source, l.status_tag, l.sf_id, l.interes, l.producto_especifico FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN leads l ON h.phone = l.phone WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 5000`;
         const rows = await db.all(query, params);
         
@@ -746,7 +744,7 @@ app.get('/api/chats-full', proteger, async (req, res) => {
             sfId: r.sf_id,
             interes: r.interes,
             producto_especifico: r.producto_especifico,
-            channel: r.channel || 'whatsapp' // Aseguramos que por defecto sea whatsapp si está vacío
+            channel: r.channel || 'whatsapp' 
         })));
     } catch(e) { res.status(500).json([]); }
 });
@@ -890,8 +888,8 @@ app.post('/api/chat/send-template', proteger, upload.single('file'), async (req,
     }
 });
 
-// 🔥 CIRUGÍA APLICADA: RUTAS DE CAMPAÑA MASIVA EXCEL REPARADA 🔥
-app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCount: 1 }, { name: 'image', maxCount: 1 }]), async (req, res) => {
+// 🔥 CIRUGÍA APLICADA: RUTAS DE CAMPAÑA MASIVA EXCEL (SOPORTE IMAGEN Y VIDEO) 🔥
+app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCount: 1 }, { name: 'media', maxCount: 1 }]), async (req, res) => {
     try {
         if (!req.files || !req.files.excel) return res.status(400).json({ error: "Falta el archivo Excel" });
         
@@ -901,12 +899,19 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
         if (!templateName) return res.status(400).json({ error: "Falta el nombre de la plantilla" });
 
         let mediaId = null;
-        if (req.files.image && req.files.image[0]) {
-            const imgFile = req.files.image[0];
-            // FIX: Nombre seguro para evitar rechazos de Meta
-            const safeName = imgFile.originalname.replace(/[^a-zA-Z0-9.]/g, '_') || 'imagen.jpg';
-            mediaId = await uploadToMeta(imgFile.buffer, imgFile.mimetype, safeName);
-            if (!mediaId) return res.status(500).json({ error: "Error al subir la imagen a Meta" });
+        let mediaType = 'image'; // Por defecto es imagen
+
+        if (req.files.media && req.files.media[0]) {
+            const mediaFile = req.files.media[0];
+            
+            // Detectamos automáticamente si el archivo es un video
+            if (mediaFile.mimetype.startsWith('video')) {
+                mediaType = 'video';
+            }
+            
+            const safeName = mediaFile.originalname.replace(/[^a-zA-Z0-9.]/g, '_') || `archivo.${mediaType === 'video' ? 'mp4' : 'jpg'}`;
+            mediaId = await uploadToMeta(mediaFile.buffer, mediaFile.mimetype, safeName);
+            if (!mediaId) return res.status(500).json({ error: "Error al subir el archivo a Meta" });
         }
 
         const workbook = XLSX.read(req.files.excel[0].buffer, { type: 'buffer' });
@@ -929,22 +934,18 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
             if (!phoneVal) continue;
             let cleanPhone = phoneVal.toString().replace(/\D/g, '');
             
-            // FIX: Auto-agregar '57' si el número es colombiano y viene sin código
             if (cleanPhone.length === 10) cleanPhone = '57' + cleanPhone;
-
             if (cleanPhone.length < 10) continue; 
 
             let components = [];
             
+            // Aquí armamos el encabezado dinámicamente (video o imagen)
             if (mediaId) {
                 components.push({
                     type: "header",
-                    parameters: [{ type: "image", image: { id: mediaId } }]
+                    parameters: [{ type: mediaType, [mediaType]: { id: mediaId } }]
                 });
             }
-            
-            // ⚠️ ELIMINAMOS LA INYECCIÓN FORZADA DEL BODY TEXT AQUI ⚠️
-            // (La mayoría de plantillas son planas y Meta rechaza si mandamos variables que no existen)
 
             const payload = {
                 name: templateName,
@@ -960,7 +961,7 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
                 if (sent) {
                     successCount++;
                     const timestamp = new Date().toISOString();
-                    const logMsg = `[CAMPAÑA EXCEL]\n📢 Plantilla: ${templateName}\n📝 Contacto: ${nameVal}${mediaId ? '\n🖼️ [Imagen Adjunta]' : ''}`;
+                    const logMsg = `[CAMPAÑA EXCEL]\n📢 Plantilla: ${templateName}\n📝 Contacto: ${nameVal}${mediaId ? `\n🎞️ [${mediaType.toUpperCase()} Adjunto]` : ''}`;
                     
                     await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', logMsg, timestamp]);
                     await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount, last_interaction) VALUES (?, ?, 1, 0, 0, ?) ON CONFLICT(phone) DO UPDATE SET last_interaction=excluded.last_interaction`, [cleanPhone, nameVal, timestamp]);
@@ -973,7 +974,6 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
 
                     io.emit('new_message', { phone: cleanPhone, role: 'manual', text: logMsg, time: timestamp });
                 } else {
-                    console.error(`❌ Meta rechazó el envío para ${cleanPhone}`);
                     errorCount++;
                 }
             } catch(e) {
