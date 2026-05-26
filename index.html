@@ -473,8 +473,8 @@
                             <option value="es_CO">Español Colombia (es_CO)</option>
                         </select>
 
-                        <label style="font-weight: bold; color: var(--text);">3. Imagen (Opcional)</label>
-                        <input type="file" id="camp-img" accept="image/jpeg, image/png" style="width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-main); color: var(--text);">
+                 <label style="font-weight: bold; color: var(--text);">3. Imagen o Video MP4 (Opcional)</label>
+<input type="file" id="camp-media" accept="image/jpeg, image/png, video/mp4" style="width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-main); color: var(--text);">
 
                         <label style="font-weight: bold; color: var(--text);">4. Cargar Base de Datos (Excel)</label>
                         <input type="file" id="camp-excel" accept=".xlsx, .csv" onchange="previewExcelData()" style="width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border: 1px dashed #10b981; border-radius: 5px; background: rgba(16, 185, 129, 0.05); color: var(--text);">
@@ -924,7 +924,7 @@
         async function ejecutarCampanaMasiva() {
             const tplName = document.getElementById('camp-tpl-name').value.trim();
             const tplLang = document.getElementById('camp-tpl-lang').value;
-            const imgFile = document.getElementById('camp-img').files[0];
+            const mediaFile = document.getElementById('camp-media').files[0];
             const btnLanzar = document.getElementById('btn-lanzar-campana');
             
             if(!tplName) return alert("⚠️ Escribe el nombre de la plantilla primero.");
@@ -939,7 +939,7 @@
             fd.append('templateName', tplName);
             fd.append('language', tplLang);
             fd.append('excel', archivoExcelValidado);
-            if (imgFile) fd.append('image', imgFile);
+            if (mediaFile) fd.append('media', mediaFile);
 
             try {
                 const res = await fetch('/api/chat/bulk-excel', { method:'POST', body: fd });
