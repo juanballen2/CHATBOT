@@ -1,11 +1,13 @@
 /*
- * SERVER BACKEND - v33.6 (ICBOT FULL PRODUCTION + OMNICANAL COMPLETADO + FIX VELOCIDAD & LOCKS)
+ * SERVER BACKEND - v33.7 (ICBOT FULL PRODUCTION + OMNICANAL COMPLETADO + FIX VELOCIDAD & LOCKS)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para eliminar errores de base de datos bloqueada (SQLITE_BUSY).
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send (Detecta WhatsApp vs Instagram/Messenger).
  * 3. ADD: Soporte completo para Videos MP4 y Fotos dinámicas en Campañas Masivas desde Excel.
  * 4. FIX: Modelo de IA estandarizado globalmente a la última versión estable (gemini-2.5-flash).
  * 5. FIX: Sistema Anti-bucle integrado y debouncing optimizado de 4.5 segundos.
+ * 6. ADD: Lectura de Ecos (mensajes salientes) y extracción de nombres de perfil para Instagram/Messenger.
+ * 7. ADD: Captura de comentarios en publicaciones de Facebook e Instagram.
  * ============================================================
  */
 
@@ -361,7 +363,7 @@ app.get('/rescate', async (req, res) => {
             html += `<div><p style='font-family:sans-serif;'>Foto ${id}</p><img src="data:${mime};base64,${base64}" style="max-width: 350px; border-radius: 8px; border: 2px solid #00a884; box-shadow: 0 4px 10px rgba(0,0,0,0.2);"></div>`;
         } catch (e) {
             const errorDetalle = e.response && e.response.data ? JSON.stringify(e.response.data) : e.message;
-            html += `<div><p>Foto ${id} 2712ce56 FALLÓ</p><pre style="color:red; background:#fee; padding:10px;">${errorDetalle}</pre></div>`;
+            html += `<div><p>Foto ${id} ❌ FALLÓ</p><pre style="color:red; background:#fee; padding:10px;">${errorDetalle}</pre></div>`;
         }
     }
     html += "</div>";
@@ -999,8 +1001,20 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
 });
 
 // ============================================================
-// WEBHOOK OMNICANAL (INSTAGRAM DIRECT & MESSENGER)
+// NUEVO WEBHOOK OMNICANAL (MESSENGER, INSTAGRAM & COMENTARIOS)
 // ============================================================
+
+// Función de rescate para obtener el Nombre y Foto del perfil
+async function getOmniProfile(senderId) {
+    try {
+        if (!IG_TOKEN) return { name: senderId, photo: null };
+        const res = await axios.get(`https://graph.facebook.com/v21.0/${senderId}?fields=name,profile_pic&access_token=${IG_TOKEN}`);
+        return { name: res.data.name || senderId, photo: res.data.profile_pic || null };
+    } catch(e) {
+        return { name: senderId, photo: null };
+    }
+}
+
 app.get('/api/omnicanal/webhook', (req, res) => {
     if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
         res.send(req.query['hub.challenge']);
@@ -1019,25 +1033,72 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
             const entries = body.entry || [];
             
             for (let entry of entries) {
-                const messagingEvents = entry.messaging || [];
                 
+                // 1. ATRApar MENSAJES DIRECTOS (DMs) Y ECOS (Mensajes Salientes)
+                const messagingEvents = entry.messaging || [];
                 for (let event of messagingEvents) {
-                    if (event.message && !event.message.is_echo) {
-                        const senderId = event.sender.id;
+                    if (event.message) {
+                        const isEcho = event.message.is_echo;
+                        // Si es un eco (enviado por nosotros), el cliente es el recipient
+                        const targetId = isEcho ? event.recipient.id : event.sender.id;
                         const text = event.message.text || "[Multimedia/Adjunto]";
                         const source = body.object === 'page' ? 'messenger' : 'instagram';
                         const timestamp = new Date().toISOString();
+                        const role = isEcho ? 'bot' : 'user';
 
-                        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [senderId, 'user', text, timestamp]);
-                        await db.run(`INSERT INTO metadata (phone, archived, unreadCount, last_interaction, channel) 
-                                      VALUES (?, 0, 1, ?, ?) 
-                                      ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction, channel=excluded.channel`, 
-                                      [senderId, timestamp, source]);
+                        // Rescate de Perfil si el metadata no existe o es solo un número
+                        let metaInfo = await db.get("SELECT contactName FROM metadata WHERE phone = ?", [targetId]);
+                        let finalName = targetId;
+                        let photoUrl = null;
+
+                        if (!metaInfo || metaInfo.contactName === targetId) {
+                            const profileData = await getOmniProfile(targetId);
+                            finalName = profileData.name;
+                            photoUrl = profileData.photo;
+                        } else {
+                            finalName = metaInfo.contactName;
+                        }
+
+                        // ALMACENAMOS EN LA BD
+                        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [targetId, role, text, timestamp]);
                         
-                        io.emit('new_message', { phone: senderId, role: 'user', text: text, time: timestamp });
+                        // Si es eco, NO sumamos unreadCount. Si es mensaje del cliente, sumamos unreadCount.
+                        const unreadIncr = isEcho ? 0 : 1;
+                        
+                        await db.run(`INSERT INTO metadata (phone, contactName, photoUrl, archived, unreadCount, last_interaction, channel) 
+                                      VALUES (?, ?, ?, 0, ?, ?, ?) 
+                                      ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName, photoUrl=COALESCE(excluded.photoUrl, photoUrl), archived=0, unreadCount = unreadCount + ?, last_interaction=excluded.last_interaction, channel=excluded.channel`, 
+                                      [targetId, finalName, photoUrl, unreadIncr, timestamp, source, unreadIncr]);
+                        
+                        io.emit('new_message', { phone: targetId, role: role, text: text, time: timestamp });
                         io.emit('update_chats_list');
 
-                        console.log(`💬 ${source.toUpperCase()} Webhook - De: ${senderId} | Msj: ${text}`);
+                        console.log(`💬 ${source.toUpperCase()} ${isEcho ? '(ECO)' : 'DM'} - De: ${finalName} | Msj: ${text}`);
+                    }
+                }
+
+                // 2. ATRAPAR COMENTARIOS EN PUBLICACIONES
+                const changesEvents = entry.changes || [];
+                for (let change of changesEvents) {
+                    if (change.field === 'comments') {
+                        const val = change.value;
+                        const targetId = val.from.id;
+                        const senderName = val.from.name || targetId;
+                        const text = `💬 [COMENTARIO EN POST]: ${val.text}`;
+                        const source = body.object === 'page' ? 'messenger' : 'instagram';
+                        const timestamp = new Date().toISOString();
+
+                        // ALMACENAMOS EL COMENTARIO COMO UN MENSAJE
+                        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [targetId, 'user', text, timestamp]);
+                        await db.run(`INSERT INTO metadata (phone, contactName, archived, unreadCount, last_interaction, channel) 
+                                      VALUES (?, ?, 0, 1, ?, ?) 
+                                      ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName, archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction, channel=excluded.channel`, 
+                                      [targetId, senderName, timestamp, source]);
+                        
+                        io.emit('new_message', { phone: targetId, role: 'user', text: text, time: timestamp });
+                        io.emit('update_chats_list');
+
+                        console.log(`📣 ${source.toUpperCase()} COMENTARIO - De: ${senderName} | Msj: ${text}`);
                     }
                 }
             }
