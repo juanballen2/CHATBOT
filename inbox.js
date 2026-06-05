@@ -1,13 +1,19 @@
 /**
  * ICBOT - Lógica del Frontend para Bandeja Omnicanal (Meta)
- * Versión v33.4 - IA Fantasma, CRM Completo y Fix Etiquetas
+ * Versión v33.6 - IA Fantasma, CRM, Fix Etiquetas y BORRADO MASIVO
  */
 
 const socket = io();
 let currentChat = null;
 let currentPlatform = 'all'; 
+let currentView = 'active'; // <-- NUEVO: Para manejar Activos/Archivados
 let omniChats = []; 
-window._cachedTags = []; // Para almacenar las etiquetas globales
+window._cachedTags = []; 
+
+// --- VARIABLES SELECCIÓN MÚLTIPLE ---
+let bulkMode = false;
+let selectedChats = new Set();
+let lastCheckedIndex = -1;
 
 const chatItemsList = document.getElementById('chat-items-list');
 const messagesContainer = document.getElementById('messages-container');
@@ -33,19 +39,30 @@ document.addEventListener('DOMContentLoaded', () => {
     updateThemeIcon(savedTheme);
 
     loadOmniChats();
-    loadTagFilterOptions(); // Cargar etiquetas al iniciar
+    loadTagFilterOptions(); 
 
     msgInput.addEventListener('keydown', handleKeyboardShortcuts);
     
-    document.querySelectorAll('.filter-btn').forEach(btn => {
+    // Filtros de Plataforma
+    document.querySelectorAll('.platform-filter, .filters .filter-btn:not(.view-filter)').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            // Ignorar si es el botón de cerrar del panel CRM
             if(e.currentTarget.innerText.includes('Cerrar')) return;
-
-            document.querySelectorAll('.filters .filter-btn').forEach(b => b.classList.remove('active'));
+            // Ajuste para que solo desmarque los de su grupo
+            const siblings = e.currentTarget.parentElement.querySelectorAll('.filter-btn');
+            siblings.forEach(b => b.classList.remove('active'));
             e.currentTarget.classList.add('active');
             currentPlatform = e.currentTarget.dataset.filter;
             renderChatList();
+        });
+    });
+
+    // Filtros de Vista (Activos / Archivados)
+    document.querySelectorAll('.view-filter').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.view-filter').forEach(b => b.classList.remove('active'));
+            e.currentTarget.classList.add('active');
+            currentView = e.currentTarget.dataset.view;
+            loadOmniChats(); // Refrescar base de datos
         });
     });
 
@@ -69,17 +86,16 @@ socket.on('new_message', (msg) => {
 // --- CARGA Y RENDERIZADO DE CHATS ---
 async function loadOmniChats() {
     try {
-        const res = await fetch('/api/chats-full?view=active');
+        const res = await fetch(`/api/chats-full?view=${currentView}`);
         const allChats = await res.json();
         
-        // --- CÁLCULO DE GLOBOS (BADGES) ---
         let waUnread = 0;
         let omniUnread = 0;
         
         allChats.forEach(c => {
             const ch = c.channel || 'whatsapp';
             if (c.unreadCount > 0) {
-                if (ch === 'whatsapp') waUnread += 1; // Contamos 1 por chat, no por mensaje
+                if (ch === 'whatsapp') waUnread += 1; 
                 else omniUnread += 1;
             }
         });
@@ -96,7 +112,6 @@ async function loadOmniChats() {
             badgeOmni.style.display = omniUnread > 0 ? 'block' : 'none';
         }
         
-        // --- FILTRO DEFINITIVO: Solo Redes Sociales ---
         omniChats = allChats.filter(c => c.channel === 'instagram' || c.channel === 'messenger');
 
         renderChatList();
@@ -105,9 +120,9 @@ async function loadOmniChats() {
     }
 }
 
-function renderChatList(searchTerm = '') {
+function renderChatList(searchTerm = searchInput.value.toLowerCase()) {
     if (omniChats.length === 0) {
-        chatItemsList.innerHTML = '<div class="empty-state" style="margin-top: 40px;"><p>No hay mensajes en redes sociales.</p></div>';
+        chatItemsList.innerHTML = `<div class="empty-state" style="margin-top: 40px;"><p>No hay mensajes ${currentView === 'archived' ? 'archivados' : 'activos'} en redes.</p></div>`;
         return;
     }
 
@@ -126,10 +141,8 @@ function renderChatList(searchTerm = '') {
         const isIg = c.channel === 'instagram';
         const platformIcon = isIg ? '<i class="fab fa-instagram" style="color: #E1306C;"></i>' : '<i class="fab fa-facebook-messenger" style="color: #0084FF;"></i>';
         
-        // Limpiamos etiquetas de texto viejas si existen
         const cleanMsg = c.lastMessage.text ? c.lastMessage.text.replace(/\[Instagram\] |\[Messenger\] /g, '') : 'Multimedia';
 
-        // --- FIX: ETIQUETAS VISUALES DUPLICADAS ---
         let uniqueLabels = [];
         let seenTexts = new Set();
         if(c.labels && Array.isArray(c.labels)) {
@@ -147,8 +160,11 @@ function renderChatList(searchTerm = '') {
             return `<span class="mini-tag" style="background:${tag.color}20; color:${tag.color}; border:1px solid ${tag.color}50">${tag.text}</span>`;
         }).join('');
 
+        const isSelected = selectedChats.has(c.id);
+
         return `
-            <div class="chat-item ${currentChat === c.id ? 'active' : ''}" id="chat-${c.id}" onclick="loadChatHistory('${c.id}', '${c.name.replace(/'/g, "\\'")}', '${c.channel}')">
+            <div class="chat-item ${currentChat === c.id ? 'active' : ''}" id="chat-${c.id}" onclick="handleChatClick('${c.id}', '${c.name.replace(/'/g, "\\'")}', '${c.channel}', event)">
+                <input type="checkbox" class="bulk-checkbox" ${isSelected ? 'checked' : ''} onclick="toggleChatSelection('${c.id}', event)">
                 <div class="chat-avatar">
                     ${c.photoUrl ? `<img src="${c.photoUrl}">` : '<i class="fas fa-user"></i>'}
                     <div class="platform-badge">${platformIcon}</div>
@@ -167,6 +183,136 @@ function renderChatList(searchTerm = '') {
             </div>
         `;
     }).join('');
+}
+
+// --- SISTEMA DE BORRADO MASIVO Y SELECCIÓN MÚLTIPLE ---
+function toggleBulkMode() {
+    bulkMode = !bulkMode;
+    const btn = document.getElementById('bulk-toggle-btn');
+    const toolbar = document.getElementById('bulk-toolbar');
+    const panel = document.querySelector('.chat-list');
+    
+    if (bulkMode) { 
+        if(btn) btn.classList.add('active'); 
+        if(panel) panel.classList.add('bulk-mode'); 
+        if(toolbar) toolbar.classList.add('show');
+    } else { 
+        if(btn) btn.classList.remove('active'); 
+        if(panel) panel.classList.remove('bulk-mode'); 
+        if(toolbar) toolbar.classList.remove('show'); 
+        selectedChats.clear(); 
+        lastCheckedIndex = -1;
+        updateBulkVisuals();
+    }
+}
+
+function handleChatClick(phone, name, channel, event) {
+    if (bulkMode) {
+        toggleChatSelection(phone, event);
+    } else {
+        loadChatHistory(phone, name, channel);
+    }
+}
+
+function selectAllBulkChats() {
+    if (!bulkMode) return;
+    const checkboxes = document.querySelectorAll('.bulk-checkbox');
+    let allChecked = true;
+    checkboxes.forEach(cb => { if (!cb.checked) allChecked = false; });
+
+    checkboxes.forEach(cb => {
+        const phone = cb.closest('.chat-item').id.replace('chat-', '');
+        if (allChecked) {
+            selectedChats.delete(phone);
+        } else {
+            selectedChats.add(phone);
+        }
+    });
+    const counter = document.getElementById('bulk-count');
+    if(counter) counter.innerText = selectedChats.size;
+    updateBulkVisuals();
+}
+
+function toggleChatSelection(phone, event) {
+    if (!bulkMode) return;
+    event.stopPropagation();
+    
+    const checkboxes = Array.from(document.querySelectorAll('.bulk-checkbox'));
+    let targetCb = event.target;
+    
+    if (targetCb.tagName !== 'INPUT') {
+        targetCb = document.querySelector(`#chat-${phone} .bulk-checkbox`);
+        targetCb.checked = !targetCb.checked;
+    }
+
+    const currentIndex = checkboxes.indexOf(targetCb);
+    const isChecking = targetCb.checked;
+
+    if (event.shiftKey && lastCheckedIndex !== -1) {
+        const start = Math.min(lastCheckedIndex, currentIndex);
+        const end = Math.max(lastCheckedIndex, currentIndex);
+        
+        for (let i = start; i <= end; i++) {
+            checkboxes[i].checked = isChecking;
+            const p = checkboxes[i].closest('.chat-item').id.replace('chat-', '');
+            if (isChecking) {
+                selectedChats.add(p);
+            } else {
+                selectedChats.delete(p);
+            }
+        }
+    } else {
+        if (isChecking) {
+            selectedChats.add(phone);
+        } else {
+            selectedChats.delete(phone);
+        }
+    }
+    
+    lastCheckedIndex = currentIndex;
+    const counter = document.getElementById('bulk-count');
+    if(counter) counter.innerText = selectedChats.size;
+}
+
+function updateBulkVisuals() {
+    document.querySelectorAll('.chat-item').forEach(item => {
+        const p = item.id.replace('chat-', '');
+        const cb = item.querySelector('.bulk-checkbox');
+        if (cb) cb.checked = selectedChats.has(p);
+    });
+}
+
+async function executeBulkDelete() {
+    if (selectedChats.size === 0) return showToast("Selecciona al menos un chat para eliminar.");
+    
+    if (!confirm(`⚠️ ¡Peligro! Vas a eliminar PERMANENTEMENTE ${selectedChats.size} chats de la Bandeja Omnicanal.\nEsta acción borra todo el historial y no se puede deshacer.\n\n¿Estás seguro?`)) return;
+    
+    showToast("🗑️ Eliminando chats... por favor espera.");
+    
+    const phones = Array.from(selectedChats);
+    
+    // Borrado secuencial para no sobrecargar la base de datos
+    for (let i = 0; i < phones.length; i++) {
+        try {
+            await fetch('/api/chat/action', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ phone: phones[i], action: 'delete' })
+            });
+        } catch(e) { console.error(`Error borrando ${phones[i]}`, e); }
+    }
+    
+    showToast(`✅ ${phones.length} chats eliminados correctamente.`);
+    toggleBulkMode();
+    
+    if (selectedChats.has(currentChat)) {
+        currentChat = null;
+        document.getElementById('conversation-empty').style.display = 'flex';
+        document.getElementById('conversation-active').style.display = 'none';
+        document.getElementById('crm-panel').classList.remove('open');
+    }
+
+    loadOmniChats(); 
 }
 
 async function loadChatHistory(phone, name, platform) {
@@ -194,7 +340,6 @@ async function loadChatHistory(phone, name, platform) {
         scrollToBottom();
         msgInput.focus();
 
-        // Cargar datos en el CRM y pintar etiquetas
         loadLeadDataToCRM(phone); 
         renderCRMTags(window._cachedTags);
     } catch (error) {
@@ -203,7 +348,6 @@ async function loadChatHistory(phone, name, platform) {
 }
 
 function appendMessage(msg) {
-    // Limpiamos el texto de etiquetas de plataforma para que Lore vea el mensaje puro
     let text = msg.text.replace(/\[Instagram\] |\[Messenger\] /g, '');
     const bubbleClass = msg.role === 'user' ? 'msg-incoming' : 'msg-outgoing';
     
@@ -309,7 +453,8 @@ async function loadLeadDataToCRM(phone) {
         const leads = await res.json();
         const lead = leads.find(l => l.phone === phone);
         
-        document.getElementById('crm-id').value = phone;
+        const idField = document.getElementById('crm-id');
+        if(idField) idField.value = phone;
         
         // 3. Llenar si existe
         if (lead) {
@@ -378,7 +523,7 @@ async function saveLeadManual() {
 
 async function syncSalesforceCurrent() {
     if(!currentChat) return;
-    showToast("🔄 Sincronizando con Salesforce...");
+    showToast("🔄 Sincronizando SF...");
     try {
         const res = await fetch('/api/salesforce/sync-lead', {
             method: 'POST',
@@ -434,7 +579,7 @@ function updateTagsOptimistic(phone, tagObj, remove = false) {
                 chat.labels.push(tagObj);
             }
         }
-        renderChatList();
+        updateBulkVisuals();
     }
 }
 
