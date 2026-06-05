@@ -27,6 +27,7 @@
             --avatar-color: #888888;
             --icon-color: #515050;
             --sf-blue: #00a1e0;
+            --danger: #ef4444;
         }
 
         [data-theme="dark"] {
@@ -58,19 +59,33 @@
 
         .main-area { flex: 1; display: flex; position: relative; overflow: hidden; background: var(--bg-main); }
         
-        .chat-list { width: 380px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--bg-main); flex-shrink: 0; }
+        .chat-list { width: 380px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--bg-main); flex-shrink: 0; position: relative; }
         .chat-header { padding: 15px; border-bottom: 1px solid var(--border); background: var(--panel); }
-        .search-bar { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text); outline: none; font-size: 0.9rem; margin-bottom: 10px; }
+        
+        .search-container { display: flex; gap: 8px; margin-bottom: 10px; }
+        .search-bar { flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text); outline: none; font-size: 0.9rem; }
         .search-bar:focus { border-color: var(--primary); }
         
-        .filters { display: flex; gap: 8px; }
-        .filter-btn { padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; font-weight: 600; flex: 1; }
+        .action-btn { width: 40px; height: 40px; border-radius: 8px; border: none; background: var(--bg-main); color: var(--icon-color); cursor: pointer; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: 0.2s; }
+        .action-btn:hover { color: var(--primary); border-color: var(--primary); }
+        .action-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+        .filters { display: flex; gap: 8px; margin-bottom: 10px; }
+        .filter-btn { padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; font-weight: 600; flex: 1; transition: 0.2s; }
         .filter-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
 
         .chat-items-container { flex: 1; overflow-y: auto; }
-        .chat-item { display: flex; padding: 12px 15px; gap: 12px; cursor: pointer; border-bottom: 1px solid var(--border); align-items: center; }
+        .chat-item { display: flex; padding: 12px 15px; gap: 12px; cursor: pointer; border-bottom: 1px solid var(--border); align-items: center; transition: background 0.1s; }
         .chat-item:hover { background: var(--hover-item); }
         .chat-item.active { background: var(--active-item); border-left: 4px solid var(--primary); padding-left: 11px; }
+
+        /* Estilos Bulk */
+        .bulk-checkbox { display: none; width: 18px; height: 18px; accent-color: var(--danger); cursor: pointer; margin-right: 5px; flex-shrink: 0; }
+        .chat-list.bulk-mode .bulk-checkbox { display: block; }
+        
+        #bulk-toolbar { display: none; position: absolute; bottom: 0; left: 0; width: 100%; background: var(--bg-main); border-top: 2px solid var(--danger); padding: 15px; z-index: 50; flex-direction: column; gap: 10px; box-shadow: 0 -5px 20px rgba(0,0,0,0.1); }
+        #bulk-toolbar.show { display: flex; animation: slideUp 0.3s; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
         .chat-avatar { position: relative; width: 45px; height: 45px; border-radius: 50%; background: var(--avatar-bg); color: var(--avatar-color); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.2rem; }
         .chat-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
@@ -117,6 +132,7 @@
         .btn-small:hover { filter: brightness(1.1); }
         .btn-green { background: var(--primary); color: #fff; }
         .btn-blue { background: var(--sf-blue); color: #fff; }
+        .btn-red { background: var(--danger); color: #fff; }
 
         .tag-container { display: flex; flex-wrap: wrap; gap: 6px; }
         .tag { padding: 4px 10px; border-radius: 99px; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border); color: var(--text-muted); background: var(--bg-main); transition: 0.2s; font-weight: 500; }
@@ -154,19 +170,41 @@
 
     <div class="main-area">
         
-        <div class="chat-list">
+        <div class="chat-list" id="chat-list-panel">
             <div class="chat-header">
-                <input type="text" id="chat-search" class="search-bar" placeholder="🔍 Buscar en redes sociales...">
+                <div class="search-container">
+                    <input type="text" id="chat-search" class="search-bar" placeholder="🔍 Buscar en redes sociales..." style="margin-bottom:0;">
+                    <button class="action-btn" id="bulk-toggle-btn" onclick="toggleBulkMode()" title="Selección Múltiple"><i class="fas fa-check-double"></i></button>
+                </div>
+                
                 <div class="filters">
-                    <button class="filter-btn active" data-filter="all">Todos</button>
-                    <button class="filter-btn" data-filter="instagram" style="color: #E1306C; border-color: #E1306C;"><i class="fab fa-instagram"></i> IG</button>
-                    <button class="filter-btn" data-filter="messenger" style="color: #0084FF; border-color: #0084FF;"><i class="fab fa-facebook-messenger"></i> FB</button>
+                    <button class="filter-btn active platform-filter" data-filter="all">Todos</button>
+                    <button class="filter-btn platform-filter" data-filter="instagram" style="color: #E1306C; border-color: #E1306C;"><i class="fab fa-instagram"></i> IG</button>
+                    <button class="filter-btn platform-filter" data-filter="messenger" style="color: #0084FF; border-color: #0084FF;"><i class="fab fa-facebook-messenger"></i> FB</button>
+                </div>
+                
+                <div class="filters" style="margin-bottom: 0;">
+                    <button class="filter-btn active view-filter" data-view="active"><i class="fas fa-inbox"></i> Activos</button>
+                    <button class="filter-btn view-filter" data-view="archived"><i class="fas fa-archive"></i> Archivados</button>
                 </div>
             </div>
+            
             <div class="chat-items-container" id="chat-items-list">
                 <div class="empty-state">
                     <i class="fas fa-circle-notch fa-spin"></i>
                     <p>Cargando mensajes...</p>
+                </div>
+            </div>
+
+            <div id="bulk-toolbar">
+                <div style="color:var(--text); font-size:0.9rem; font-weight:bold; display: flex; justify-content: space-between; align-items: center;">
+                    <span><span id="bulk-count">0</span> seleccionados</span>
+                    <button class="btn-small btn-blue" onclick="selectAllBulkChats()" style="padding: 4px 8px; font-size: 0.75rem;"><i class="fas fa-check-square"></i> Seleccionar Todo</button>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-small btn-red" onclick="executeBulkAction('delete')" style="flex: 1; padding: 12px;"><i class="fas fa-trash"></i> Eliminar</button>
+                    <button class="btn-small btn-blue" onclick="executeBulkAction('toggle_archive')" style="flex: 1; padding: 12px;"><i class="fas fa-archive"></i> Archivar</button>
+                    <button class="btn-small" onclick="toggleBulkMode()" style="background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 12px;">Cancelar</button>
                 </div>
             </div>
         </div>
@@ -265,8 +303,14 @@
         const socket = io();
         let currentChat = null;
         let currentPlatform = 'all'; 
+        let currentView = 'active'; // 'active' o 'archived'
         let omniChats = []; 
         window._cachedTags = [];
+
+        // Variables para Selección Múltiple
+        let bulkMode = false;
+        let selectedChats = new Set();
+        let lastCheckedIndex = -1;
 
         const chatItemsList = document.getElementById('chat-items-list');
         const messagesContainer = document.getElementById('messages-container');
@@ -284,15 +328,23 @@
 
             msgInput.addEventListener('keydown', handleKeyboardShortcuts);
             
-            document.querySelectorAll('.filter-btn').forEach(btn => {
+            // Filtros de Plataforma (IG/FB/Todos)
+            document.querySelectorAll('.platform-filter').forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    // Ignorar el botón de cerrar del CRM
-                    if(e.currentTarget.innerText.includes('Cerrar')) return;
-                    
-                    document.querySelectorAll('.filters .filter-btn').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.platform-filter').forEach(b => b.classList.remove('active'));
                     e.currentTarget.classList.add('active');
                     currentPlatform = e.currentTarget.dataset.filter;
                     renderChatList();
+                });
+            });
+
+            // Filtros de Vista (Activos/Archivados)
+            document.querySelectorAll('.view-filter').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.view-filter').forEach(b => b.classList.remove('active'));
+                    e.currentTarget.classList.add('active');
+                    currentView = e.currentTarget.dataset.view;
+                    loadOmniChats(); 
                 });
             });
 
@@ -315,7 +367,8 @@
         // 1. CARGA DE DATOS Y RENDERIZADO
         async function loadOmniChats() {
             try {
-                const res = await fetch('/api/chats-full?view=active');
+                // Filtra por activo o archivado
+                const res = await fetch(`/api/chats-full?view=${currentView}`);
                 const allChats = await res.json();
                 
                 let waUnread = 0;
@@ -343,9 +396,9 @@
             }
         }
 
-        function renderChatList(searchTerm = '') {
+        function renderChatList(searchTerm = searchInput.value.toLowerCase()) {
             if (omniChats.length === 0) {
-                chatItemsList.innerHTML = '<div class="empty-state" style="margin-top:40px;"><p>No hay mensajes en redes.</p></div>';
+                chatItemsList.innerHTML = `<div class="empty-state" style="margin-top:40px;"><p>No hay mensajes ${currentView === 'archived' ? 'archivados' : 'activos'}.</p></div>`;
                 return;
             }
 
@@ -363,7 +416,6 @@
                 const platformIcon = isIg ? '<i class="fab fa-instagram" style="color: #E1306C;"></i>' : '<i class="fab fa-facebook-messenger" style="color: #0084FF;"></i>';
                 const cleanMsg = c.lastMessage.text ? c.lastMessage.text.replace(/\[Instagram\] |\[Messenger\] /g, '') : 'Multimedia';
 
-                // --- FIX: ETIQUETAS DUPLICADAS EN INBOX ---
                 let uniqueLabels = [];
                 let seenTexts = new Set();
                 (c.labels || []).forEach(l => {
@@ -375,8 +427,11 @@
                     return `<span class="mini-tag" style="background:${tag.color}20; color:${tag.color}; border:1px solid ${tag.color}50">${tag.text}</span>`;
                 }).join('');
 
+                const isSelected = selectedChats.has(c.id);
+
                 return `
-                    <div class="chat-item ${currentChat === c.id ? 'active' : ''}" id="chat-${c.id}" onclick="loadChatHistory('${c.id}', '${c.name.replace(/'/g, "\\'")}', '${c.channel}')">
+                    <div class="chat-item ${currentChat === c.id ? 'active' : ''}" id="chat-${c.id}" onclick="handleChatClick('${c.id}', '${c.name.replace(/'/g, "\\'")}', '${c.channel}', event)">
+                        <input type="checkbox" class="bulk-checkbox" ${isSelected ? 'checked' : ''} onclick="toggleChatSelection('${c.id}', event)">
                         <div class="chat-avatar">
                             ${c.photoUrl ? `<img src="${c.photoUrl}">` : '<i class="fas fa-user"></i>'}
                             <div class="platform-badge">${platformIcon}</div>
@@ -396,6 +451,140 @@
                 `;
             }).join('');
         }
+
+        // --- SISTEMA DE BORRADO MASIVO ---
+
+        function toggleBulkMode() {
+            bulkMode = !bulkMode;
+            const btn = document.getElementById('bulk-toggle-btn');
+            const toolbar = document.getElementById('bulk-toolbar');
+            const panel = document.getElementById('chat-list-panel');
+            
+            if (bulkMode) { 
+                btn.classList.add('active'); 
+                panel.classList.add('bulk-mode'); 
+                toolbar.classList.add('show');
+            } else { 
+                btn.classList.remove('active'); 
+                panel.classList.remove('bulk-mode'); 
+                toolbar.classList.remove('show'); 
+                selectedChats.clear(); 
+                lastCheckedIndex = -1;
+                updateBulkVisuals();
+            }
+        }
+
+        function handleChatClick(phone, name, channel, event) {
+            if (bulkMode) {
+                toggleChatSelection(phone, event);
+            } else {
+                loadChatHistory(phone, name, channel);
+            }
+        }
+
+        function toggleChatSelection(phone, event) {
+            if (!bulkMode) return;
+            event.stopPropagation();
+            
+            const checkboxes = Array.from(document.querySelectorAll('.bulk-checkbox'));
+            let targetCb = event.target;
+            
+            if (targetCb.tagName !== 'INPUT') {
+                targetCb = document.querySelector(`#chat-${phone} .bulk-checkbox`);
+                targetCb.checked = !targetCb.checked;
+            }
+
+            const currentIndex = checkboxes.indexOf(targetCb);
+            const isChecking = targetCb.checked;
+
+            if (event.shiftKey && lastCheckedIndex !== -1) {
+                const start = Math.min(lastCheckedIndex, currentIndex);
+                const end = Math.max(lastCheckedIndex, currentIndex);
+                
+                for (let i = start; i <= end; i++) {
+                    checkboxes[i].checked = isChecking;
+                    const p = checkboxes[i].closest('.chat-item').id.replace('chat-', '');
+                    if (isChecking) {
+                        selectedChats.add(p);
+                    } else {
+                        selectedChats.delete(p);
+                    }
+                }
+            } else {
+                if (isChecking) {
+                    selectedChats.add(phone);
+                } else {
+                    selectedChats.delete(phone);
+                }
+            }
+            
+            lastCheckedIndex = currentIndex;
+            document.getElementById('bulk-count').innerText = selectedChats.size;
+        }
+
+        function selectAllBulkChats() {
+            if (!bulkMode) return;
+            const checkboxes = document.querySelectorAll('.bulk-checkbox');
+            let allChecked = true;
+            checkboxes.forEach(cb => { if (!cb.checked) allChecked = false; });
+
+            checkboxes.forEach(cb => {
+                const phone = cb.closest('.chat-item').id.replace('chat-', '');
+                if (allChecked) {
+                    selectedChats.delete(phone);
+                } else {
+                    selectedChats.add(phone);
+                }
+            });
+            document.getElementById('bulk-count').innerText = selectedChats.size;
+            updateBulkVisuals();
+        }
+
+        function updateBulkVisuals() {
+            document.querySelectorAll('.chat-item').forEach(item => {
+                const p = item.id.replace('chat-', '');
+                const cb = item.querySelector('.bulk-checkbox');
+                if (cb) cb.checked = selectedChats.has(p);
+            });
+        }
+
+        async function executeBulkAction(action) {
+            if (selectedChats.size === 0) return showToast("Selecciona al menos un chat.");
+            
+            if (action === 'delete') {
+                if (!confirm(`⚠️ ¡Peligro! Vas a eliminar PERMANENTEMENTE ${selectedChats.size} chats.\nEsta acción borra todo el historial y no se puede deshacer.\n\n¿Estás seguro?`)) return;
+            } else {
+                if (!confirm(`¿Estás seguro de querer archivar/desarchivar ${selectedChats.size} chats?`)) return;
+            }
+            
+            showToast("⏳ Procesando... por favor espera.");
+            
+            const phones = Array.from(selectedChats);
+            
+            for (let i = 0; i < phones.length; i++) {
+                try {
+                    await fetch('/api/chat/action', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ phone: phones[i], action: action, value: true })
+                    });
+                } catch(e) { console.error(`Error procesando ${phones[i]}`, e); }
+            }
+            
+            showToast(`✅ Acción completada correctamente.`);
+            toggleBulkMode();
+            
+            if (selectedChats.has(currentChat) && action === 'delete') {
+                currentChat = null;
+                document.getElementById('conversation-empty').style.display = 'flex';
+                document.getElementById('conversation-active').style.display = 'none';
+                document.getElementById('crm-panel').classList.remove('open');
+            }
+
+            loadOmniChats(); 
+        }
+
+        // --- MANEJO DE CHAT INDIVIDUAL ---
 
         async function loadChatHistory(phone, name, platform) {
             currentChat = phone;
@@ -521,7 +710,6 @@
         // 3. CRM Y ETIQUETAS
         async function loadLeadDataToCRM(phone) {
             try {
-                // Limpiar campos primero
                 document.getElementById('crm-name').value = ""; 
                 document.getElementById('crm-city').value = ""; 
                 document.getElementById('crm-email').value = ""; 
@@ -633,7 +821,6 @@
             
             const tagObj = { text: name, color: color };
             
-            // Optimistic UI update
             if (chat) {
                 if(exists) chat.labels = activeTags.filter(l => (l.text || l) !== name);
                 else chat.labels.push(tagObj);
