@@ -297,6 +297,14 @@
 
     </div>
 
+    <div id="context-menu" style="position: absolute; display: none; background: var(--bg-main); border: 1px solid var(--border); box-shadow: 0 10px 25px rgba(0,0,0,0.2); border-radius: 8px; width: 180px; z-index: 1000; overflow: hidden;">
+        <div class="ctx-item" id="ctx-pin" style="padding: 12px 15px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 500;"><i class="fas fa-thumbtack"></i> <span>Fijar Chat</span></div>
+        <div class="ctx-item" onclick="quickLabel()" style="padding: 12px 15px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 500;"><i class="fas fa-tag"></i> Etiquetar</div>
+        <div class="ctx-item" id="ctx-archive" style="padding: 12px 15px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 500;"><i class="fas fa-archive"></i> <span>Archivar</span></div>
+        <div style="height: 1px; background: var(--border); margin: 0;"></div>
+        <div class="ctx-item" onclick="contextAction('delete')" style="padding: 12px 15px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 10px; color:#ef4444; font-weight: 500;"><i class="fas fa-trash"></i> Eliminar Chat</div>
+    </div>
+
     <div id="toast-container"></div>
 
     <script>
@@ -306,6 +314,8 @@
         let currentView = 'active'; // 'active' o 'archived'
         let omniChats = []; 
         window._cachedTags = [];
+        let contextPhone = null; 
+        let searchTimeout = null; // 🔥 FIX: Para el Debouncing
 
         // Variables para Selección Múltiple
         let bulkMode = false;
@@ -317,6 +327,18 @@
         const msgInput = document.getElementById('msg-input');
         const btnSend = document.getElementById('btn-send');
         const searchInput = document.getElementById('chat-search');
+
+        const executivesMap = {
+            "005Dn000007mWFhIAM": "Luz",
+            "005UO000000PdB3YAK": "Felipe",
+            "005Dn000005u1yTIAQ": "Mario",
+            "005Dn000005u27NIAQ": "Marcos",
+            "005Dn000005u22vIAA": "Fabio",
+            "005Dn000005u2BkIAI": "Diana",
+            "005Dn000007H1EUIA0": "Marketing",
+            "005Dn000003Z5vbIAC": "Oscar",
+            "Pendiente": "Pendiente (Sin Asignar)"
+        };
 
         document.addEventListener('DOMContentLoaded', () => {
             const savedTheme = localStorage.getItem('theme') || 'light';
@@ -348,11 +370,24 @@
                 });
             });
 
+            // 🔥 FIX: Debouncing en el buscador para no congelar la pestaña 🔥
             searchInput.addEventListener('input', (e) => {
-                renderChatList(e.target.value.toLowerCase());
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    renderChatList(e.target.value.toLowerCase());
+                }, 300);
+            });
+
+            // Ocultar menú de clic derecho
+            document.addEventListener('click', (e) => { 
+                if(!e.target.closest('.chat-item') && !e.target.closest('#context-menu')) {
+                    const menu = document.getElementById('context-menu');
+                    if (menu) menu.style.display = 'none'; 
+                }
             });
         });
 
+        // 🔥 FIX: Mantener historial local y no recargar toda la base de datos si no es necesario
         socket.on('update_chats_list', () => {
             loadOmniChats(); 
         });
@@ -367,28 +402,22 @@
         // 1. CARGA DE DATOS Y RENDERIZADO
         async function loadOmniChats() {
             try {
-                // Filtra por activo o archivado
-                const res = await fetch(`/api/chats-full?view=${currentView}`);
+                // 🔥 FIX: Añadimos &channel=omni para ahorrar RAM
+                const res = await fetch(`/api/chats-full?view=${currentView}&channel=omni`);
                 const allChats = await res.json();
                 
-                let waUnread = 0;
-                let omniUnread = 0;
+                omniChats = allChats; // Ya viene filtrado desde SQLite
                 
-                allChats.forEach(c => {
-                    const ch = c.channel || 'whatsapp';
-                    if (c.unreadCount > 0) {
-                        if (ch === 'whatsapp') waUnread += 1;
-                        else omniUnread += 1;
-                    }
+                let omniUnread = 0;
+                omniChats.forEach(c => {
+                    if (c.unreadCount > 0) omniUnread += 1;
                 });
                 
-                const badgeWa = document.getElementById('badge-wa');
                 const badgeOmni = document.getElementById('badge-omni');
-                
-                if(badgeWa) { badgeWa.innerText = waUnread; badgeWa.style.display = waUnread > 0 ? 'block' : 'none'; }
-                if(badgeOmni) { badgeOmni.innerText = omniUnread; badgeOmni.style.display = omniUnread > 0 ? 'block' : 'none'; }
-                
-                omniChats = allChats.filter(c => c.channel === 'instagram' || c.channel === 'messenger');
+                if(badgeOmni) { 
+                    badgeOmni.innerText = omniUnread; 
+                    badgeOmni.style.display = omniUnread > 0 ? 'block' : 'none'; 
+                }
 
                 renderChatList();
             } catch (error) {
@@ -411,10 +440,21 @@
                 return matchesSearch && matchesPlatform;
             });
 
+            // 🔥 Mantenemos el scroll
+            const scroll = chatItemsList.children.length > 0 ? chatItemsList.scrollTop : 0;
+
             chatItemsList.innerHTML = filteredChats.map(c => {
                 const isIg = c.channel === 'instagram';
                 const platformIcon = isIg ? '<i class="fab fa-instagram" style="color: #E1306C;"></i>' : '<i class="fab fa-facebook-messenger" style="color: #0084FF;"></i>';
-                const cleanMsg = c.lastMessage.text ? c.lastMessage.text.replace(/\[Instagram\] |\[Messenger\] /g, '') : 'Multimedia';
+                
+                let cleanMsg = c.lastMessage.text ? c.lastMessage.text.replace(/\[Instagram\] |\[Messenger\] /g, '') : 'Multimedia';
+                
+                // 🔥 FIX: Icono amigable para Multimedia
+                if (cleanMsg.includes('[Multimedia/Adjunto]')) {
+                    cleanMsg = '🖼️ Contenido Multimedia';
+                } else if (cleanMsg.includes('COMENTARIO EN POST')) {
+                    cleanMsg = '💬 Comentó tu publicación';
+                }
 
                 let uniqueLabels = [];
                 let seenTexts = new Set();
@@ -422,6 +462,7 @@
                     let txt = l.text || l;
                     if(!seenTexts.has(txt)) { seenTexts.add(txt); uniqueLabels.push(l); }
                 });
+                
                 const labelsHtml = uniqueLabels.map(l => { 
                     const tag = typeof l === 'string' ? {text:l, color:'#555'} : l; 
                     return `<span class="mini-tag" style="background:${tag.color}20; color:${tag.color}; border:1px solid ${tag.color}50">${tag.text}</span>`;
@@ -430,15 +471,15 @@
                 const isSelected = selectedChats.has(c.id);
 
                 return `
-                    <div class="chat-item ${currentChat === c.id ? 'active' : ''}" id="chat-${c.id}" onclick="handleChatClick('${c.id}', '${c.name.replace(/'/g, "\\'")}', '${c.channel}', event)">
+                    <div class="chat-item ${currentChat === c.id ? 'active' : ''}" id="chat-${c.id}" onclick="handleChatClick('${c.id}', '${c.name.replace(/'/g, "\\'")}', '${c.channel}', event)" oncontextmenu="showContextMenu(event, '${c.id}', ${c.pinned || false}, ${c.archived || false})">
                         <input type="checkbox" class="bulk-checkbox" ${isSelected ? 'checked' : ''} onclick="toggleChatSelection('${c.id}', event)">
                         <div class="chat-avatar">
-                            ${c.photoUrl ? `<img src="${c.photoUrl}">` : '<i class="fas fa-user"></i>'}
+                            ${c.photoUrl ? `<img src="${c.photoUrl}" referrerpolicy="no-referrer">` : '<i class="fas fa-user"></i>'}
                             <div class="platform-badge">${platformIcon}</div>
                         </div>
                         <div class="chat-info">
                             <div class="chat-name">
-                                <span>${c.name}</span>
+                                <span>${c.name} ${c.pinned ? '<i class="fas fa-thumbtack" style="color:var(--primary); font-size:0.8rem; margin-left:5px;"></i>' : ''}</span>
                                 <span class="time">${formatTime(c.lastMessage.time)}</span>
                             </div>
                             <div class="chat-preview">
@@ -450,24 +491,94 @@
                     </div>
                 `;
             }).join('');
+            
+            if(scroll > 0) chatItemsList.scrollTop = scroll;
+            
+            if (bulkMode) updateBulkVisuals(); 
         }
 
-        // --- SISTEMA DE BORRADO MASIVO ---
+        // --- MENÚ DE CLIC DERECHO (CONTEXT MENU) ---
+        function showContextMenu(e, phone, isPinned, isArchived) { 
+            e.preventDefault(); 
+            contextPhone = phone; 
+            const menu = document.getElementById('context-menu'); 
+            const pinBtn = document.getElementById('ctx-pin'); 
+            
+            if (pinBtn) {
+                pinBtn.innerHTML = isPinned ? '<i class="fas fa-thumbtack" style="opacity:0.5"></i> <span>Desfijar Chat</span>' : '<i class="fas fa-thumbtack"></i> <span>Fijar Chat</span>'; 
+                pinBtn.onclick = () => contextAction('toggle_pin'); 
+            }
+            
+            const archBtn = document.getElementById('ctx-archive'); 
+            if (archBtn) {
+                archBtn.innerHTML = isArchived ? '<i class="fas fa-box-open"></i> <span>Desarchivar</span>' : '<i class="fas fa-archive"></i> <span>Archivar</span>'; 
+                archBtn.onclick = () => contextAction('toggle_archive'); 
+            }
+            
+            if (menu) {
+                menu.style.display = 'block'; 
+                menu.style.left = e.pageX + 'px'; 
+                menu.style.top = e.pageY + 'px'; 
+            }
+        }
 
+        async function contextAction(action, valueOverride = true) { 
+            if(!contextPhone) return; 
+            if(action === 'delete' && !confirm("⚠️ ¿Estás seguro que deseas ELIMINAR el chat y todo su historial? Esta acción no se puede deshacer.")) return; 
+            
+            try {
+                await fetch('/api/chat/action', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ phone: contextPhone, action: action, value: valueOverride }) 
+                }); 
+                
+                loadOmniChats(); 
+                const menu = document.getElementById('context-menu');
+                if (menu) menu.style.display = 'none'; 
+                
+                if ((action === 'delete' || action === 'toggle_archive') && contextPhone === currentChat) {
+                    currentChat = null;
+                    document.getElementById('conversation-empty').style.display = 'flex';
+                    document.getElementById('conversation-active').style.display = 'none';
+                    document.getElementById('crm-panel').classList.remove('open');
+                }
+                
+            } catch(e) {
+                showToast("Error ejecutando acción");
+            }
+        }
+
+        function quickLabel() { 
+            if(!contextPhone) return; 
+            const chat = omniChats.find(c => c.id === contextPhone); 
+            
+            if(chat) {
+                loadChatHistory(chat.id, chat.name, chat.channel); 
+            }
+            
+            const crmPanel = document.getElementById('crm-panel');
+            if (crmPanel) crmPanel.classList.add('open'); 
+            
+            const menu = document.getElementById('context-menu');
+            if (menu) menu.style.display = 'none'; 
+        }
+
+        // --- SISTEMA DE BORRADO MASIVO Y SELECCIÓN MÚLTIPLE ---
         function toggleBulkMode() {
             bulkMode = !bulkMode;
             const btn = document.getElementById('bulk-toggle-btn');
             const toolbar = document.getElementById('bulk-toolbar');
-            const panel = document.getElementById('chat-list-panel');
+            const panel = document.querySelector('.chat-list');
             
             if (bulkMode) { 
-                btn.classList.add('active'); 
-                panel.classList.add('bulk-mode'); 
-                toolbar.classList.add('show');
+                if(btn) btn.classList.add('active'); 
+                if(panel) panel.classList.add('bulk-mode'); 
+                if(toolbar) toolbar.classList.add('show');
             } else { 
-                btn.classList.remove('active'); 
-                panel.classList.remove('bulk-mode'); 
-                toolbar.classList.remove('show'); 
+                if(btn) btn.classList.remove('active'); 
+                if(panel) panel.classList.remove('bulk-mode'); 
+                if(toolbar) toolbar.classList.remove('show'); 
                 selectedChats.clear(); 
                 lastCheckedIndex = -1;
                 updateBulkVisuals();
@@ -480,6 +591,25 @@
             } else {
                 loadChatHistory(phone, name, channel);
             }
+        }
+
+        function selectAllBulkChats() {
+            if (!bulkMode) return;
+            const checkboxes = document.querySelectorAll('.bulk-checkbox');
+            let allChecked = true;
+            checkboxes.forEach(cb => { if (!cb.checked) allChecked = false; });
+
+            checkboxes.forEach(cb => {
+                const phone = cb.closest('.chat-item').id.replace('chat-', '');
+                if (allChecked) {
+                    selectedChats.delete(phone);
+                } else {
+                    selectedChats.add(phone);
+                }
+            });
+            const counter = document.getElementById('bulk-count');
+            if(counter) counter.innerText = selectedChats.size;
+            updateBulkVisuals();
         }
 
         function toggleChatSelection(phone, event) {
@@ -519,25 +649,8 @@
             }
             
             lastCheckedIndex = currentIndex;
-            document.getElementById('bulk-count').innerText = selectedChats.size;
-        }
-
-        function selectAllBulkChats() {
-            if (!bulkMode) return;
-            const checkboxes = document.querySelectorAll('.bulk-checkbox');
-            let allChecked = true;
-            checkboxes.forEach(cb => { if (!cb.checked) allChecked = false; });
-
-            checkboxes.forEach(cb => {
-                const phone = cb.closest('.chat-item').id.replace('chat-', '');
-                if (allChecked) {
-                    selectedChats.delete(phone);
-                } else {
-                    selectedChats.add(phone);
-                }
-            });
-            document.getElementById('bulk-count').innerText = selectedChats.size;
-            updateBulkVisuals();
+            const counter = document.getElementById('bulk-count');
+            if(counter) counter.innerText = selectedChats.size;
         }
 
         function updateBulkVisuals() {
@@ -574,7 +687,7 @@
             showToast(`✅ Acción completada correctamente.`);
             toggleBulkMode();
             
-            if (selectedChats.has(currentChat) && action === 'delete') {
+            if (selectedChats.has(currentChat) && (action === 'delete' || action === 'toggle_archive')) {
                 currentChat = null;
                 document.getElementById('conversation-empty').style.display = 'flex';
                 document.getElementById('conversation-active').style.display = 'none';
@@ -621,6 +734,19 @@
         function appendMessage(msg) {
             let text = msg.text.replace(/\[Instagram\] |\[Messenger\] /g, '');
             const bubbleClass = msg.role === 'user' ? 'msg-incoming' : 'msg-outgoing';
+            
+            // 🔥 FIX: Visor elegante para Multimedia
+            if (text.includes('[Multimedia/Adjunto]')) {
+                text = `
+                <div style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.1); padding: 10px; border-radius: 8px;">
+                    <i class="fas fa-image" style="font-size: 1.5rem; opacity: 0.8;"></i>
+                    <div style="display: flex; flex-direction: column;">
+                        <span style="font-weight: bold; font-size: 0.9rem;">Multimedia</span>
+                        <span style="font-size: 0.75rem; opacity: 0.8;">Ver en la app nativa (Meta no provee el archivo por API)</span>
+                    </div>
+                </div>`;
+            }
+
             const msgHTML = `
                 <div class="message-bubble ${bubbleClass}">
                     <div class="message-text">${text.replace(/\n/g, '<br>')}</div>
@@ -735,8 +861,10 @@
                             }
                         }
                     }
-                    if (lead.etiqueta) {
+                    if (lead.etiqueta && executivesMap[lead.etiqueta]) {
                         document.getElementById('crm-executive').value = lead.etiqueta;
+                    } else {
+                        document.getElementById('crm-executive').value = "Pendiente";
                     }
                 }
             } catch(e) { console.error("Error cargando CRM:", e); }
@@ -806,10 +934,26 @@
                 if(!seenTags.has(t.name)) { seenTags.add(t.name); uniqueTags.push(t); }
             });
 
+            // 🔥 FIX: Formato JSON correcto para las etiquetas (igual que en WhatsApp)
             container.innerHTML = uniqueTags.map(t => { 
                 const isActive = activeTags.find(l => (l.text || l) === t.name); 
-                return `<div class="tag ${isActive ? 'selected' : ''}" style="${isActive ? `background:${t.color}; border-color:${t.color};` : ''}" onclick="toggleTagLocal('${t.name}', '${t.color}')">${t.name}</div>`; 
+                return `<div class="tag ${isActive ? 'selected' : ''}" style="${isActive ? `background:${t.color}; border-color:${t.color};` : ''}" onclick="toggleTagLocal(decodeURIComponent('${encodeURIComponent(t.name)}'), '${t.color}')">${t.name}</div>`; 
             }).join(''); 
+        }
+
+        function updateTagsOptimistic(phone, tagObj, remove = false) {
+            const chat = omniChats.find(c => c.id === phone);
+            if (chat) {
+                if (!chat.labels) chat.labels = [];
+                if (remove) {
+                    chat.labels = chat.labels.filter(l => (l.text || l) !== tagObj.text);
+                } else {
+                    if (!chat.labels.find(l => (l.text || l) === tagObj.text)) {
+                        chat.labels.push(tagObj);
+                    }
+                }
+                if (bulkMode) updateBulkVisuals();
+            }
         }
 
         async function toggleTagLocal(name, color) { 
@@ -820,12 +964,8 @@
             const exists = activeTags.find(l => (l.text || l) === name);
             
             const tagObj = { text: name, color: color };
+            updateTagsOptimistic(currentChat, tagObj, !!exists);
             
-            if (chat) {
-                if(exists) chat.labels = activeTags.filter(l => (l.text || l) !== name);
-                else chat.labels.push(tagObj);
-                renderChatList();
-            }
             renderCRMTags(window._cachedTags);
             
             try {
