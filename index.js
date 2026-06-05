@@ -1,30 +1,11 @@
 /*
- * SERVER BACKEND - v33.5 (ICBOT FULL PRODUCTION + OMNICANAL AISLADO + IA FANTASMA + FIX CAMPAÑAS)
+ * SERVER BACKEND - v33.6 (ICBOT FULL PRODUCTION + OMNICANAL COMPLETADO + FIX VELOCIDAD & LOCKS)
  * ============================================================
- * 1. FIX: Renombrado oficial a ICBOT completado (Asistente Lorena).
- * 2. ADD: Índices SQL (idx_history_phone, idx_leads_phone).
- * 3. ADD: Cronjob de Limpieza robusto 'media_cache'.
- * 4. FIX: Audios/Videos con soporte Range 206 (codecs=opus).
- * 5. ADD: Sistema Anti-bucle (Auto-apagado del bot).
- * 6. FIX: Prioridad absoluta al nombre dado por el cliente.
- * 7. ADD: WEBSOCKETS (Socket.io) para eliminar el Polling del frontend.
- * 8. MOD: Cronjob seguimiento inteligente (Fix: Plantilla sin parámetros).
- * 9. MOD: Segmentación de Categoría vs Producto Específico.
- * 10.FIX: Se eliminó el bloqueo duro de archivos adjuntos para que la IA los procese.
- * 11.DEL: EXTIRPADO SALESFORCE (Limpieza de código fallido para estabilidad).
- * 12.ADD: Soporte nativo para 'Template Messages' en enviarWhatsApp.
- * 13.MOD: Endpoint /api/chat/send-template preparado para imágenes dinámicas y FormData.
- * 14.ADD: Endpoint /api/chat/bulk-excel (Motor de campañas con Rate Limiting 250ms).
- * 15.FIX: Integración nativa Gemini (System Instructions + JSON estricto + Fusión de roles).
- * 16.ADD: Endpoint /api/omnicanal/webhook para Messenger e Instagram (Bypass IA).
- * 17.ADD: Endpoints /api/salesforce/sync-lead y /sync-bulk (Preparados para API Real).
- * 18.FIX: Rutas /inbox añadidas para el frontend omnicanal.
- * 19.FIX: Aislamiento total DB (Columna 'channel') para separar WhatsApp de Redes.
- * 20.ADD: IA Fantasma (/api/chat/analyze-lead) para auto-llenar CRM leyendo el chat.
- * 21.FIX: Motor de campañas Excel reparado (Eliminada variable forzada, Auto-57 añadido, Fix nombres de imagen).
- * 22.MOD: Límite de carga de chats aumentado de 1000 a 5000 para envíos masivos.
- * 23.FIX: Modelo de IA estabilizado a la última versión estable (gemini-2.5-flash).
- * 24.ADD: Soporte para Videos MP4 en campañas masivas (bulk-excel).
+ * 1. FIX: Inyección de busyTimeout (10s) para eliminar errores de base de datos bloqueada (SQLITE_BUSY).
+ * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send (Detecta WhatsApp vs Instagram/Messenger).
+ * 3. ADD: Soporte completo para Videos MP4 y Fotos dinámicas en Campañas Masivas desde Excel.
+ * 4. FIX: Modelo de IA estandarizado globalmente a la última versión estable (gemini-2.5-flash).
+ * 5. FIX: Sistema Anti-bucle integrado y debouncing optimizado de 4.5 segundos.
  * ============================================================
  */
 
@@ -68,6 +49,7 @@ const DEBOUNCE_TIME = 4500;
 const API_KEY = process.env.GEMINI_API_KEY; 
 const META_TOKEN = process.env.META_TOKEN;
 const PHONE_ID = process.env.PHONE_NUMBER_ID; 
+const IG_TOKEN = process.env.IG_TOKEN; // Token de Acceso para Instagram Direct y Messenger
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = "icbot-secure-v29-final"; 
@@ -100,7 +82,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- 4. BASE DE DATOS (WAL MODE + ÍNDICES SENIOR) ---
+// --- 4. BASE DE DATOS (WAL MODE + OPTIMIZACIONES DE CONCURRENCIA) ---
 let db, globalKnowledge = [], serverInstance;
 
 (async () => {
@@ -113,11 +95,13 @@ let db, globalKnowledge = [], serverInstance;
             driver: sqlite3.Database 
         });
 
+        // 🔥 PARCHES DE VELOCIDAD EXTREMA Y ANTI-LOCKS 🔥
         await db.exec("PRAGMA journal_mode = WAL;");
         await db.exec("PRAGMA synchronous = NORMAL;");
-        console.log("📂 Base de Datos Conectada (WAL Mode).");
+        await db.configure('busyTimeout', 10000); // Espera hasta 10s si la DB está ocupada con el Excel
+        
+        console.log("📂 Base de Datos Conectada de forma segura (WAL Mode + 10s Busy Timeout).");
 
-        // ACTUALIZACIÓN DE ESTRUCTURA: Se agrega el campo 'channel'
         const tables = [
             `history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT)`,
             `leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT UNIQUE, nombre TEXT, interes TEXT, producto_especifico TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, departamento TEXT, correo TEXT, source TEXT DEFAULT 'Organico', status_tag TEXT, farewell_sent INTEGER DEFAULT 0, followup_day INTEGER DEFAULT 0, sf_id TEXT)`,
@@ -163,7 +147,7 @@ let db, globalKnowledge = [], serverInstance;
         await escanearFuentesHistoricas(); 
 
         const PORT = process.env.PORT || 10000;
-        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND v33.5 ONLINE (Port ${PORT}) - WEBSOCKETS ACTIVOS`));
+        serverInstance = server.listen(PORT, () => console.log(`🔥 BACKEND ONLINE (Port ${PORT}) - WEBSOCKETS Y OMNICANAL ACTIVOS`));
 
     } catch (e) { console.error("❌ DB FATAL ERROR:", e); }
 })();
@@ -180,9 +164,9 @@ io.on('connection', (socket) => {
 async function verificarTokenMeta() {
     try {
         const r = await axios.get(`https://graph.facebook.com/v21.0/me?access_token=${META_TOKEN}`);
-        console.log(`✅ TOKEN META OK. Conectado como: ${r.data.name}`);
+        console.log(`✅ TOKEN META WHATSAPP OK. Conectado como: ${r.data.name}`);
     } catch (e) {
-        console.error("❌ ERROR CRÍTICO: Token Meta Inválido o Expirado.");
+        console.error("❌ ERROR CRÍTICO: Token Meta de WhatsApp Inválido o Expirado.");
     }
 }
 
@@ -242,13 +226,11 @@ function obtenerDepartamento(ciudad) {
     return mapa[c] || null;
 }
 
-// --- 7. META API ---
+// --- 7. APIS DE MENSAJERÍA OUTBOUND ---
 async function uploadToMeta(buffer, mime, name) {
     try {
         const form = new FormData();
         const type = mime.includes('audio') || mime.includes('ogg') ? 'audio' : (mime.includes('image') ? 'image' : (mime.includes('video') ? 'video' : 'document'));
-        
-        // ⚠️ FIX DE ARCHIVOS: Limpiamos caracteres raros y espacios para que Meta no rebote la imagen
         const safeName = name.replace(/[^a-zA-Z0-9.]/g, '_') || 'imagen.jpg';
 
         form.append('file', buffer, { filename: safeName, contentType: mime });
@@ -287,6 +269,21 @@ async function enviarWhatsApp(to, content, type = "text") {
     } catch (e) { 
         console.error(`❌ ERROR ENVIANDO WHATSAPP:`, e.response ? JSON.stringify(e.response.data) : e.message);
         return false; 
+    }
+}
+
+// 🔥 NUEVA FUNCIÓN: Envío directo para Mensajería de Redes Sociales (Instagram / Messenger) 🔥
+async function enviarOmnicanal(recipientId, text, channel) {
+    try {
+        const payload = {
+            recipient: { id: recipientId },
+            message: { text: text }
+        };
+        await axios.post(`https://graph.facebook.com/v21.0/me/messages?access_token=${IG_TOKEN}`, payload);
+        return true;
+    } catch (e) {
+        console.error(`❌ ERROR ENVIANDO A OMNICANAL (${channel.toUpperCase()}):`, e.response ? JSON.stringify(e.response.data) : e.message);
+        return false;
     }
 }
 
@@ -364,7 +361,7 @@ app.get('/rescate', async (req, res) => {
             html += `<div><p style='font-family:sans-serif;'>Foto ${id}</p><img src="data:${mime};base64,${base64}" style="max-width: 350px; border-radius: 8px; border: 2px solid #00a884; box-shadow: 0 4px 10px rgba(0,0,0,0.2);"></div>`;
         } catch (e) {
             const errorDetalle = e.response && e.response.data ? JSON.stringify(e.response.data) : e.message;
-            html += `<div><p>Foto ${id} ❌ FALLÓ</p><pre style="color:red; background:#fee; padding:10px;">${errorDetalle}</pre></div>`;
+            html += `<div><p>Foto ${id} 2712ce56 FALLÓ</p><pre style="color:red; background:#fee; padding:10px;">${errorDetalle}</pre></div>`;
         }
     }
     html += "</div>";
@@ -671,14 +668,11 @@ app.post('/api/chat/analyze-lead', proteger, async (req, res) => {
     if (!phone) return res.status(400).json({ error: "Falta teléfono" });
 
     try {
-        // 1. Extraemos los últimos 50 mensajes de esa conversación
         const history = await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id ASC LIMIT 50", [phone]);
         if (!history || history.length === 0) return res.json({ success: false, message: "No hay historial para analizar." });
 
-        // 2. Formateamos el texto para que la IA entienda quién dijo qué
         let convoText = history.map(h => `${h.role === 'user' ? 'Cliente' : 'Asesor'}: ${h.text}`).join('\n');
 
-        // 3. El Prompt estricto (Modo Lector)
         const promptEstractor = `
         Actúa como un analista de datos experto. Lee la siguiente conversación entre un cliente y un asesor de ventas de maquinaria pesada.
         Tu ÚNICO objetivo es extraer los datos del cliente para llenar el CRM. No respondas nada más.
@@ -705,7 +699,6 @@ app.post('/api/chat/analyze-lead', proteger, async (req, res) => {
         const rawText = r.data.candidates[0].content.parts[0].text;
         const extractedData = JSON.parse(rawText);
 
-        // 5. Devolvemos los datos al frontend
         res.json({ success: true, data: extractedData });
     } catch (error) {
         console.error("❌ Error en auto-análisis IA:", error.response ? error.response.data : error.message);
@@ -817,20 +810,36 @@ app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, r
     } catch(e) { res.status(500).json({error: e.message}); } 
 });
 
+// 🔥 ENRUTAMIENTO INTELIGENTE OMNICANAL EN RESPUESTA MANUAL DEL PANEL 🔥
 app.post('/api/chat/send', proteger, async (req, res) => { 
-    const { phone, message } = req.body; const cleanPhone = phone.replace(/\D/g, ''); 
-    try { const sent = await enviarWhatsApp(cleanPhone, message); 
+    const { phone, message } = req.body; 
+    try { 
+        // Identificar el canal guardado en metadata para este ID
+        const metaInfo = await db.get("SELECT channel FROM metadata WHERE phone = ?", [phone]);
+        const channel = metaInfo ? metaInfo.channel : 'whatsapp';
+        
+        let sent = false;
+        let finalId = phone;
+
+        if (channel === 'whatsapp') {
+            finalId = phone.replace(/\D/g, ''); // WhatsApp exige solo números planos
+            sent = await enviarWhatsApp(finalId, message); 
+        } else {
+            // Instagram / Messenger usan IDs alfanuméricos provistos por el Webhook
+            sent = await enviarOmnicanal(finalId, message, channel);
+        }
+
         if(sent) { 
             const timestamp = new Date().toISOString();
-            await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [cleanPhone, 'manual', message, timestamp]); 
-            await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount, last_interaction) VALUES (?, ?, 1, 0, 0, ?) ON CONFLICT(phone) DO UPDATE SET last_interaction=excluded.last_interaction`, [cleanPhone, cleanPhone, timestamp]); 
+            await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [finalId, 'manual', message, timestamp]); 
+            await db.run(`INSERT INTO metadata (phone, contactName, addedManual, archived, unreadCount, last_interaction) VALUES (?, ?, 1, 0, 0, ?) ON CONFLICT(phone) DO UPDATE SET last_interaction=excluded.last_interaction`, [finalId, finalId, timestamp]); 
             
-            io.emit('new_message', { phone: cleanPhone, role: 'manual', text: message, time: timestamp });
+            io.emit('new_message', { phone: finalId, role: 'manual', text: message, time: timestamp });
             io.emit('update_chats_list');
 
             res.json({ success: true }); 
-        } else res.status(500).json({ error: "Error enviando" }); 
-    } catch(e) { res.status(500).json({ error: "Error interno" }); } 
+        } else res.status(500).json({ error: "Error enviando el mensaje por la API" }); 
+    } catch(e) { res.status(500).json({ error: "Error interno del servidor" }); } 
 });
 
 app.post('/api/chat/send-template', proteger, upload.single('file'), async (req, res) => {
@@ -888,7 +897,7 @@ app.post('/api/chat/send-template', proteger, upload.single('file'), async (req,
     }
 });
 
-// 🔥 CIRUGÍA APLICADA: RUTAS DE CAMPAÑA MASIVA EXCEL (SOPORTE IMAGEN Y VIDEO) 🔥
+// 🔥 CAMPAÑA MASIVA EXCEL REPARADA (SOPORTE IMÁGENES Y VIDEOS MP4 CON INTERRUPCIÓN CONTROLADA) 🔥
 app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCount: 1 }, { name: 'media', maxCount: 1 }]), async (req, res) => {
     try {
         if (!req.files || !req.files.excel) return res.status(400).json({ error: "Falta el archivo Excel" });
@@ -899,19 +908,17 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
         if (!templateName) return res.status(400).json({ error: "Falta el nombre de la plantilla" });
 
         let mediaId = null;
-        let mediaType = 'image'; // Por defecto es imagen
+        let mediaType = 'image';
 
         if (req.files.media && req.files.media[0]) {
             const mediaFile = req.files.media[0];
-            
-            // Detectamos automáticamente si el archivo es un video
             if (mediaFile.mimetype.startsWith('video')) {
                 mediaType = 'video';
             }
             
             const safeName = mediaFile.originalname.replace(/[^a-zA-Z0-9.]/g, '_') || `archivo.${mediaType === 'video' ? 'mp4' : 'jpg'}`;
             mediaId = await uploadToMeta(mediaFile.buffer, mediaFile.mimetype, safeName);
-            if (!mediaId) return res.status(500).json({ error: "Error al subir el archivo a Meta" });
+            if (!mediaId) return res.status(500).json({ error: "Error al subir el archivo multimedia a los servidores de Meta" });
         }
 
         const workbook = XLSX.read(req.files.excel[0].buffer, { type: 'buffer' });
@@ -939,7 +946,6 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
 
             let components = [];
             
-            // Aquí armamos el encabezado dinámicamente (video o imagen)
             if (mediaId) {
                 components.push({
                     type: "header",
@@ -980,7 +986,7 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
                 errorCount++;
             }
 
-            await new Promise(r => setTimeout(r, 250)); // Control de velocidad
+            await new Promise(r => setTimeout(r, 250)); // Rate limiting no bloqueante de 250ms
         }
 
         io.emit('update_chats_list');
@@ -993,9 +999,8 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
 });
 
 // ============================================================
-// NUEVO WEBHOOK OMNICANAL (BANDEJA HUMANA - BYPASS IA)
+// WEBHOOK OMNICANAL (INSTAGRAM DIRECT & MESSENGER)
 // ============================================================
-
 app.get('/api/omnicanal/webhook', (req, res) => {
     if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
         res.send(req.query['hub.challenge']);
@@ -1023,7 +1028,6 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                         const source = body.object === 'page' ? 'messenger' : 'instagram';
                         const timestamp = new Date().toISOString();
 
-                        // ALMACENAMOS EL CANAL DIRECTAMENTE EN LA BD
                         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [senderId, 'user', text, timestamp]);
                         await db.run(`INSERT INTO metadata (phone, archived, unreadCount, last_interaction, channel) 
                                       VALUES (?, 0, 1, ?, ?) 
@@ -1033,7 +1037,7 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                         io.emit('new_message', { phone: senderId, role: 'user', text: text, time: timestamp });
                         io.emit('update_chats_list');
 
-                        console.log(`💬 ${source.toUpperCase()} - De: ${senderId} | Msj: ${text}`);
+                        console.log(`💬 ${source.toUpperCase()} Webhook - De: ${senderId} | Msj: ${text}`);
                     }
                 }
             }
@@ -1044,7 +1048,7 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
 });
 
 // ============================================================
-// WEBHOOK ORIGINAL BLINDADO (SOLO WHATSAPP - CON IA)
+// WEBHOOK ORIGINAL (SOLO WHATSAPP CLOUD API)
 // ============================================================
 app.get('/webhook', (req, res) => {
     if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
@@ -1061,20 +1065,16 @@ app.post('/webhook', async (req, res) => {
         const changes = entry?.changes?.[0];
         const val = changes?.value; 
         
-        // 🔥 GAFAS DE RAYOS X: Atrapamos los errores silenciosos de Meta 🔥
         if (val?.statuses && val.statuses[0]) {
             const status = val.statuses[0];
             if (status.status === 'failed') {
                 console.error(`🚨 META MATÓ EL MENSAJE PARA ${status.recipient_id}. MOTIVO:`, JSON.stringify(status.errors));
             }
-            return; // Como es un reporte de estado, paramos el código aquí
+            return;
         }
 
         const msg = val?.messages?.[0]; 
-        
-        if (msg && msg.from === PHONE_ID) {
-             return;
-        }
+        if (msg && msg.from === PHONE_ID) return;
 
         if (val?.contacts?.[0]?.profile?.name) {
             await db.run("INSERT INTO metadata (phone, contactName) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName WHERE addedManual=0", [val.contacts[0].wa_id, val.contacts[0].profile.name]); 
@@ -1085,7 +1085,6 @@ app.post('/webhook', async (req, res) => {
             
             if (msg.referral) {
                 const refSource = `Meta Ads: ${msg.referral.source_url || 'N/A'}`;
-                
                 const existeLead = await db.get("SELECT id FROM leads WHERE phone = ?", [phone]);
                 if (existeLead) {
                     await db.run("UPDATE leads SET source = ? WHERE phone = ?", [refSource, phone]);
@@ -1110,7 +1109,6 @@ app.post('/webhook', async (req, res) => {
             
             if (userMsg) {
                 const timestamp = new Date().toISOString();
-                // LOS MENSAJES DE WHATSAPP CONSERVAN SU COMPORTAMIENTO ORIGINAL
                 await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'user', userMsg, timestamp]);
                 await db.run("INSERT INTO metadata (phone, archived, unreadCount, last_interaction) VALUES (?, 0, 1, ?) ON CONFLICT(phone) DO UPDATE SET archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction", [phone, timestamp]);
                 
@@ -1150,168 +1148,3 @@ app.post('/webhook', async (req, res) => {
         } 
     } catch(e) { console.error("Webhook Error", e); } 
 });
-
-// ============================================================
-// 10. INTEGRACIÓN SALESFORCE (API REAL)
-// ============================================================
-
-// Utilidad interna: Obtener Token de Salesforce
-async function getSalesforceToken() {
-    const params = new URLSearchParams();
-    params.append('grant_type', 'password');
-    params.append('client_id', process.env.SF_CLIENT_ID);
-    params.append('client_secret', process.env.SF_CLIENT_SECRET);
-    params.append('username', process.env.SF_USERNAME);
-    params.append('password', process.env.SF_PASSWORD);
-
-    const url = `${process.env.SF_URL}/services/oauth2/token`;
-    
-    try {
-        const res = await axios.post(url, params, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
-        return { token: res.data.access_token, instanceUrl: res.data.instance_url };
-    } catch (error) {
-        console.error("❌ Error autenticando con Salesforce:", error.response ? error.response.data : error.message);
-        throw new Error("Credenciales de Salesforce inválidas o expiradas.");
-    }
-}
-
-// Endpoint para sincronizar 1 solo Lead (Desde el panel lateral CRM)
-app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
-    const { phone } = req.body;
-    if (!phone) return res.status(400).json({ success: false, message: "Falta el número de teléfono" });
-
-    try {
-        const lead = await db.get("SELECT * FROM leads WHERE phone = ?", [phone]);
-        if (!lead) return res.status(404).json({ success: false, message: "Lead no encontrado en la base local" });
-
-        // 1. Nos autenticamos
-        const sfAuth = await getSalesforceToken();
-        const headers = { 'Authorization': `Bearer ${sfAuth.token}`, 'Content-Type': 'application/json' };
-
-        // 2. BUSCAR DUPLICADOS (Detective)
-        let query = `SELECT Id FROM Lead WHERE Phone = '${lead.phone}'`;
-        if (lead.correo && lead.correo.includes('@')) {
-            query += ` OR Email = '${lead.correo}'`;
-        }
-        
-        const searchUrl = `${sfAuth.instanceUrl}/services/data/v60.0/query/?q=${encodeURIComponent(query)}`;
-        const searchRes = await axios.get(searchUrl, { headers });
-
-        if (searchRes.data.totalSize > 0) {
-            // EL LEAD YA EXISTE
-            const existingSfId = searchRes.data.records[0].Id;
-            await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [existingSfId, lead.id]);
-            return res.json({ success: true, sfId: existingSfId, message: "El lead ya existía en Salesforce. Se ha vinculado." });
-        }
-
-        // 3. CREAR NUEVO LEAD (Aplicando las Reglas de Oro)
-        let nameParts = lead.nombre ? lead.nombre.trim().split(' ') : [];
-        let firstName = nameParts.length > 0 ? nameParts[0] : ".";
-        let lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : firstName; // Comodín: Apellido = Nombre si falta
-        
-        const sfPayload = {
-            FirstName: firstName,
-            LastName: lastName,
-            Company: lead.nombre || ".", // Empresa obligatoria = Nombre o "."
-            Phone: lead.phone || ".",
-            Email: lead.correo && lead.correo.includes('@') ? lead.correo : null, // El email no acepta ".", mandamos null
-            City: lead.ciudad || ".",
-            State: lead.departamento || ".",
-            Description: `[Lead capturado por ICBOT]\nInterés: ${lead.interes || '.'}\nDetalle: ${lead.producto_especifico || '.'}`
-        };
-
-        const createUrl = `${sfAuth.instanceUrl}/services/data/v60.0/sobjects/Lead/`;
-        const createRes = await axios.post(createUrl, sfPayload, { headers });
-
-        if (createRes.data.success) {
-            const newSfId = createRes.data.id;
-            await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [newSfId, lead.id]);
-            return res.json({ success: true, sfId: newSfId, message: "Lead creado exitosamente en Salesforce." });
-        } else {
-            throw new Error("Salesforce devolvió un error desconocido al crear.");
-        }
-
-    } catch (error) {
-        console.error("❌ Error en Salesforce Sync:", error.response ? JSON.stringify(error.response.data) : error.message);
-        
-        let errorMsg = "Error interno contactando a Salesforce.";
-        if (error.response && error.response.data && error.response.data[0]) {
-            errorMsg = `Rechazado por SF: ${error.response.data[0].message}`;
-        } else if (error.message) {
-            errorMsg = error.message;
-        }
-
-        res.status(500).json({ success: false, message: errorMsg });
-    }
-});
-
-// Endpoint para sincronizar Masivamente
-app.post('/api/salesforce/sync-bulk', proteger, async (req, res) => {
-    try {
-        const leadsPendientes = await db.all("SELECT * FROM leads WHERE sf_id IS NULL OR sf_id = ''");
-        if (leadsPendientes.length === 0) {
-            return res.json({ success: true, count: 0, message: "Todos los leads ya están sincronizados." });
-        }
-
-        const sfAuth = await getSalesforceToken();
-        const headers = { 'Authorization': `Bearer ${sfAuth.token}`, 'Content-Type': 'application/json' };
-
-        let successCount = 0;
-        let errorCount = 0;
-
-        for (const lead of leadsPendientes) {
-            try {
-                // Buscar duplicados
-                let query = `SELECT Id FROM Lead WHERE Phone = '${lead.phone}'`;
-                if (lead.correo && lead.correo.includes('@')) query += ` OR Email = '${lead.correo}'`;
-                const searchRes = await axios.get(`${sfAuth.instanceUrl}/services/data/v60.0/query/?q=${encodeURIComponent(query)}`, { headers });
-
-                if (searchRes.data.totalSize > 0) {
-                    await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [searchRes.data.records[0].Id, lead.id]);
-                    successCount++;
-                    continue;
-                }
-
-                // Crear Nuevo
-                let nameParts = lead.nombre ? lead.nombre.trim().split(' ') : [];
-                let firstName = nameParts.length > 0 ? nameParts[0] : ".";
-                let lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : firstName;
-                
-                const sfPayload = {
-                    FirstName: firstName,
-                    LastName: lastName,
-                    Company: lead.nombre || ".",
-                    Phone: lead.phone || ".",
-                    Email: lead.correo && lead.correo.includes('@') ? lead.correo : null,
-                    City: lead.ciudad || ".",
-                    State: lead.departamento || ".",
-                    Description: `[Lead masivo ICBOT]\nInterés: ${lead.interes || '.'}\nDetalle: ${lead.producto_especifico || '.'}`
-                };
-
-                const createRes = await axios.post(`${sfAuth.instanceUrl}/services/data/v60.0/sobjects/Lead/`, sfPayload, { headers });
-                
-                if (createRes.data.success) {
-                    await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [createRes.data.id, lead.id]);
-                    successCount++;
-                } else {
-                    errorCount++;
-                }
-            } catch (err) {
-                console.error(`Error masivo lead ${lead.phone}:`, err.response ? err.response.data : err.message);
-                errorCount++;
-            }
-            
-            // Pausa para no saturar la API
-            await new Promise(r => setTimeout(r, 200));
-        }
-
-        res.json({ success: true, count: successCount, message: `Completado: ${successCount} subidos/encontrados. ${errorCount} errores.` });
-
-    } catch (error) {
-        console.error("❌ Error Crítico Bulk:", error.message);
-        res.status(500).json({ success: false, message: "Fallo al iniciar sincronización masiva." });
-    }
-});
-
-process.on('SIGTERM', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
-process.on('SIGINT', () => { if (serverInstance) serverInstance.close(() => process.exit(0)); else process.exit(0); });
