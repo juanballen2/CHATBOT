@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICBOT V33.5 - Panel Principal & Campañas</title>
+    <title>ICBOT V33.7 - Panel Principal & Campañas</title>
     <link rel="icon" href="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" type="image/svg+xml">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -473,8 +473,8 @@
                             <option value="es_CO">Español Colombia (es_CO)</option>
                         </select>
 
-                 <label style="font-weight: bold; color: var(--text);">3. Imagen o Video MP4 (Opcional)</label>
-<input type="file" id="camp-media" accept="image/jpeg, image/png, video/mp4" style="width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-main); color: var(--text);">
+                        <label style="font-weight: bold; color: var(--text);">3. Imagen o Video MP4 (Opcional)</label>
+                        <input type="file" id="camp-media" accept="image/jpeg, image/png, video/mp4" style="width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-main); color: var(--text);">
 
                         <label style="font-weight: bold; color: var(--text);">4. Cargar Base de Datos (Excel)</label>
                         <input type="file" id="camp-excel" accept=".xlsx, .csv" onchange="previewExcelData()" style="width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border: 1px dashed #10b981; border-radius: 5px; background: rgba(16, 185, 129, 0.05); color: var(--text);">
@@ -492,7 +492,7 @@
                         </div>
 
                         <div id="excel-preview-table" style="margin-top: 15px; max-height: 250px; overflow-y: auto; background: var(--bg-main); color: var(--text); border-radius: 5px; border: 1px solid var(--border); display: none;">
-                            </div>
+                        </div>
                     </div>
 
                 </div>
@@ -952,7 +952,7 @@
                     alert("❌ Ocurrió un error: " + data.error);
                 }
             } catch(e) {
-                alert("❌ Error de red lanzando la campaña.");
+                alert("❌ Error de red lanzando la campaña. Por favor revisa el progreso en la consola del servidor.");
             } finally {
                 btnLanzar.disabled = false;
                 btnLanzar.innerHTML = '<i class="fas fa-paper-plane"></i> Lanzar Campaña';
@@ -1049,13 +1049,13 @@
             if (chat) {
                 if (!chat.labels) chat.labels = [];
                 if (remove) {
-                    chat.labels = chat.labels.filter(l => l.text !== tagObj.text);
+                    chat.labels = chat.labels.filter(l => (l.text || l) !== tagObj.text);
                 } else {
-                    if (!chat.labels.find(l => l.text === tagObj.text)) {
+                    if (!chat.labels.find(l => (l.text || l) === tagObj.text)) {
                         chat.labels.push(tagObj);
                     }
                 }
-                updateBulkVisuals();
+                if (bulkMode) updateBulkVisuals();
             }
         }
 
@@ -1271,35 +1271,22 @@
         async function syncChats() { 
             try { 
                 const search = document.getElementById('main-search').value; 
-                const res = await fetch(`/api/chats-full?view=${currentFilter}&search=${search}`); 
+                // 🔥 FIX: Añadimos &channel=whatsapp para ahorrar megabytes de RAM en el navegador
+                const res = await fetch(`/api/chats-full?view=${currentFilter}&search=${search}&channel=whatsapp`); 
                 const allChats = await res.json(); 
                 
-                // --- CÁLCULO DE GLOBOS (BADGES) ---
-                let waUnread = 0;
-                let omniUnread = 0;
+                chatsData = allChats; // Ya viene filtrado, cero estrés para el navegador.
                 
-                allChats.forEach(c => {
-                    const ch = c.channel || 'whatsapp';
-                    if (c.unreadCount > 0) {
-                        if (ch === 'whatsapp') waUnread += 1;
-                        else omniUnread += 1;
-                    }
+                let waUnread = 0;
+                chatsData.forEach(c => {
+                    if (c.unreadCount > 0) waUnread += 1;
                 });
                 
                 const badgeWa = document.getElementById('badge-wa');
-                const badgeOmni = document.getElementById('badge-omni');
-                
                 if(badgeWa) {
                     badgeWa.innerText = waUnread;
                     badgeWa.style.display = waUnread > 0 ? 'block' : 'none';
                 }
-                if(badgeOmni) {
-                    badgeOmni.innerText = omniUnread;
-                    badgeOmni.style.display = omniUnread > 0 ? 'block' : 'none';
-                }
-
-                // --- AISLAMIENTO TOTAL: Solo mostramos WhatsApp aquí ---
-                chatsData = allChats.filter(c => !c.channel || c.channel === 'whatsapp');
                 
                 const tagFilter = document.getElementById('tag-filter').value; 
                 if(tagFilter) {
@@ -1346,7 +1333,6 @@
             }
         }
 
-        // 🔥 NUEVA FUNCIÓN: Seleccionar todos los chats visibles 🔥
         function selectAllBulkChats() {
             if (!bulkMode) return;
             const checkboxes = document.querySelectorAll('.bulk-checkbox');
@@ -1365,9 +1351,7 @@
             updateBulkVisuals();
         }
 
-        // 🔥 FIX: LÓGICA DE SHIFT + CLIC SIN PARPADEOS 🔥
-        let lastCheckedIndex = -1;
-
+        // 🔥 FIX: Funciona el Shift+Clic sin importar el redibujado de la lista
         function toggleChatSelection(phone, event) {
             if (!bulkMode) return;
             event.stopPropagation();
@@ -1375,7 +1359,6 @@
             const checkboxes = Array.from(document.querySelectorAll('.bulk-checkbox'));
             let targetCb = event.target;
             
-            // Si el clic fue en el div y no directamente en el checkbox, invertimos el valor
             if (targetCb.tagName !== 'INPUT') {
                 targetCb = document.querySelector(`#chat-${phone} .bulk-checkbox`);
                 targetCb.checked = !targetCb.checked;
@@ -1409,7 +1392,6 @@
             document.getElementById('bulk-count').innerText = selectedChats.size;
         }
 
-        // Solo actualiza los chulitos visualmente sin recargar toda la lista
         function updateBulkVisuals() {
             document.querySelectorAll('.chat-item').forEach(item => {
                 const p = item.id.replace('chat-', '');
@@ -1418,7 +1400,6 @@
             });
         }
 
-        // 🔥 FIX: BORRADO MASIVO SECUENCIAL PARA NO BLOQUEAR LA BASE DE DATOS 🔥
         async function executeBulkAction(action) {
             if (selectedChats.size === 0) return alert("Selecciona al menos un chat");
             
@@ -1432,7 +1413,6 @@
                 selectedChats.forEach(phone => updateTagsOptimistic(phone, value, false));
             }
             
-            // Advertencia especial si es borrado masivo
             if (action === 'delete') {
                 if (!confirm(`⚠️ ¡Peligro! Vas a eliminar PERMANENTEMENTE ${selectedChats.size} chats de WhatsApp.\nEsta acción borra todo el historial y no se puede deshacer.\n\n¿Estás seguro?`)) return;
             } else {
@@ -1443,7 +1423,6 @@
             
             if (action === 'toggle_archive' || action === 'delete') {
                 const phones = Array.from(selectedChats);
-                // Procesamos uno por uno en lugar de todos al mismo milisegundo
                 for (let i = 0; i < phones.length; i++) {
                     try {
                         await fetch('/api/chat/action', {
@@ -1454,7 +1433,6 @@
                     } catch(e) { console.error(e); }
                 }
                 
-                // Si borramos el chat que estábamos viendo, limpiar la pantalla
                 if (action === 'delete' && selectedChats.has(currentChat)) {
                     currentChat = null;
                     document.getElementById('conversation-view').style.display = 'none';
@@ -1546,6 +1524,9 @@
             }).join(''); 
             
             if(scroll > 0) container.scrollTop = scroll;
+            
+            // 🔥 FIX: Mantiene los chulitos visualmente después del DOM Reflow
+            if (bulkMode) updateBulkVisuals(); 
         }
 
         function showContextMenu(e, phone, isPinned, isArchived) { 
@@ -2018,6 +1999,7 @@
                 }
             });
 
+            // 🔥 FIX: Formato JSON correcto para renderizar etiquetas
             container.innerHTML = uniqueTags.map(t => { 
                 const isActive = activeTags.find(l => (l.text || l) === t.name); 
                 return `<div class="tag ${isActive ? 'selected' : ''}" style="${isActive ? `background:${t.color}; border-color:${t.color};` : ''}" onclick="toggleTagLocal(decodeURIComponent('${encodeURIComponent(t.name)}'), '${t.color}')">${t.name}</div>`; 
@@ -2029,7 +2011,7 @@
             
             const chat = chatsData.find(c => c.id === currentChat);
             const activeTags = chat ? (chat.labels || []) : [];
-            const exists = activeTags.find(l => l.text === name);
+            const exists = activeTags.find(l => (l.text || l) === name);
             
             const tagObj = { text: name, color: color };
             updateTagsOptimistic(currentChat, tagObj, !!exists);
@@ -2039,7 +2021,7 @@
             try {
                 let newTags = [...activeTags]; 
                 if(exists) { 
-                    newTags = newTags.filter(l => l.text !== name); 
+                    newTags = newTags.filter(l => (l.text || l) !== name); 
                 } else { 
                     newTags.push(tagObj); 
                 } 
@@ -2063,7 +2045,6 @@
                 const d = new Date(l.fecha); 
                 const f = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`; 
                 
-                // 🔥 ETIQUETAS VISUALES ACTUALIZADAS 🔥
                 let sourceHTML = l.source || '-';
                 if(l.source && l.source.includes('Ads')) sourceHTML = `<span class="lead-source-tag" style="background:rgba(239, 68, 68, 0.1); color:#ef4444; border: 1px solid #ef4444;">META ADS</span>`;
                 else if(l.source === 'Web') sourceHTML = `<span class="lead-source-tag lead-source-web">WEB</span>`;
