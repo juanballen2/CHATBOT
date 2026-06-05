@@ -1,14 +1,15 @@
 /**
  * ICBOT - Lógica del Frontend para Bandeja Omnicanal (Meta)
- * Versión v33.6 - IA Fantasma, CRM, Fix Etiquetas y BORRADO MASIVO
+ * Versión v33.7 - IA Fantasma, CRM, Fix Etiquetas, Borrado Masivo y Menú Clic Derecho
  */
 
 const socket = io();
 let currentChat = null;
 let currentPlatform = 'all'; 
-let currentView = 'active'; // <-- NUEVO: Para manejar Activos/Archivados
+let currentView = 'active'; 
 let omniChats = []; 
 window._cachedTags = []; 
+let contextPhone = null; // <-- NUEVO: Para guardar el ID del clic derecho
 
 // --- VARIABLES SELECCIÓN MÚLTIPLE ---
 let bulkMode = false;
@@ -47,7 +48,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.platform-filter, .filters .filter-btn:not(.view-filter)').forEach(btn => {
         btn.addEventListener('click', (e) => {
             if(e.currentTarget.innerText.includes('Cerrar')) return;
-            // Ajuste para que solo desmarque los de su grupo
             const siblings = e.currentTarget.parentElement.querySelectorAll('.filter-btn');
             siblings.forEach(b => b.classList.remove('active'));
             e.currentTarget.classList.add('active');
@@ -62,12 +62,20 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.view-filter').forEach(b => b.classList.remove('active'));
             e.currentTarget.classList.add('active');
             currentView = e.currentTarget.dataset.view;
-            loadOmniChats(); // Refrescar base de datos
+            loadOmniChats(); 
         });
     });
 
     searchInput.addEventListener('input', (e) => {
         renderChatList(e.target.value.toLowerCase());
+    });
+
+    // <-- NUEVO: Ocultar menú de clic derecho al hacer clic en cualquier otro lado
+    document.addEventListener('click', (e) => { 
+        if(!e.target.closest('.chat-item') && !e.target.closest('#context-menu')) {
+            const menu = document.getElementById('context-menu');
+            if (menu) menu.style.display = 'none'; 
+        }
     });
 });
 
@@ -162,16 +170,17 @@ function renderChatList(searchTerm = searchInput.value.toLowerCase()) {
 
         const isSelected = selectedChats.has(c.id);
 
+        // 🔥 FIX: Añadimos oncontextmenu y referrerpolicy="no-referrer" a la imagen 🔥
         return `
-            <div class="chat-item ${currentChat === c.id ? 'active' : ''}" id="chat-${c.id}" onclick="handleChatClick('${c.id}', '${c.name.replace(/'/g, "\\'")}', '${c.channel}', event)">
+            <div class="chat-item ${currentChat === c.id ? 'active' : ''} ${c.archived ? 'archived' : ''}" id="chat-${c.id}" onclick="handleChatClick('${c.id}', '${c.name.replace(/'/g, "\\'")}', '${c.channel}', event)" oncontextmenu="showContextMenu(event, '${c.id}', ${c.pinned || false}, ${c.archived || false})">
                 <input type="checkbox" class="bulk-checkbox" ${isSelected ? 'checked' : ''} onclick="toggleChatSelection('${c.id}', event)">
                 <div class="chat-avatar">
-                    ${c.photoUrl ? `<img src="${c.photoUrl}">` : '<i class="fas fa-user"></i>'}
+                    ${c.photoUrl ? `<img src="${c.photoUrl}" referrerpolicy="no-referrer">` : '<i class="fas fa-user"></i>'}
                     <div class="platform-badge">${platformIcon}</div>
                 </div>
                 <div class="chat-info">
                     <div class="chat-name">
-                        <h4>${c.name}</h4>
+                        <h4>${c.name} ${c.pinned ? '<i class="fas fa-thumbtack" style="color:var(--primary); font-size:0.8rem; margin-left:5px;"></i>' : ''}</h4>
                         <span class="time">${formatTime(c.lastMessage.time)}</span>
                     </div>
                     <div class="chat-preview">
@@ -184,6 +193,75 @@ function renderChatList(searchTerm = searchInput.value.toLowerCase()) {
         `;
     }).join('');
 }
+
+// --- 🔥 NUEVO: MENÚ DE CLIC DERECHO (CONTEXT MENU) 🔥 ---
+function showContextMenu(e, phone, isPinned, isArchived) { 
+    e.preventDefault(); 
+    contextPhone = phone; 
+    const menu = document.getElementById('context-menu'); 
+    const pinBtn = document.getElementById('ctx-pin'); 
+    
+    if (pinBtn) {
+        pinBtn.innerHTML = isPinned ? '<i class="fas fa-thumbtack" style="opacity:0.5"></i> <span>Desfijar Chat</span>' : '<i class="fas fa-thumbtack"></i> <span>Fijar Chat</span>'; 
+        pinBtn.onclick = () => contextAction('toggle_pin'); 
+    }
+    
+    const archBtn = document.getElementById('ctx-archive'); 
+    if (archBtn) {
+        archBtn.innerHTML = isArchived ? '<i class="fas fa-box-open"></i> <span>Desarchivar</span>' : '<i class="fas fa-archive"></i> <span>Archivar</span>'; 
+        archBtn.onclick = () => contextAction('toggle_archive'); 
+    }
+    
+    if (menu) {
+        menu.style.display = 'block'; 
+        menu.style.left = e.pageX + 'px'; 
+        menu.style.top = e.pageY + 'px'; 
+    }
+}
+
+async function contextAction(action, valueOverride = true) { 
+    if(!contextPhone) return; 
+    if(action === 'delete' && !confirm("⚠️ ¿Estás seguro que deseas ELIMINAR el chat y todo su historial? Esta acción no se puede deshacer.")) return; 
+    
+    try {
+        await fetch('/api/chat/action', { 
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'}, 
+            body: JSON.stringify({ phone: contextPhone, action: action, value: valueOverride }) 
+        }); 
+        
+        loadOmniChats(); 
+        const menu = document.getElementById('context-menu');
+        if (menu) menu.style.display = 'none'; 
+        
+        // Si borró o archivó el chat abierto, limpiar la pantalla
+        if ((action === 'delete' || action === 'toggle_archive') && contextPhone === currentChat) {
+            currentChat = null;
+            document.getElementById('conversation-empty').style.display = 'flex';
+            document.getElementById('conversation-active').style.display = 'none';
+            document.getElementById('crm-panel').classList.remove('open');
+        }
+        
+    } catch(e) {
+        showToast("Error ejecutando acción");
+    }
+}
+
+function quickLabel() { 
+    if(!contextPhone) return; 
+    const chat = omniChats.find(c => c.id === contextPhone); 
+    
+    if(chat) {
+        loadChatHistory(chat.id, chat.name, chat.channel); 
+    }
+    
+    const crmPanel = document.getElementById('crm-panel');
+    if (crmPanel) crmPanel.classList.add('open'); 
+    
+    const menu = document.getElementById('context-menu');
+    if (menu) menu.style.display = 'none'; 
+}
+
 
 // --- SISTEMA DE BORRADO MASIVO Y SELECCIÓN MÚLTIPLE ---
 function toggleBulkMode() {
@@ -282,30 +360,33 @@ function updateBulkVisuals() {
     });
 }
 
-async function executeBulkDelete() {
-    if (selectedChats.size === 0) return showToast("Selecciona al menos un chat para eliminar.");
+async function executeBulkAction(action) {
+    if (selectedChats.size === 0) return showToast("Selecciona al menos un chat.");
     
-    if (!confirm(`⚠️ ¡Peligro! Vas a eliminar PERMANENTEMENTE ${selectedChats.size} chats de la Bandeja Omnicanal.\nEsta acción borra todo el historial y no se puede deshacer.\n\n¿Estás seguro?`)) return;
+    if (action === 'delete') {
+        if (!confirm(`⚠️ ¡Peligro! Vas a eliminar PERMANENTEMENTE ${selectedChats.size} chats.\nEsta acción borra todo el historial y no se puede deshacer.\n\n¿Estás seguro?`)) return;
+    } else {
+        if (!confirm(`¿Estás seguro de querer archivar/desarchivar ${selectedChats.size} chats?`)) return;
+    }
     
-    showToast("🗑️ Eliminando chats... por favor espera.");
+    showToast("⏳ Procesando... por favor espera.");
     
     const phones = Array.from(selectedChats);
     
-    // Borrado secuencial para no sobrecargar la base de datos
     for (let i = 0; i < phones.length; i++) {
         try {
             await fetch('/api/chat/action', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ phone: phones[i], action: 'delete' })
+                body: JSON.stringify({ phone: phones[i], action: action, value: true })
             });
-        } catch(e) { console.error(`Error borrando ${phones[i]}`, e); }
+        } catch(e) { console.error(`Error procesando ${phones[i]}`, e); }
     }
     
-    showToast(`✅ ${phones.length} chats eliminados correctamente.`);
+    showToast(`✅ Acción completada correctamente.`);
     toggleBulkMode();
     
-    if (selectedChats.has(currentChat)) {
+    if (selectedChats.has(currentChat) && (action === 'delete' || action === 'toggle_archive')) {
         currentChat = null;
         document.getElementById('conversation-empty').style.display = 'flex';
         document.getElementById('conversation-active').style.display = 'none';
@@ -315,6 +396,8 @@ async function executeBulkDelete() {
     loadOmniChats(); 
 }
 
+// --- MANEJO DE CHAT INDIVIDUAL ---
+
 async function loadChatHistory(phone, name, platform) {
     currentChat = phone;
     
@@ -322,7 +405,7 @@ async function loadChatHistory(phone, name, platform) {
     document.getElementById('conversation-active').style.display = 'flex';
     document.getElementById('active-name').innerText = name;
     
-    const sourceIcon = platform === 'instagram' ? '<i class="fab fa-instagram" style="color: #E1306C;"></i> Instagram Direct' : '<i class="fab fa-facebook-messenger" style="color: #0084FF;"></i> Messenger';
+    const sourceIcon = platform === 'instagram' ? '<i class="fab fa-instagram" style="color:#E1306C;"></i> Instagram' : '<i class="fab fa-facebook-messenger" style="color:#0084FF;"></i> Messenger';
     document.getElementById('active-source').innerHTML = sourceIcon;
 
     document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
@@ -330,18 +413,18 @@ async function loadChatHistory(phone, name, platform) {
     if (clickedItem) clickedItem.classList.add('active');
 
     try {
-        messagesContainer.innerHTML = '<div class="loading-state" style="text-align:center; padding:20px;"><i class="fas fa-circle-notch fa-spin"></i> Cargando...</div>';
+        messagesContainer.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);"><i class="fas fa-circle-notch fa-spin"></i> Cargando...</div>';
         const res = await fetch(`/api/chat-history/${phone}`);
         const history = await res.json();
         
         messagesContainer.innerHTML = '';
         history.forEach(msg => appendMessage(msg));
-        
         scrollToBottom();
         msgInput.focus();
-
+        
         loadLeadDataToCRM(phone); 
         renderCRMTags(window._cachedTags);
+        
     } catch (error) {
         console.error('Error cargando historial:', error);
     }
@@ -350,7 +433,6 @@ async function loadChatHistory(phone, name, platform) {
 function appendMessage(msg) {
     let text = msg.text.replace(/\[Instagram\] |\[Messenger\] /g, '');
     const bubbleClass = msg.role === 'user' ? 'msg-incoming' : 'msg-outgoing';
-    
     const msgHTML = `
         <div class="message-bubble ${bubbleClass}">
             <div class="message-text">${text.replace(/\n/g, '<br>')}</div>
@@ -360,7 +442,7 @@ function appendMessage(msg) {
     messagesContainer.insertAdjacentHTML('beforeend', msgHTML);
 }
 
-// --- ENVÍO DE MENSAJES Y ATAJOS ---
+// 2. ACCIONES (ENVIAR, ATAJOS, IA)
 async function sendMessage() {
     const text = msgInput.value.trim();
     if (!text || !currentChat) return;
@@ -392,13 +474,13 @@ function handleKeyboardShortcuts(e) {
     }
 }
 
-// --- 🔥 IA FANTASMA: LECTURA Y AUTO-LLENADO ---
+// 🔥 FUNCIÓN: AUTO-LLENAR CON IA FANTASMA
 async function analyzeChatAI() {
-    if(!currentChat) return showToast("Abre un chat primero para analizar.");
+    if(!currentChat) return showToast("Abre un chat primero.");
     
     const btn = document.getElementById('btn-analyze-ai');
     const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Leyendo chat...';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analizando...';
     btn.disabled = true;
 
     try {
@@ -425,22 +507,21 @@ async function analyzeChatAI() {
                     }
                 }
             }
-            showToast("✨ Ficha llenada por la IA. Revisa y haz clic en Guardar.");
+            showToast("✨ Datos extraídos exitosamente. Recuerda guardarlos.");
         } else {
-            showToast("No se encontró información clara en el chat.");
+            showToast("No se pudo extraer información clara.");
         }
     } catch (error) {
-        showToast("Error conectando con la IA.");
+        showToast("Error contactando a la IA.");
     } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
     }
 }
 
-// --- CRM COMPLETO Y ETIQUETAS ---
+// 3. CRM Y ETIQUETAS
 async function loadLeadDataToCRM(phone) {
     try {
-        // 1. Limpiar campos
         document.getElementById('crm-name').value = ""; 
         document.getElementById('crm-city').value = ""; 
         document.getElementById('crm-email').value = ""; 
@@ -448,15 +529,10 @@ async function loadLeadDataToCRM(phone) {
         document.getElementById('crm-specific-interest').value = ""; 
         document.getElementById('crm-executive').value = "Pendiente"; 
 
-        // 2. Traer datos
         const res = await fetch('/api/data/leads');
         const leads = await res.json();
         const lead = leads.find(l => l.phone === phone);
         
-        const idField = document.getElementById('crm-id');
-        if(idField) idField.value = phone;
-        
-        // 3. Llenar si existe
         if (lead) {
             document.getElementById('crm-name').value = lead.nombre || '';
             document.getElementById('crm-city').value = lead.ciudad || '';
@@ -465,22 +541,16 @@ async function loadLeadDataToCRM(phone) {
             
             if(lead.interes) {
                 const select = document.getElementById('crm-interest');
-                let found = false;
                 for(let opt of select.options) {
                     if(opt.value.toUpperCase() === lead.interes.toUpperCase()) {
-                        select.value = opt.value;
-                        found = true;
-                        break;
+                        select.value = opt.value; break;
                     }
                 }
-                if(!found) select.value = "Consultando";
             }
-            
-            let execSelect = document.getElementById('crm-executive'); 
-            if (lead.etiqueta && executivesMap[lead.etiqueta]) { 
-                execSelect.value = lead.etiqueta; 
-            } else { 
-                execSelect.value = "Pendiente"; 
+            if (lead.etiqueta && executivesMap[lead.etiqueta]) {
+                document.getElementById('crm-executive').value = lead.etiqueta;
+            } else {
+                document.getElementById('crm-executive').value = "Pendiente";
             }
         }
     } catch(e) { console.error("Error cargando CRM:", e); }
@@ -489,36 +559,32 @@ async function loadLeadDataToCRM(phone) {
 async function saveLeadManual() { 
     if(!currentChat) return; 
     
-    try {
-        const res = await fetch('/api/data/leads'); 
-        const leads = await res.json(); 
-        const lead = leads.find(l => l.phone === currentChat); 
-        const id = lead ? lead.id : null; 
+    const res = await fetch('/api/data/leads'); 
+    const leads = await res.json(); 
+    const lead = leads.find(l => l.phone === currentChat); 
+    const id = lead ? lead.id : null; 
+    
+    if(id) { 
+        const updates = [ 
+            {field:'nombre', value:document.getElementById('crm-name').value}, 
+            {field:'ciudad', value:document.getElementById('crm-city').value}, 
+            {field:'correo', value:document.getElementById('crm-email').value}, 
+            {field:'interes', value:document.getElementById('crm-interest').value}, 
+            {field:'producto_especifico', value:document.getElementById('crm-specific-interest').value}, 
+            {field:'etiqueta', value:document.getElementById('crm-executive').value} 
+        ]; 
         
-        if(id) { 
-            const updates = [ 
-                {field:'nombre', value:document.getElementById('crm-name').value}, 
-                {field:'ciudad', value:document.getElementById('crm-city').value}, 
-                {field:'correo', value:document.getElementById('crm-email').value}, 
-                {field:'interes', value:document.getElementById('crm-interest').value}, 
-                {field:'producto_especifico', value:document.getElementById('crm-specific-interest').value}, 
-                {field:'etiqueta', value:document.getElementById('crm-executive').value} 
-            ]; 
-            
-            for(let u of updates) { 
-                await fetch('/api/leads/update', { 
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({ id, field: u.field, value: u.value }) 
-                }); 
-            }
-            showToast("✅ Ficha Guardada Correctamente"); 
-        } else { 
-            showToast("⚠️ Espera un primer mensaje del cliente para crear su ficha."); 
-        } 
-    } catch (e) {
-        showToast("Error al guardar.");
-    }
+        for(let u of updates) { 
+            await fetch('/api/leads/update', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ id, field: u.field, value: u.value }) 
+            }); 
+        }
+        showToast("✅ Ficha Actualizada"); 
+    } else { 
+        showToast("⚠️ Espera un primer mensaje del cliente."); 
+    } 
 }
 
 async function syncSalesforceCurrent() {
@@ -531,28 +597,20 @@ async function syncSalesforceCurrent() {
             body: JSON.stringify({ phone: currentChat })
         });
         const data = await res.json();
-        if(data.success) {
-            showToast("✅ Subido a Salesforce (ID: " + data.sfId + ")");
-        } else {
-            showToast("❌ Error: " + data.message);
-        }
-    } catch(e) {
-        showToast("❌ Fallo de red con el servidor");
-    }
+        if(data.success) showToast("✅ Subido a Salesforce");
+        else showToast("❌ Error: " + data.message);
+    } catch(e) { showToast("❌ Fallo de red"); }
 }
 
-// --- GESTIÓN DE ETIQUETAS VISUALES ---
 async function loadTagFilterOptions() { 
     try { 
         const tagsResponse = await fetch('/api/data/tags');
         window._cachedTags = await tagsResponse.json(); 
-    } catch(e) { console.error("Error cargando etiquetas", e); } 
+    } catch(e) { console.error(e); } 
 }
 
 function renderCRMTags(tags) {
     const container = document.getElementById('tag-list');
-    if (!container) return;
-
     const chat = omniChats.find(c => c.id === currentChat); 
     const activeTags = chat ? (chat.labels || []) : []; 
 
@@ -592,11 +650,13 @@ async function toggleTagLocal(name, color) {
     
     const tagObj = { text: name, color: color };
     
-    // UI Optimista
-    updateTagsOptimistic(currentChat, tagObj, !!exists);
+    if (chat) {
+        if(exists) chat.labels = activeTags.filter(l => (l.text || l) !== name);
+        else chat.labels.push(tagObj);
+        renderChatList();
+    }
     renderCRMTags(window._cachedTags);
     
-    // Petición al Backend
     try {
         let newTags = [...activeTags]; 
         if(exists) newTags = newTags.filter(l => (l.text || l) !== name); 
@@ -607,12 +667,10 @@ async function toggleTagLocal(name, color) {
             headers: {'Content-Type': 'application/json'}, 
             body: JSON.stringify({ phone: currentChat, action: 'set_labels', value: newTags }) 
         });
-    } catch(e) { 
-        showToast("Error guardando etiqueta."); 
-    }
+    } catch(e) { showToast("Error guardando etiqueta."); }
 }
 
-// --- UTILIDADES ---
+// 4. UTILIDADES VISUALES
 function formatTime(isoString) {
     if (!isoString) return '';
     const d = new Date(isoString);
@@ -624,8 +682,7 @@ function scrollToBottom() {
 }
 
 function toggleCRM() {
-    const panel = document.getElementById('crm-panel');
-    if (panel) panel.classList.toggle('open');
+    document.getElementById('crm-panel').classList.toggle('open');
 }
 
 function showToast(message) {
