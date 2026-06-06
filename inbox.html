@@ -111,10 +111,23 @@
         .chat-top-info span { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
 
         .messages-viewport { flex: 1; overflow-y: auto; padding: 20px 40px; display: flex; flex-direction: column; gap: 8px; }
-        .message-bubble { max-width: 65%; padding: 10px 14px; border-radius: 8px; font-size: 0.95rem; line-height: 1.4; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .message-bubble { max-width: 65%; padding: 10px 14px; border-radius: 8px; font-size: 0.95rem; line-height: 1.4; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); display: flex; flex-direction: column; word-wrap: break-word; }
         .msg-incoming { background: var(--incoming); align-self: flex-start; border-top-left-radius: 0; color: #FFF; }
         .msg-outgoing { background: var(--outgoing); align-self: flex-end; border-top-right-radius: 0; color: #FFF; }
         .message-time { font-size: 0.65rem; opacity: 0.7; align-self: flex-end; margin-top: 4px; }
+
+        /* 🔥 NUEVO: Estilo para la tarjeta de Preview del Post 🔥 */
+        .post-preview-card {
+            margin-top: 8px;
+            background: rgba(0,0,0,0.15);
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            border: 1px solid rgba(255,255,255,0.2);
+            height: 70px;
+        }
+        [data-theme="light"] .post-preview-card { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); }
 
         .input-area { padding: 15px 20px; background: var(--panel); display: flex; gap: 10px; align-items: center; border-top: 1px solid var(--border); }
         .input-box { flex: 1; padding: 12px 15px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text); outline: none; resize: none; height: 45px; font-size: 0.95rem; }
@@ -311,13 +324,12 @@
         const socket = io();
         let currentChat = null;
         let currentPlatform = 'all'; 
-        let currentView = 'active'; // 'active' o 'archived'
+        let currentView = 'active'; 
         let omniChats = []; 
         window._cachedTags = [];
         let contextPhone = null; 
-        let searchTimeout = null; // 🔥 FIX: Para el Debouncing
+        let searchTimeout = null; 
 
-        // Variables para Selección Múltiple
         let bulkMode = false;
         let selectedChats = new Set();
         let lastCheckedIndex = -1;
@@ -350,7 +362,6 @@
 
             msgInput.addEventListener('keydown', handleKeyboardShortcuts);
             
-            // Filtros de Plataforma (IG/FB/Todos)
             document.querySelectorAll('.platform-filter').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     document.querySelectorAll('.platform-filter').forEach(b => b.classList.remove('active'));
@@ -360,7 +371,6 @@
                 });
             });
 
-            // Filtros de Vista (Activos/Archivados)
             document.querySelectorAll('.view-filter').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     document.querySelectorAll('.view-filter').forEach(b => b.classList.remove('active'));
@@ -370,7 +380,6 @@
                 });
             });
 
-            // 🔥 FIX: Debouncing en el buscador para no congelar la pestaña 🔥
             searchInput.addEventListener('input', (e) => {
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(() => {
@@ -378,7 +387,6 @@
                 }, 300);
             });
 
-            // Ocultar menú de clic derecho
             document.addEventListener('click', (e) => { 
                 if(!e.target.closest('.chat-item') && !e.target.closest('#context-menu')) {
                     const menu = document.getElementById('context-menu');
@@ -387,7 +395,6 @@
             });
         });
 
-        // 🔥 FIX: Mantener historial local y no recargar toda la base de datos si no es necesario
         socket.on('update_chats_list', () => {
             loadOmniChats(); 
         });
@@ -399,14 +406,12 @@
             }
         });
 
-        // 1. CARGA DE DATOS Y RENDERIZADO
         async function loadOmniChats() {
             try {
-                // 🔥 FIX: Añadimos &channel=omni para ahorrar RAM
                 const res = await fetch(`/api/chats-full?view=${currentView}&channel=omni`);
                 const allChats = await res.json();
                 
-                omniChats = allChats; // Ya viene filtrado desde SQLite
+                omniChats = allChats; 
                 
                 let omniUnread = 0;
                 omniChats.forEach(c => {
@@ -440,7 +445,6 @@
                 return matchesSearch && matchesPlatform;
             });
 
-            // 🔥 Mantenemos el scroll
             const scroll = chatItemsList.children.length > 0 ? chatItemsList.scrollTop : 0;
 
             chatItemsList.innerHTML = filteredChats.map(c => {
@@ -449,7 +453,6 @@
                 
                 let cleanMsg = c.lastMessage.text ? c.lastMessage.text.replace(/\[Instagram\] |\[Messenger\] /g, '') : 'Multimedia';
                 
-                // 🔥 FIX: Icono amigable para Multimedia
                 if (cleanMsg.includes('[Multimedia/Adjunto]')) {
                     cleanMsg = '🖼️ Contenido Multimedia';
                 } else if (cleanMsg.includes('COMENTARIO EN POST')) {
@@ -497,7 +500,6 @@
             if (bulkMode) updateBulkVisuals(); 
         }
 
-        // --- MENÚ DE CLIC DERECHO (CONTEXT MENU) ---
         function showContextMenu(e, phone, isPinned, isArchived) { 
             e.preventDefault(); 
             contextPhone = phone; 
@@ -564,7 +566,6 @@
             if (menu) menu.style.display = 'none'; 
         }
 
-        // --- SISTEMA DE BORRADO MASIVO Y SELECCIÓN MÚLTIPLE ---
         function toggleBulkMode() {
             bulkMode = !bulkMode;
             const btn = document.getElementById('bulk-toggle-btn');
@@ -713,6 +714,20 @@
             const clickedItem = document.getElementById(`chat-${phone}`);
             if (clickedItem) clickedItem.classList.add('active');
 
+            // 🔥 FIX: BORRAR GLOBO DE NO LEÍDOS LOCALMENTE AL INSTANTE 🔥
+            const chatInfo = omniChats.find(c => c.id === phone); 
+            if (chatInfo && chatInfo.unreadCount > 0) {
+                chatInfo.unreadCount = 0;
+                let omniUnread = 0;
+                omniChats.forEach(c => { if (c.unreadCount > 0) omniUnread += 1; });
+                const badgeOmni = document.getElementById('badge-omni');
+                if(badgeOmni) {
+                    badgeOmni.innerText = omniUnread;
+                    badgeOmni.style.display = omniUnread > 0 ? 'block' : 'none';
+                }
+                renderChatList(); 
+            }
+
             try {
                 messagesContainer.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);"><i class="fas fa-circle-notch fa-spin"></i> Cargando...</div>';
                 const res = await fetch(`/api/chat-history/${phone}`);
@@ -731,11 +746,35 @@
             }
         }
 
+        // 🔥 NUEVA FUNCIÓN PARA OBTENER EL PREVIEW DEL POST ASÍNCRONAMENTE 🔥
+        async function fetchPostPreview(mediaId, elementId) {
+            try {
+                const res = await fetch(`/api/meta/post-preview/${mediaId}`);
+                const data = await res.json();
+                const el = document.getElementById(elementId);
+                if (!el) return;
+
+                if (data.success) {
+                    el.innerHTML = `
+                        <img src="${data.media_url}" style="width: 70px; height: 100%; object-fit: cover; border-right: 1px solid rgba(255,255,255,0.2);" onerror="this.src='https://via.placeholder.com/70?text=Post'">
+                        <div style="padding: 10px; flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: center;">
+                            <span style="font-size: 0.8rem; color: #FFF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.9;">${data.caption}</span>
+                            <a href="${data.permalink}" target="_blank" style="font-size: 0.75rem; color: #FFF; text-decoration: underline; margin-top: 4px; font-weight: 600;"><i class="fas fa-external-link-alt"></i> Ver en Meta</a>
+                        </div>
+                    `;
+                } else {
+                    el.innerHTML = `<div style="padding: 10px; font-size: 0.8rem; color: var(--danger);"><i class="fas fa-exclamation-triangle"></i> Publicación no disponible</div>`;
+                }
+            } catch (e) {
+                const el = document.getElementById(elementId);
+                if(el) el.innerHTML = `<div style="padding: 10px; font-size: 0.8rem; color: #FFF; opacity: 0.8;"><i class="fas fa-image"></i> Publicación Privada o Expirada</div>`;
+            }
+        }
+
         function appendMessage(msg) {
             let text = msg.text.replace(/\[Instagram\] |\[Messenger\] /g, '');
             const bubbleClass = msg.role === 'user' ? 'msg-incoming' : 'msg-outgoing';
             
-            // 🔥 FIX: Visor elegante para Multimedia
             if (text.includes('[Multimedia/Adjunto]')) {
                 text = `
                 <div style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.1); padding: 10px; border-radius: 8px;">
@@ -745,6 +784,28 @@
                         <span style="font-size: 0.75rem; opacity: 0.8;">Ver en la app nativa (Meta no provee el archivo por API)</span>
                     </div>
                 </div>`;
+            }
+
+            // 🔥 FIX FASE 4: INYECCIÓN DEL PREVIEW DE PUBLICACIONES 🔥
+            if (text.includes('💬 [COMENTARIO EN POST]:') || msg.msg_type === 'comment') {
+                text = text.replace('💬 [COMENTARIO EN POST]: ', '<strong style="color:var(--primary);"><i class="fas fa-comment-dots"></i> Comentó en una publicación:</strong><br><br>');
+                
+                // Si el mensaje tiene un media_id, renderizamos la tarjeta de previsualización
+                if (msg.media_id) {
+                    const previewId = `preview-${msg.id || Math.random().toString(36).substr(2, 9)}`;
+                    
+                    const previewHTML = `
+                        <div class="post-preview-card" id="${previewId}">
+                            <div style="padding: 10px; font-size: 0.8rem; color: #FFF; opacity: 0.7; display:flex; align-items:center; gap:8px;">
+                                <i class="fas fa-spinner fa-spin"></i> Cargando publicación...
+                            </div>
+                        </div>
+                    `;
+                    text += previewHTML;
+                    
+                    // Disparamos la petición asíncrona sin congelar el renderizado del mensaje
+                    setTimeout(() => fetchPostPreview(msg.media_id, previewId), 100);
+                }
             }
 
             const msgHTML = `
@@ -934,28 +995,13 @@
                 if(!seenTags.has(t.name)) { seenTags.add(t.name); uniqueTags.push(t); }
             });
 
-            // 🔥 FIX: Formato JSON correcto para las etiquetas (igual que en WhatsApp)
             container.innerHTML = uniqueTags.map(t => { 
                 const isActive = activeTags.find(l => (l.text || l) === t.name); 
                 return `<div class="tag ${isActive ? 'selected' : ''}" style="${isActive ? `background:${t.color}; border-color:${t.color};` : ''}" onclick="toggleTagLocal(decodeURIComponent('${encodeURIComponent(t.name)}'), '${t.color}')">${t.name}</div>`; 
             }).join(''); 
         }
 
-        function updateTagsOptimistic(phone, tagObj, remove = false) {
-            const chat = omniChats.find(c => c.id === phone);
-            if (chat) {
-                if (!chat.labels) chat.labels = [];
-                if (remove) {
-                    chat.labels = chat.labels.filter(l => (l.text || l) !== tagObj.text);
-                } else {
-                    if (!chat.labels.find(l => (l.text || l) === tagObj.text)) {
-                        chat.labels.push(tagObj);
-                    }
-                }
-                if (bulkMode) updateBulkVisuals();
-            }
-        }
-
+        // 🔥 FIX FASE 4: SANIDAD DE ETIQUETAS Y CERO DUPLICACIONES 🔥
         async function toggleTagLocal(name, color) { 
             if(!currentChat) return; 
             
@@ -964,15 +1010,21 @@
             const exists = activeTags.find(l => (l.text || l) === name);
             
             const tagObj = { text: name, color: color };
-            updateTagsOptimistic(currentChat, tagObj, !!exists);
             
+            let newTags = [...activeTags]; 
+            if(exists) { 
+                newTags = newTags.filter(l => (l.text || l) !== name); 
+            } else { 
+                newTags.push(tagObj); 
+            } 
+            
+            if (chat) {
+                chat.labels = newTags;
+                renderChatList();
+            }
             renderCRMTags(window._cachedTags);
             
             try {
-                let newTags = [...activeTags]; 
-                if(exists) newTags = newTags.filter(l => (l.text || l) !== name); 
-                else newTags.push(tagObj); 
-                
                 await fetch('/api/chat/action', { 
                     method: 'POST', 
                     headers: {'Content-Type': 'application/json'}, 
