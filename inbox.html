@@ -74,6 +74,10 @@
         .filter-btn { padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; font-weight: 600; flex: 1; transition: 0.2s; }
         .filter-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
 
+        .type-toggle-container { background: var(--bg-main); padding: 4px; border-radius: 8px; border: 1px solid var(--border); display: flex; margin-bottom: 10px; }
+        .type-toggle-container .filter-btn { border: none; border-radius: 6px; }
+        .type-toggle-container .filter-btn.active { background: rgba(233, 82, 30, 0.1); color: var(--primary); }
+
         .chat-items-container { flex: 1; overflow-y: auto; }
         .chat-item { display: flex; padding: 12px 15px; gap: 12px; cursor: pointer; border-bottom: 1px solid var(--border); align-items: center; transition: background 0.1s; }
         .chat-item:hover { background: var(--hover-item); }
@@ -116,7 +120,6 @@
         .msg-outgoing { background: var(--outgoing); align-self: flex-end; border-top-right-radius: 0; color: #FFF; }
         .message-time { font-size: 0.65rem; opacity: 0.7; align-self: flex-end; margin-top: 4px; }
 
-        /* 🔥 NUEVO: Estilo para la tarjeta de Preview del Post 🔥 */
         .post-preview-card {
             margin-top: 8px;
             background: rgba(0,0,0,0.15);
@@ -189,9 +192,15 @@
                     <input type="text" id="chat-search" class="search-bar" placeholder="🔍 Buscar en redes sociales..." style="margin-bottom:0;">
                     <button class="action-btn" id="bulk-toggle-btn" onclick="toggleBulkMode()" title="Selección Múltiple"><i class="fas fa-check-double"></i></button>
                 </div>
+
+                <!-- 🔥 NUEVO FILTRO TIPO DE MENSAJE: Aislar DM de Comentarios 🔥 -->
+                <div class="type-toggle-container">
+                    <button class="filter-btn active type-filter" data-type="dm"><i class="fas fa-envelope"></i> Mensajes (DM)</button>
+                    <button class="filter-btn type-filter" data-type="comment"><i class="fas fa-comment-dots"></i> Comentarios</button>
+                </div>
                 
                 <div class="filters">
-                    <button class="filter-btn active platform-filter" data-filter="all">Todos</button>
+                    <button class="filter-btn active platform-filter" data-filter="all">Todas</button>
                     <button class="filter-btn platform-filter" data-filter="instagram" style="color: #E1306C; border-color: #E1306C;"><i class="fab fa-instagram"></i> IG</button>
                     <button class="filter-btn platform-filter" data-filter="messenger" style="color: #0084FF; border-color: #0084FF;"><i class="fab fa-facebook-messenger"></i> FB</button>
                 </div>
@@ -325,6 +334,7 @@
         let currentChat = null;
         let currentPlatform = 'all'; 
         let currentView = 'active'; 
+        let currentType = 'dm'; // 🔥 NUEVO: Estado para filtrar DM vs Comentarios
         let omniChats = []; 
         window._cachedTags = [];
         let contextPhone = null; 
@@ -362,6 +372,16 @@
 
             msgInput.addEventListener('keydown', handleKeyboardShortcuts);
             
+            // 🔥 LÓGICA DEL NUEVO FILTRO DM VS COMENTARIOS 🔥
+            document.querySelectorAll('.type-filter').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.type-filter').forEach(b => b.classList.remove('active'));
+                    e.currentTarget.classList.add('active');
+                    currentType = e.currentTarget.dataset.type;
+                    renderChatList();
+                });
+            });
+
             document.querySelectorAll('.platform-filter').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     document.querySelectorAll('.platform-filter').forEach(b => b.classList.remove('active'));
@@ -439,11 +459,23 @@
             let filteredChats = omniChats.filter(chat => {
                 const textToSearch = (chat.name + chat.id).toLowerCase();
                 const matchesSearch = textToSearch.includes(searchTerm);
+                
                 let matchesPlatform = true;
                 if (currentPlatform === 'instagram') matchesPlatform = chat.channel === 'instagram';
                 else if (currentPlatform === 'messenger') matchesPlatform = chat.channel === 'messenger';
-                return matchesSearch && matchesPlatform;
+                
+                // 🔥 AISLAMIENTO DE DM VS COMENTARIOS 🔥
+                let isComment = chat.lastMessage.text && chat.lastMessage.text.includes('[COMENTARIO EN POST]');
+                let matchesType = (currentType === 'comment') ? isComment : !isComment;
+
+                return matchesSearch && matchesPlatform && matchesType;
             });
+
+            if (filteredChats.length === 0) {
+                const msjVacio = currentType === 'dm' ? 'No hay mensajes privados recientes.' : 'No hay comentarios recientes en tus publicaciones.';
+                chatItemsList.innerHTML = `<div class="empty-state" style="margin-top:40px;"><p>${msjVacio}</p></div>`;
+                return;
+            }
 
             const scroll = chatItemsList.children.length > 0 ? chatItemsList.scrollTop : 0;
 
@@ -698,8 +730,6 @@
             loadOmniChats(); 
         }
 
-        // --- MANEJO DE CHAT INDIVIDUAL ---
-
         async function loadChatHistory(phone, name, platform) {
             currentChat = phone;
             
@@ -714,7 +744,6 @@
             const clickedItem = document.getElementById(`chat-${phone}`);
             if (clickedItem) clickedItem.classList.add('active');
 
-            // 🔥 FIX: BORRAR GLOBO DE NO LEÍDOS LOCALMENTE AL INSTANTE 🔥
             const chatInfo = omniChats.find(c => c.id === phone); 
             if (chatInfo && chatInfo.unreadCount > 0) {
                 chatInfo.unreadCount = 0;
@@ -746,7 +775,6 @@
             }
         }
 
-        // 🔥 NUEVA FUNCIÓN PARA OBTENER EL PREVIEW DEL POST ASÍNCRONAMENTE 🔥
         async function fetchPostPreview(mediaId, elementId) {
             try {
                 const res = await fetch(`/api/meta/post-preview/${mediaId}`);
@@ -786,11 +814,9 @@
                 </div>`;
             }
 
-            // 🔥 FIX FASE 4: INYECCIÓN DEL PREVIEW DE PUBLICACIONES 🔥
             if (text.includes('💬 [COMENTARIO EN POST]:') || msg.msg_type === 'comment') {
                 text = text.replace('💬 [COMENTARIO EN POST]: ', '<strong style="color:var(--primary);"><i class="fas fa-comment-dots"></i> Comentó en una publicación:</strong><br><br>');
                 
-                // Si el mensaje tiene un media_id, renderizamos la tarjeta de previsualización
                 if (msg.media_id) {
                     const previewId = `preview-${msg.id || Math.random().toString(36).substr(2, 9)}`;
                     
@@ -803,7 +829,6 @@
                     `;
                     text += previewHTML;
                     
-                    // Disparamos la petición asíncrona sin congelar el renderizado del mensaje
                     setTimeout(() => fetchPostPreview(msg.media_id, previewId), 100);
                 }
             }
@@ -817,7 +842,6 @@
             messagesContainer.insertAdjacentHTML('beforeend', msgHTML);
         }
 
-        // 2. ACCIONES (ENVIAR, ATAJOS, IA)
         async function sendMessage() {
             const text = msgInput.value.trim();
             if (!text || !currentChat) return;
@@ -849,7 +873,6 @@
             }
         }
 
-        // 🔥 FUNCIÓN: AUTO-LLENAR CON IA FANTASMA
         async function analyzeChatAI() {
             if(!currentChat) return showToast("Abre un chat primero.");
             
@@ -894,7 +917,6 @@
             }
         }
 
-        // 3. CRM Y ETIQUETAS
         async function loadLeadDataToCRM(phone) {
             try {
                 document.getElementById('crm-name').value = ""; 
@@ -1001,7 +1023,6 @@
             }).join(''); 
         }
 
-        // 🔥 FIX FASE 4: SANIDAD DE ETIQUETAS Y CERO DUPLICACIONES 🔥
         async function toggleTagLocal(name, color) { 
             if(!currentChat) return; 
             
@@ -1033,7 +1054,6 @@
             } catch(e) { showToast("Error guardando etiqueta."); }
         }
 
-        // 4. UTILIDADES VISUALES
         function formatTime(isoString) {
             if (!isoString) return '';
             const d = new Date(isoString);
