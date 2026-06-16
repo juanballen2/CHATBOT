@@ -17,7 +17,8 @@
     "socket.io": "^4.7.5",
     "sqlite3": "^5.1.7",
     "sqlite": "^5.1.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "jsforce": "^3.6.1"
   },
   "engines": {
     "node": "18.x"
