@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICBOT V33.7 - Panel Principal & Campañas</title>
+    <title>ICBOT V33.9 - Panel Principal & Campañas</title>
     <link rel="icon" href="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" type="image/svg+xml">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -409,6 +409,14 @@
                         <option value="005Dn000005u2BkIAI">Diana</option>
                         <option value="005Dn000007H1EUIA0">Marketing</option>
                         <option value="005Dn000003Z5vbIAC">Oscar</option>
+                    </select>
+
+                    <div class="crm-title" style="margin-top:20px;"><i class="fas fa-filter"></i> Origen (Salesforce)</div>
+                    <select id="crm-source" class="crm-input">
+                        <option value="A Redes sociales">A Redes sociales (Ads / Orgánico)</option>
+                        <option value="Tienda Virtual">Tienda Virtual</option>
+                        <option value="Sitio web">Sitio web</option>
+                        <option value="WhatsApp">WhatsApp (Masivo / Directo)</option>
                     </select>
 
                     <div style="display:flex; gap:10px; margin-top:15px;">
@@ -849,7 +857,6 @@
                     return;
                 }
 
-                // Analizar columnas
                 let colTelefono = null;
                 let colNombre = null;
                 const primerasClaves = Object.keys(rows[0]);
@@ -872,11 +879,9 @@
                     return;
                 }
 
-                // Auditar números
                 let validos = 0;
                 let invalidos = 0;
                 let filasHTML = '';
-                const previewRows = rows.slice(0, 5);
 
                 rows.forEach((row, index) => {
                     let num = row[colTelefono] ? row[colTelefono].toString().replace(/\D/g, '') : '';
@@ -952,18 +957,13 @@
                     alert("❌ Ocurrió un error: " + data.error);
                 }
             } catch(e) {
-                alert("❌ Error de red lanzando la campaña. Por favor revisa el progreso en la consola del servidor.");
+                alert("❌ Error de red lanzando la campaña.");
             } finally {
                 btnLanzar.disabled = false;
                 btnLanzar.innerHTML = '<i class="fas fa-paper-plane"></i> Lanzar Campaña';
             }
         }
-        // ==========================================
 
-
-        // ==========================================
-        // FUNCIONES SALESFORCE
-        // ==========================================
         async function syncSalesforceCurrent() {
             if(!currentChat) return;
             showToast("🔄 Sincronizando con Salesforce...");
@@ -1002,7 +1002,6 @@
                 showToast("❌ Fallo de red con el servidor");
             }
         }
-        // ==========================================
 
         function switchConfigTab(tabId, btnElement) {
             document.querySelectorAll('.config-sub-panel').forEach(panel => panel.classList.remove('active'));
@@ -1049,13 +1048,13 @@
             if (chat) {
                 if (!chat.labels) chat.labels = [];
                 if (remove) {
-                    chat.labels = chat.labels.filter(l => (l.text || l) !== tagObj.text);
+                    chat.labels = chat.labels.filter(l => l.text !== tagObj.text);
                 } else {
-                    if (!chat.labels.find(l => (l.text || l) === tagObj.text)) {
+                    if (!chat.labels.find(l => l.text === tagObj.text)) {
                         chat.labels.push(tagObj);
                     }
                 }
-                if (bulkMode) updateBulkVisuals();
+                updateBulkVisuals();
             }
         }
 
@@ -1271,11 +1270,10 @@
         async function syncChats() { 
             try { 
                 const search = document.getElementById('main-search').value; 
-                // 🔥 FIX: Añadimos &channel=whatsapp para ahorrar megabytes de RAM en el navegador
-                const res = await fetch(`/api/chats-full?view=${currentFilter}&search=${search}&channel=whatsapp`); 
+                const res = await fetch(`/api/chats-full?view=${currentFilter}&search=${search}`); 
                 const allChats = await res.json(); 
                 
-                chatsData = allChats; // Ya viene filtrado, cero estrés para el navegador.
+                chatsData = allChats.filter(c => !c.channel || c.channel === 'whatsapp');
                 
                 let waUnread = 0;
                 chatsData.forEach(c => {
@@ -1351,7 +1349,6 @@
             updateBulkVisuals();
         }
 
-        // 🔥 FIX: Funciona el Shift+Clic sin importar el redibujado de la lista
         function toggleChatSelection(phone, event) {
             if (!bulkMode) return;
             event.stopPropagation();
@@ -1524,9 +1521,6 @@
             }).join(''); 
             
             if(scroll > 0) container.scrollTop = scroll;
-            
-            // 🔥 FIX: Mantiene los chulitos visualmente después del DOM Reflow
-            if (bulkMode) updateBulkVisuals(); 
         }
 
         function showContextMenu(e, phone, isPinned, isArchived) { 
@@ -1904,6 +1898,7 @@
             document.getElementById('crm-specific-interest').value = ""; 
             document.getElementById('crm-phone').value = phone ? "+" + phone : ""; 
             document.getElementById('crm-executive').value = "Pendiente"; 
+            document.getElementById('crm-source').value = "A Redes sociales"; 
             
             const res = await fetch('/api/data/leads'); 
             const leads = await res.json(); 
@@ -1936,6 +1931,15 @@
                 } else { 
                     execSelect.value = "Pendiente"; 
                 }
+
+                // 🔥 HOMOLOGACIÓN VISUAL DEL ORIGEN PARA SALESFORCE 🔥
+                let srcVal = "A Redes sociales";
+                const src = (lead.source || "").toLowerCase();
+                if (src.includes("tienda")) srcVal = "Tienda Virtual";
+                else if (src.includes("web")) srcVal = "Sitio web";
+                else if (src.includes("excel") || src.includes("masivo") || src.includes("campaña") || src.includes("whatsapp")) srcVal = "WhatsApp";
+                
+                document.getElementById('crm-source').value = srcVal;
             }
         }
 
@@ -1954,7 +1958,8 @@
                     {field:'correo', value:document.getElementById('crm-email').value}, 
                     {field:'interes', value:document.getElementById('crm-interest').value}, 
                     {field:'producto_especifico', value:document.getElementById('crm-specific-interest').value}, 
-                    {field:'etiqueta', value:document.getElementById('crm-executive').value} 
+                    {field:'etiqueta', value:document.getElementById('crm-executive').value},
+                    {field:'source', value:document.getElementById('crm-source').value}
                 ]; 
                 
                 for(let u of updates) { 
@@ -1999,7 +2004,6 @@
                 }
             });
 
-            // 🔥 FIX: Formato JSON correcto para renderizar etiquetas
             container.innerHTML = uniqueTags.map(t => { 
                 const isActive = activeTags.find(l => (l.text || l) === t.name); 
                 return `<div class="tag ${isActive ? 'selected' : ''}" style="${isActive ? `background:${t.color}; border-color:${t.color};` : ''}" onclick="toggleTagLocal(decodeURIComponent('${encodeURIComponent(t.name)}'), '${t.color}')">${t.name}</div>`; 
