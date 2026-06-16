@@ -1,16 +1,13 @@
 /*
- * SERVER BACKEND - v33.8 (REFACTORIZACIÓN PRO - FASE OMNICANAL & PREVIEWS)
+ * SERVER BACKEND - v33.7 (ICBOT FULL PRODUCTION + OMNICANAL COMPLETADO + FIX VELOCIDAD & LOCKS)
  * ============================================================
- * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
- * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
- * 3. ADD: Soporte completo para Videos MP4 y Fotos en Campañas.
- * 4. FIX: Modelo de IA estandarizado a gemini-2.5-flash.
- * 5. FIX: Sistema Anti-bucle y debouncing de 4.5s.
- * 6. ADD: Lectura de Ecos y extracción de perfiles Omnicanal.
- * 7. FIX: Asincronismo I/O con fsPromises y CronJob N+1 resuelto.
- * 8. ADD: (v33.8) Migración de BD -> 'msg_type' y 'media_id' en history.
- * 9. ADD: (v33.8) Webhook Omnicanal ahora atrapa el ID del post en comentarios.
- * 10. ADD:(v33.8) Proxy /api/meta/post-preview para renderizar miniaturas de IG/FB.
+ * 1. FIX: Inyección de busyTimeout (10s) para eliminar errores de base de datos bloqueada (SQLITE_BUSY).
+ * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send (Detecta WhatsApp vs Instagram/Messenger).
+ * 3. ADD: Soporte completo para Videos MP4 y Fotos dinámicas en Campañas Masivas desde Excel.
+ * 4. FIX: Modelo de IA estandarizado globalmente a la última versión estable (gemini-2.5-flash).
+ * 5. FIX: Sistema Anti-bucle integrado y debouncing optimizado de 4.5 segundos.
+ * 6. ADD: Lectura de Ecos (mensajes salientes) y extracción de nombres de perfil para Instagram/Messenger.
+ * 7. ADD: Captura de comentarios en publicaciones de Facebook e Instagram.
  * ============================================================
  */
 
@@ -19,7 +16,6 @@ const http = require('http');
 const { Server } = require('socket.io'); 
 const session = require('express-session');
 const fs = require('fs');
-const fsPromises = fs.promises; 
 const path = require('path');
 const multer = require('multer');
 const XLSX = require('xlsx'); 
@@ -55,7 +51,7 @@ const DEBOUNCE_TIME = 4500;
 const API_KEY = process.env.GEMINI_API_KEY; 
 const META_TOKEN = process.env.META_TOKEN;
 const PHONE_ID = process.env.PHONE_NUMBER_ID; 
-const IG_TOKEN = process.env.IG_TOKEN; 
+const IG_TOKEN = process.env.IG_TOKEN; // Token de Acceso para Instagram Direct y Messenger
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = "icbot-secure-v29-final"; 
@@ -101,15 +97,15 @@ let db, globalKnowledge = [], serverInstance;
             driver: sqlite3.Database 
         });
 
+        // 🔥 PARCHES DE VELOCIDAD EXTREMA Y ANTI-LOCKS 🔥
         await db.exec("PRAGMA journal_mode = WAL;");
         await db.exec("PRAGMA synchronous = NORMAL;");
-        await db.configure('busyTimeout', 10000); 
+        await db.configure('busyTimeout', 10000); // Espera hasta 10s si la DB está ocupada con el Excel
         
         console.log("📂 Base de Datos Conectada de forma segura (WAL Mode + 10s Busy Timeout).");
 
-        // 🔥 FIX V33.8: Añadido msg_type y media_id a history
         const tables = [
-            `history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT, msg_type TEXT DEFAULT 'dm', media_id TEXT)`,
+            `history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, role TEXT, text TEXT, time TEXT)`,
             `leads (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT UNIQUE, nombre TEXT, interes TEXT, producto_especifico TEXT, etiqueta TEXT, fecha TEXT, ciudad TEXT, departamento TEXT, correo TEXT, source TEXT DEFAULT 'Organico', status_tag TEXT, farewell_sent INTEGER DEFAULT 0, followup_day INTEGER DEFAULT 0, sf_id TEXT)`,
             `metadata (phone TEXT PRIMARY KEY, contactName TEXT, labels TEXT DEFAULT '[]', pinned INTEGER DEFAULT 0, addedManual INTEGER DEFAULT 0, photoUrl TEXT, archived INTEGER DEFAULT 0, unreadCount INTEGER DEFAULT 0, last_interaction TEXT, channel TEXT DEFAULT 'whatsapp')`,
             `bot_status (phone TEXT PRIMARY KEY, active INTEGER DEFAULT 1)`,
@@ -136,9 +132,7 @@ let db, globalKnowledge = [], serverInstance;
             "ALTER TABLE leads ADD COLUMN departamento TEXT",
             "ALTER TABLE leads ADD COLUMN producto_especifico TEXT",
             "ALTER TABLE leads ADD COLUMN followup_day INTEGER DEFAULT 0",
-            "ALTER TABLE leads ADD COLUMN sf_id TEXT",
-            "ALTER TABLE history ADD COLUMN msg_type TEXT DEFAULT 'dm'",
-            "ALTER TABLE history ADD COLUMN media_id TEXT"
+            "ALTER TABLE leads ADD COLUMN sf_id TEXT"
         ];
         for (const m of migrations) { try { await db.exec(m); } catch(e){} }
 
@@ -280,6 +274,7 @@ async function enviarWhatsApp(to, content, type = "text") {
     }
 }
 
+// 🔥 NUEVA FUNCIÓN: Envío directo para Mensajería de Redes Sociales (Instagram / Messenger) 🔥
 async function enviarOmnicanal(recipientId, text, channel) {
     try {
         const payload = {
@@ -303,7 +298,7 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
         const cacheDir = path.join(__dirname, 'data', 'media_cache');
         if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
         
-        const files = await fsPromises.readdir(cacheDir);
+        const files = fs.readdirSync(cacheDir);
         const existingFile = files.find(f => f.startsWith(mediaId));
         
         if (existingFile) {
@@ -342,41 +337,16 @@ app.get('/api/media-proxy/:id', proteger, async (req, res) => {
         }
 
         const filePath = path.join(cacheDir, `${mediaId}${ext}`);
-        await fsPromises.writeFile(filePath, fileRes.data);
+        fs.writeFileSync(filePath, fileRes.data);
 
         res.sendFile(filePath, { headers: { 'Content-Type': contentType } });
 
-        setTimeout(async () => {
-            try { 
-                await fsPromises.access(filePath);
-                await fsPromises.unlink(filePath); 
-            } catch(e){}
+        setTimeout(() => {
+            try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(e){}
         }, 10 * 60 * 1000);
 
     } catch (e) { 
         if (!res.headersSent) res.status(500).send("Error procesando medio"); 
-    }
-});
-
-// 🔥 NUEVA RUTA: PROXY PARA PREVIEW DE POSTS DE INSTAGRAM/FACEBOOK 🔥
-app.get('/api/meta/post-preview/:media_id', proteger, async (req, res) => {
-    try {
-        const mediaId = req.params.media_id;
-        const token = IG_TOKEN || META_TOKEN; 
-        
-        if (!token) return res.status(500).json({ success: false, error: "Tokens no configurados" });
-
-        const metaRes = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}?fields=media_url,caption,permalink_url,thumbnail_url&access_token=${token}`);
-        
-        res.json({
-            success: true,
-            media_url: metaRes.data.thumbnail_url || metaRes.data.media_url,
-            caption: metaRes.data.caption || 'Publicación',
-            permalink: metaRes.data.permalink_url || '#'
-        });
-    } catch (e) {
-        console.error("❌ Error fetching post preview:", e.response ? JSON.stringify(e.response.data) : e.message);
-        res.status(500).json({ success: false, error: "No se pudo obtener la vista previa de Meta" });
     }
 });
 
@@ -550,20 +520,20 @@ async function gestionarLead(phone, info, fbName, oldLead) {
 }
 
 function iniciarCronJobs() {
-    setInterval(async () => {
+    setInterval(() => {
         try {
             const cacheDir = path.join(__dirname, 'data', 'media_cache');
             if (fs.existsSync(cacheDir)) {
-                const files = await fsPromises.readdir(cacheDir);
+                const files = fs.readdirSync(cacheDir);
                 const now = Date.now();
-                for (const file of files) {
+                files.forEach(file => {
                     const filePath = path.join(cacheDir, file);
-                    const stats = await fsPromises.stat(filePath);
+                    const stats = fs.statSync(filePath);
                     if (now - stats.mtimeMs > 1800000) {
-                        await fsPromises.unlink(filePath);
+                        fs.unlinkSync(filePath);
                         console.log(`🗑️ Caché limpiado: Eliminado archivo temporal ${file}`);
                     }
-                }
+                });
             }
         } catch(e) { console.error("Error limpiando cache:", e); }
     }, 60000 * 30);
@@ -579,16 +549,12 @@ function iniciarCronJobs() {
                 await setCfg('last_followup_date', todayStr);
                 console.log("⏰ Ejecutando CronJob de Seguimiento 7:00 AM...");
 
-                const query = `
-                    SELECT l.*, m.last_interaction 
-                    FROM leads l 
-                    JOIN metadata m ON l.phone = m.phone 
-                    WHERE LOWER(l.etiqueta) = 'pendiente' AND m.last_interaction IS NOT NULL
-                `;
-                const leadsPendientes = await db.all(query);
-                
+                const leadsPendientes = await db.all("SELECT * FROM leads WHERE LOWER(etiqueta) = 'pendiente'");
                 for (const l of leadsPendientes) {
-                    const horasInactivo = (Date.now() - new Date(l.last_interaction).getTime()) / (1000 * 60 * 60);
+                    const meta = await db.get("SELECT last_interaction FROM metadata WHERE phone = ?", [l.phone]);
+                    if (!meta || !meta.last_interaction) continue;
+
+                    const horasInactivo = (Date.now() - new Date(meta.last_interaction).getTime()) / (1000 * 60 * 60);
 
                     if (horasInactivo >= 24) {
                         let fDay = l.followup_day || 0;
@@ -630,6 +596,7 @@ app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login'
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
 
+// 🔥 RUTAS DE LA BANDEJA OMNICANAL 🔥
 app.get('/inbox', proteger, (req, res) => res.sendFile(path.join(__dirname, 'inbox.html')));
 app.get('/inbox.css', (req, res) => res.sendFile(path.join(__dirname, 'inbox.css')));
 app.get('/inbox.js', (req, res) => res.sendFile(path.join(__dirname, 'inbox.js')));
@@ -695,33 +662,9 @@ app.post('/api/data/web-knowledge', proteger, async (req, res) => { await db.run
 app.get('/api/data/web-knowledge', proteger, async (req, res) => { res.json(await db.all("SELECT * FROM knowledge_sources ORDER BY id DESC")); });
 app.post('/api/data/web-knowledge/delete', proteger, async (req, res) => { await db.run("DELETE FROM knowledge_sources WHERE id = ?", [req.body.id]); res.json({success:true}); });
 
-app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
-    const { phone } = req.body;
-    if (!phone) return res.status(400).json({ success: false, message: "Falta teléfono" });
-    try {
-        const fakeSfId = "SF-" + Math.floor(Math.random() * 1000000);
-        await db.run("UPDATE leads SET sf_id = ? WHERE phone = ?", [fakeSfId, phone]);
-        res.json({ success: true, sfId: fakeSfId });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Error interno sincronizando lead" });
-    }
-});
-
-app.post('/api/salesforce/sync-bulk', proteger, async (req, res) => {
-    try {
-        const leads = await db.all("SELECT id, phone FROM leads WHERE sf_id IS NULL OR sf_id = ''");
-        let count = 0;
-        for (const lead of leads) {
-            const fakeSfId = "SF-" + Math.floor(Math.random() * 1000000);
-            await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [fakeSfId, lead.id]);
-            count++;
-        }
-        res.json({ success: true, count: count });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Error masivo" });
-    }
-});
-
+// ============================================================
+// 🔥 IA FANTASMA: AUTO-LLENADO DE CRM (SIN HABLAR CON EL CLIENTE)
+// ============================================================
 app.post('/api/chat/analyze-lead', proteger, async (req, res) => {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ error: "Falta teléfono" });
@@ -769,17 +712,9 @@ app.get('/api/chats-full', proteger, async (req, res) => {
     try {
         const view = req.query.view || 'active';
         const search = req.query.search ? `%${req.query.search}%` : null;
-        const channelFilter = req.query.channel; 
-        
         let whereClause = '(m.archived = 0 OR m.archived IS NULL)';
         if (view === 'archived') whereClause = 'm.archived = 1';
         else if (view === 'unread') whereClause = 'm.unreadCount > 0 AND (m.archived = 0 OR m.archived IS NULL)';
-        
-        if (channelFilter === 'whatsapp') {
-            whereClause += " AND (m.channel = 'whatsapp' OR m.channel IS NULL)";
-        } else if (channelFilter === 'omni') {
-            whereClause += " AND m.channel IN ('instagram', 'messenger')";
-        }
         
         let params = [];
         if (search) { whereClause += ` AND (m.contactName LIKE ? OR h.phone LIKE ? OR h.text LIKE ?)`; params.push(search, search, search); }
@@ -787,35 +722,25 @@ app.get('/api/chats-full', proteger, async (req, res) => {
         const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, m.channel, b.active as botActive, l.source, l.status_tag, l.sf_id, l.interes, l.producto_especifico FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN leads l ON h.phone = l.phone WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 5000`;
         const rows = await db.all(query, params);
         
-        res.json(rows.map(r => {
-            let parsedLabels = [];
-            try { 
-                parsedLabels = JSON.parse(r.labels || "[]"); 
-                if (!Array.isArray(parsedLabels)) parsedLabels = [{ text: r.labels, color: "#555555" }];
-            } catch(e) { 
-                parsedLabels = [{ text: r.labels, color: "#555555" }]; 
-            }
-
-            return { 
-                id: r.id, 
-                phone: r.id,
-                name: r.contactName || r.id, 
-                lastMessage: { text: r.lastText, time: r.timestamp }, 
-                botActive: r.botActive !== 0, 
-                pinned: r.pinned === 1, 
-                archived: r.archived === 1, 
-                unreadCount: r.unreadCount || 0, 
-                labels: parsedLabels, 
-                photoUrl: r.photoUrl, 
-                timestamp: r.timestamp, 
-                source: r.source, 
-                statusTag: r.status_tag, 
-                sfId: r.sf_id,
-                interes: r.interes,
-                producto_especifico: r.producto_especifico,
-                channel: r.channel || 'whatsapp' 
-            };
-        }));
+        res.json(rows.map(r => ({ 
+            id: r.id, 
+            phone: r.id,
+            name: r.contactName || r.id, 
+            lastMessage: { text: r.lastText, time: r.timestamp }, 
+            botActive: r.botActive !== 0, 
+            pinned: r.pinned === 1, 
+            archived: r.archived === 1, 
+            unreadCount: r.unreadCount || 0, 
+            labels: JSON.parse(r.labels || "[]"), 
+            photoUrl: r.photoUrl, 
+            timestamp: r.timestamp, 
+            source: r.source, 
+            statusTag: r.status_tag, 
+            sfId: r.sf_id,
+            interes: r.interes,
+            producto_especifico: r.producto_especifico,
+            channel: r.channel || 'whatsapp' 
+        })));
     } catch(e) { res.status(500).json([]); }
 });
 
@@ -826,6 +751,7 @@ app.get('/api/chat-history/:phone(*)', proteger, async (req, res) => {
         const historial = await db.all("SELECT * FROM history WHERE phone = ? ORDER BY id ASC", [phone]);
         res.json(historial || []);
     } catch (e) {
+        console.error(`❌ Error al abrir el chat ${req.params.phone}:`, e);
         res.status(500).json([]);
     }
 });
@@ -852,6 +778,7 @@ app.post('/api/contacts/bulk-update', proteger, async (req, res) => {
         }
         res.json({success: true});
     } catch (e) {
+        console.error("Bulk Error:", e);
         res.status(500).json({error: "Error en actualización masiva"});
     }
 });
@@ -885,9 +812,11 @@ app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, r
     } catch(e) { res.status(500).json({error: e.message}); } 
 });
 
+// 🔥 ENRUTAMIENTO INTELIGENTE OMNICANAL EN RESPUESTA MANUAL DEL PANEL 🔥
 app.post('/api/chat/send', proteger, async (req, res) => { 
     const { phone, message } = req.body; 
     try { 
+        // Identificar el canal guardado en metadata para este ID
         const metaInfo = await db.get("SELECT channel FROM metadata WHERE phone = ?", [phone]);
         const channel = metaInfo ? metaInfo.channel : 'whatsapp';
         
@@ -895,9 +824,10 @@ app.post('/api/chat/send', proteger, async (req, res) => {
         let finalId = phone;
 
         if (channel === 'whatsapp') {
-            finalId = phone.replace(/\D/g, ''); 
+            finalId = phone.replace(/\D/g, ''); // WhatsApp exige solo números planos
             sent = await enviarWhatsApp(finalId, message); 
         } else {
+            // Instagram / Messenger usan IDs alfanuméricos provistos por el Webhook
             sent = await enviarOmnicanal(finalId, message, channel);
         }
 
@@ -964,10 +894,12 @@ app.post('/api/chat/send-template', proteger, upload.single('file'), async (req,
             res.status(500).json({ error: "Error enviando plantilla en Meta" });
         }
     } catch (e) {
+        console.error("Error Endpoint Plantilla:", e);
         res.status(500).json({ error: "Error interno enviando plantilla" });
     }
 });
 
+// 🔥 CAMPAÑA MASIVA EXCEL REPARADA (SOPORTE IMÁGENES Y VIDEOS MP4 CON INTERRUPCIÓN CONTROLADA) 🔥
 app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCount: 1 }, { name: 'media', maxCount: 1 }]), async (req, res) => {
     try {
         if (!req.files || !req.files.excel) return res.status(400).json({ error: "Falta el archivo Excel" });
@@ -1056,13 +988,14 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
                 errorCount++;
             }
 
-            await new Promise(r => setTimeout(r, 250)); 
+            await new Promise(r => setTimeout(r, 250)); // Rate limiting no bloqueante de 250ms
         }
 
         io.emit('update_chats_list');
         res.json({ success: true, sent: successCount, failed: errorCount });
 
     } catch (error) {
+        console.error("Error en bulk-excel:", error);
         res.status(500).json({ error: "Error procesando el archivo Excel" });
     }
 });
@@ -1071,6 +1004,7 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
 // NUEVO WEBHOOK OMNICANAL (MESSENGER, INSTAGRAM & COMENTARIOS)
 // ============================================================
 
+// Función de rescate para obtener el Nombre y Foto del perfil
 async function getOmniProfile(senderId) {
     try {
         if (!IG_TOKEN) return { name: senderId, photo: null };
@@ -1100,17 +1034,19 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
             
             for (let entry of entries) {
                 
-                // 1. ATRApar MENSAJES DIRECTOS (DMs) Y ECOS
+                // 1. ATRApar MENSAJES DIRECTOS (DMs) Y ECOS (Mensajes Salientes)
                 const messagingEvents = entry.messaging || [];
                 for (let event of messagingEvents) {
                     if (event.message) {
                         const isEcho = event.message.is_echo;
+                        // Si es un eco (enviado por nosotros), el cliente es el recipient
                         const targetId = isEcho ? event.recipient.id : event.sender.id;
                         const text = event.message.text || "[Multimedia/Adjunto]";
                         const source = body.object === 'page' ? 'messenger' : 'instagram';
                         const timestamp = new Date().toISOString();
                         const role = isEcho ? 'bot' : 'user';
 
+                        // Rescate de Perfil si el metadata no existe o es solo un número
                         let metaInfo = await db.get("SELECT contactName FROM metadata WHERE phone = ?", [targetId]);
                         let finalName = targetId;
                         let photoUrl = null;
@@ -1123,8 +1059,10 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                             finalName = metaInfo.contactName;
                         }
 
+                        // ALMACENAMOS EN LA BD
                         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [targetId, role, text, timestamp]);
                         
+                        // Si es eco, NO sumamos unreadCount. Si es mensaje del cliente, sumamos unreadCount.
                         const unreadIncr = isEcho ? 0 : 1;
                         
                         await db.run(`INSERT INTO metadata (phone, contactName, photoUrl, archived, unreadCount, last_interaction, channel) 
@@ -1139,33 +1077,28 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                     }
                 }
 
-                // 2. ATRAPAR COMENTARIOS EN PUBLICACIONES (🔥 FIX V33.8: MSG_TYPE y MEDIA_ID)
+                // 2. ATRAPAR COMENTARIOS EN PUBLICACIONES
                 const changesEvents = entry.changes || [];
                 for (let change of changesEvents) {
                     if (change.field === 'comments') {
                         const val = change.value;
                         const targetId = val.from.id;
                         const senderName = val.from.name || targetId;
-                        const rawText = val.text || '';
-                        const text = `💬 [COMENTARIO EN POST]: ${rawText}`;
+                        const text = `💬 [COMENTARIO EN POST]: ${val.text}`;
                         const source = body.object === 'page' ? 'messenger' : 'instagram';
                         const timestamp = new Date().toISOString();
 
-                        // 🔥 EXTRAEMOS EL MEDIA ID (POST O FOTO) DONDE COMENTARON 🔥
-                        const mediaId = val.media?.id || val.post?.id || val.post_id || null;
-
-                        // ALMACENAMOS EL COMENTARIO CON SU TIPO Y MEDIA ID
-                        await db.run("INSERT INTO history (phone, role, text, time, msg_type, media_id) VALUES (?, ?, ?, ?, 'comment', ?)", [targetId, 'user', text, timestamp, mediaId]);
-                        
+                        // ALMACENAMOS EL COMENTARIO COMO UN MENSAJE
+                        await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [targetId, 'user', text, timestamp]);
                         await db.run(`INSERT INTO metadata (phone, contactName, archived, unreadCount, last_interaction, channel) 
                                       VALUES (?, ?, 0, 1, ?, ?) 
                                       ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName, archived=0, unreadCount = unreadCount + 1, last_interaction=excluded.last_interaction, channel=excluded.channel`, 
                                       [targetId, senderName, timestamp, source]);
                         
-                        io.emit('new_message', { phone: targetId, role: 'user', text: text, time: timestamp, msg_type: 'comment', media_id: mediaId });
+                        io.emit('new_message', { phone: targetId, role: 'user', text: text, time: timestamp });
                         io.emit('update_chats_list');
 
-                        console.log(`📣 ${source.toUpperCase()} COMENTARIO - De: ${senderName} | Msj: ${rawText} | PostID: ${mediaId}`);
+                        console.log(`📣 ${source.toUpperCase()} COMENTARIO - De: ${senderName} | Msj: ${text}`);
                     }
                 }
             }
@@ -1194,6 +1127,10 @@ app.post('/webhook', async (req, res) => {
         const val = changes?.value; 
         
         if (val?.statuses && val.statuses[0]) {
+            const status = val.statuses[0];
+            if (status.status === 'failed') {
+                console.error(`🚨 META MATÓ EL MENSAJE PARA ${status.recipient_id}. MOTIVO:`, JSON.stringify(status.errors));
+            }
             return;
         }
 
@@ -1270,5 +1207,5 @@ app.post('/webhook', async (req, res) => {
             currentData.timer = timer;
             messageQueue.set(phone, currentData);
         } 
-    } catch(e) {} 
+    } catch(e) { console.error("Webhook Error", e); } 
 });
