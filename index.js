@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.9 (FULL SALESFORCE + SEPARACIÓN DE COMENTARIOS)
+ * SERVER BACKEND - v33.10 (FIX: ACCIONES MASIVAS EN COMENTARIOS)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -7,6 +7,8 @@
  * 4. FIX: Integración real con JSFORCE para crear Leads.
  * 5. FIX: Traductor de LeadSource y limpieza del '57' en teléfonos.
  * 6. ADD: Los comentarios ahora crean un chat separado (ID_comentarios).
+ * 7. FIX: (v33.10) Sanitización Regex en rutas Bulk/Action para no borrar 
+ * los DM originales al manipular masivamente los '_comentarios'.
  * ============================================================
  */
 
@@ -25,7 +27,7 @@ const cors = require('cors');
 const FormData = require('form-data');
 const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
-const jsforce = require('jsforce'); // 🔥 LIBRERÍA DE SALESFORCE
+const jsforce = require('jsforce'); 
 
 // --- 1. CONFIGURACIÓN DEL SERVIDOR ---
 const app = express();
@@ -57,7 +59,6 @@ const ADMIN_PASS = process.env.ADMIN_PASS || "icc2025";
 const SESSION_SECRET = "icbot-secure-v29-final"; 
 const VERIFY_TOKEN = "ICC_2025"; 
 
-// 🔥 CREDENCIALES SALESFORCE 🔥
 const SF_USER = process.env.SF_USERNAME || 'marketing@casacolombia.com.co';
 const SF_PASS = process.env.SF_PASSWORD || 'Crm2026..';
 const SF_TOKEN = process.env.SF_TOKEN || 'IRKsWeCW6ooQw4ORheVQmLRt';
@@ -891,13 +892,15 @@ app.get('/api/chat-history/:phone(*)', proteger, async (req, res) => {
     }
 });
 
+// 🔥 FIX: Sanitizamos pero SIN destruir el sufijo '_comentarios'
 app.post('/api/contacts/bulk-update', proteger, async (req, res) => {
     const { phones, action, value } = req.body; 
     try {
         if (!phones || !Array.isArray(phones)) return res.status(400).json({error: "Lista de teléfonos inválida"});
         
         for (const phone of phones) {
-            const cleanPhone = phone.replace(/\D/g, '');
+            // Permitimos números, letras y guion bajo para mantener el _comentarios intacto
+            const cleanPhone = phone.replace(/[^0-9a-zA-Z_]/g, '');
             if (action === 'set_label') {
                 await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, JSON.stringify([value])]); 
                 await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [value.text, cleanPhone]);
@@ -917,16 +920,27 @@ app.post('/api/contacts/bulk-update', proteger, async (req, res) => {
     }
 });
 
+// 🔥 FIX: Blindamos la ruta de eliminación/archivo masivo para que afecte el chat correcto
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
-    const cleanPhone = phone.replace(/\D/g, ''); 
-    if(action === 'delete') { for(const t of ['history','metadata','bot_status','leads']) await db.run(`DELETE FROM ${t} WHERE phone=?`,[cleanPhone]); }
+    // Permite alfanuméricos y guion bajo
+    const cleanPhone = phone.replace(/[^0-9a-zA-Z_]/g, ''); 
+    
+    if(action === 'delete') { 
+        for(const t of ['history','metadata','bot_status','leads']) {
+            await db.run(`DELETE FROM ${t} WHERE phone=?`,[cleanPhone]); 
+        }
+    }
     else if(action === 'set_labels') { 
         await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, JSON.stringify(value)]); 
         await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [value.length > 0 ? value.map(v => v.text).join(', ') : "Sin Etiqueta", cleanPhone]); 
     }
-    else if(action === 'toggle_pin') { await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET pinned = CASE WHEN pinned = 1 THEN 0 ELSE 1 END", [cleanPhone]); }
-    else if(action === 'toggle_archive') { await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET archived = CASE WHEN archived = 1 THEN 0 ELSE 1 END", [cleanPhone]); }
+    else if(action === 'toggle_pin') { 
+        await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET pinned = CASE WHEN pinned = 1 THEN 0 ELSE 1 END", [cleanPhone]); 
+    }
+    else if(action === 'toggle_archive') { 
+        await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET archived = CASE WHEN archived = 1 THEN 0 ELSE 1 END", [cleanPhone]); 
+    }
     res.json({success:true});
 });
 
@@ -949,7 +963,6 @@ app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, r
 app.post('/api/chat/send', proteger, async (req, res) => { 
     const { phone, message } = req.body; 
     try { 
-        // 🔥 FIX: Quitar el '_comentarios' si le estamos respondiendo a un comentario
         let finalId = phone;
         if (finalId.includes('_comentarios')) {
             finalId = finalId.replace('_comentarios', '');
@@ -1205,13 +1218,12 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                     }
                 }
 
-                // 2. ATRAPAR COMENTARIOS EN PUBLICACIONES (🔥 FIX V33.9: COMENTARIOS AISLADOS)
+                // 2. ATRAPAR COMENTARIOS EN PUBLICACIONES
                 const changesEvents = entry.changes || [];
                 for (let change of changesEvents) {
                     if (change.field === 'comments') {
                         const val = change.value;
                         const originalId = val.from.id;
-                        // 🔥 LE AÑADIMOS EL APELLIDO _comentarios AL ID PARA AISLARLO DEL CHAT NORMAL
                         const targetId = originalId + '_comentarios';
                         const senderName = (val.from.name || originalId) + ' (Comentarios)';
                         
