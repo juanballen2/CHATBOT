@@ -664,7 +664,7 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
         if (!lead) return res.status(404).json({ success: false, message: "No encontrado en la BD local" });
 
         // 1. REGLAS DE ASIGNACIÓN DE ORIGEN (LeadSource)
-        let leadSource = "A Redes sociales"; 
+        let leadSource = "Redes sociales"; 
         const src = (lead.source || "").toLowerCase();
 
         if (src.includes("tienda")) {
