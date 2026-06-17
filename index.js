@@ -213,7 +213,7 @@ function obtenerDepartamento(ciudad) {
     if (!ciudad) return null;
     const c = ciudad.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
     const mapa = {
-        "medellin": "Antioquia", "bogota": "Bogotá D.C.", "cali": "Valle del Cauca", "barranquilla": "Atlántico",
+        "medellin": "Antioquia", "bogota": "Bogotá", "cali": "Valle del Cauca", "barranquilla": "Atlántico",
         "cartagena": "Bolívar", "bucaramanga": "Santander", "pereira": "Risaralda", "manizales": "Caldas",
         "armenia": "Quindío", "cucuta": "Norte de Santander", "ibague": "Tolima", "villavicencio": "Meta",
         "neiva": "Huila", "santa marta": "Magdalena", "pasto": "Nariño", "popayan": "Cauca",
