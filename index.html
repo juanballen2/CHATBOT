@@ -413,7 +413,7 @@
 
                     <div class="crm-title" style="margin-top:20px;"><i class="fas fa-filter"></i> Origen (Salesforce)</div>
                     <select id="crm-source" class="crm-input">
-                        <option value="A Redes sociales">A Redes sociales (Ads / Orgánico)</option>
+                        <option value="Redes sociales">Redes sociales (Ads / Orgánico)</option>
                         <option value="Tienda Virtual">Tienda Virtual</option>
                         <option value="Sitio web">Sitio web</option>
                         <option value="WhatsApp">WhatsApp (Masivo / Directo)</option>
@@ -637,6 +637,12 @@
                     <option value="plantilla_de_retoma"></option>
                     <option value="tu_plantilla_promo"></option>
                 </datalist>
+
+                <label>Idioma de la Plantilla</label>
+                <select id="tpl-lang" class="crm-input" style="margin-bottom:10px;">
+                    <option value="es_CO">Español Colombia (es_CO)</option>
+                    <option value="es">Español (es)</option>
+                </select>
 
                 <label>Imagen de Encabezado (Opcional)</label>
                 <input type="file" id="tpl-file" accept="image/jpeg, image/png">
@@ -1089,6 +1095,7 @@
             const fileInput = document.getElementById('tpl-file');
             const varsInput = document.getElementById('tpl-vars').value.trim();
             const isBulk = document.getElementById('tpl-is-bulk').value === "true";
+            const lang = document.getElementById('tpl-lang').value;
             
             if(!name) return showToast("⚠️ El nombre de la plantilla es obligatorio.");
 
@@ -1106,7 +1113,7 @@
 
             const formData = new FormData();
             formData.append('templateName', name);
-            formData.append('language', 'es_CO');
+            formData.append('language', lang);
             formData.append('previewText', previewText);
             
             if (components.length > 0) formData.append('components', JSON.stringify(components));
@@ -1230,7 +1237,7 @@
             document.body.classList.remove('mobile-chat-open'); 
             currentChat = null; 
             if(currentlyPlaying) { 
-                currentlyPlaying.pause(); 
+                try { currentlyPlaying.pause(); } catch(e){} 
                 currentlyPlaying = null; 
             }
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
@@ -1570,6 +1577,11 @@
         async function openChat(phone, name, photo) { 
             if(bulkMode) return toggleChatSelection(phone, event); 
             
+            if(currentlyPlaying) { 
+                try { currentlyPlaying.pause(); } catch(e){} 
+                currentlyPlaying = null; 
+            }
+
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
             const clickedItem = document.getElementById(`chat-${phone}`);
             if(clickedItem) clickedItem.classList.add('active');
@@ -1832,8 +1844,12 @@
         }
 
         function resetPlayer(id) { 
-            document.getElementById(`btn-${id}`).innerHTML = '<i class="fas fa-play" style="margin-left:3px;"></i>'; 
-            document.getElementById(`seek-${id}`).value = 0; 
+            const btn = document.getElementById(`btn-${id}`);
+            if(btn) btn.innerHTML = '<i class="fas fa-play" style="margin-left:3px;"></i>'; 
+            
+            const seek = document.getElementById(`seek-${id}`);
+            if(seek) seek.value = 0; 
+            
             const time = document.getElementById(`time-${id}`); 
             if(time) time.innerText = "0:00"; 
         }
@@ -1898,7 +1914,7 @@
             document.getElementById('crm-specific-interest').value = ""; 
             document.getElementById('crm-phone').value = phone ? "+" + phone : ""; 
             document.getElementById('crm-executive').value = "Pendiente"; 
-            document.getElementById('crm-source').value = "A Redes sociales"; 
+            document.getElementById('crm-source').value = "Redes sociales"; 
             
             const res = await fetch('/api/data/leads'); 
             const leads = await res.json(); 
@@ -1932,8 +1948,7 @@
                     execSelect.value = "Pendiente"; 
                 }
 
-                // 🔥 HOMOLOGACIÓN VISUAL DEL ORIGEN PARA SALESFORCE 🔥
-                let srcVal = "A Redes sociales";
+                let srcVal = "Redes sociales";
                 const src = (lead.source || "").toLowerCase();
                 if (src.includes("tienda")) srcVal = "Tienda Virtual";
                 else if (src.includes("web")) srcVal = "Sitio web";
