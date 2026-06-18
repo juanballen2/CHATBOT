@@ -146,6 +146,12 @@ function renderChatList(searchTerm = searchInput.value.toLowerCase()) {
         return matchesSearch && matchesPlatform && matchesType;
     });
 
+    if (filteredChats.length === 0) {
+        const msjVacio = currentType === 'dm' ? 'No hay mensajes privados recientes.' : 'No hay comentarios recientes en tus publicaciones.';
+        chatItemsList.innerHTML = `<div class="empty-state" style="margin-top:40px;"><p>${msjVacio}</p></div>`;
+        return;
+    }
+
     chatItemsList.innerHTML = filteredChats.map(c => {
         const isIg = c.channel === 'instagram';
         const platformIcon = isIg ? '<i class="fab fa-instagram" style="color: #E1306C;"></i>' : '<i class="fab fa-facebook-messenger" style="color: #0084FF;"></i>';
@@ -404,7 +410,6 @@ async function loadChatHistory(phone, name, platform) {
     try {
         messagesContainer.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);"><i class="fas fa-circle-notch fa-spin"></i> Cargando...</div>';
         
-        // Limpiamos notificación local si la tiene
         const chatInfo = omniChats.find(c => c.id === phone); 
         if (chatInfo && chatInfo.unreadCount > 0) {
             chatInfo.unreadCount = 0;
@@ -466,7 +471,6 @@ function appendMessage(msg) {
         </div>`;
     }
 
-    // Identificador de Comentario + Previews
     if (text.includes('💬 [COMENTARIO EN POST]:') || msg.msg_type === 'comment') {
         text = text.replace('💬 [COMENTARIO EN POST]: ', '<strong style="color:var(--primary);"><i class="fas fa-comment-dots"></i> Comentó en una publicación:</strong><br><br>');
         
@@ -535,7 +539,6 @@ async function analyzeChatAI() {
     btn.disabled = true;
 
     try {
-        // 1. Conseguimos el historial completo localmente
         const histRes = await fetch(`/api/chat-history/${currentChat}`);
         const history = await histRes.json();
         
@@ -544,7 +547,6 @@ async function analyzeChatAI() {
             return;
         }
 
-        // 2. Formateamos a texto para mandarlo al súper extractor
         const chatText = history.map(h => `${h.role === 'user' ? 'Cliente' : 'Asesor'}: ${h.text}`).join('\n');
 
         const formData = new FormData();
@@ -559,8 +561,6 @@ async function analyzeChatAI() {
 
         if (result.success && result.data) {
             const d = result.data;
-            
-            // Re-mapeamos la respuesta inteligente del extractor a las cajas del CRM
             const nombreFull = `${d.nombre !== 'No proporcionado' ? d.nombre : ''} ${d.apellido !== 'No proporcionado' ? d.apellido : ''}`.trim();
             
             if(nombreFull) document.getElementById('crm-name').value = nombreFull;
@@ -589,7 +589,6 @@ async function analyzeChatAI() {
     }
 }
 
-// 3. CRM Y ETIQUETAS
 async function loadLeadDataToCRM(phone) {
     try {
         document.getElementById('crm-name').value = ""; 
@@ -662,7 +661,7 @@ async function syncSalesforceCurrent() {
     if(!currentChat) return;
     
     showToast("💾 Guardando ficha local...");
-    await saveLeadManual(false); // Guarda silenciosamente primero
+    await saveLeadManual(false); 
     
     showToast("🔄 Subiendo a Salesforce...");
     try {
@@ -704,28 +703,12 @@ function renderCRMTags(tags) {
     }).join(''); 
 }
 
-function updateTagsOptimistic(phone, tagObj, remove = false) {
-    const chat = omniChats.find(c => c.id === phone);
-    if (chat) {
-        if (!chat.labels) chat.labels = [];
-        if (remove) {
-            chat.labels = chat.labels.filter(l => (l.text || l) !== tagObj.text);
-        } else {
-            if (!chat.labels.find(l => (l.text || l) === tagObj.text)) {
-                chat.labels.push(tagObj);
-            }
-        }
-        updateBulkVisuals();
-    }
-}
-
 async function toggleTagLocal(name, color) { 
     if(!currentChat) return; 
     
     const chat = omniChats.find(c => c.id === currentChat);
     const activeTags = chat ? (chat.labels || []) : [];
     const exists = activeTags.find(l => (l.text || l) === name);
-    
     const tagObj = { text: name, color: color };
     
     if (chat) {
@@ -748,7 +731,6 @@ async function toggleTagLocal(name, color) {
     } catch(e) { showToast("Error guardando etiqueta."); }
 }
 
-// 4. UTILIDADES VISUALES
 function formatTime(isoString) {
     if (!isoString) return '';
     const d = new Date(isoString);
@@ -759,6 +741,7 @@ function scrollToBottom() {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
+// Control del panel CRM de la derecha
 function toggleCRM() {
     document.getElementById('crm-panel').classList.toggle('open');
 }
