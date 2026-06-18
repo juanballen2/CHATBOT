@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.11 (FULL SALESFORCE + EXTRACTOR INTELIGENTE)
+ * SERVER BACKEND - v33.12 (FIX: TIEMPO REAL Y ECOS EN MESSENGER)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -8,7 +8,9 @@
  * 5. FIX: Traductor de LeadSource y limpieza del '57' en teléfonos.
  * 6. ADD: Los comentarios ahora crean un chat separado (ID_comentarios).
  * 7. FIX: Sanitización Regex en rutas Bulk/Action para DMs originales.
- * 8. ADD: (v33.11) Rutas Nativas para Extractor Inteligente (/extractor)
+ * 8. ADD: Rutas Nativas para Extractor Inteligente (/extractor).
+ * 9. FIX: (v33.12) Re-ingeniería del Webhook Omnicanal para capturar 
+ * correctamente los Ecos y DMs de Messenger mapeando el ID del cliente real.
  * ============================================================
  */
 
@@ -899,7 +901,6 @@ app.post('/api/contacts/bulk-update', proteger, async (req, res) => {
         if (!phones || !Array.isArray(phones)) return res.status(400).json({error: "Lista de teléfonos inválida"});
         
         for (const phone of phones) {
-            // Permitimos números, letras y guion bajo para mantener el _comentarios intacto
             const cleanPhone = phone.replace(/[^0-9a-zA-Z_]/g, '');
             if (action === 'set_label') {
                 await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, JSON.stringify([value])]); 
@@ -920,10 +921,8 @@ app.post('/api/contacts/bulk-update', proteger, async (req, res) => {
     }
 });
 
-// 🔥 FIX: Blindamos la ruta de eliminación/archivo masivo para que afecte el chat correcto
 app.post('/api/chat/action', proteger, async (req, res) => {
     const { phone, action, value } = req.body;
-    // Permite alfanuméricos y guion bajo
     const cleanPhone = phone.replace(/[^0-9a-zA-Z_]/g, ''); 
     
     if(action === 'delete') { 
@@ -1147,7 +1146,7 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
 });
 
 // ============================================================
-// NUEVO WEBHOOK OMNICANAL (MESSENGER, INSTAGRAM & COMENTARIOS)
+// 🔥 ACTUALIZADO v33.12: WEBHOOK OMNICANAL FLUIDO EN TIEMPO REAL 🔥
 // ============================================================
 
 async function getOmniProfile(senderId) {
@@ -1178,17 +1177,26 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
             const entries = body.entry || [];
             
             for (let entry of entries) {
-                
-                // 1. ATRApar MENSAJES DIRECTOS (DMs) Y ECOS
                 const messagingEvents = entry.messaging || [];
+                
                 for (let event of messagingEvents) {
                     if (event.message) {
-                        const isEcho = event.message.is_echo;
+                        const isEcho = !!event.message.is_echo;
+                        
+                        // 🔥 BLINDAJE DE IDENTIFICACIÓN: Mapear el ID del cliente real 
+                        // En DMs: event.sender.id es el cliente.
+                        // En Ecos: event.sender.id es la página corporativa, por lo que el cliente es event.recipient.id
                         const targetId = isEcho ? event.recipient.id : event.sender.id;
+                        
+                        // Si el eco proviene del propio ICBOT manual para no duplicar en el feed
+                        if (isEcho && event.message.app_id && event.message.app_id.toString() === process.env.META_APP_ID) {
+                            continue;
+                        }
+
                         const text = event.message.text || "[Multimedia/Adjunto]";
                         const source = body.object === 'page' ? 'messenger' : 'instagram';
                         const timestamp = new Date().toISOString();
-                        const role = isEcho ? 'bot' : 'user';
+                        const role = isEcho ? 'manual' : 'user';
 
                         let metaInfo = await db.get("SELECT contactName FROM metadata WHERE phone = ?", [targetId]);
                         let finalName = targetId;
@@ -1202,6 +1210,7 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                             finalName = metaInfo.contactName;
                         }
 
+                        // Inyectar en el historial
                         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [targetId, role, text, timestamp]);
                         
                         const unreadIncr = isEcho ? 0 : 1;
@@ -1211,10 +1220,11 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                                       ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName, photoUrl=COALESCE(excluded.photoUrl, photoUrl), archived=0, unreadCount = unreadCount + ?, last_interaction=excluded.last_interaction, channel=excluded.channel`, 
                                       [targetId, finalName, photoUrl, unreadIncr, timestamp, source, unreadIncr]);
                         
+                        // Disparar WebSockets directos a la UI
                         io.emit('new_message', { phone: targetId, role: role, text: text, time: timestamp });
                         io.emit('update_chats_list');
 
-                        console.log(`💬 ${source.toUpperCase()} ${isEcho ? '(ECO)' : 'DM'} - De: ${finalName} | Msj: ${text}`);
+                        console.log(`📢 TIEMPO REAL (${source.toUpperCase()}) - ChatID: ${targetId} | Rol: ${role} | Msj: ${text}`);
                     }
                 }
 
@@ -1353,15 +1363,13 @@ app.post('/webhook', async (req, res) => {
 });
 
 // ============================================================
-// 🔥 NUEVO MÓDULO: EXTRACTOR INTELIGENTE INDEPENDIENTE 🔥
+// 🔥 MÓDULO: EXTRACTOR INTELIGENTE INDEPENDIENTE 🔥
 // ============================================================
 
-// 1. Ruta para servir la página HTML del Extractor
 app.get('/extractor', proteger, (req, res) => {
     res.sendFile(path.join(__dirname, 'extractor.html'));
 });
 
-// 2. Ruta para procesar Texto o Imágenes con Gemini 2.5
 app.post('/api/extractor/process', proteger, upload.single('image'), async (req, res) => {
     try {
         const { type, data } = req.body;
@@ -1419,7 +1427,6 @@ app.post('/api/extractor/process', proteger, upload.single('image'), async (req,
     }
 });
 
-// 3. Ruta para empujar a Salesforce directo desde el Extractor
 app.post('/api/extractor/salesforce', proteger, async (req, res) => {
     try {
         const payload = req.body;
