@@ -1,15 +1,16 @@
 /**
  * ICBOT - Lógica del Frontend para Bandeja Omnicanal (Meta)
- * Versión v33.7 - IA Fantasma, CRM, Fix Etiquetas, Borrado Masivo y Menú Clic Derecho
+ * Versión v33.11 - IA Extractor Unificada, Auto-Save Salesforce, Post Previews
  */
 
 const socket = io();
 let currentChat = null;
 let currentPlatform = 'all'; 
 let currentView = 'active'; 
+let currentType = 'dm'; // Filtro de DM vs Comentarios
 let omniChats = []; 
 window._cachedTags = []; 
-let contextPhone = null; // <-- NUEVO: Para guardar el ID del clic derecho
+let contextPhone = null; 
 
 // --- VARIABLES SELECCIÓN MÚLTIPLE ---
 let bulkMode = false;
@@ -44,12 +45,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     msgInput.addEventListener('keydown', handleKeyboardShortcuts);
     
-    // Filtros de Plataforma
-    document.querySelectorAll('.platform-filter, .filters .filter-btn:not(.view-filter)').forEach(btn => {
+    // Filtros de Tipo (DM vs Comentarios)
+    document.querySelectorAll('.type-filter').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            if(e.currentTarget.innerText.includes('Cerrar')) return;
-            const siblings = e.currentTarget.parentElement.querySelectorAll('.filter-btn');
-            siblings.forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.type-filter').forEach(b => b.classList.remove('active'));
+            e.currentTarget.classList.add('active');
+            currentType = e.currentTarget.dataset.type;
+            renderChatList();
+        });
+    });
+
+    // Filtros de Plataforma
+    document.querySelectorAll('.platform-filter').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.platform-filter').forEach(b => b.classList.remove('active'));
             e.currentTarget.classList.add('active');
             currentPlatform = e.currentTarget.dataset.filter;
             renderChatList();
@@ -70,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderChatList(e.target.value.toLowerCase());
     });
 
-    // <-- NUEVO: Ocultar menú de clic derecho al hacer clic en cualquier otro lado
+    // Ocultar menú de clic derecho
     document.addEventListener('click', (e) => { 
         if(!e.target.closest('.chat-item') && !e.target.closest('#context-menu')) {
             const menu = document.getElementById('context-menu');
@@ -94,33 +103,21 @@ socket.on('new_message', (msg) => {
 // --- CARGA Y RENDERIZADO DE CHATS ---
 async function loadOmniChats() {
     try {
-        const res = await fetch(`/api/chats-full?view=${currentView}`);
+        const res = await fetch(`/api/chats-full?view=${currentView}&channel=omni`);
         const allChats = await res.json();
         
-        let waUnread = 0;
-        let omniUnread = 0;
+        omniChats = allChats;
         
-        allChats.forEach(c => {
-            const ch = c.channel || 'whatsapp';
-            if (c.unreadCount > 0) {
-                if (ch === 'whatsapp') waUnread += 1; 
-                else omniUnread += 1;
-            }
+        let omniUnread = 0;
+        omniChats.forEach(c => {
+            if (c.unreadCount > 0) omniUnread += 1;
         });
         
-        const badgeWa = document.getElementById('badge-wa');
         const badgeOmni = document.getElementById('badge-omni');
-        
-        if(badgeWa) {
-            badgeWa.innerText = waUnread;
-            badgeWa.style.display = waUnread > 0 ? 'block' : 'none';
-        }
         if(badgeOmni) {
             badgeOmni.innerText = omniUnread;
             badgeOmni.style.display = omniUnread > 0 ? 'block' : 'none';
         }
-        
-        omniChats = allChats.filter(c => c.channel === 'instagram' || c.channel === 'messenger');
 
         renderChatList();
     } catch (error) {
@@ -142,14 +139,21 @@ function renderChatList(searchTerm = searchInput.value.toLowerCase()) {
         if (currentPlatform === 'instagram') matchesPlatform = chat.channel === 'instagram';
         else if (currentPlatform === 'messenger') matchesPlatform = chat.channel === 'messenger';
         
-        return matchesSearch && matchesPlatform;
+        // Aislamiento de DM vs Comentarios
+        let isComment = chat.lastMessage.text && chat.lastMessage.text.includes('[COMENTARIO EN POST]');
+        let matchesType = (currentType === 'comment') ? isComment : !isComment;
+
+        return matchesSearch && matchesPlatform && matchesType;
     });
 
     chatItemsList.innerHTML = filteredChats.map(c => {
         const isIg = c.channel === 'instagram';
         const platformIcon = isIg ? '<i class="fab fa-instagram" style="color: #E1306C;"></i>' : '<i class="fab fa-facebook-messenger" style="color: #0084FF;"></i>';
         
-        const cleanMsg = c.lastMessage.text ? c.lastMessage.text.replace(/\[Instagram\] |\[Messenger\] /g, '') : 'Multimedia';
+        let cleanMsg = c.lastMessage.text ? c.lastMessage.text.replace(/\[Instagram\] |\[Messenger\] /g, '') : 'Multimedia';
+        
+        if (cleanMsg.includes('[Multimedia/Adjunto]')) cleanMsg = '🖼️ Contenido Multimedia';
+        else if (cleanMsg.includes('COMENTARIO EN POST')) cleanMsg = '💬 Comentó tu publicación';
 
         let uniqueLabels = [];
         let seenTexts = new Set();
@@ -170,7 +174,6 @@ function renderChatList(searchTerm = searchInput.value.toLowerCase()) {
 
         const isSelected = selectedChats.has(c.id);
 
-        // 🔥 FIX: Añadimos oncontextmenu y referrerpolicy="no-referrer" a la imagen 🔥
         return `
             <div class="chat-item ${currentChat === c.id ? 'active' : ''} ${c.archived ? 'archived' : ''}" id="chat-${c.id}" onclick="handleChatClick('${c.id}', '${c.name.replace(/'/g, "\\'")}', '${c.channel}', event)" oncontextmenu="showContextMenu(event, '${c.id}', ${c.pinned || false}, ${c.archived || false})">
                 <input type="checkbox" class="bulk-checkbox" ${isSelected ? 'checked' : ''} onclick="toggleChatSelection('${c.id}', event)">
@@ -192,9 +195,11 @@ function renderChatList(searchTerm = searchInput.value.toLowerCase()) {
             </div>
         `;
     }).join('');
+    
+    if (bulkMode) updateBulkVisuals(); 
 }
 
-// --- 🔥 NUEVO: MENÚ DE CLIC DERECHO (CONTEXT MENU) 🔥 ---
+// --- MENÚ DE CLIC DERECHO (CONTEXT MENU) ---
 function showContextMenu(e, phone, isPinned, isArchived) { 
     e.preventDefault(); 
     contextPhone = phone; 
@@ -234,14 +239,12 @@ async function contextAction(action, valueOverride = true) {
         const menu = document.getElementById('context-menu');
         if (menu) menu.style.display = 'none'; 
         
-        // Si borró o archivó el chat abierto, limpiar la pantalla
         if ((action === 'delete' || action === 'toggle_archive') && contextPhone === currentChat) {
             currentChat = null;
             document.getElementById('conversation-empty').style.display = 'flex';
             document.getElementById('conversation-active').style.display = 'none';
             document.getElementById('crm-panel').classList.remove('open');
         }
-        
     } catch(e) {
         showToast("Error ejecutando acción");
     }
@@ -251,9 +254,7 @@ function quickLabel() {
     if(!contextPhone) return; 
     const chat = omniChats.find(c => c.id === contextPhone); 
     
-    if(chat) {
-        loadChatHistory(chat.id, chat.name, chat.channel); 
-    }
+    if(chat) loadChatHistory(chat.id, chat.name, chat.channel); 
     
     const crmPanel = document.getElementById('crm-panel');
     if (crmPanel) crmPanel.classList.add('open'); 
@@ -300,11 +301,8 @@ function selectAllBulkChats() {
 
     checkboxes.forEach(cb => {
         const phone = cb.closest('.chat-item').id.replace('chat-', '');
-        if (allChecked) {
-            selectedChats.delete(phone);
-        } else {
-            selectedChats.add(phone);
-        }
+        if (allChecked) selectedChats.delete(phone);
+        else selectedChats.add(phone);
     });
     const counter = document.getElementById('bulk-count');
     if(counter) counter.innerText = selectedChats.size;
@@ -333,18 +331,12 @@ function toggleChatSelection(phone, event) {
         for (let i = start; i <= end; i++) {
             checkboxes[i].checked = isChecking;
             const p = checkboxes[i].closest('.chat-item').id.replace('chat-', '');
-            if (isChecking) {
-                selectedChats.add(p);
-            } else {
-                selectedChats.delete(p);
-            }
+            if (isChecking) selectedChats.add(p);
+            else selectedChats.delete(p);
         }
     } else {
-        if (isChecking) {
-            selectedChats.add(phone);
-        } else {
-            selectedChats.delete(phone);
-        }
+        if (isChecking) selectedChats.add(phone);
+        else selectedChats.delete(phone);
     }
     
     lastCheckedIndex = currentIndex;
@@ -370,7 +362,6 @@ async function executeBulkAction(action) {
     }
     
     showToast("⏳ Procesando... por favor espera.");
-    
     const phones = Array.from(selectedChats);
     
     for (let i = 0; i < phones.length; i++) {
@@ -392,12 +383,10 @@ async function executeBulkAction(action) {
         document.getElementById('conversation-active').style.display = 'none';
         document.getElementById('crm-panel').classList.remove('open');
     }
-
     loadOmniChats(); 
 }
 
-// --- MANEJO DE CHAT INDIVIDUAL ---
-
+// --- MANEJO DE CHAT INDIVIDUAL Y PREVIEWS ---
 async function loadChatHistory(phone, name, platform) {
     currentChat = phone;
     
@@ -414,6 +403,14 @@ async function loadChatHistory(phone, name, platform) {
 
     try {
         messagesContainer.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);"><i class="fas fa-circle-notch fa-spin"></i> Cargando...</div>';
+        
+        // Limpiamos notificación local si la tiene
+        const chatInfo = omniChats.find(c => c.id === phone); 
+        if (chatInfo && chatInfo.unreadCount > 0) {
+            chatInfo.unreadCount = 0;
+            renderChatList();
+        }
+
         const res = await fetch(`/api/chat-history/${phone}`);
         const history = await res.json();
         
@@ -430,9 +427,63 @@ async function loadChatHistory(phone, name, platform) {
     }
 }
 
+async function fetchPostPreview(mediaId, elementId) {
+    try {
+        const res = await fetch(`/api/meta/post-preview/${mediaId}`);
+        const data = await res.json();
+        const el = document.getElementById(elementId);
+        if (!el) return;
+
+        if (data.success) {
+            el.innerHTML = `
+                <img src="${data.media_url}" style="width: 70px; height: 100%; object-fit: cover; border-right: 1px solid rgba(255,255,255,0.2);" onerror="this.src='https://via.placeholder.com/70?text=Post'">
+                <div style="padding: 10px; flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: center;">
+                    <span style="font-size: 0.8rem; color: #FFF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.9;">${data.caption}</span>
+                    <a href="${data.permalink}" target="_blank" style="font-size: 0.75rem; color: #FFF; text-decoration: underline; margin-top: 4px; font-weight: 600;"><i class="fas fa-external-link-alt"></i> Ver en Meta</a>
+                </div>
+            `;
+        } else {
+            el.innerHTML = `<div style="padding: 10px; font-size: 0.8rem; color: var(--danger);"><i class="fas fa-exclamation-triangle"></i> Publicación no disponible</div>`;
+        }
+    } catch (e) {
+        const el = document.getElementById(elementId);
+        if(el) el.innerHTML = `<div style="padding: 10px; font-size: 0.8rem; color: #FFF; opacity: 0.8;"><i class="fas fa-image"></i> Publicación Protegida</div>`;
+    }
+}
+
 function appendMessage(msg) {
     let text = msg.text.replace(/\[Instagram\] |\[Messenger\] /g, '');
     const bubbleClass = msg.role === 'user' ? 'msg-incoming' : 'msg-outgoing';
+    
+    if (text.includes('[Multimedia/Adjunto]')) {
+        text = `
+        <div style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.1); padding: 10px; border-radius: 8px;">
+            <i class="fas fa-image" style="font-size: 1.5rem; opacity: 0.8;"></i>
+            <div style="display: flex; flex-direction: column;">
+                <span style="font-weight: bold; font-size: 0.9rem;">Multimedia</span>
+                <span style="font-size: 0.75rem; opacity: 0.8;">Ver en la app nativa</span>
+            </div>
+        </div>`;
+    }
+
+    // Identificador de Comentario + Previews
+    if (text.includes('💬 [COMENTARIO EN POST]:') || msg.msg_type === 'comment') {
+        text = text.replace('💬 [COMENTARIO EN POST]: ', '<strong style="color:var(--primary);"><i class="fas fa-comment-dots"></i> Comentó en una publicación:</strong><br><br>');
+        
+        if (msg.media_id) {
+            const previewId = `preview-${msg.id || Math.random().toString(36).substr(2, 9)}`;
+            const previewHTML = `
+                <div class="post-preview-card" id="${previewId}" style="margin-top: 8px; background: rgba(0,0,0,0.15); border-radius: 8px; overflow: hidden; display: flex; align-items: center; border: 1px solid rgba(255,255,255,0.2); height: 70px;">
+                    <div style="padding: 10px; font-size: 0.8rem; color: #FFF; opacity: 0.7; display:flex; align-items:center; gap:8px;">
+                        <i class="fas fa-spinner fa-spin"></i> Cargando publicación...
+                    </div>
+                </div>
+            `;
+            text += previewHTML;
+            setTimeout(() => fetchPostPreview(msg.media_id, previewId), 100);
+        }
+    }
+
     const msgHTML = `
         <div class="message-bubble ${bubbleClass}">
             <div class="message-text">${text.replace(/\n/g, '<br>')}</div>
@@ -474,7 +525,7 @@ function handleKeyboardShortcuts(e) {
     }
 }
 
-// 🔥 FUNCIÓN: AUTO-LLENAR CON IA FANTASMA
+// 🔥 MEJORA 1: AUTO-LLENADO USANDO EL NUEVO MOTOR DEL EXTRACTOR 🔥
 async function analyzeChatAI() {
     if(!currentChat) return showToast("Abre un chat primero.");
     
@@ -484,24 +535,43 @@ async function analyzeChatAI() {
     btn.disabled = true;
 
     try {
-        const res = await fetch('/api/chat/analyze-lead', {
+        // 1. Conseguimos el historial completo localmente
+        const histRes = await fetch(`/api/chat-history/${currentChat}`);
+        const history = await histRes.json();
+        
+        if (!history || history.length === 0) {
+            showToast("No hay historial para analizar.");
+            return;
+        }
+
+        // 2. Formateamos a texto para mandarlo al súper extractor
+        const chatText = history.map(h => `${h.role === 'user' ? 'Cliente' : 'Asesor'}: ${h.text}`).join('\n');
+
+        const formData = new FormData();
+        formData.append('type', 'text');
+        formData.append('data', chatText);
+
+        const res = await fetch('/api/extractor/process', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone: currentChat })
+            body: formData
         });
         const result = await res.json();
 
         if (result.success && result.data) {
             const d = result.data;
-            if(d.nombre) document.getElementById('crm-name').value = d.nombre;
-            if(d.ciudad) document.getElementById('crm-city').value = d.ciudad;
-            if(d.correo) document.getElementById('crm-email').value = d.correo;
-            if(d.producto_especifico) document.getElementById('crm-specific-interest').value = d.producto_especifico;
             
-            if(d.categoria_interes) {
+            // Re-mapeamos la respuesta inteligente del extractor a las cajas del CRM
+            const nombreFull = `${d.nombre !== 'No proporcionado' ? d.nombre : ''} ${d.apellido !== 'No proporcionado' ? d.apellido : ''}`.trim();
+            
+            if(nombreFull) document.getElementById('crm-name').value = nombreFull;
+            if(d.ubicacion && d.ubicacion !== 'No proporcionado') document.getElementById('crm-city').value = d.ubicacion;
+            if(d.correo && d.correo !== 'No proporcionado') document.getElementById('crm-email').value = d.correo;
+            if(d.producto_detalle && d.producto_detalle !== 'No proporcionado') document.getElementById('crm-specific-interest').value = d.producto_detalle;
+            
+            if(d.categoria_producto && d.categoria_producto !== 'No proporcionado') {
                 const select = document.getElementById('crm-interest');
                 for(let opt of select.options) {
-                    if(opt.value.toUpperCase() === d.categoria_interes.toUpperCase()) {
+                    if(opt.value.toUpperCase() === d.categoria_producto.toUpperCase()) {
                         select.value = opt.value;
                         break;
                     }
@@ -556,7 +626,7 @@ async function loadLeadDataToCRM(phone) {
     } catch(e) { console.error("Error cargando CRM:", e); }
 }
 
-async function saveLeadManual() { 
+async function saveLeadManual(showNotification = true) { 
     if(!currentChat) return; 
     
     const res = await fetch('/api/data/leads'); 
@@ -581,15 +651,20 @@ async function saveLeadManual() {
                 body: JSON.stringify({ id, field: u.field, value: u.value }) 
             }); 
         }
-        showToast("✅ Ficha Actualizada"); 
+        if (showNotification) showToast("✅ Ficha Actualizada"); 
     } else { 
-        showToast("⚠️ Espera un primer mensaje del cliente."); 
+        if (showNotification) showToast("⚠️ Espera un primer mensaje del cliente para guardar."); 
     } 
 }
 
+// 🔥 MEJORA 2: AUTO-GUARDADO ANTES DE SUBIR A SALESFORCE 🔥
 async function syncSalesforceCurrent() {
     if(!currentChat) return;
-    showToast("🔄 Sincronizando SF...");
+    
+    showToast("💾 Guardando ficha local...");
+    await saveLeadManual(false); // Guarda silenciosamente primero
+    
+    showToast("🔄 Subiendo a Salesforce...");
     try {
         const res = await fetch('/api/salesforce/sync-lead', {
             method: 'POST',
@@ -597,9 +672,12 @@ async function syncSalesforceCurrent() {
             body: JSON.stringify({ phone: currentChat })
         });
         const data = await res.json();
-        if(data.success) showToast("✅ Subido a Salesforce");
-        else showToast("❌ Error: " + data.message);
-    } catch(e) { showToast("❌ Fallo de red"); }
+        if(data.success) {
+            showToast("✅ ¡Lead sincronizado con Salesforce!");
+        } else {
+            showToast("❌ Error SF: " + data.message);
+        }
+    } catch(e) { showToast("❌ Fallo de red con Salesforce"); }
 }
 
 async function loadTagFilterOptions() { 
