@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.10 (FIX: ACCIONES MASIVAS EN COMENTARIOS)
+ * SERVER BACKEND - v33.11 (FULL SALESFORCE + EXTRACTOR INTELIGENTE)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -7,8 +7,8 @@
  * 4. FIX: Integración real con JSFORCE para crear Leads.
  * 5. FIX: Traductor de LeadSource y limpieza del '57' en teléfonos.
  * 6. ADD: Los comentarios ahora crean un chat separado (ID_comentarios).
- * 7. FIX: (v33.10) Sanitización Regex en rutas Bulk/Action para no borrar 
- * los DM originales al manipular masivamente los '_comentarios'.
+ * 7. FIX: Sanitización Regex en rutas Bulk/Action para DMs originales.
+ * 8. ADD: (v33.11) Rutas Nativas para Extractor Inteligente (/extractor)
  * ============================================================
  */
 
@@ -1350,4 +1350,113 @@ app.post('/webhook', async (req, res) => {
             messageQueue.set(phone, currentData);
         } 
     } catch(e) {} 
+});
+
+// ============================================================
+// 🔥 NUEVO MÓDULO: EXTRACTOR INTELIGENTE INDEPENDIENTE 🔥
+// ============================================================
+
+// 1. Ruta para servir la página HTML del Extractor
+app.get('/extractor', proteger, (req, res) => {
+    res.sendFile(path.join(__dirname, 'extractor.html'));
+});
+
+// 2. Ruta para procesar Texto o Imágenes con Gemini 2.5
+app.post('/api/extractor/process', proteger, upload.single('image'), async (req, res) => {
+    try {
+        const { type, data } = req.body;
+        let contents = [];
+
+        const promptReglas = `
+        Analiza la información provista, extrae los datos del cliente y clasifica los campos según las siguientes reglas de negocio.
+        REGLAS DE CLASIFICACIÓN PARA 'categoria_producto':
+        - "Maquinaria nueva": Equipos Shantui o especifica "nuevo".
+        - "Maquinaria usada": Hitachi, Komatsu, CAT o "usado".
+        - "Volquetas": Shacman o "volqueta".
+        - "Martillos Hidráulicos": Martillos, Beilite, Max Power.
+        - "Repuestos": motores, bombas, empaquetaduras, dientes, tren rodaje, zapatas, cadenas, filtros, aceites.
+        - "Accesorios": pontones o aditamentos.
+        - "Brazos largos": brazos largos.
+        - "Servicio": mano de obra, taller o mantenimiento.
+        - "Otros": No se puede identificar.
+
+        REGLAS DE GEOLOCALIZACIÓN PARA 'ubicacion':
+        1. Identifica departamento correspondiente de Colombia.
+        2. Si menciona Bogotá, asígnale exactamente "Bogotá".
+        3. Si no hay ubicación, pon "No proporcionado".
+
+        Devuelve ESTRICTAMENTE un JSON, sin texto adicional ni bloques de markdown (\`\`\`json):
+        {
+            "nombre": "Valor", "apellido": "Valor", "telefono": "Valor indicativo completo",
+            "producto_detalle": "Valor", "categoria_producto": "Valor clasificado",
+            "correo": "Valor", "ubicacion": "Nombre exacto del departamento o 'No proporcionado'"
+        }`;
+
+        if (type === 'text') {
+            contents = [{ role: 'user', parts: [{ text: `${promptReglas}\n\nTexto:\n${data}` }] }];
+        } else if (type === 'image' && req.file) {
+            const base64Data = req.file.buffer.toString('base64');
+            contents = [{ role: 'user', parts: [
+                { text: promptReglas },
+                { inlineData: { mimeType: req.file.mimetype, data: base64Data } }
+            ]}];
+        }
+
+        const requestBody = {
+            contents: contents,
+            generationConfig: { responseMimeType: "application/json" }
+        };
+
+        const gRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, requestBody);
+        const rawText = gRes.data.candidates[0].content.parts[0].text;
+        const extractedData = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
+
+        res.json({ success: true, data: extractedData });
+
+    } catch (error) {
+        console.error("Error en Extractor IA:", error);
+        res.status(500).json({ success: false, message: "Error procesando con IA." });
+    }
+});
+
+// 3. Ruta para empujar a Salesforce directo desde el Extractor
+app.post('/api/extractor/salesforce', proteger, async (req, res) => {
+    try {
+        const payload = req.body;
+        
+        let telefonoFinal = payload.telefono.replace(/\s+/g, '');
+        if (telefonoFinal.startsWith("+57")) telefonoFinal = telefonoFinal.substring(3);
+        if (telefonoFinal.startsWith("57") && telefonoFinal.length > 10) telefonoFinal = telefonoFinal.substring(2);
+
+        const sfData = {
+            FirstName: payload.nombre !== "No proporcionado" ? payload.nombre : "Cliente",
+            LastName: payload.apellido !== "No proporcionado" ? payload.apellido : "Extraído",
+            Phone: telefonoFinal,
+            Email: payload.correo !== "No proporcionado" ? payload.correo : "",
+            Company: `${payload.nombre} ${payload.apellido}`,
+            DescripciondeProducto__c: payload.producto_detalle !== "No proporcionado" ? payload.producto_detalle : "",
+            Producto_de_su_inter_s__c: payload.categoria_producto !== "No proporcionado" ? payload.categoria_producto : "Consultando",
+            Ubicaci_n__c: payload.ubicacion !== "No proporcionado" ? payload.ubicacion : "",
+            LeadSource: "WhatsApp" 
+        };
+
+        const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
+        await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
+
+        const search = await sfConn.query(`SELECT Id FROM Lead WHERE Phone = '${telefonoFinal}'`);
+        if (search.totalSize > 0) {
+            return res.status(400).json({ success: false, message: "El número ya existe en Salesforce." });
+        }
+
+        const result = await sfConn.sobject("Lead").create(sfData);
+        
+        if (result.success) {
+            res.json({ success: true, sfId: result.id });
+        } else {
+            res.status(500).json({ success: false, message: "Salesforce rechazó la creación." });
+        }
+    } catch (error) {
+        console.error("Error Salesforce Extractor:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
 });
