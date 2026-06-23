@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.12 (FIX: TIEMPO REAL Y ECOS EN MESSENGER)
+ * SERVER BACKEND - v33.12 (FIX: TIEMPO REAL Y ECOS EN MESSENGER + FIX PLANTILLAS)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -11,6 +11,8 @@
  * 8. ADD: Rutas Nativas para Extractor Inteligente (/extractor).
  * 9. FIX: (v33.12) Re-ingeniería del Webhook Omnicanal para capturar 
  * correctamente los Ecos y DMs de Messenger mapeando el ID del cliente real.
+ * 10. FIX: (v33.12) Solución al crash de envío individual de plantillas sin variables.
+ * 11. ADD: (v33.12) Generación de Ficha CRM en el chat tras subir a Salesforce.
  * ============================================================
  */
 
@@ -208,7 +210,7 @@ function analizarTextoFuente(texto) {
     if(!texto) return null;
     const t = texto.toLowerCase();
     if (t.includes('storeicc.com') || t.includes('deseo asesoría')) return 'Tienda Virtual';
-    if (t.includes('importadoracasacolombia.com')) return 'Web';
+    if (t.includes('importadoracasacolombia.com')) return 'Sitio web';
     return null;
 }
 
@@ -666,7 +668,7 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
         const lead = await db.get("SELECT * FROM leads WHERE phone = ?", [phone]);
         if (!lead) return res.status(404).json({ success: false, message: "No encontrado en la BD local" });
 
-        // 1. REGLAS DE ASIGNACIÓN DE ORIGEN (LeadSource)
+        // 1. REGLAS DE ASIGNACIÓN DE ORIGEN (LeadSource) LIMPIO
         let leadSource = "Redes sociales"; 
         const src = (lead.source || "").toLowerCase();
 
@@ -721,6 +723,17 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
 
         if (result.success) {
             await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [result.id, lead.id]);
+            
+            // 🔥 FICHA GENERADA PARA EL CHAT (PARA REENVIAR) 🔥
+            const timestamp = new Date().toISOString();
+            const sfLink = `https://casacolombia--dev2025.sandbox.lightning.force.com/${result.id}`; 
+            const necesidad = sfData.DescripciondeProducto__c ? sfData.DescripciondeProducto__c : sfData.Producto_de_su_inter_s__c;
+            
+            const msgNotif = `[FICHA CRM - SALESFORCE]\n👤 Nombre: ${sfData.FirstName} ${sfData.LastName}\n📱 Num: +${sfData.Phone}\n🎯 Necesidad: ${necesidad}\n🔗 Link: ${sfLink}`;
+            
+            await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', msgNotif, timestamp]);
+            io.emit('new_message', { phone: phone, role: 'bot', text: msgNotif, time: timestamp });
+
             res.json({ success: true, sfId: result.id });
         } else {
             res.status(500).json({ success: false, message: "Salesforce rechazó los datos." });
@@ -742,7 +755,7 @@ app.post('/api/salesforce/sync-bulk', proteger, async (req, res) => {
         let count = 0;
         for (const lead of leads) {
             try {
-                let leadSource = "A Redes sociales";
+                let leadSource = "Redes sociales";
                 const src = (lead.source || "").toLowerCase();
                 if (src.includes("tienda")) leadSource = "Tienda Virtual";
                 else if (src.includes("web")) leadSource = "Sitio web";
@@ -894,7 +907,6 @@ app.get('/api/chat-history/:phone(*)', proteger, async (req, res) => {
     }
 });
 
-// 🔥 FIX: Sanitizamos pero SIN destruir el sufijo '_comentarios'
 app.post('/api/contacts/bulk-update', proteger, async (req, res) => {
     const { phones, action, value } = req.body; 
     try {
@@ -992,6 +1004,7 @@ app.post('/api/chat/send', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({ error: "Error interno del servidor" }); } 
 });
 
+// 🔥 FIX: Envío correcto de plantilla individual (evitando el error de [] components vacío) 🔥
 app.post('/api/chat/send-template', proteger, upload.single('file'), async (req, res) => {
     const phone = req.body.phone;
     if (!phone) return res.status(400).json({ error: "Falta teléfono" });
@@ -1021,9 +1034,13 @@ app.post('/api/chat/send-template', proteger, upload.single('file'), async (req,
 
         const payload = {
             name: templateName,
-            language: { code: language },
-            components: components
+            language: { code: language }
         };
+
+        // Sólo enviar components si no está vacío, sino Meta rechaza la petición
+        if (components.length > 0) {
+            payload.components = components;
+        }
 
         const sent = await enviarWhatsApp(cleanPhone, payload, 'template');
         
@@ -1039,7 +1056,7 @@ app.post('/api/chat/send-template', proteger, upload.single('file'), async (req,
 
             res.json({ success: true });
         } else {
-            res.status(500).json({ error: "Error enviando plantilla en Meta" });
+            res.status(500).json({ error: "Rechazado por Meta (Revisa que el idioma coincida y el nombre sea exacto)" });
         }
     } catch (e) {
         res.status(500).json({ error: "Error interno enviando plantilla" });
@@ -1146,7 +1163,7 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
 });
 
 // ============================================================
-// 🔥 ACTUALIZADO v33.12: WEBHOOK OMNICANAL FLUIDO EN TIEMPO REAL 🔥
+// NUEVO WEBHOOK OMNICANAL (MESSENGER, INSTAGRAM & COMENTARIOS)
 // ============================================================
 
 async function getOmniProfile(senderId) {
@@ -1183,12 +1200,8 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                     if (event.message) {
                         const isEcho = !!event.message.is_echo;
                         
-                        // 🔥 BLINDAJE DE IDENTIFICACIÓN: Mapear el ID del cliente real 
-                        // En DMs: event.sender.id es el cliente.
-                        // En Ecos: event.sender.id es la página corporativa, por lo que el cliente es event.recipient.id
                         const targetId = isEcho ? event.recipient.id : event.sender.id;
                         
-                        // Si el eco proviene del propio ICBOT manual para no duplicar en el feed
                         if (isEcho && event.message.app_id && event.message.app_id.toString() === process.env.META_APP_ID) {
                             continue;
                         }
@@ -1210,7 +1223,6 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                             finalName = metaInfo.contactName;
                         }
 
-                        // Inyectar en el historial
                         await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [targetId, role, text, timestamp]);
                         
                         const unreadIncr = isEcho ? 0 : 1;
@@ -1220,7 +1232,6 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                                       ON CONFLICT(phone) DO UPDATE SET contactName=excluded.contactName, photoUrl=COALESCE(excluded.photoUrl, photoUrl), archived=0, unreadCount = unreadCount + ?, last_interaction=excluded.last_interaction, channel=excluded.channel`, 
                                       [targetId, finalName, photoUrl, unreadIncr, timestamp, source, unreadIncr]);
                         
-                        // Disparar WebSockets directos a la UI
                         io.emit('new_message', { phone: targetId, role: role, text: text, time: timestamp });
                         io.emit('update_chats_list');
 
