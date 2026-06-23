@@ -280,9 +280,7 @@
             <i class="fas fa-inbox" style="color: #8b5cf6;"></i>
             <span class="badge-nav" id="badge-omni">0</span>
         </a>
-        <a href="/extractor" class="nav-btn" title="Extractor Inteligente">
-    <i class="fas fa-magic" style="color: #E9511D;"></i>
-</a>
+        
         <button class="nav-btn" onclick="switchTab('leads')" title="Base de Leads"><i class="fas fa-database"></i></button>
         
         <button class="nav-btn" onclick="switchTab('campanas')" title="Centro de Campañas">
@@ -415,10 +413,10 @@
 
                     <div class="crm-title" style="margin-top:20px;"><i class="fas fa-filter"></i> Origen (Salesforce)</div>
                     <select id="crm-source" class="crm-input">
-                        <option value="Redes sociales">Redes sociales (Ads / Orgánico)</option>
+                        <option value="Redes sociales">Redes sociales</option>
                         <option value="Tienda Virtual">Tienda Virtual</option>
                         <option value="Sitio web">Sitio web</option>
-                        <option value="WhatsApp">WhatsApp (Masivo / Directo)</option>
+                        <option value="WhatsApp">WhatsApp</option>
                     </select>
 
                     <div style="display:flex; gap:10px; margin-top:15px;">
@@ -972,6 +970,7 @@
             }
         }
 
+        // 🔥 FIX 4: GENERAR FICHA EN EL CHAT Y ENVIARLA COMO NOTIFICACIÓN AL EJECUTIVO 🔥
         async function syncSalesforceCurrent() {
             if(!currentChat) return;
             showToast("🔄 Sincronizando con Salesforce...");
@@ -981,10 +980,38 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ phone: currentChat })
                 });
+                
+                if (!res.ok) {
+                    const textData = await res.text();
+                    try {
+                        const jsonData = JSON.parse(textData);
+                        return showToast("❌ Error SF: " + jsonData.message);
+                    } catch(e) {
+                        return showToast("❌ El servidor aún se está reiniciando (Error " + res.status + ")");
+                    }
+                }
+
                 const data = await res.json();
                 if(data.success) {
                     showToast("✅ Subido a Salesforce (ID: " + data.sfId + ")");
                     refreshLeads();
+                    
+                    // 👉 CREAMOS LA FICHA Y LA ENVIAMOS AL CHAT
+                    const leadName = document.getElementById('crm-name').value || "Cliente";
+                    const leadPhone = document.getElementById('crm-phone').value || currentChat;
+                    let leadNeed = document.getElementById('crm-specific-interest').value;
+                    if (!leadNeed) leadNeed = document.getElementById('crm-interest').value;
+                    if (!leadNeed) leadNeed = "No especificada";
+                    
+                    const sfLink = `https://login.salesforce.com/${data.sfId}`;
+                    const fichaMsg = `[FICHA CRM - SALESFORCE]\n👤 Nombre: ${leadName}\n📱 Num: ${leadPhone}\n🎯 Necesidad: ${leadNeed}\n🔗 Link: ${sfLink}`;
+                    
+                    await fetch('/api/chat/send', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ phone: currentChat, message: fichaMsg })
+                    });
+                    
                 } else {
                     showToast("❌ Error: " + data.message);
                 }
@@ -1097,6 +1124,8 @@
             const fileInput = document.getElementById('tpl-file');
             const varsInput = document.getElementById('tpl-vars').value.trim();
             const isBulk = document.getElementById('tpl-is-bulk').value === "true";
+            
+            // 🔥 IDIOMA ATRAPADO DESDE EL SELECT PARA PLANTILLA INDIVIDUAL 🔥
             const lang = document.getElementById('tpl-lang').value;
             
             if(!name) return showToast("⚠️ El nombre de la plantilla es obligatorio.");
@@ -1115,7 +1144,7 @@
 
             const formData = new FormData();
             formData.append('templateName', name);
-            formData.append('language', lang);
+            formData.append('language', lang); 
             formData.append('previewText', previewText);
             
             if (components.length > 0) formData.append('components', JSON.stringify(components));
@@ -1235,6 +1264,7 @@
             document.getElementById('crm-panel').classList.toggle('open'); 
         }
 
+        // 🔥 FIX DE AUDIO: Detener audio limpiamente al cerrar/cambiar de chat 🔥
         function closeChat() { 
             document.body.classList.remove('mobile-chat-open'); 
             currentChat = null; 
@@ -1579,6 +1609,7 @@
         async function openChat(phone, name, photo) { 
             if(bulkMode) return toggleChatSelection(phone, event); 
             
+            // 🔥 FIX: Detiene limpiamente el audio anterior al cambiar de chat
             if(currentlyPlaying) { 
                 try { currentlyPlaying.pause(); } catch(e){} 
                 currentlyPlaying = null; 
@@ -1699,11 +1730,11 @@
                 }
             } 
             
-            const isAlert = text.includes('[ALERTA:');
+            const isAlert = text.includes('[ALERTA:') || text.includes('[FICHA CRM');
             const isCampaign = text.startsWith('[CAMPAÑA]');
             
             if (isCampaign) {
-                text = text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="text-decoration:underline;">$1</a>');
+                text = text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="text-decoration:underline; color:#a5b4fc;">$1</a>');
             }
             
             const bubbleClass = isAlert ? 'alert' : (isCampaign ? 'campaign' : m.role);
@@ -1782,7 +1813,7 @@
                     resetPlayer(currentlyPlaying.id.replace('audio-', '')); 
                 } 
                 
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; 
+                if(btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; 
                 if (!audio.src || audio.src === window.location.href) { 
                     audio.src = url; 
                     audio.load(); 
@@ -1793,16 +1824,17 @@
                     currentlyPlaying = audio; 
                 })
                 .catch((error) => { 
-                    btn.innerHTML = '<i class="fas fa-play" style="margin-left:3px;"></i>'; 
+                    if(btn) btn.innerHTML = '<i class="fas fa-play" style="margin-left:3px;"></i>'; 
                 });
             } else { 
                 audio.pause(); 
-                btn.innerHTML = '<i class="fas fa-play" style="margin-left:3px;"></i>'; 
+                if(btn) btn.innerHTML = '<i class="fas fa-play" style="margin-left:3px;"></i>'; 
             } 
         }
 
         function onAudioStart(id) { 
-            document.getElementById(`btn-${id}`).innerHTML = '<i class="fas fa-pause"></i>'; 
+            const btn = document.getElementById(`btn-${id}`);
+            if(btn) btn.innerHTML = '<i class="fas fa-pause"></i>'; 
         }
 
         function updateProgress(id) { 
@@ -1812,10 +1844,10 @@
             
             if (audio && audio.duration && !audio.paused) { 
                 const percent = (audio.currentTime / audio.duration) * 100; 
-                slider.value = percent; 
+                if(slider) slider.value = percent; 
                 const mins = Math.floor(audio.currentTime / 60); 
                 const secs = Math.floor(audio.currentTime % 60); 
-                time.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`; 
+                if(time) time.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`; 
             } 
         }
 
@@ -1826,25 +1858,27 @@
             if (audio.duration && isFinite(audio.duration)) { 
                 const mins = Math.floor(audio.duration / 60); 
                 const secs = Math.floor(audio.duration % 60); 
-                durText.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`; 
+                if(durText) durText.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`; 
             } 
         }
 
         function pauseForSeek(id) { 
             const audio = document.getElementById(`audio-${id}`); 
-            if(!audio.paused) audio.pause(); 
+            if(audio && !audio.paused) audio.pause(); 
         }
 
         function seekAudio(id, value) { 
             const audio = document.getElementById(`audio-${id}`); 
-            if(audio.duration) { 
+            const btn = document.getElementById(`btn-${id}`);
+            if(audio && audio.duration) { 
                 audio.currentTime = (value / 100) * audio.duration; 
                 audio.play(); 
-                document.getElementById(`btn-${id}`).innerHTML = '<i class="fas fa-pause"></i>'; 
+                if(btn) btn.innerHTML = '<i class="fas fa-pause"></i>'; 
                 currentlyPlaying = audio; 
             } 
         }
 
+        // 🔥 FIX: Seguro contra crash si el chat se cerró y el botón ya no existe 🔥
         function resetPlayer(id) { 
             const btn = document.getElementById(`btn-${id}`);
             if(btn) btn.innerHTML = '<i class="fas fa-play" style="margin-left:3px;"></i>'; 
@@ -1950,6 +1984,7 @@
                     execSelect.value = "Pendiente"; 
                 }
 
+                // 🔥 HOMOLOGACIÓN DE ORIGEN SIN LA "A" 🔥
                 let srcVal = "Redes sociales";
                 const src = (lead.source || "").toLowerCase();
                 if (src.includes("tienda")) srcVal = "Tienda Virtual";
@@ -2538,6 +2573,72 @@
             } finally {
                 btn.innerHTML = originalHTML;
                 btn.disabled = false;
+            }
+        }
+
+        // 🔥 FUNCIONALIDAD NUEVA: FICHA EN EL CHAT DE SALESFORCE 🔥
+        async function syncSalesforceCurrent() {
+            if(!currentChat) return;
+            showToast("🔄 Sincronizando con Salesforce...");
+            try {
+                const res = await fetch('/api/salesforce/sync-lead', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ phone: currentChat })
+                });
+                
+                if (!res.ok) {
+                    const textData = await res.text();
+                    try {
+                        const jsonData = JSON.parse(textData);
+                        return showToast("❌ Error SF: " + jsonData.message);
+                    } catch(e) {
+                        return showToast("❌ El servidor aún se está reiniciando (Error " + res.status + ")");
+                    }
+                }
+
+                const data = await res.json();
+                if(data.success) {
+                    showToast("✅ Subido a Salesforce (ID: " + data.sfId + ")");
+                    refreshLeads();
+                    
+                    // 👉 CREAR LA FICHA EN EL CHAT Y ENVIAR COMO MENSAJE
+                    const leadName = document.getElementById('crm-name').value || "Cliente";
+                    const leadPhone = document.getElementById('crm-phone').value || currentChat;
+                    let leadNeed = document.getElementById('crm-specific-interest').value;
+                    if (!leadNeed) leadNeed = document.getElementById('crm-interest').value;
+                    if (!leadNeed) leadNeed = "No especificada";
+                    
+                    const sfLink = `https://login.salesforce.com/${data.sfId}`;
+                    const fichaMsg = `[FICHA CRM - SALESFORCE]\n👤 Nombre: ${leadName}\n📱 Num: ${leadPhone}\n🎯 Necesidad: ${leadNeed}\n🔗 Link: ${sfLink}`;
+                    
+                    await fetch('/api/chat/send', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ phone: currentChat, message: fichaMsg })
+                    });
+                    
+                } else {
+                    showToast("❌ Error: " + data.message);
+                }
+            } catch(e) {
+                showToast("❌ Fallo de red con el servidor");
+            }
+        }
+
+        async function syncSalesforceBulk() {
+            showToast("🔄 Sincronizando masivamente...");
+            try {
+                const res = await fetch('/api/salesforce/sync-bulk', { method: 'POST' });
+                const data = await res.json();
+                if(data.success) {
+                    showToast("✅ " + data.count + " leads sincronizados");
+                    refreshLeads();
+                } else {
+                    showToast("❌ Error: " + data.message);
+                }
+            } catch(e) {
+                showToast("❌ Fallo de red con el servidor");
             }
         }
 
