@@ -352,7 +352,7 @@
                 <div class="messages" id="messages-container"></div>
                 
                 <div class="input-area">
-                    <button class="attach-btn" onclick="openTemplateModal(false)" title="Enviar Plantilla (Marketing/Retoma)"><i class="fas fa-bullhorn"></i></button>
+                    <button class="attach-btn" onclick="openTemplateModal(false)" title="Enviar Plantilla"><i class="fas fa-bullhorn"></i></button>
                     <button class="attach-btn" onclick="document.getElementById('file-upload').click()"><i class="fas fa-paperclip"></i></button>
                     <input type="file" id="file-upload" hidden onchange="uploadFile()" accept="image/*,video/*,audio/*,application/pdf">
                     <textarea class="input-box" id="msg-input" placeholder="Escribe un mensaje aquí..." onkeypress="checkEnter(event)"></textarea>
@@ -376,11 +376,10 @@
                 <div class="crm-section">
                     <div class="crm-title"><i class="fas fa-user-edit"></i> Datos del Contacto</div>
                     <input id="crm-name" class="crm-input" placeholder="Nombre Completo">
-                    <input id="crm-phone" class="crm-input" placeholder="Teléfono" readonly title="No editable. Se copia para el Ejecutivo." style="background:var(--panel); cursor:text; font-family: monospace; font-size: 1rem;">
-                    
+                    <input id="crm-phone" class="crm-input" placeholder="Teléfono" readonly style="background:var(--panel); font-family: monospace;">
                     <input id="crm-email" class="crm-input" type="email" placeholder="Correo Electrónico">
                     <input id="crm-city" class="crm-input" placeholder="Ciudad">
-                    <input id="crm-dept" class="crm-input" placeholder="Departamento" readonly title="Automático" style="background:var(--panel); cursor:not-allowed;">
+                    <input id="crm-dept" class="crm-input" placeholder="Departamento" readonly style="background:var(--panel); cursor:not-allowed;">
                     
                     <div class="crm-title" style="margin-top:20px;"><i class="fas fa-bullseye"></i> Perfilamiento</div>
                     <select id="crm-interest" class="crm-input">
@@ -396,7 +395,7 @@
                         <option value="Otro">Otro</option>
                         <option value="Consultando">Consultando</option>
                     </select>
-                    <input id="crm-specific-interest" class="crm-input" placeholder="Detalle (Ej: Volvo 50 tons, Retro John Deere...)">
+                    <input id="crm-specific-interest" class="crm-input" placeholder="Detalle (Ej: Volvo 50 tons, Retro...)">
 
                     <div class="crm-title" style="margin-top:20px;"><i class="fas fa-user-tie"></i> Ejecutivo Asignado</div>
                     <select id="crm-executive" class="crm-input">
@@ -413,16 +412,20 @@
 
                     <div class="crm-title" style="margin-top:20px;"><i class="fas fa-filter"></i> Origen (Salesforce)</div>
                     <select id="crm-source" class="crm-input">
-                        <option value="Redes sociales">Redes sociales</option>
+                        <option value="Redes sociales">Redes sociales (Ads / Orgánico)</option>
                         <option value="Tienda Virtual">Tienda Virtual</option>
                         <option value="Sitio web">Sitio web</option>
-                        <option value="WhatsApp">WhatsApp</option>
+                        <option value="WhatsApp">WhatsApp (Masivo / Directo)</option>
                     </select>
 
                     <div style="display:flex; gap:10px; margin-top:15px;">
                         <button class="btn-small btn-green" style="flex:1;" onclick="saveLeadManual()"><i class="fas fa-save"></i> Guardar</button>
                         <button class="btn-small btn-blue" style="flex:1; background:var(--sf-blue); color:white; border:none;" onclick="syncSalesforceCurrent()"><i class="fas fa-cloud-upload-alt"></i> Salesforce</button>
                     </div>
+                    
+                    <button class="btn-small" style="width:100%; margin-top:10px; background:#8b5cf6; color:white; border:none;" onclick="copyLeadInfo()">
+                        <i class="fas fa-copy"></i> Copiar Información
+                    </button>
                 </div>
 
                 <div class="crm-section"><div class="crm-title"><i class="fas fa-tags"></i> Etiqueta Comercial</div><div class="tag-container" id="tag-list"></div></div>
@@ -468,17 +471,15 @@
         <div id="tab-campanas" class="view-panel">
             <div class="leads-container">
                 <h2><i class="fas fa-rocket" style="color:#10b981;"></i> Lanzador de Campañas Masivas</h2>
-                
                 <div class="config-row" style="display: flex; gap: 20px; align-items: flex-start; margin-top: 20px;">
-                    
                     <div class="config-card" style="flex: 1; background: var(--bg-main); padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border: 1px solid var(--border);">
                         <label style="font-weight: bold; color: var(--text);">1. Nombre de la Plantilla (Exacto como en Meta)</label>
                         <input type="text" id="camp-tpl-name" placeholder="Ej: plantilla_promocional" style="width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-main); color: var(--text);">
                         
                         <label style="font-weight: bold; color: var(--text);">2. Idioma de la Plantilla</label>
                         <select id="camp-tpl-lang" style="width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-main); color: var(--text);">
-                            <option value="es">Español (es)</option>
                             <option value="es_CO">Español Colombia (es_CO)</option>
+                            <option value="es">Español (es)</option>
                         </select>
 
                         <label style="font-weight: bold; color: var(--text);">3. Imagen o Video MP4 (Opcional)</label>
@@ -494,22 +495,17 @@
 
                     <div class="config-card" style="flex: 1; background: var(--panel); padding: 20px; border-radius: 8px; border: 1px solid var(--border);">
                         <h3 style="margin-top: 0; color: var(--primary);"><i class="fas fa-search"></i> Auditoría de Datos</h3>
-                        
                         <div id="excel-stats" style="margin-top: 15px; padding: 15px; background: var(--bg-main); color: var(--text); border-radius: 5px; border-left: 4px solid var(--border);">
                             <p style="margin: 0;">Esperando archivo Excel...</p>
                         </div>
-
-                        <div id="excel-preview-table" style="margin-top: 15px; max-height: 250px; overflow-y: auto; background: var(--bg-main); color: var(--text); border-radius: 5px; border: 1px solid var(--border); display: none;">
-                        </div>
+                        <div id="excel-preview-table" style="margin-top: 15px; max-height: 250px; overflow-y: auto; background: var(--bg-main); color: var(--text); border-radius: 5px; border: 1px solid var(--border); display: none;"></div>
                     </div>
-
                 </div>
             </div>
         </div>
 
         <div id="tab-config" class="view-panel">
             <div class="config-container">
-                
                 <div class="config-tabs-nav">
                     <button class="btn-tab active" onclick="switchConfigTab('sub-identidad', this)"><i class="fas fa-brain"></i> Identidad y Reglas</button>
                     <button class="btn-tab" onclick="switchConfigTab('sub-memoria', this)"><i class="fas fa-database"></i> Memoria y Catálogo</button>
@@ -525,9 +521,7 @@
                                 <button class="btn-small btn-blue" onclick="openPromptEdit()"><i class="fas fa-pencil-alt"></i> Editar</button>
                             </div>
                             <span class="config-subtitle">Así es como se está comportando el bot en este momento:</span>
-                            <div id="prompt-readonly" style="background: var(--panel); padding: 15px; border-radius: 8px; font-size: 0.95rem; color: var(--text); border: 1px solid var(--border); min-height: 120px; white-space: pre-wrap; font-style: italic;">
-                                Cargando personalidad...
-                            </div>
+                            <div id="prompt-readonly" style="background: var(--panel); padding: 15px; border-radius: 8px; font-size: 0.95rem; color: var(--text); border: 1px solid var(--border); min-height: 120px; white-space: pre-wrap; font-style: italic;"></div>
                         </div>
                         
                         <div class="config-card" style="flex: 1;">
@@ -551,16 +545,13 @@
                                 <span id="inventory-count" style="font-size:0.85rem; color:var(--text); background:var(--panel); padding:4px 10px; border-radius:12px; border: 1px solid var(--border);">0 items</span>
                             </div>
                             <span class="config-subtitle">Sube tu base de datos de productos para que la IA sepa precios y disponibilidad en tiempo real.</span>
-                            
                             <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center; background: var(--panel); padding: 10px; border-radius: 8px;">
                                 <input type="file" id="csv-upload" accept=".csv, .xlsx, .xls" style="flex:1; font-size:0.85rem;">
                                 <button class="btn-small btn-green" onclick="uploadCSV()"><i class="fas fa-upload"></i> Cargar Archivo</button>
                                 <button class="btn-small btn-blue" onclick="loadInventoryPreview()" title="Refrescar vista"><i class="fas fa-sync"></i></button>
                                 <button class="btn-small btn-red" onclick="clearInventory()" title="Borrar todo el inventario"><i class="fas fa-trash-alt"></i></button>
                             </div>
-                            <ul class="item-list" id="inventory-list" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--bg-main);">
-                                <li style="text-align:center; color:var(--text-muted); font-size:0.9rem;">Cargando inventario...</li>
-                            </ul>
+                            <ul class="item-list" id="inventory-list" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--bg-main);"></ul>
                         </div>
                         
                         <div class="config-card" style="flex: 1;">
@@ -577,27 +568,24 @@
 
                 <div id="sub-herramientas" class="config-sub-panel">
                     <div class="config-header-main"><i class="fas fa-briefcase" style="color:var(--primary);"></i> Herramientas Operativas</div>
-                    
                     <div class="config-row">
                         <div class="config-card" style="flex: 1;">
                             <div class="config-header">Perfil de Empresa</div>
                             <span class="config-subtitle">Información básica del negocio.</span>
                             <div style="display:flex; gap:10px; flex-direction: column;">
                                 <input id="biz-name" class="cfg-input" placeholder="Nombre Oficial de la Empresa">
-                                <input id="biz-hours" class="cfg-input" placeholder="Horario de atención (Ej: Lun-Vie 8am a 6pm)">
+                                <input id="biz-hours" class="cfg-input" placeholder="Horario de atención">
                                 <button class="btn-small btn-green" onclick="saveBizConfig()"><i class="fas fa-save"></i> Guardar Perfil</button>
                             </div>
                             <div style="margin-top:20px; font-size:0.9rem; font-weight:600; padding-top: 15px; border-top: 1px solid var(--border);">
-                                Actualizar Logo del Sistema: 
-                                <input type="file" onchange="uploadLogo(this)" style="margin-top: 10px; display: block; font-weight:normal;">
+                                Actualizar Logo: <input type="file" onchange="uploadLogo(this)" style="margin-top: 10px; display: block; font-weight:normal;">
                             </div>
                         </div>
 
                         <div class="config-card" style="flex: 1;">
                             <div class="config-header">Etiquetas Visuales</div>
-                            <span class="config-subtitle">Crea etiquetas de colores para organizar a los leads en el CRM.</span>
                             <div class="config-input-group">
-                                <input type="text" id="tag-name" class="cfg-input" placeholder="Nombre (Ej: VIP, Seguimiento)">
+                                <input type="text" id="tag-name" class="cfg-input" placeholder="Nombre (Ej: VIP)">
                                 <input type="color" id="tag-color" value="#E9521E" style="width:45px; height:40px; padding:2px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
                                 <button class="btn-small btn-green" onclick="addTag()"><i class="fas fa-plus"></i></button>
                             </div>
@@ -605,12 +593,11 @@
                         </div>
                         
                         <div class="config-card" style="flex: 1;">
-                            <div class="config-header">Respuestas Rápidas (Atajos)</div>
-                            <span class="config-subtitle">Textos largos que puedes enviar usando un comando corto.</span>
+                            <div class="config-header">Respuestas Rápidas</div>
                             <div style="display: flex; flex-direction: column; gap: 10px;">
                                 <div class="config-input-group">
                                     <input type="text" id="short-key" class="cfg-input" placeholder="/hola" style="width:30%;">
-                                    <input type="text" id="short-text" class="cfg-input" placeholder="Texto extenso de saludo...">
+                                    <input type="text" id="short-text" class="cfg-input" placeholder="Texto extenso...">
                                 </div>
                                 <button class="btn-small btn-green" onclick="addShortcut()"><i class="fas fa-plus"></i> Crear Atajo</button>
                             </div>
@@ -635,7 +622,6 @@
                 <input list="template-names" id="tpl-name" placeholder="Ej: plantilla_de_retoma" required>
                 <datalist id="template-names">
                     <option value="plantilla_de_retoma"></option>
-                    <option value="tu_plantilla_promo"></option>
                 </datalist>
 
                 <label>Idioma de la Plantilla</label>
@@ -649,7 +635,6 @@
 
                 <label>Variables de Texto (Opcional)</label>
                 <input type="text" id="tpl-vars" placeholder="Ej: Carlos, 15% Descuento (Separar por comas)">
-                <span style="font-size:0.75rem; color:var(--text-muted);">Aplica solo si el cuerpo del mensaje tiene {{1}}, {{2}}</span>
             </div>
             
             <div class="modal-actions">
@@ -829,9 +814,6 @@
             }
         });
 
-        // ==========================================
-        // LÓGICA DEL AUDITOR DE CAMPAÑAS EXCEL
-        // ==========================================
         let archivoExcelValidado = null;
 
         function previewExcelData() {
@@ -918,7 +900,6 @@
                         </thead>
                         <tbody>${filasHTML}</tbody>
                     </table>
-                    ${rows.length > 5 ? `<div style="text-align:center; padding: 5px; font-size: 12px; color:var(--text-muted);">Mostrando 5 de ${rows.length} registros...</div>` : ''}
                 `;
                 tableDiv.style.display = 'block';
 
@@ -970,7 +951,6 @@
             }
         }
 
-        // 🔥 FIX 4: GENERAR FICHA EN EL CHAT Y ENVIARLA COMO NOTIFICACIÓN AL EJECUTIVO 🔥
         async function syncSalesforceCurrent() {
             if(!currentChat) return;
             showToast("🔄 Sincronizando con Salesforce...");
@@ -987,7 +967,7 @@
                         const jsonData = JSON.parse(textData);
                         return showToast("❌ Error SF: " + jsonData.message);
                     } catch(e) {
-                        return showToast("❌ El servidor aún se está reiniciando (Error " + res.status + ")");
+                        return showToast("❌ El servidor aún se está reiniciando");
                     }
                 }
 
@@ -995,23 +975,6 @@
                 if(data.success) {
                     showToast("✅ Subido a Salesforce (ID: " + data.sfId + ")");
                     refreshLeads();
-                    
-                    // 👉 CREAMOS LA FICHA Y LA ENVIAMOS AL CHAT
-                    const leadName = document.getElementById('crm-name').value || "Cliente";
-                    const leadPhone = document.getElementById('crm-phone').value || currentChat;
-                    let leadNeed = document.getElementById('crm-specific-interest').value;
-                    if (!leadNeed) leadNeed = document.getElementById('crm-interest').value;
-                    if (!leadNeed) leadNeed = "No especificada";
-                    
-                    const sfLink = `https://login.salesforce.com/${data.sfId}`;
-                    const fichaMsg = `[FICHA CRM - SALESFORCE]\n👤 Nombre: ${leadName}\n📱 Num: ${leadPhone}\n🎯 Necesidad: ${leadNeed}\n🔗 Link: ${sfLink}`;
-                    
-                    await fetch('/api/chat/send', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ phone: currentChat, message: fichaMsg })
-                    });
-                    
                 } else {
                     showToast("❌ Error: " + data.message);
                 }
@@ -1019,13 +982,41 @@
                 showToast("❌ Fallo de red con el servidor");
             }
         }
+        
+        async function copyLeadInfo() {
+            if(!currentChat) return showToast("⚠️ Abre un chat primero.");
+            
+            try {
+                const res = await fetch('/api/data/leads');
+                const leads = await res.json();
+                const lead = leads.find(l => l.phone === currentChat);
+                
+                let sfLink = "No sincronizado (Sube a Salesforce primero)";
+                if (lead && lead.sf_id) {
+                    sfLink = `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${lead.sf_id}/view`;
+                }
+                
+                const leadName = document.getElementById('crm-name').value || "Cliente";
+                let leadPhone = (document.getElementById('crm-phone').value || currentChat).replace(/\D/g, '');
+                if (leadPhone.startsWith("57") && leadPhone.length > 10) leadPhone = leadPhone.substring(2);
+                
+                let leadNeed = document.getElementById('crm-specific-interest').value;
+                if (!leadNeed) leadNeed = document.getElementById('crm-interest').value;
+                if (!leadNeed) leadNeed = "No especificada";
+                
+                const fichaText = `Nombre: ${leadName}\nNum: ${leadPhone}\nLink: ${sfLink}\nNecesidad: ${leadNeed}`;
+                
+                await navigator.clipboard.writeText(fichaText);
+                showToast("✅ Información copiada al portapapeles");
+            } catch(e) {
+                showToast("❌ Error copiando información.");
+            }
+        }
 
         async function syncSalesforceBulk() {
-            showToast("🔄 Sincronizando masivamente con Salesforce...");
+            showToast("🔄 Sincronizando masivamente...");
             try {
-                const res = await fetch('/api/salesforce/sync-bulk', {
-                    method: 'POST'
-                });
+                const res = await fetch('/api/salesforce/sync-bulk', { method: 'POST' });
                 const data = await res.json();
                 if(data.success) {
                     showToast("✅ " + data.count + " leads sincronizados");
@@ -1124,8 +1115,6 @@
             const fileInput = document.getElementById('tpl-file');
             const varsInput = document.getElementById('tpl-vars').value.trim();
             const isBulk = document.getElementById('tpl-is-bulk').value === "true";
-            
-            // 🔥 IDIOMA ATRAPADO DESDE EL SELECT PARA PLANTILLA INDIVIDUAL 🔥
             const lang = document.getElementById('tpl-lang').value;
             
             if(!name) return showToast("⚠️ El nombre de la plantilla es obligatorio.");
@@ -1163,10 +1152,7 @@
         async function executeSingleTemplate(formData) {
             showToast("Enviando plantilla e imagen a Meta... ⏳");
             try {
-                const res = await fetch('/api/chat/send-template', {
-                    method: 'POST',
-                    body: formData 
-                });
+                const res = await fetch('/api/chat/send-template', { method: 'POST', body: formData });
                 const data = await res.json();
                 if(data.success) showToast("✅ Plantilla enviada con éxito");
                 else showToast("❌ Error Meta: " + (data.error || "Desconocido"));
@@ -1178,28 +1164,18 @@
         async function executeBulkTemplates(baseFormData) {
             const phones = Array.from(selectedChats);
             showToast(`🚀 Iniciando envío masivo a ${phones.length} contactos...`);
-            
             let successCount = 0;
             let errorCount = 0;
-            
             for (let i = 0; i < phones.length; i++) {
                 const phone = phones[i];
                 baseFormData.set('phone', phone);
-                
                 try {
-                    const res = await fetch('/api/chat/send-template', {
-                        method: 'POST',
-                        body: baseFormData
-                    });
+                    const res = await fetch('/api/chat/send-template', { method: 'POST', body: baseFormData });
                     if (res.ok) successCount++;
                     else errorCount++;
-                } catch(e) {
-                    errorCount++;
-                }
-                
+                } catch(e) { errorCount++; }
                 await new Promise(r => setTimeout(r, 250));
             }
-            
             alert(`Resumen de Campaña Masiva:\n\n✅ Enviados: ${successCount}\n❌ Errores: ${errorCount}`);
             toggleBulkMode();
         }
@@ -1208,19 +1184,11 @@
             const modal = document.getElementById('lightbox-modal');
             const img = document.getElementById('lightbox-img');
             const vid = document.getElementById('lightbox-video');
-            
             modal.classList.add('show');
-            
             if (type === 'IMAGE') {
-                img.src = url; 
-                img.style.display = 'block'; 
-                vid.style.display = 'none'; 
-                vid.pause();
+                img.src = url; img.style.display = 'block'; vid.style.display = 'none'; vid.pause();
             } else if (type === 'VIDEO') {
-                vid.src = url; 
-                vid.style.display = 'block'; 
-                img.style.display = 'none'; 
-                vid.play();
+                vid.src = url; vid.style.display = 'block'; img.style.display = 'none'; vid.play();
             }
         }
 
@@ -1232,9 +1200,7 @@
         }
 
         function viewLeadDetails(phone) {
-            fetch('/api/data/leads')
-            .then(r => r.json())
-            .then(leads => {
+            fetch('/api/data/leads').then(r => r.json()).then(leads => {
                 const lead = leads.find(l => l.phone === phone);
                 if(lead) {
                     let html = '<table class="data-table" style="width:100%;">';
@@ -1245,17 +1211,14 @@
                     document.getElementById('lead-details-content').innerHTML = html;
                     document.getElementById('lead-details-modal').classList.add('show');
                 }
-            })
-            .catch(e => showToast("Error cargando información del lead."));
+            }).catch(e => showToast("Error cargando información del lead."));
         }
         
         function switchTab(tab) {
             document.querySelectorAll('.view-panel').forEach(el => el.classList.remove('active'));
             document.getElementById('tab-' + tab).classList.add('active');
-            
             document.querySelectorAll('.sidebar .nav-btn').forEach(el => el.classList.remove('active'));
             event.currentTarget.classList.add('active');
-            
             if(tab === 'leads') refreshLeads();
             if(tab === 'config') loadInventoryPreview();
         }
@@ -1264,7 +1227,6 @@
             document.getElementById('crm-panel').classList.toggle('open'); 
         }
 
-        // 🔥 FIX DE AUDIO: Detener audio limpiamente al cerrar/cambiar de chat 🔥
         function closeChat() { 
             document.body.classList.remove('mobile-chat-open'); 
             currentChat = null; 
@@ -1287,23 +1249,17 @@
             openChat(phone.replace(/\D/g, ''), name, ''); 
         }
 
-        function startSyncLoop() { 
-            syncChats(); 
-        }
+        function startSyncLoop() { syncChats(); }
         
         async function loadTagFilterOptions() { 
             try { 
                 const tagsResponse = await fetch('/api/data/tags');
                 const tags = await tagsResponse.json(); 
                 window._cachedTags = tags; 
-                
                 const html = '<option value="">Todas las etiquetas</option>' + tags.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
                 document.getElementById('tag-filter').innerHTML = html;
-                
                 document.getElementById('bulk-tag-select').innerHTML = '<option value="">Etiquetar como...</option>' + tags.map(t => `<option value='${JSON.stringify({text:t.name, color:t.color})}'>${t.name}</option>`).join('');
-            } catch(e) {
-                console.error("Error cargando filtros de etiquetas:", e);
-            } 
+            } catch(e) {} 
         }
         
         async function syncChats() { 
@@ -1311,32 +1267,20 @@
                 const search = document.getElementById('main-search').value; 
                 const res = await fetch(`/api/chats-full?view=${currentFilter}&search=${search}`); 
                 const allChats = await res.json(); 
-                
                 chatsData = allChats.filter(c => !c.channel || c.channel === 'whatsapp');
                 
                 let waUnread = 0;
-                chatsData.forEach(c => {
-                    if (c.unreadCount > 0) waUnread += 1;
-                });
-                
+                chatsData.forEach(c => { if (c.unreadCount > 0) waUnread += 1; });
                 const badgeWa = document.getElementById('badge-wa');
-                if(badgeWa) {
-                    badgeWa.innerText = waUnread;
-                    badgeWa.style.display = waUnread > 0 ? 'block' : 'none';
-                }
+                if(badgeWa) { badgeWa.innerText = waUnread; badgeWa.style.display = waUnread > 0 ? 'block' : 'none'; }
                 
                 const tagFilter = document.getElementById('tag-filter').value; 
-                if(tagFilter) {
-                    chatsData = chatsData.filter(c => c.labels && c.labels.some(l => (l.text || l) === tagFilter)); 
-                }
+                if(tagFilter) chatsData = chatsData.filter(c => c.labels && c.labels.some(l => (l.text || l) === tagFilter)); 
                 
                 chatsData.sort((a, b) => new Date(b.lastMessage.time) - new Date(a.lastMessage.time)); 
                 chatsData.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)); 
-                
                 renderChatList(); 
-            } catch(e) {
-                console.error("Error sincronizando chats:", e);
-            } 
+            } catch(e) {} 
         }
 
         function setChatFilter(filter, el) { 
@@ -1346,9 +1290,7 @@
             syncChats(); 
         }
 
-        function normalizeTag(tag) { 
-            return typeof tag === 'string' ? { text: tag, color: '#555' } : tag; 
-        }
+        function normalizeTag(tag) { return typeof tag === 'string' ? { text: tag, color: '#555' } : tag; }
         
         function toggleBulkMode() {
             bulkMode = !bulkMode;
@@ -1357,16 +1299,10 @@
             const panel = document.getElementById('chat-list-panel');
             
             if (bulkMode) { 
-                btn.classList.add('active'); 
-                panel.classList.add('bulk-mode'); 
-                toolbar.classList.add('show');
+                btn.classList.add('active'); panel.classList.add('bulk-mode'); toolbar.classList.add('show');
             } else { 
-                btn.classList.remove('active'); 
-                panel.classList.remove('bulk-mode'); 
-                toolbar.classList.remove('show'); 
-                selectedChats.clear(); 
-                lastCheckedIndex = -1;
-                updateBulkVisuals();
+                btn.classList.remove('active'); panel.classList.remove('bulk-mode'); toolbar.classList.remove('show'); 
+                selectedChats.clear(); lastCheckedIndex = -1; updateBulkVisuals();
             }
         }
 
@@ -1375,14 +1311,9 @@
             const checkboxes = document.querySelectorAll('.bulk-checkbox');
             let allChecked = true;
             checkboxes.forEach(cb => { if (!cb.checked) allChecked = false; });
-
             checkboxes.forEach(cb => {
                 const phone = cb.closest('.chat-item').id.replace('chat-', '');
-                if (allChecked) {
-                    selectedChats.delete(phone);
-                } else {
-                    selectedChats.add(phone);
-                }
+                if (allChecked) selectedChats.delete(phone); else selectedChats.add(phone);
             });
             document.getElementById('bulk-count').innerText = selectedChats.size;
             updateBulkVisuals();
@@ -1391,39 +1322,26 @@
         function toggleChatSelection(phone, event) {
             if (!bulkMode) return;
             event.stopPropagation();
-            
             const checkboxes = Array.from(document.querySelectorAll('.bulk-checkbox'));
             let targetCb = event.target;
-            
             if (targetCb.tagName !== 'INPUT') {
                 targetCb = document.querySelector(`#chat-${phone} .bulk-checkbox`);
                 targetCb.checked = !targetCb.checked;
             }
-
             const currentIndex = checkboxes.indexOf(targetCb);
             const isChecking = targetCb.checked;
 
             if (event.shiftKey && lastCheckedIndex !== -1) {
                 const start = Math.min(lastCheckedIndex, currentIndex);
                 const end = Math.max(lastCheckedIndex, currentIndex);
-                
                 for (let i = start; i <= end; i++) {
                     checkboxes[i].checked = isChecking;
                     const p = checkboxes[i].closest('.chat-item').id.replace('chat-', '');
-                    if (isChecking) {
-                        selectedChats.add(p);
-                    } else {
-                        selectedChats.delete(p);
-                    }
+                    if (isChecking) selectedChats.add(p); else selectedChats.delete(p);
                 }
             } else {
-                if (isChecking) {
-                    selectedChats.add(phone);
-                } else {
-                    selectedChats.delete(phone);
-                }
+                if (isChecking) selectedChats.add(phone); else selectedChats.delete(phone);
             }
-            
             lastCheckedIndex = currentIndex;
             document.getElementById('bulk-count').innerText = selectedChats.size;
         }
@@ -1438,64 +1356,46 @@
 
         async function executeBulkAction(action) {
             if (selectedChats.size === 0) return alert("Selecciona al menos un chat");
-            
             let value = null;
             if (action === 'set_label') {
                 const valStr = document.getElementById('bulk-tag-select').value;
                 if (!valStr) return alert("Selecciona una etiqueta");
                 value = JSON.parse(valStr); 
                 action = 'add_label';
-                
                 selectedChats.forEach(phone => updateTagsOptimistic(phone, value, false));
             }
-            
             if (action === 'delete') {
                 if (!confirm(`⚠️ ¡Peligro! Vas a eliminar PERMANENTEMENTE ${selectedChats.size} chats de WhatsApp.\nEsta acción borra todo el historial y no se puede deshacer.\n\n¿Estás seguro?`)) return;
             } else {
                 if (!confirm(`¿Aplicar acción a ${selectedChats.size} chats?`)) return;
             }
-            
             showToast("⏳ Procesando acción masiva, por favor espera...");
-            
             if (action === 'toggle_archive' || action === 'delete') {
                 const phones = Array.from(selectedChats);
                 for (let i = 0; i < phones.length; i++) {
                     try {
                         await fetch('/api/chat/action', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
+                            method: 'POST', headers: {'Content-Type': 'application/json'},
                             body: JSON.stringify({ phone: phones[i], action: action, value: true })
                         });
-                    } catch(e) { console.error(e); }
+                    } catch(e) {}
                 }
-                
                 if (action === 'delete' && selectedChats.has(currentChat)) {
-                    currentChat = null;
-                    document.getElementById('conversation-view').style.display = 'none';
-                    document.getElementById('crm-panel').classList.remove('open');
+                    currentChat = null; document.getElementById('conversation-view').style.display = 'none'; document.getElementById('crm-panel').classList.remove('open');
                 }
-                
             } else {
                 await fetch('/api/contacts/bulk-update', { 
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({ 
-                        phones: Array.from(selectedChats), 
-                        action: action, 
-                        value: value 
-                    }) 
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ phones: Array.from(selectedChats), action: action, value: value }) 
                 });
             }
-            
             showToast("✅ Acción masiva completada"); 
-            toggleBulkMode(); 
-            syncChats();
+            toggleBulkMode(); syncChats();
         }
         
         function renderChatList() {
             const container = document.getElementById('chat-list-container'); 
             const scroll = container.children.length > 0 ? container.scrollTop : 0;
-            
             container.innerHTML = chatsData.map(c => {
                 let labelsHtml = ''; 
                 if(c.labels && Array.isArray(c.labels)) {
@@ -1503,113 +1403,61 @@
                     let seenTexts = new Set();
                     c.labels.forEach(l => {
                         let txt = l.text || l;
-                        if(!seenTexts.has(txt)) {
-                            seenTexts.add(txt);
-                            uniqueLabels.push(l);
-                        }
+                        if(!seenTexts.has(txt)) { seenTexts.add(txt); uniqueLabels.push(l); }
                     });
                     labelsHtml = uniqueLabels.map(l => { 
                         const tag = normalizeTag(l); 
                         return `<span class="mini-tag" style="background:${tag.color}20; color:${tag.color}; border:1px solid ${tag.color}50">${tag.text}</span>`;
                     }).join('');
                 }
-                
                 let cleanMsgText = c.lastMessage.text || 'Multimedia';
                 let platformIcon = '<i class="fab fa-whatsapp" style="color:#25D366;"></i>';
-                
-                if (cleanMsgText.includes('[Instagram]')) {
-                    platformIcon = '<i class="fab fa-instagram" style="color:#E1306C;"></i>';
-                    cleanMsgText = cleanMsgText.replace(/\[Instagram\]\s*/g, '');
-                } else if (cleanMsgText.includes('[Messenger]')) {
-                    platformIcon = '<i class="fab fa-facebook-messenger" style="color:#0084FF;"></i>';
-                    cleanMsgText = cleanMsgText.replace(/\[Messenger\]\s*/g, '');
-                }
+                if (cleanMsgText.includes('[Instagram]')) { platformIcon = '<i class="fab fa-instagram" style="color:#E1306C;"></i>'; cleanMsgText = cleanMsgText.replace(/\[Instagram\]\s*/g, ''); } 
+                else if (cleanMsgText.includes('[Messenger]')) { platformIcon = '<i class="fab fa-facebook-messenger" style="color:#0084FF;"></i>'; cleanMsgText = cleanMsgText.replace(/\[Messenger\]\s*/g, ''); }
 
                 let sourceBadge = '';
-                if(c.source && c.source.includes('Ads')) {
-                    sourceBadge = `<span class="badge" style="background:#ff0000; color:#fff;">ADS</span>`;
-                } else if(c.source === 'Web') {
-                    sourceBadge = `<span class="badge" style="background:#1e3a8a; color:#fff;">WEB</span>`;
-                } else if(c.source === 'Tienda Virtual') {
-                    sourceBadge = `<span class="badge" style="background:#a21caf; color:#fff;">TIENDA</span>`;
-                } else if(c.source === 'Campaña Excel') {
-                    sourceBadge = `<span class="badge" style="background:#10b981; color:#fff;">MASIVO</span>`;
-                }
-                
+                if(c.source && c.source.includes('Ads')) sourceBadge = `<span class="badge" style="background:#ff0000; color:#fff;">ADS</span>`;
+                else if(c.source === 'Web') sourceBadge = `<span class="badge" style="background:#1e3a8a; color:#fff;">WEB</span>`;
+                else if(c.source === 'Tienda Virtual') sourceBadge = `<span class="badge" style="background:#a21caf; color:#fff;">TIENDA</span>`;
+                else if(c.source === 'Campaña Excel') sourceBadge = `<span class="badge" style="background:#10b981; color:#fff;">MASIVO</span>`;
                 const isSelected = selectedChats.has(c.id);
 
                 return `
                 <div id="chat-${c.id}" class="chat-item ${currentChat === c.id ? 'active' : ''} ${c.archived ? 'archived' : ''}" onclick="openChat('${c.id}', decodeURIComponent('${encodeURIComponent(c.name)}'), '${c.photoUrl || ''}')" oncontextmenu="showContextMenu(event, '${c.id}', ${c.pinned}, ${c.archived})">
                     <input type="checkbox" class="bulk-checkbox" ${isSelected ? 'checked' : ''} onclick="toggleChatSelection('${c.id}', event)">
-                    <div class="avatar">
-                        ${c.photoUrl ? `<img src="${c.photoUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fas fa-user"></i>'}
-                        <div class="omni-badge">${platformIcon}</div>
-                    </div>
+                    <div class="avatar">${c.photoUrl ? `<img src="${c.photoUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fas fa-user"></i>'}<div class="omni-badge">${platformIcon}</div></div>
                     <div class="chat-info">
-                        <div class="chat-name">
-                            <span>${c.name} ${c.pinned ? '<i class="fas fa-thumbtack pin-icon" style="color:var(--primary); font-size:0.8rem;"></i>' : ''}</span>
-                            <span class="chat-date" style="font-weight:400; font-size:0.75rem;">${new Date(c.lastMessage.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                        </div>
-                        <div class="chat-preview">
-                            <span class="chat-last-msg">${cleanMsgText}</span>
-                            <div style="display:flex; gap:3px;">${c.unreadCount > 0 ? `<span class="badge">${c.unreadCount}</span>` : ''}${sourceBadge}</div>
-                        </div>
+                        <div class="chat-name"><span>${c.name} ${c.pinned ? '<i class="fas fa-thumbtack pin-icon" style="color:var(--primary); font-size:0.8rem;"></i>' : ''}</span><span class="chat-date" style="font-weight:400; font-size:0.75rem;">${new Date(c.lastMessage.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span></div>
+                        <div class="chat-preview"><span class="chat-last-msg">${cleanMsgText}</span><div style="display:flex; gap:3px;">${c.unreadCount > 0 ? `<span class="badge">${c.unreadCount}</span>` : ''}${sourceBadge}</div></div>
                         <div class="mini-tags">${labelsHtml}</div>
                     </div>
                 </div>`;
             }).join(''); 
-            
             if(scroll > 0) container.scrollTop = scroll;
         }
 
         function showContextMenu(e, phone, isPinned, isArchived) { 
-            e.preventDefault(); 
-            contextPhone = phone; 
-            const menu = document.getElementById('context-menu'); 
-            const pinBtn = document.getElementById('ctx-pin'); 
-            
-            pinBtn.innerHTML = isPinned ? '<i class="fas fa-thumbtack" style="opacity:0.5"></i> <span>Desfijar Chat</span>' : '<i class="fas fa-thumbtack"></i> <span>Fijar Chat</span>'; 
-            pinBtn.onclick = () => contextAction('toggle_pin'); 
-            
-            const archBtn = document.getElementById('ctx-archive'); 
-            archBtn.innerHTML = isArchived ? '<i class="fas fa-box-open"></i> <span>Desarchivar</span>' : '<i class="fas fa-archive"></i> <span>Archivar</span>'; 
-            archBtn.onclick = () => contextAction('toggle_archive'); 
-            
-            menu.style.display = 'block'; 
-            menu.style.left = e.pageX + 'px'; 
-            menu.style.top = e.pageY + 'px'; 
+            e.preventDefault(); contextPhone = phone; const menu = document.getElementById('context-menu'); const pinBtn = document.getElementById('ctx-pin'); 
+            pinBtn.innerHTML = isPinned ? '<i class="fas fa-thumbtack" style="opacity:0.5"></i> <span>Desfijar Chat</span>' : '<i class="fas fa-thumbtack"></i> <span>Fijar Chat</span>'; pinBtn.onclick = () => contextAction('toggle_pin'); 
+            const archBtn = document.getElementById('ctx-archive'); archBtn.innerHTML = isArchived ? '<i class="fas fa-box-open"></i> <span>Desarchivar</span>' : '<i class="fas fa-archive"></i> <span>Archivar</span>'; archBtn.onclick = () => contextAction('toggle_archive'); 
+            menu.style.display = 'block'; menu.style.left = e.pageX + 'px'; menu.style.top = e.pageY + 'px'; 
         }
 
         async function contextAction(action, valueOverride = true) { 
-            if(!contextPhone) return; 
-            if(action === 'delete' && !confirm("¿ELIMINAR CHAT ESTÁ SEGURO?")) return; 
-            
-            await fetch('/api/chat/action', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ phone: contextPhone, action: action, value: valueOverride }) 
-            }); 
-            
-            syncChats(); 
-            document.getElementById('context-menu').style.display = 'none'; 
+            if(!contextPhone) return; if(action === 'delete' && !confirm("¿ELIMINAR CHAT ESTÁ SEGURO?")) return; 
+            await fetch('/api/chat/action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: contextPhone, action: action, value: valueOverride }) }); 
+            syncChats(); document.getElementById('context-menu').style.display = 'none'; 
         }
 
         function quickLabel() { 
-            if(!contextPhone) return; 
-            const chat = chatsData.find(c => c.id === contextPhone); 
-            
-            if(chat) {
-                openChat(chat.id, chat.name, chat.photoUrl); 
-            }
-            
-            document.getElementById('crm-panel').classList.add('open'); 
-            document.getElementById('context-menu').style.display = 'none'; 
+            if(!contextPhone) return; const chat = chatsData.find(c => c.id === contextPhone); 
+            if(chat) { openChat(chat.id, chat.name, chat.photoUrl); }
+            document.getElementById('crm-panel').classList.add('open'); document.getElementById('context-menu').style.display = 'none'; 
         }
         
         async function openChat(phone, name, photo) { 
             if(bulkMode) return toggleChatSelection(phone, event); 
             
-            // 🔥 FIX: Detiene limpiamente el audio anterior al cambiar de chat
             if(currentlyPlaying) { 
                 try { currentlyPlaying.pause(); } catch(e){} 
                 currentlyPlaying = null; 
@@ -1626,11 +1474,8 @@
             document.getElementById('chat-header-phone').innerText = '+' + phone; 
             
             const headerAvatar = document.getElementById('chat-header-avatar');
-            if(photo) { 
-                headerAvatar.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;">`; 
-            } else { 
-                headerAvatar.innerHTML = `<i class="fas fa-user"></i>`; 
-            }
+            if(photo) { headerAvatar.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;">`; } 
+            else { headerAvatar.innerHTML = `<i class="fas fa-user"></i>`; }
             
             document.getElementById('messages-container').innerHTML = `<div style="display:flex; justify-content:center; align-items:center; height:100%; color:var(--text-muted); flex-direction:column; gap:10px;"><i class="fas fa-circle-notch fa-spin fa-2x" style="color:var(--primary);"></i><span style="font-size:0.9rem;">Cargando historial...</span></div>`; 
             
@@ -1639,24 +1484,16 @@
             
             loadLeadDataToCRM(phone); 
             
-            if (window._cachedTags && window._cachedTags.length > 0) {
-                renderCRMTags(window._cachedTags);
-            } else {
-                loadTags(phone); 
-            }
-
+            if (window._cachedTags && window._cachedTags.length > 0) { renderCRMTags(window._cachedTags); } else { loadTags(phone); }
             await loadMessages(phone, true); 
         }
         
         function formatSmartTime(iso) {
             if(!iso) return '';
-            const d = new Date(iso); 
-            const now = new Date();
+            const d = new Date(iso); const now = new Date();
             const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
             const timeStr = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            
             if (isToday) return timeStr;
-            
             const dateStr = d.toLocaleDateString([], {day: '2-digit', month: '2-digit', year:'2-digit'});
             return `${dateStr} ${timeStr}`;
         }
@@ -1670,13 +1507,10 @@
             text = text.replace(/\[Messenger\]\s*/g, '');
 
             if(text.includes('[MEDIA:')) { 
-                isMedia = true;
-                const parts = text.split(':'); 
-                const type = parts[1]; 
+                isMedia = true; const parts = text.split(':'); const type = parts[1]; 
                 const id = parts[2].split(']')[0].replace(/\D/g, ''); 
                 const extraCaption = text.split(']').slice(1).join(']').trim(); 
-                mediaId = id; 
-                const mediaUrl = `/api/media-proxy/${id}?v=final`; 
+                mediaId = id; const mediaUrl = `/api/media-proxy/${id}?v=final`; 
                 let captionHtml = extraCaption ? `<div style="margin-top:8px; font-size:0.9rem;">${extraCaption}</div>` : '';
 
                 if(type === 'IMAGE') { 
@@ -1686,8 +1520,7 @@
                         <div style="display:none; color:#ef4444; font-size:0.8rem; padding:10px; border:1px dashed #ef4444; border-radius:8px;">⚠️ Error de imagen.</div>
                         ${captionHtml}
                     </div>`; 
-                }
-                else if(type === 'VIDEO') {
+                } else if(type === 'VIDEO') {
                     text = `
                     <div style="display:flex; flex-direction:column; gap:5px;">
                         <div style="position:relative; width:250px; cursor:pointer; overflow:hidden; border-radius:8px; background:#000; transition:transform 0.2s;" onclick="openLightbox('${mediaUrl}', 'VIDEO')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
@@ -1698,8 +1531,7 @@
                         </div>
                         ${captionHtml}
                     </div>`;
-                }
-                else if(type === 'AUDIO') {
+                } else if(type === 'AUDIO') {
                     text = `
                     <div class="audio-wrapper">
                         <button class="play-btn" id="btn-${id}" onclick="togglePlay('${id}', '${mediaUrl}')">
@@ -1713,29 +1545,20 @@
                             </div>
                         </div>
                         <audio id="audio-${id}" ontimeupdate="updateProgress('${id}')" onloadedmetadata="setAudioDuration('${id}')" onended="resetPlayer('${id}')" onplaying="onAudioStart('${id}')" style="display:none;"></audio>
-                        <a href="${mediaUrl}" download="nota_voz.ogg" class="btn-download-audio" title="Descargar Audio">
-                            <i class="fas fa-download"></i>
-                        </a>
+                        <a href="${mediaUrl}" download="nota_voz.ogg" class="btn-download-audio" title="Descargar Audio"><i class="fas fa-download"></i></a>
                     </div>`;
                 } else { 
                     text = `
                     <a href="${mediaUrl}" target="_blank" style="color:white; text-decoration:none; display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.2); padding:10px; border-radius:6px; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
                         <i class="fas fa-file-download" style="font-size:1.5rem;"></i>
-                        <div style="display:flex; flex-direction:column;">
-                            <span>Archivo Adjunto (${type})</span>
-                            <span style="font-size:0.75rem; font-weight:600; color:#FFF;">Clic para descargar</span>
-                        </div>
-                    </a>
-                    ${captionHtml}`; 
+                        <div style="display:flex; flex-direction:column;"><span>Archivo Adjunto (${type})</span><span style="font-size:0.75rem; font-weight:600; color:#FFF;">Clic para descargar</span></div>
+                    </a>${captionHtml}`; 
                 }
             } 
             
             const isAlert = text.includes('[ALERTA:') || text.includes('[FICHA CRM');
             const isCampaign = text.startsWith('[CAMPAÑA]');
-            
-            if (isCampaign) {
-                text = text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="text-decoration:underline; color:#a5b4fc;">$1</a>');
-            }
+            if (isCampaign) text = text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="text-decoration:underline; color:#a5b4fc;">$1</a>');
             
             const bubbleClass = isAlert ? 'alert' : (isCampaign ? 'campaign' : m.role);
             
@@ -1754,24 +1577,16 @@
             try { 
                 const res = await fetch(`/api/chat-history/${phone}`); 
                 const msgs = await res.json(); 
-                
                 if(currentChat !== phone) return; 
-                
                 const container = document.getElementById('messages-container');
                 container.innerHTML = msgs.map(m => buildMessageHTML(m)).join(''); 
-                
-                if(scrollDown) {
-                    setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
-                }
-            } catch(e) {
-                console.error("Error cargando historial de mensajes:", e);
-            }
+                if(scrollDown) { setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50); }
+            } catch(e) { console.error("Error cargando historial de mensajes:", e); }
         }
 
         function openForwardModal(content, isMedia, mediaId) {
             msgToForward = { content, isMedia, mediaId };
             let preview = isMedia ? "Multimedia (Imagen/Audio/Video/Doc)" : content.substring(0, 50) + "...";
-            
             document.getElementById('forward-preview').innerText = "Reenviando: " + preview;
             document.getElementById('forward-modal').classList.add('show'); 
             renderForwardList(chatsData);
@@ -1794,12 +1609,7 @@
         async function executeForward(targetPhone) {
             if(!msgToForward) return; 
             closeModal('forward-modal');
-            
-            await fetch('/api/chat/send', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ phone: targetPhone, message: msgToForward.content }) 
-            });
+            await fetch('/api/chat/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: targetPhone, message: msgToForward.content }) });
             showToast("Mensaje reenviado exitosamente");
         }
 
@@ -1820,12 +1630,8 @@
                 }
                 
                 audio.play()
-                .then(() => { 
-                    currentlyPlaying = audio; 
-                })
-                .catch((error) => { 
-                    if(btn) btn.innerHTML = '<i class="fas fa-play" style="margin-left:3px;"></i>'; 
-                });
+                .then(() => { currentlyPlaying = audio; })
+                .catch((error) => { if(btn) btn.innerHTML = '<i class="fas fa-play" style="margin-left:3px;"></i>'; });
             } else { 
                 audio.pause(); 
                 if(btn) btn.innerHTML = '<i class="fas fa-play" style="margin-left:3px;"></i>'; 
@@ -1878,7 +1684,6 @@
             } 
         }
 
-        // 🔥 FIX: Seguro contra crash si el chat se cerró y el botón ya no existe 🔥
         function resetPlayer(id) { 
             const btn = document.getElementById(`btn-${id}`);
             if(btn) btn.innerHTML = '<i class="fas fa-play" style="margin-left:3px;"></i>'; 
@@ -1915,29 +1720,14 @@
             if(!txt) return; 
             document.getElementById('msg-input').value = ''; 
             
-            await fetch('/api/chat/send', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ phone: currentChat, message: txt }) 
-            }); 
+            await fetch('/api/chat/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, message: txt }) }); 
         }
 
-        function checkEnter(e) { 
-            if(e.key === 'Enter' && !e.shiftKey) { 
-                e.preventDefault(); 
-                sendMessage(); 
-            } 
-        }
+        function checkEnter(e) { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
 
         async function toggleBotActive() { 
             const active = document.getElementById('bot-switch').checked; 
-            
-            await fetch('/api/chat/toggle-bot', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ phone: currentChat, active }) 
-            }); 
-            
+            await fetch('/api/chat/toggle-bot', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, active }) }); 
             showToast(active ? "🤖 ICBOT Activado" : "⏸️ ICBOT Pausado"); 
         }
         
@@ -1969,22 +1759,16 @@
                 if(lead.interes) { 
                     for(let opt of interestSelect.options) { 
                         if(opt.value.toUpperCase() === lead.interes.toUpperCase()) { 
-                            interestSelect.value = opt.value; 
-                            foundInterest = true; 
-                            break; 
+                            interestSelect.value = opt.value; foundInterest = true; break; 
                         } 
                     } 
                     if(!foundInterest) interestSelect.value = "Consultando"; 
                 }
                 
                 let execSelect = document.getElementById('crm-executive'); 
-                if (lead.etiqueta && executivesMap[lead.etiqueta]) { 
-                    execSelect.value = lead.etiqueta; 
-                } else { 
-                    execSelect.value = "Pendiente"; 
-                }
+                if (lead.etiqueta && executivesMap[lead.etiqueta]) { execSelect.value = lead.etiqueta; } 
+                else { execSelect.value = "Pendiente"; }
 
-                // 🔥 HOMOLOGACIÓN DE ORIGEN SIN LA "A" 🔥
                 let srcVal = "Redes sociales";
                 const src = (lead.source || "").toLowerCase();
                 if (src.includes("tienda")) srcVal = "Tienda Virtual";
@@ -2015,25 +1799,15 @@
                 ]; 
                 
                 for(let u of updates) { 
-                    await fetch('/api/leads/update', { 
-                        method: 'POST', 
-                        headers: {'Content-Type': 'application/json'}, 
-                        body: JSON.stringify({ id, field: u.field, value: u.value }) 
-                    }); 
+                    await fetch('/api/leads/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id, field: u.field, value: u.value }) }); 
                 }
-                
-                showToast("✅ Base de Datos Actualizada"); 
-                refreshLeads(); 
-            } else { 
-                showToast("⚠️ Espera un primer mensaje del cliente."); 
-            } 
+                showToast("✅ Base de Datos Actualizada"); refreshLeads(); 
+            } else { showToast("⚠️ Espera un primer mensaje del cliente."); } 
         }
 
         function toggleAllLeads(source) {
             let checkboxes = document.querySelectorAll('.lead-checkbox');
-            for (let i = 0; i < checkboxes.length; i++) {
-                checkboxes[i].checked = source.checked;
-            }
+            for (let i = 0; i < checkboxes.length; i++) { checkboxes[i].checked = source.checked; }
         }
 
         function loadTags(phone) { 
@@ -2049,12 +1823,7 @@
 
             const uniqueTags = [];
             const seenTags = new Set();
-            tags.forEach(t => {
-                if(!seenTags.has(t.name)) {
-                    seenTags.add(t.name);
-                    uniqueTags.push(t);
-                }
-            });
+            tags.forEach(t => { if(!seenTags.has(t.name)) { seenTags.add(t.name); uniqueTags.push(t); } });
 
             container.innerHTML = uniqueTags.map(t => { 
                 const isActive = activeTags.find(l => (l.text || l) === t.name); 
@@ -2071,35 +1840,21 @@
             
             const tagObj = { text: name, color: color };
             updateTagsOptimistic(currentChat, tagObj, !!exists);
-            
             renderCRMTags(window._cachedTags);
             
             try {
                 let newTags = [...activeTags]; 
-                if(exists) { 
-                    newTags = newTags.filter(l => (l.text || l) !== name); 
-                } else { 
-                    newTags.push(tagObj); 
-                } 
-                
-                await fetch('/api/chat/action', { 
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({ phone: currentChat, action: 'set_labels', value: newTags }) 
-                });
-            } catch(e) {
-                showToast("Error guardando etiqueta.");
-            }
+                if(exists) { newTags = newTags.filter(l => (l.text || l) !== name); } else { newTags.push(tagObj); } 
+                await fetch('/api/chat/action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, action: 'set_labels', value: newTags }) });
+            } catch(e) { showToast("Error guardando etiqueta."); }
         }
 
         async function refreshLeads() { 
-            const res = await fetch('/api/data/leads'); 
-            const data = await res.json(); 
+            const res = await fetch('/api/data/leads'); const data = await res.json(); 
             const tbody = document.getElementById('leads-body'); 
             
             tbody.innerHTML = data.map(l => { 
-                const d = new Date(l.fecha); 
-                const f = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`; 
+                const d = new Date(l.fecha); const f = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`; 
                 
                 let sourceHTML = l.source || '-';
                 if(l.source && l.source.includes('Ads')) sourceHTML = `<span class="lead-source-tag" style="background:rgba(239, 68, 68, 0.1); color:#ef4444; border: 1px solid #ef4444;">META ADS</span>`;
@@ -2109,12 +1864,8 @@
                 else if(l.source === 'Organico') sourceHTML = `<span class="lead-source-tag" style="background:rgba(16, 185, 129, 0.1); color:#10b981; border: 1px solid #10b981;">ORGÁNICO</span>`;
 
                 let visualTagsHTML = '';
-                if(l.status_tag && l.status_tag !== "Sin Etiqueta") {
-                    visualTagsHTML = `<span class="mini-tag" style="background:var(--panel); border:1px solid var(--border); color:var(--text);">${l.status_tag}</span>`;
-                }
-
+                if(l.status_tag && l.status_tag !== "Sin Etiqueta") { visualTagsHTML = `<span class="mini-tag" style="background:var(--panel); border:1px solid var(--border); color:var(--text);">${l.status_tag}</span>`; }
                 const execName = executivesMap[l.etiqueta] || l.etiqueta || 'Pendiente';
-                
                 const sfIcon = l.sf_id ? '<i class="fas fa-check-circle" style="color:#10b981;" title="Sincronizado"></i>' : '<i class="fas fa-cloud text-gray-400" title="Pendiente de Sincronizar"></i>';
 
                 return `<tr>
@@ -2139,444 +1890,232 @@
         }
 
         async function deleteLead(id) { 
-            if(confirm("¿Eliminar lead permanentemente?")) { 
-                await fetch('/api/leads/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) }); 
-                refreshLeads(); 
-            } 
+            if(confirm("¿Eliminar lead permanentemente?")) { await fetch('/api/leads/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) }); refreshLeads(); } 
         }
 
         async function downloadExcel() { 
-            const res = await fetch('/api/data/leads'); 
-            const data = await res.json(); 
-            
+            const res = await fetch('/api/data/leads'); const data = await res.json(); 
             if(data.length === 0) return alert("No hay datos para descargar"); 
-            
             let csv = "ID,Fecha,Fuente,Nombre,Telefono,Ciudad,Departamento,Correo,Interes_Categoria,Producto_Especifico,Ejecutivo,Etiqueta_Comercial\n"; 
-            
             data.forEach(l => { 
                 const execName = executivesMap[l.etiqueta] || l.etiqueta || 'Pendiente';
                 const tagVisual = l.status_tag && l.status_tag !== "Sin Etiqueta" ? l.status_tag : '';
-                
                 csv += `${l.id},${l.fecha},"${l.source || ''}","${l.nombre || ''}","${l.phone || ''}","${l.ciudad || ''}","${l.departamento || ''}","${l.correo || ''}","${l.interes || ''}","${l.producto_especifico || ''}","${execName}","${tagVisual}"\n`; 
             }); 
-            
-            const blob = new Blob([csv], { type: 'text/csv' }); 
-            const url = window.URL.createObjectURL(blob); 
-            const a = document.createElement('a'); 
-            a.href = url; 
-            a.download = `Leads_ICBOT_${new Date().toLocaleDateString()}.csv`; 
-            a.click(); 
+            const blob = new Blob([csv], { type: 'text/csv' }); const url = window.URL.createObjectURL(blob); 
+            const a = document.createElement('a'); a.href = url; a.download = `Leads_ICBOT_${new Date().toLocaleDateString()}.csv`; a.click(); 
         }
 
         async function loadAllConfig() {
             try {
-                const res = await fetch('/api/data/config');
-                const configData = await res.json();
-                
-                const ptRes = await fetch('/api/config/prompt');
-                const ptData = await ptRes.json();
+                const res = await fetch('/api/data/config'); const configData = await res.json();
+                const ptRes = await fetch('/api/config/prompt'); const ptData = await ptRes.json();
                 document.getElementById('prompt-readonly').innerText = ptData.prompt;
 
                 const rules = configData.tech_rules || [];
-                document.getElementById('rules-list').innerHTML = rules.map((r, i) => `
-                    <li class="config-item">
-                        <span style="color:var(--text);"><i class="fas fa-check-circle" style="color:var(--primary); margin-right:8px;"></i> ${r}</span>
-                        <button class="btn-small btn-red" onclick="deleteRule(${i})"><i class="fas fa-times"></i></button>
-                    </li>
-                `).join('');
+                document.getElementById('rules-list').innerHTML = rules.map((r, i) => `<li class="config-item"><span style="color:var(--text);"><i class="fas fa-check-circle" style="color:var(--primary); margin-right:8px;"></i> ${r}</span><button class="btn-small btn-red" onclick="deleteRule(${i})"><i class="fas fa-times"></i></button></li>`).join('');
 
                 const biz = configData.biz_profile || {};
-                document.getElementById('biz-name').value = biz.name || '';
-                document.getElementById('biz-hours').value = biz.hours || '';
+                document.getElementById('biz-name').value = biz.name || ''; document.getElementById('biz-hours').value = biz.hours || '';
 
-                if(configData.logo_url) {
-                    document.getElementById('logo-preview').style.backgroundImage = `url(${configData.logo_url})`;
-                }
+                if(configData.logo_url) document.getElementById('logo-preview').style.backgroundImage = `url(${configData.logo_url})`;
 
-                const tagsRes = await fetch('/api/data/tags');
-                const tags = await tagsRes.json();
-                document.getElementById('config-tags-list').innerHTML = tags.map(t => `
-                    <li class="config-item">
-                        <span style="display:flex; align-items:center; gap:10px; color:var(--text);"><div style="width:15px;height:15px;border-radius:50%;background:${t.color};"></div> ${t.name}</span>
-                        <div style="display:flex; gap:5px;">
-                            <button class="btn-small btn-blue" onclick="openTagEdit(${t.id}, decodeURIComponent('${encodeURIComponent(t.name)}'), '${t.color}')"><i class="fas fa-pencil-alt"></i></button>
-                            <button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button>
-                        </div>
-                    </li>
-                `).join('');
+                const tagsRes = await fetch('/api/data/tags'); const tags = await tagsRes.json();
+                document.getElementById('config-tags-list').innerHTML = tags.map(t => `<li class="config-item"><span style="display:flex; align-items:center; gap:10px; color:var(--text);"><div style="width:15px;height:15px;border-radius:50%;background:${t.color};"></div> ${t.name}</span><div style="display:flex; gap:5px;"><button class="btn-small btn-blue" onclick="openTagEdit(${t.id}, decodeURIComponent('${encodeURIComponent(t.name)}'), '${t.color}')"><i class="fas fa-pencil-alt"></i></button><button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button></div></li>`).join('');
 
-                const shortRes = await fetch('/api/data/shortcuts');
-                const shortcuts = await shortRes.json();
-                
+                const shortRes = await fetch('/api/data/shortcuts'); const shortcuts = await shortRes.json();
                 const crmShortcuts = document.getElementById('shortcuts-list');
-                crmShortcuts.innerHTML = shortcuts.map(s => `
-                    <div class="tag" style="border-color:var(--border);" onclick="insertShortcut(decodeURIComponent('${encodeURIComponent(s.text)}'))" title="${s.text}">${s.keyword}</div>
-                `).join('');
+                crmShortcuts.innerHTML = shortcuts.map(s => `<div class="tag" style="border-color:var(--border);" onclick="insertShortcut(decodeURIComponent('${encodeURIComponent(s.text)}'))" title="${s.text}">${s.keyword}</div>`).join('');
+                document.getElementById('config-shortcuts-list').innerHTML = shortcuts.map(s => `<li class="config-item" style="flex-direction:column; align-items:flex-start; gap:5px;"><div style="display:flex; justify-content:space-between; width:100%; align-items:center;"><strong style="color:var(--text);">${s.keyword}</strong><button class="btn-small btn-red" onclick="deleteShortcut(${s.id})"><i class="fas fa-trash"></i></button></div><span style="font-size:0.8rem; color:var(--text-muted);">${s.text}</span></li>`).join('');
 
-                document.getElementById('config-shortcuts-list').innerHTML = shortcuts.map(s => `
-                    <li class="config-item" style="flex-direction:column; align-items:flex-start; gap:5px;">
-                        <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                            <strong style="color:var(--text);">${s.keyword}</strong>
-                            <button class="btn-small btn-red" onclick="deleteShortcut(${s.id})"><i class="fas fa-trash"></i></button>
-                        </div>
-                        <span style="font-size:0.8rem; color:var(--text-muted);">${s.text}</span>
-                    </li>
-                `).join('');
-
-                const webRes = await fetch('/api/data/web-knowledge');
-                const webSources = await webRes.json();
-                document.getElementById('web-knowledge-list').innerHTML = webSources.map(w => `
-                    <li class="config-item" style="flex-direction:column; align-items:flex-start; gap:8px;">
-                        <div style="display:flex; justify-content:space-between; width:100%;">
-                            <a href="${w.url}" target="_blank" style="color:var(--primary); font-weight:600; text-decoration:none;"><i class="fas fa-link"></i> ${w.url}</a>
-                            <div style="display:flex; gap:5px;">
-                                <button class="btn-small btn-blue" onclick="openWebEdit(${w.id}, decodeURIComponent('${encodeURIComponent(w.url)}'), decodeURIComponent('${encodeURIComponent(w.summary)}'))"><i class="fas fa-eye"></i> Ver/Editar</button>
-                                <button class="btn-small btn-red" onclick="deleteWeb(${w.id})"><i class="fas fa-trash"></i></button>
-                            </div>
-                        </div>
-                        <span style="font-size:0.75rem; color:var(--text-muted);">Escaneado el: ${w.date}</span>
-                    </li>
-                `).join('');
-
+                const webRes = await fetch('/api/data/web-knowledge'); const webSources = await webRes.json();
+                document.getElementById('web-knowledge-list').innerHTML = webSources.map(w => `<li class="config-item" style="flex-direction:column; align-items:flex-start; gap:8px;"><div style="display:flex; justify-content:space-between; width:100%;"><a href="${w.url}" target="_blank" style="color:var(--primary); font-weight:600; text-decoration:none;"><i class="fas fa-link"></i> ${w.url}</a><div style="display:flex; gap:5px;"><button class="btn-small btn-blue" onclick="openWebEdit(${w.id}, decodeURIComponent('${encodeURIComponent(w.url)}'), decodeURIComponent('${encodeURIComponent(w.summary)}'))"><i class="fas fa-eye"></i> Ver/Editar</button><button class="btn-small btn-red" onclick="deleteWeb(${w.id})"><i class="fas fa-trash"></i></button></div></div><span style="font-size:0.75rem; color:var(--text-muted);">Escaneado el: ${w.date}</span></li>`).join('');
             } catch(e) { console.error("Error cargando configuración:", e); }
         }
 
         async function openPromptEdit() {
-            const res = await fetch('/api/config/prompt');
-            const data = await res.json();
-            document.getElementById('prompt-editor').value = data.prompt;
-            document.getElementById('prompt-edit-modal').classList.add('show');
+            const res = await fetch('/api/config/prompt'); const data = await res.json();
+            document.getElementById('prompt-editor').value = data.prompt; document.getElementById('prompt-edit-modal').classList.add('show');
         }
 
         async function savePrompt(event) {
             const newPrompt = document.getElementById('prompt-editor').value;
-            const btn = event.currentTarget;
-            const originalHTML = btn.innerHTML;
-            
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
-            btn.disabled = true;
-
+            const btn = event.currentTarget; const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...'; btn.disabled = true;
             try {
-                const res = await fetch('/api/config/prompt', { 
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({prompt: newPrompt}) 
-                });
-                
-                if (res.ok) {
-                    document.getElementById('prompt-readonly').innerText = newPrompt;
-                    closeModal('prompt-edit-modal');
-                    showToast("✅ Personalidad Actualizada en el Servidor");
-                } else {
-                    showToast("❌ Fallo al guardar en base de datos");
-                }
-            } catch (e) {
-                showToast("❌ Error de red");
-            } finally {
-                btn.innerHTML = originalHTML;
-                btn.disabled = false;
-            }
+                const res = await fetch('/api/config/prompt', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: newPrompt}) });
+                if (res.ok) { document.getElementById('prompt-readonly').innerText = newPrompt; closeModal('prompt-edit-modal'); showToast("✅ Personalidad Actualizada en el Servidor"); } 
+                else { showToast("❌ Fallo al guardar en base de datos"); }
+            } catch (e) { showToast("❌ Error de red"); } finally { btn.innerHTML = originalHTML; btn.disabled = false; }
         }
 
         async function addRule() {
-            const input = document.getElementById('rule-input');
-            if(!input.value) return;
+            const input = document.getElementById('rule-input'); if(!input.value) return;
             await fetch('/api/config/rules/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({rule: input.value}) });
-            input.value = '';
-            loadAllConfig();
+            input.value = ''; loadAllConfig();
         }
 
-        async function deleteRule(index) {
-            await fetch('/api/config/rules/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({index}) });
-            loadAllConfig();
-        }
+        async function deleteRule(index) { await fetch('/api/config/rules/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({index}) }); loadAllConfig(); }
 
         async function saveBizConfig() {
-            const name = document.getElementById('biz-name').value;
-            const hours = document.getElementById('biz-hours').value;
-            await fetch('/api/config/biz/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, hours}) });
-            showToast("Perfil guardado");
+            const name = document.getElementById('biz-name').value; const hours = document.getElementById('biz-hours').value;
+            await fetch('/api/config/biz/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, hours}) }); showToast("Perfil guardado");
         }
 
         async function uploadLogo(input) {
-            if(!input.files[0]) return;
-            const formData = new FormData();
-            formData.append('file', input.files[0]);
-            await fetch('/api/config/logo', { method: 'POST', body: formData });
-            showToast("Logo actualizado (Recarga para ver cambios)");
+            if(!input.files[0]) return; const formData = new FormData(); formData.append('file', input.files[0]);
+            await fetch('/api/config/logo', { method: 'POST', body: formData }); showToast("Logo actualizado (Recarga para ver cambios)");
         }
 
         async function addTag() {
-            const name = document.getElementById('tag-name').value;
-            const color = document.getElementById('tag-color').value;
-            if(!name) return;
+            const name = document.getElementById('tag-name').value; const color = document.getElementById('tag-color').value; if(!name) return;
             await fetch('/api/tags/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, color}) });
-            document.getElementById('tag-name').value = '';
-            loadAllConfig();
-            loadTagFilterOptions(); 
+            document.getElementById('tag-name').value = ''; loadAllConfig(); loadTagFilterOptions(); 
         }
 
         async function deleteTag(id) {
             if(!confirm("¿Eliminar etiqueta?")) return;
-            await fetch('/api/tags/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id}) });
-            loadAllConfig();
-            loadTagFilterOptions(); 
+            await fetch('/api/tags/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id}) }); loadAllConfig(); loadTagFilterOptions(); 
         }
         
         function openTagEdit(id, name, color) {
-            document.getElementById('edit-tag-id').value = id;
-            document.getElementById('edit-tag-name').value = name;
-            document.getElementById('edit-tag-color').value = color;
-            document.getElementById('tag-edit-modal').classList.add('show');
+            document.getElementById('edit-tag-id').value = id; document.getElementById('edit-tag-name').value = name; document.getElementById('edit-tag-color').value = color; document.getElementById('tag-edit-modal').classList.add('show');
         }
 
         async function saveTagEdit() {
-            const id = document.getElementById('edit-tag-id').value;
-            const name = document.getElementById('edit-tag-name').value;
-            const color = document.getElementById('edit-tag-color').value;
-            
-            await fetch('/api/tags/update', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({id, name, color}) 
-            });
-            
-            closeModal('tag-edit-modal');
-            loadAllConfig();
-            loadTagFilterOptions();
+            const id = document.getElementById('edit-tag-id').value; const name = document.getElementById('edit-tag-name').value; const color = document.getElementById('edit-tag-color').value;
+            await fetch('/api/tags/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, color}) });
+            closeModal('tag-edit-modal'); loadAllConfig(); loadTagFilterOptions();
         }
 
         async function addShortcut() {
-            const keyword = document.getElementById('short-key').value;
-            const text = document.getElementById('short-text').value;
-            if(!keyword || !text) return;
+            const keyword = document.getElementById('short-key').value; const text = document.getElementById('short-text').value; if(!keyword || !text) return;
             await fetch('/api/shortcuts/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({keyword, text}) });
-            document.getElementById('short-key').value = '';
-            document.getElementById('short-text').value = '';
-            loadAllConfig();
+            document.getElementById('short-key').value = ''; document.getElementById('short-text').value = ''; loadAllConfig();
         }
 
-        async function deleteShortcut(id) {
-            await fetch('/api/shortcuts/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id}) });
-            loadAllConfig();
-        }
+        async function deleteShortcut(id) { await fetch('/api/shortcuts/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id}) }); loadAllConfig(); }
 
-        function insertShortcut(text) {
-            const input = document.getElementById('msg-input');
-            input.value = text;
-            input.focus();
-        }
+        function insertShortcut(text) { const input = document.getElementById('msg-input'); input.value = text; input.focus(); }
 
         async function uploadCSV() {
-            const file = document.getElementById('csv-upload').files[0];
-            if(!file) return alert('Selecciona un archivo');
-            
-            const btn = event.target;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
-            btn.disabled = true;
-            
-            const fd = new FormData();
-            fd.append('file', file);
+            const file = document.getElementById('csv-upload').files[0]; if(!file) return alert('Selecciona un archivo');
+            const btn = event.target; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...'; btn.disabled = true;
+            const fd = new FormData(); fd.append('file', file);
             try {
-                const res = await fetch('/api/knowledge/csv', { method:'POST', body: fd });
-                const result = await res.json();
-                if(result.success) {
-                    showToast(`✅ ${result.count} productos cargados`);
-                    loadInventoryPreview();
-                }
-            } catch(e) {
-                alert("Error procesando el archivo. Asegúrate de que sea un CSV o Excel válido.");
-            } finally {
-                btn.innerHTML = '<i class="fas fa-upload"></i> Cargar Archivo';
-                btn.disabled = false;
-                document.getElementById('csv-upload').value = '';
+                const res = await fetch('/api/knowledge/csv', { method:'POST', body: fd }); const result = await res.json();
+                if(result.success) { showToast(`✅ ${result.count} productos cargados`); loadInventoryPreview(); }
+            } catch(e) { alert("Error procesando el archivo."); } finally {
+                btn.innerHTML = '<i class="fas fa-upload"></i> Cargar Archivo'; btn.disabled = false; document.getElementById('csv-upload').value = '';
             }
         }
         
         async function loadInventoryPreview() {
             try {
-                const res = await fetch('/api/data/knowledge');
-                currentInventory = await res.json();
-                
+                const res = await fetch('/api/data/knowledge'); currentInventory = await res.json();
                 document.getElementById('inventory-count').innerText = `${currentInventory.length} items`;
-                
-                if(currentInventory.length === 0) {
-                    document.getElementById('inventory-list').innerHTML = '<li style="text-align:center; color:var(--text-muted); padding:10px;">Inventario vacío. Sube un archivo CSV o Excel.</li>';
-                    return;
-                }
+                if(currentInventory.length === 0) { document.getElementById('inventory-list').innerHTML = '<li style="text-align:center; color:var(--text-muted); padding:10px;">Inventario vacío. Sube un archivo CSV o Excel.</li>'; return; }
 
-                let html = '';
-                const limit = Math.min(currentInventory.length, 100);
-                
+                let html = ''; const limit = Math.min(currentInventory.length, 100);
                 for(let i = 0; i < limit; i++) {
-                    const item = currentInventory[i];
-                    let data;
+                    const item = currentInventory[i]; let data;
                     try { data = JSON.parse(item.raw_data); } catch(e) { data = {}; }
-                    
                     const nombre = data.nombre || data.producto || data.name || data.descripcion || "Item sin nombre";
                     const precio = data.precio || data.price || "N/A";
-                    
-                    html += `
-                    <li class="config-item" style="flex-direction:column; align-items:flex-start; gap:5px;">
-                        <div style="display:flex; justify-content:space-between; width:100%;">
-                            <strong style="font-size:0.9rem; color:var(--text);">${nombre}</strong>
-                            <div style="display:flex; gap:5px;">
-                                <span class="badge" style="background:var(--panel); color:var(--text); border:1px solid var(--border);">$${precio}</span>
-                                <button class="btn-small btn-blue" style="padding:4px 8px;" onclick="openEditInventory(${item.id}, decodeURIComponent('${encodeURIComponent(item.raw_data)}'))"><i class="fas fa-pencil-alt"></i></button>
-                                <button class="btn-small btn-red" style="padding:4px 8px;" onclick="deleteInventoryItem(${item.id})"><i class="fas fa-trash"></i></button>
-                            </div>
-                        </div>
-                        <span style="font-size:0.75rem; color:var(--text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%; display: inline-block;">
-                            Búsqueda: ${item.searchable}
-                        </span>
-                    </li>`;
+                    html += `<li class="config-item" style="flex-direction:column; align-items:flex-start; gap:5px;"><div style="display:flex; justify-content:space-between; width:100%;"><strong style="font-size:0.9rem; color:var(--text);">${nombre}</strong><div style="display:flex; gap:5px;"><span class="badge" style="background:var(--panel); color:var(--text); border:1px solid var(--border);">$${precio}</span><button class="btn-small btn-blue" style="padding:4px 8px;" onclick="openEditInventory(${item.id}, decodeURIComponent('${encodeURIComponent(item.raw_data)}'))"><i class="fas fa-pencil-alt"></i></button><button class="btn-small btn-red" style="padding:4px 8px;" onclick="deleteInventoryItem(${item.id})"><i class="fas fa-trash"></i></button></div></div><span style="font-size:0.75rem; color:var(--text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%; display: inline-block;">Búsqueda: ${item.searchable}</span></li>`;
                 }
-                
-                if(currentInventory.length > 100) {
-                    html += `<li style="text-align:center; padding:10px; color:var(--text-muted); font-size:0.85rem;">... y ${currentInventory.length - 100} items más. Mostrando solo los primeros 100.</li>`;
-                }
-                
+                if(currentInventory.length > 100) html += `<li style="text-align:center; padding:10px; color:var(--text-muted); font-size:0.85rem;">... y ${currentInventory.length - 100} items más. Mostrando solo los primeros 100.</li>`;
                 document.getElementById('inventory-list').innerHTML = html;
-            } catch(e) {
-                console.error("Error cargando inventario:", e);
-            }
+            } catch(e) { console.error("Error cargando inventario:", e); }
         }
         
         function openEditInventory(id, rawDataStr) {
             try {
-                const data = JSON.parse(rawDataStr);
-                document.getElementById('edit-id').value = id;
+                const data = JSON.parse(rawDataStr); document.getElementById('edit-id').value = id;
                 document.getElementById('edit-nombre').value = data.nombre || data.producto || data.name || data.descripcion || "";
                 document.getElementById('edit-precio').value = data.precio || data.price || "";
                 document.getElementById('edit-stock').value = data.stock || data.disponibilidad || "";
                 document.getElementById('edit-desc').value = data.descripcion_larga || data.detalle || "";
                 document.getElementById('edit-modal').classList.add('show');
-            } catch(e) {
-                alert("Error abriendo editor");
-            }
+            } catch(e) {}
         }
         
         async function saveEditInventory() {
-            const id = document.getElementById('edit-id').value;
-            
-            const item = currentInventory.find(i => i.id == id);
-            let data = {};
-            if(item) {
-                try { data = JSON.parse(item.raw_data); } catch(e){}
-            }
-            
-            data.nombre = document.getElementById('edit-nombre').value;
-            data.precio = document.getElementById('edit-precio').value;
-            data.stock = document.getElementById('edit-stock').value;
-            data.descripcion_larga = document.getElementById('edit-desc').value;
-            
-            await fetch('/api/knowledge/update', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ id, data })
-            });
-            
-            closeModal('edit-modal');
-            showToast("Producto actualizado");
-            loadInventoryPreview();
+            const id = document.getElementById('edit-id').value; const item = currentInventory.find(i => i.id == id); let data = {};
+            if(item) { try { data = JSON.parse(item.raw_data); } catch(e){} }
+            data.nombre = document.getElementById('edit-nombre').value; data.precio = document.getElementById('edit-precio').value; data.stock = document.getElementById('edit-stock').value; data.descripcion_larga = document.getElementById('edit-desc').value;
+            await fetch('/api/knowledge/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id, data }) });
+            closeModal('edit-modal'); showToast("Producto actualizado"); loadInventoryPreview();
         }
 
         async function deleteInventoryItem(id) {
             if(!confirm("¿Eliminar este producto?")) return;
-            await fetch('/api/knowledge/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) });
-            loadInventoryPreview();
+            await fetch('/api/knowledge/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) }); loadInventoryPreview();
         }
 
         async function clearInventory() {
             if(!confirm("⚠️ ¡PELIGRO! ¿Estás seguro de querer BORRAR TODO EL INVENTARIO? Esta acción no se puede deshacer.")) return;
-            const res = await fetch('/api/knowledge/clear', { method: 'POST' });
-            if(res.ok) {
-                showToast("Inventario borrado por completo");
-                loadInventoryPreview();
-            }
+            const res = await fetch('/api/knowledge/clear', { method: 'POST' }); if(res.ok) { showToast("Inventario borrado por completo"); loadInventoryPreview(); }
         }
 
         async function scanWeb() {
-            const urlInput = document.getElementById('web-url-input');
-            const url = urlInput.value.trim();
-            if(!url) return;
-            
-            const btn = event.target;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Escaneando...';
-            btn.disabled = true;
-            
+            const urlInput = document.getElementById('web-url-input'); const url = urlInput.value.trim(); if(!url) return;
+            const btn = event.target; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Escaneando...'; btn.disabled = true;
             try {
-                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-                const response = await fetch(proxyUrl);
-                const data = await response.json();
-                const htmlText = data.contents;
-                
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(htmlText, "text/html");
-                
-                doc.querySelectorAll('script, style, nav, footer, iframe, img, svg').forEach(el => el.remove());
-                let rawText = doc.body.innerText;
-                
-                rawText = rawText.replace(/\s+/g, ' ').trim();
-                
-                const summary = `Contenido de ${url}:\n` + rawText.substring(0, 3000); 
-
-                await fetch('/api/data/web-knowledge', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ url: url, summary: summary })
-                });
-
-                showToast("✅ Página escaneada y memorizada");
-                urlInput.value = '';
-                loadAllConfig();
-            } catch(error) {
-                console.error(error);
-                alert("No se pudo escanear la página. Es posible que tenga bloqueos de seguridad.");
-            } finally {
-                btn.innerHTML = '<i class="fas fa-plus"></i> Añadir';
-                btn.disabled = false;
-            }
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`; const response = await fetch(proxyUrl); const data = await response.json(); const htmlText = data.contents;
+                const parser = new DOMParser(); const doc = parser.parseFromString(htmlText, "text/html");
+                doc.querySelectorAll('script, style, nav, footer, iframe, img, svg').forEach(el => el.remove()); let rawText = doc.body.innerText;
+                rawText = rawText.replace(/\s+/g, ' ').trim(); const summary = `Contenido de ${url}:\n` + rawText.substring(0, 3000); 
+                await fetch('/api/data/web-knowledge', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url: url, summary: summary }) });
+                showToast("✅ Página escaneada y memorizada"); urlInput.value = ''; loadAllConfig();
+            } catch(error) { alert("No se pudo escanear la página."); } finally { btn.innerHTML = '<i class="fas fa-plus"></i> Añadir'; btn.disabled = false; }
         }
 
         function openWebEdit(id, url, text) {
-            document.getElementById('edit-web-id').value = id;
-            document.getElementById('edit-web-id').dataset.url = url;
-            document.getElementById('web-audit-text').value = text;
-            document.getElementById('web-audit-modal').classList.add('show');
+            document.getElementById('edit-web-id').value = id; document.getElementById('edit-web-id').dataset.url = url;
+            document.getElementById('web-audit-text').value = text; document.getElementById('web-audit-modal').classList.add('show');
         }
 
         async function saveWebEdit(event) {
-            const id = document.getElementById('edit-web-id').value;
-            const url = document.getElementById('edit-web-id').dataset.url;
-            const newSummary = document.getElementById('web-audit-text').value;
-            
-            const btn = event.currentTarget;
-            const originalHTML = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
-            btn.disabled = true;
-
+            const id = document.getElementById('edit-web-id').value; const url = document.getElementById('edit-web-id').dataset.url; const newSummary = document.getElementById('web-audit-text').value;
+            const btn = event.currentTarget; const originalHTML = btn.innerHTML; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...'; btn.disabled = true;
             try {
                 await fetch('/api/data/web-knowledge/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) });
+                await fetch('/api/data/web-knowledge', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url: url, summary: newSummary }) });
+                closeModal('web-audit-modal'); showToast("✅ Conocimiento web actualizado"); loadAllConfig();
+            } catch (e) { showToast("❌ Error actualizando la web"); } finally { btn.innerHTML = originalHTML; btn.disabled = false; }
+        }
+
+        async function copyLeadInfo() {
+            if(!currentChat) return showToast("⚠️ Abre un chat primero.");
+            
+            try {
+                const res = await fetch('/api/data/leads');
+                const leads = await res.json();
+                const lead = leads.find(l => l.phone === currentChat);
                 
-                await fetch('/api/data/web-knowledge', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ url: url, summary: newSummary })
-                });
+                let sfLink = "No sincronizado (Sube a Salesforce primero)";
+                if (lead && lead.sf_id) {
+                    sfLink = `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${lead.sf_id}/view`;
+                }
                 
-                closeModal('web-audit-modal');
-                showToast("✅ Conocimiento web actualizado");
-                loadAllConfig();
-            } catch (e) {
-                showToast("❌ Error actualizando la web");
-            } finally {
-                btn.innerHTML = originalHTML;
-                btn.disabled = false;
+                const leadName = document.getElementById('crm-name').value || "Cliente";
+                let leadPhone = (document.getElementById('crm-phone').value || currentChat).replace(/\D/g, '');
+                if (leadPhone.startsWith("57") && leadPhone.length > 10) leadPhone = leadPhone.substring(2);
+                
+                let leadNeed = document.getElementById('crm-specific-interest').value;
+                if (!leadNeed) leadNeed = document.getElementById('crm-interest').value;
+                if (!leadNeed) leadNeed = "No especificada";
+                
+                const fichaText = `Nombre: ${leadName}\nNum: ${leadPhone}\nLink: ${sfLink}\nNecesidad: ${leadNeed}`;
+                
+                await navigator.clipboard.writeText(fichaText);
+                showToast("✅ Información copiada al portapapeles");
+            } catch(e) {
+                showToast("❌ Error copiando información.");
             }
         }
 
-        // 🔥 FUNCIONALIDAD NUEVA: FICHA EN EL CHAT DE SALESFORCE 🔥
         async function syncSalesforceCurrent() {
             if(!currentChat) return;
             showToast("🔄 Sincronizando con Salesforce...");
@@ -2593,7 +2132,7 @@
                         const jsonData = JSON.parse(textData);
                         return showToast("❌ Error SF: " + jsonData.message);
                     } catch(e) {
-                        return showToast("❌ El servidor aún se está reiniciando (Error " + res.status + ")");
+                        return showToast("❌ El servidor aún se está reiniciando");
                     }
                 }
 
@@ -2601,23 +2140,6 @@
                 if(data.success) {
                     showToast("✅ Subido a Salesforce (ID: " + data.sfId + ")");
                     refreshLeads();
-                    
-                    // 👉 CREAR LA FICHA EN EL CHAT Y ENVIAR COMO MENSAJE
-                    const leadName = document.getElementById('crm-name').value || "Cliente";
-                    const leadPhone = document.getElementById('crm-phone').value || currentChat;
-                    let leadNeed = document.getElementById('crm-specific-interest').value;
-                    if (!leadNeed) leadNeed = document.getElementById('crm-interest').value;
-                    if (!leadNeed) leadNeed = "No especificada";
-                    
-                    const sfLink = `https://login.salesforce.com/${data.sfId}`;
-                    const fichaMsg = `[FICHA CRM - SALESFORCE]\n👤 Nombre: ${leadName}\n📱 Num: ${leadPhone}\n🎯 Necesidad: ${leadNeed}\n🔗 Link: ${sfLink}`;
-                    
-                    await fetch('/api/chat/send', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ phone: currentChat, message: fichaMsg })
-                    });
-                    
                 } else {
                     showToast("❌ Error: " + data.message);
                 }
