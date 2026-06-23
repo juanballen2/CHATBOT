@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.12 (FIX: TIEMPO REAL Y ECOS EN MESSENGER + FIX PLANTILLAS)
+ * SERVER BACKEND - v33.12 (FIX: TIEMPO REAL Y ECOS EN MESSENGER)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -11,8 +11,7 @@
  * 8. ADD: Rutas Nativas para Extractor Inteligente (/extractor).
  * 9. FIX: (v33.12) Re-ingeniería del Webhook Omnicanal para capturar 
  * correctamente los Ecos y DMs de Messenger mapeando el ID del cliente real.
- * 10. FIX: (v33.12) Solución al crash de envío individual de plantillas sin variables.
- * 11. ADD: (v33.12) Generación de Ficha CRM en el chat tras subir a Salesforce.
+ * 10. FIX: Solución de link de SF y silencio en chat (Solo guarda ID local).
  * ============================================================
  */
 
@@ -210,7 +209,7 @@ function analizarTextoFuente(texto) {
     if(!texto) return null;
     const t = texto.toLowerCase();
     if (t.includes('storeicc.com') || t.includes('deseo asesoría')) return 'Tienda Virtual';
-    if (t.includes('importadoracasacolombia.com')) return 'Sitio web';
+    if (t.includes('importadoracasacolombia.com')) return 'Web';
     return null;
 }
 
@@ -723,17 +722,7 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
 
         if (result.success) {
             await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [result.id, lead.id]);
-            
-            // 🔥 FICHA GENERADA PARA EL CHAT (PARA REENVIAR) 🔥
-            const timestamp = new Date().toISOString();
-            const sfLink = `https://casacolombia--dev2025.sandbox.lightning.force.com/${result.id}`; 
-            const necesidad = sfData.DescripciondeProducto__c ? sfData.DescripciondeProducto__c : sfData.Producto_de_su_inter_s__c;
-            
-            const msgNotif = `[FICHA CRM - SALESFORCE]\n👤 Nombre: ${sfData.FirstName} ${sfData.LastName}\n📱 Num: +${sfData.Phone}\n🎯 Necesidad: ${necesidad}\n🔗 Link: ${sfLink}`;
-            
-            await db.run("INSERT INTO history (phone, role, text, time) VALUES (?, ?, ?, ?)", [phone, 'bot', msgNotif, timestamp]);
-            io.emit('new_message', { phone: phone, role: 'bot', text: msgNotif, time: timestamp });
-
+            // 🔥 SE ELIMINÓ LA INYECCIÓN DEL MENSAJE EN EL CHAT (Ahora lo hace el botón "Copiar Información")
             res.json({ success: true, sfId: result.id });
         } else {
             res.status(500).json({ success: false, message: "Salesforce rechazó los datos." });
