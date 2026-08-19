@@ -12,6 +12,7 @@
  * 9. FIX: (v33.12) Re-ingeniería del Webhook Omnicanal para capturar 
  * correctamente los Ecos y DMs de Messenger mapeando el ID del cliente real.
  * 10. FIX: Solución de link de SF y silencio en chat (Solo guarda ID local).
+ * 11. FIX: El extractor inteligente ahora captura Ejecutivo y Origen.
  * ============================================================
  */
 
@@ -209,7 +210,7 @@ function analizarTextoFuente(texto) {
     if(!texto) return null;
     const t = texto.toLowerCase();
     if (t.includes('storeicc.com') || t.includes('deseo asesoría')) return 'Tienda Virtual';
-    if (t.includes('importadoracasacolombia.com')) return 'Web';
+    if (t.includes('importadoracasacolombia.com')) return 'Sitio web';
     return null;
 }
 
@@ -667,7 +668,6 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
         const lead = await db.get("SELECT * FROM leads WHERE phone = ?", [phone]);
         if (!lead) return res.status(404).json({ success: false, message: "No encontrado en la BD local" });
 
-        // 1. REGLAS DE ASIGNACIÓN DE ORIGEN (LeadSource) LIMPIO
         let leadSource = "Redes sociales"; 
         const src = (lead.source || "").toLowerCase();
 
@@ -679,7 +679,6 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
             leadSource = "WhatsApp";
         }
 
-        // 2. DIVIDIR NOMBRE Y APELLIDO
         let firstName = "Cliente";
         let lastName = "ICC";
         if (lead.nombre) {
@@ -688,7 +687,6 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
             lastName = parts.length > 1 ? parts.slice(1).join(" ") : "ICC";
         }
 
-        // 3. LIMPIEZA DEL NÚMERO DE TELÉFONO
         let telefonoFinal = lead.phone;
         if (telefonoFinal.startsWith("57") && telefonoFinal.length > 10) {
             telefonoFinal = telefonoFinal.substring(2); 
@@ -722,7 +720,6 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
 
         if (result.success) {
             await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [result.id, lead.id]);
-            // 🔥 SE ELIMINÓ LA INYECCIÓN DEL MENSAJE EN EL CHAT (Ahora lo hace el botón "Copiar Información")
             res.json({ success: true, sfId: result.id });
         } else {
             res.status(500).json({ success: false, message: "Salesforce rechazó los datos." });
@@ -1427,6 +1424,7 @@ app.post('/api/extractor/process', proteger, upload.single('image'), async (req,
     }
 });
 
+// 🔥 NUEVA LÓGICA DE CAPTURA DE EJECUTIVO Y ORIGEN DESDE EL EXTRACTOR 🔥
 app.post('/api/extractor/salesforce', proteger, async (req, res) => {
     try {
         const payload = req.body;
@@ -1444,8 +1442,13 @@ app.post('/api/extractor/salesforce', proteger, async (req, res) => {
             DescripciondeProducto__c: payload.producto_detalle !== "No proporcionado" ? payload.producto_detalle : "",
             Producto_de_su_inter_s__c: payload.categoria_producto !== "No proporcionado" ? payload.categoria_producto : "Consultando",
             Ubicaci_n__c: payload.ubicacion !== "No proporcionado" ? payload.ubicacion : "",
-            LeadSource: "WhatsApp" 
+            LeadSource: payload.origen || "WhatsApp" // 🔥 Ahora atrapa el origen elegido en el extractor
         };
+
+        // 🔥 Atrapa el Ejecutivo (OwnerId) si se eligió uno válido
+        if (payload.ejecutivo && payload.ejecutivo.startsWith("005")) {
+            sfData.OwnerId = payload.ejecutivo;
+        }
 
         const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
         await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
