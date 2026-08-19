@@ -280,6 +280,11 @@
             <i class="fas fa-inbox" style="color: #8b5cf6;"></i>
             <span class="badge-nav" id="badge-omni">0</span>
         </a>
+
+        <!-- 🔥 NUEVO BOTÓN AL EXTRACTOR 🔥 -->
+        <a href="/extractor" class="nav-btn" title="Extractor Inteligente">
+            <i class="fas fa-magic" style="color: #E9521E;"></i>
+        </a>
         
         <button class="nav-btn" onclick="switchTab('leads')" title="Base de Leads"><i class="fas fa-database"></i></button>
         
@@ -412,10 +417,10 @@
 
                     <div class="crm-title" style="margin-top:20px;"><i class="fas fa-filter"></i> Origen (Salesforce)</div>
                     <select id="crm-source" class="crm-input">
-                        <option value="Redes sociales">Redes sociales (Ads / Orgánico)</option>
+                        <option value="Redes sociales">Redes sociales</option>
                         <option value="Tienda Virtual">Tienda Virtual</option>
                         <option value="Sitio web">Sitio web</option>
-                        <option value="WhatsApp">WhatsApp (Masivo / Directo)</option>
+                        <option value="WhatsApp">WhatsApp</option>
                     </select>
 
                     <div style="display:flex; gap:10px; margin-top:15px;">
@@ -610,6 +615,7 @@
         </div>
     </div>
 
+    <!-- MODAL DE PLANTILLAS -->
     <div id="template-modal" class="modal-overlay" onclick="closeModal('template-modal')">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-title" id="tpl-modal-title"><i class="fas fa-bullhorn" style="color:var(--primary);"></i> Enviar Plantilla</div>
@@ -624,6 +630,7 @@
                     <option value="plantilla_de_retoma"></option>
                 </datalist>
 
+                <!-- 🔥 SELECTOR DE IDIOMA 🔥 -->
                 <label>Idioma de la Plantilla</label>
                 <select id="tpl-lang" class="crm-input" style="margin-bottom:10px;">
                     <option value="es_CO">Español Colombia (es_CO)</option>
@@ -951,6 +958,36 @@
             }
         }
 
+        async function copyLeadInfo() {
+            if(!currentChat) return showToast("⚠️ Abre un chat primero.");
+            
+            try {
+                const res = await fetch('/api/data/leads');
+                const leads = await res.json();
+                const lead = leads.find(l => l.phone === currentChat);
+                
+                let sfLink = "No sincronizado (Sube a Salesforce primero)";
+                if (lead && lead.sf_id) {
+                    sfLink = `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${lead.sf_id}/view`;
+                }
+                
+                const leadName = document.getElementById('crm-name').value || "Cliente";
+                let leadPhone = (document.getElementById('crm-phone').value || currentChat).replace(/\D/g, '');
+                if (leadPhone.startsWith("57") && leadPhone.length > 10) leadPhone = leadPhone.substring(2);
+                
+                let leadNeed = document.getElementById('crm-specific-interest').value;
+                if (!leadNeed) leadNeed = document.getElementById('crm-interest').value;
+                if (!leadNeed) leadNeed = "No especificada";
+                
+                const fichaText = `Nombre: ${leadName}\nNum: ${leadPhone}\nLink: ${sfLink}\nNecesidad: ${leadNeed}`;
+                
+                await navigator.clipboard.writeText(fichaText);
+                showToast("✅ Información copiada al portapapeles");
+            } catch(e) {
+                showToast("❌ Error copiando información.");
+            }
+        }
+
         async function syncSalesforceCurrent() {
             if(!currentChat) return;
             showToast("🔄 Sincronizando con Salesforce...");
@@ -980,36 +1017,6 @@
                 }
             } catch(e) {
                 showToast("❌ Fallo de red con el servidor");
-            }
-        }
-        
-        async function copyLeadInfo() {
-            if(!currentChat) return showToast("⚠️ Abre un chat primero.");
-            
-            try {
-                const res = await fetch('/api/data/leads');
-                const leads = await res.json();
-                const lead = leads.find(l => l.phone === currentChat);
-                
-                let sfLink = "No sincronizado (Sube a Salesforce primero)";
-                if (lead && lead.sf_id) {
-                    sfLink = `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${lead.sf_id}/view`;
-                }
-                
-                const leadName = document.getElementById('crm-name').value || "Cliente";
-                let leadPhone = (document.getElementById('crm-phone').value || currentChat).replace(/\D/g, '');
-                if (leadPhone.startsWith("57") && leadPhone.length > 10) leadPhone = leadPhone.substring(2);
-                
-                let leadNeed = document.getElementById('crm-specific-interest').value;
-                if (!leadNeed) leadNeed = document.getElementById('crm-interest').value;
-                if (!leadNeed) leadNeed = "No especificada";
-                
-                const fichaText = `Nombre: ${leadName}\nNum: ${leadPhone}\nLink: ${sfLink}\nNecesidad: ${leadNeed}`;
-                
-                await navigator.clipboard.writeText(fichaText);
-                showToast("✅ Información copiada al portapapeles");
-            } catch(e) {
-                showToast("❌ Error copiando información.");
             }
         }
 
@@ -2086,6 +2093,7 @@
             } catch (e) { showToast("❌ Error actualizando la web"); } finally { btn.innerHTML = originalHTML; btn.disabled = false; }
         }
 
+        // 🔥 FUNCIONALIDAD NUEVA: FICHA COPIADA AL PORTAPAPELES (BOTÓN EN CRM) 🔥
         async function copyLeadInfo() {
             if(!currentChat) return showToast("⚠️ Abre un chat primero.");
             
@@ -2112,55 +2120,7 @@
                 await navigator.clipboard.writeText(fichaText);
                 showToast("✅ Información copiada al portapapeles");
             } catch(e) {
-                showToast("❌ Error copiando información.");
-            }
-        }
-
-        async function syncSalesforceCurrent() {
-            if(!currentChat) return;
-            showToast("🔄 Sincronizando con Salesforce...");
-            try {
-                const res = await fetch('/api/salesforce/sync-lead', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ phone: currentChat })
-                });
-                
-                if (!res.ok) {
-                    const textData = await res.text();
-                    try {
-                        const jsonData = JSON.parse(textData);
-                        return showToast("❌ Error SF: " + jsonData.message);
-                    } catch(e) {
-                        return showToast("❌ El servidor aún se está reiniciando");
-                    }
-                }
-
-                const data = await res.json();
-                if(data.success) {
-                    showToast("✅ Subido a Salesforce (ID: " + data.sfId + ")");
-                    refreshLeads();
-                } else {
-                    showToast("❌ Error: " + data.message);
-                }
-            } catch(e) {
-                showToast("❌ Fallo de red con el servidor");
-            }
-        }
-
-        async function syncSalesforceBulk() {
-            showToast("🔄 Sincronizando masivamente...");
-            try {
-                const res = await fetch('/api/salesforce/sync-bulk', { method: 'POST' });
-                const data = await res.json();
-                if(data.success) {
-                    showToast("✅ " + data.count + " leads sincronizados");
-                    refreshLeads();
-                } else {
-                    showToast("❌ Error: " + data.message);
-                }
-            } catch(e) {
-                showToast("❌ Fallo de red con el servidor");
+                showToast("❌ Error copiando información al portapapeles.");
             }
         }
 
