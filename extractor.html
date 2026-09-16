@@ -240,6 +240,17 @@
 
             try {
                 const res = await fetch('/api/extractor/process', { method: 'POST', body: formData });
+                
+                // SEGURO ANTI-SESIONES EXPIRADAS
+                if (res.status === 401 || res.redirected) {
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                if (!res.ok) {
+                    throw new Error(`Error en el servidor: ${res.status}`);
+                }
+
                 const json = await res.json();
 
                 if (json.success && json.data) {
@@ -271,7 +282,7 @@
                     alert("Error en el análisis: " + json.message);
                 }
             } catch (error) {
-                alert("Error de conexión con el servidor.");
+                alert("Error de conexión con el servidor. Por favor, revisa que el backend esté respondiendo o reinicia tu sesión.");
             } finally {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -301,17 +312,25 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
+                
+                // SEGURO ANTI-SESIONES EXPIRADAS
+                if (res.status === 401 || res.redirected) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                if (!res.ok) {
+                    throw new Error(`Error en Salesforce: ${res.status}`);
+                }
+
                 const result = await res.json();
 
                 if (result.success) {
-                    // Ocultamos el formulario y mostramos la tarjeta de éxito
                     document.getElementById('results-card').style.display = 'none';
                     
-                    // 1. Crear el enlace oficial
                     const sfLink = `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${result.sfId}/view`;
                     document.getElementById('success-link').href = sfLink;
 
-                    // 2. Armar la ficha para el botón "Copiar"
                     const leadName = payload.nombre !== "No proporcionado" ? payload.nombre + " " + payload.apellido : "Cliente Extraído";
                     
                     let leadPhone = payload.telefono.replace(/\D/g, '');
@@ -322,7 +341,6 @@
 
                     fichaListaParaCopiar = `Nombre: ${leadName.trim()}\nNum: ${leadPhone}\nLink: ${sfLink}\nNecesidad: ${leadNeed}`;
 
-                    // Mostrar la tarjeta
                     document.getElementById('success-card').style.display = 'block';
                     document.getElementById('success-card').scrollIntoView({ behavior: 'smooth' });
 
