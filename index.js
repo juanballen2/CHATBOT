@@ -13,6 +13,7 @@
  * correctamente los Ecos y DMs de Messenger mapeando el ID del cliente real.
  * 10. FIX: Solución de link de SF y silencio en chat (Solo guarda ID local).
  * 11. ADD: (v33.13) Rutas de verificación de Lead y creación de Tareas (Tasks).
+ * 12. FIX: Estado de Tareas cambiado de 'Not Started' a 'Open' para visualización.
  * ============================================================
  */
 
@@ -757,7 +758,7 @@ app.post('/api/salesforce/create-task', proteger, async (req, res) => {
         const nueva_tarea = {
             Subject: 'Contactar',
             ActivityDate: hoy,
-            Status: 'Not Started',
+            Status: 'Open', // 🔥 FIX: Cambiado a 'Open' para visualización en Salesforce
             Description: descripcion || "Sin detalle especificado",
             OwnerId: owner_id
         };
@@ -1112,6 +1113,7 @@ app.post('/api/chat/send', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({ error: "Error interno del servidor" }); } 
 });
 
+// 🔥 FIX: Envío correcto de plantilla individual (evitando el error de [] components vacío) 🔥
 app.post('/api/chat/send-template', proteger, upload.single('file'), async (req, res) => {
     const phone = req.body.phone;
     if (!phone) return res.status(400).json({ error: "Falta teléfono" });
@@ -1144,6 +1146,7 @@ app.post('/api/chat/send-template', proteger, upload.single('file'), async (req,
             language: { code: language }
         };
 
+        // Sólo enviar components si no está vacío, sino Meta rechaza la petición
         if (components.length > 0) {
             payload.components = components;
         }
@@ -1529,7 +1532,6 @@ app.post('/api/extractor/process', proteger, upload.single('image'), async (req,
 
         const requestBody = {
             contents: contents,
-            // 🔥 CORRECCIÓN: Modelo válido de Gemini actual 🔥
             generationConfig: { responseMimeType: "application/json" }
         };
 
