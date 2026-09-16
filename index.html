@@ -963,7 +963,6 @@
             }
         }
 
-        // 🔥 NUEVA FUNCIONALIDAD: PROCESAR LEAD O CREAR TAREA EN SALESFORCE 🔥
         let currentSfClient = null;
         let fichaListaParaCopiar = "";
 
@@ -986,6 +985,11 @@
                     body: JSON.stringify({ phone: currentChat })
                 });
 
+                if (res.status === 401 || res.redirected || !res.ok) {
+                    window.location.href = '/login';
+                    return;
+                }
+
                 const data = await res.json();
 
                 if (data.exists && data.data) {
@@ -996,7 +1000,6 @@
                         if (key === currentSfClient.owner_id) execName = value;
                     }
 
-                    // 🔥 AQUÍ ARMAMOS LA DESCRIPCIÓN INTELIGENTE 🔥
                     let leadNeed = document.getElementById('crm-specific-interest').value;
                     let leadCat = document.getElementById('crm-interest').value;
                     let leadSource = document.getElementById('crm-source').value;
@@ -1035,7 +1038,7 @@
                     `;
                 }
             } catch(e) {
-                resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error de conexión con el servidor.</div>`;
+                resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error de conexión con el servidor. Verifica tu sesión.</div>`;
             }
         }
 
@@ -1062,6 +1065,11 @@
                     body: JSON.stringify(payload)
                 });
                 
+                if (res.status === 401 || res.redirected || !res.ok) {
+                    window.location.href = '/login';
+                    return;
+                }
+
                 const data = await res.json();
                 
                 if(data.success) {
@@ -1081,7 +1089,7 @@
                     resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error: ${data.message}</div>`;
                 }
             } catch(e) {
-                resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error de conexión al crear tarea.</div>`;
+                resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error de conexión al crear tarea. Verifica tu sesión.</div>`;
             }
         }
 
@@ -1096,14 +1104,8 @@
                     body: JSON.stringify({ phone: currentChat })
                 });
                 
-                if (!res.ok) {
-                    const textData = await res.text();
-                    try {
-                        const jsonData = JSON.parse(textData);
-                        resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error SF: ${jsonData.message}</div>`;
-                    } catch(e) {
-                        resultContainer.innerHTML = `<div style="color:var(--danger);">❌ El servidor aún se está reiniciando</div>`;
-                    }
+                if (res.status === 401 || res.redirected || !res.ok) {
+                    window.location.href = '/login';
                     return;
                 }
 
@@ -1134,7 +1136,7 @@
                     resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error: ${data.message}</div>`;
                 }
             } catch(e) {
-                resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Fallo de red con el servidor</div>`;
+                resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Fallo de red con el servidor. Verifica tu sesión.</div>`;
             }
         }
 
@@ -1272,6 +1274,7 @@
             showToast("Enviando plantilla e imagen a Meta... ⏳");
             try {
                 const res = await fetch('/api/chat/send-template', { method: 'POST', body: formData });
+                if (res.status === 401 || res.redirected || !res.ok) { window.location.href = '/login'; return; }
                 const data = await res.json();
                 if(data.success) showToast("✅ Plantilla enviada con éxito");
                 else showToast("❌ Error Meta: " + (data.error || "Desconocido"));
@@ -1330,7 +1333,7 @@
                     document.getElementById('lead-details-content').innerHTML = html;
                     document.getElementById('lead-details-modal').classList.add('show');
                 }
-            }).catch(e => showToast("Error cargando información del lead."));
+            }).catch(e => showToast("Error cargando información del lead. Verifica tu sesión."));
         }
         
         function switchTab(tab) {
@@ -1373,6 +1376,7 @@
         async function loadTagFilterOptions() { 
             try { 
                 const tagsResponse = await fetch('/api/data/tags');
+                if (tagsResponse.status === 401 || tagsResponse.redirected || !tagsResponse.ok) { window.location.href = '/login'; return; }
                 const tags = await tagsResponse.json(); 
                 window._cachedTags = tags; 
                 const html = '<option value="">Todas las etiquetas</option>' + tags.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
@@ -1385,7 +1389,24 @@
             try { 
                 const search = document.getElementById('main-search').value; 
                 const res = await fetch(`/api/chats-full?view=${currentFilter}&search=${search}`); 
-                const allChats = await res.json(); 
+                
+                // 🔥 SEGURO CONTRA SESIONES EXPIRADAS EN RAILWAY
+                if (res.status === 401 || res.redirected || !res.ok) {
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                const textData = await res.text();
+                let allChats;
+                try {
+                    allChats = JSON.parse(textData);
+                } catch(err) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                if (!Array.isArray(allChats)) return;
+
                 chatsData = allChats.filter(c => !c.channel || c.channel === 'whatsapp');
                 
                 let waUnread = 0;
@@ -1399,7 +1420,10 @@
                 chatsData.sort((a, b) => new Date(b.lastMessage.time) - new Date(a.lastMessage.time)); 
                 chatsData.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)); 
                 renderChatList(); 
-            } catch(e) {} 
+            } catch(e) {
+                console.error("Error sincronizando chats:", e);
+                document.getElementById('chat-list-container').innerHTML = `<div style="padding:20px; color:var(--danger); text-align:center;"><b>Error de Conexión:</b> No se pudieron cargar los chats. Verifica que el backend esté en línea.</div>`;
+            } 
         }
 
         function setChatFilter(filter, el) { 
@@ -1700,6 +1724,7 @@
         async function loadMessages(phone, scrollDown) {
             try { 
                 const res = await fetch(`/api/chat-history/${phone}`); 
+                if (res.status === 401 || res.redirected || !res.ok) { window.location.href = '/login'; return; }
                 const msgs = await res.json(); 
                 if(currentChat !== phone) return; 
                 const container = document.getElementById('messages-container');
@@ -1867,6 +1892,7 @@
             document.getElementById('crm-source').value = "Redes sociales"; 
             
             const res = await fetch('/api/data/leads'); 
+            if (res.status === 401 || res.redirected || !res.ok) { window.location.href = '/login'; return; }
             const leads = await res.json(); 
             const lead = leads.find(l => l.phone === phone); 
             
@@ -1919,7 +1945,8 @@
                     {field:'interes', value:document.getElementById('crm-interest').value}, 
                     {field:'producto_especifico', value:document.getElementById('crm-specific-interest').value}, 
                     {field:'etiqueta', value:document.getElementById('crm-executive').value},
-                    {field:'source', value:document.getElementById('crm-source').value}
+                    {field:'source', value:document.getElementById('crm-source').value},
+                    {field:'departamento', value:document.getElementById('crm-dept').value}
                 ]; 
                 
                 for(let u of updates) { 
@@ -1974,7 +2001,9 @@
         }
 
         async function refreshLeads() { 
-            const res = await fetch('/api/data/leads'); const data = await res.json(); 
+            const res = await fetch('/api/data/leads'); 
+            if (res.status === 401 || res.redirected || !res.ok) { window.location.href = '/login'; return; }
+            const data = await res.json(); 
             const tbody = document.getElementById('leads-body'); 
             
             tbody.innerHTML = data.map(l => { 
@@ -2208,191 +2237,6 @@
                 await fetch('/api/data/web-knowledge', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url: url, summary: newSummary }) });
                 closeModal('web-audit-modal'); showToast("✅ Conocimiento web actualizado"); loadAllConfig();
             } catch (e) { showToast("❌ Error actualizando la web"); } finally { btn.innerHTML = originalHTML; btn.disabled = false; }
-        }
-
-        // 🔥 FUNCIONALIDAD MEJORADA: PROCESAR LEAD O CREAR TAREA EN SALESFORCE DESDE EL PANEL DE CHAT 🔥
-        let currentSfClient = null;
-        let fichaListaParaCopiar = "";
-
-        async function procesarLeadSF() {
-            if(!currentChat) return showToast("⚠️ Abre un chat primero.");
-            
-            const btnContainer = document.getElementById('sf-action-container');
-            const resultContainer = document.getElementById('sf-result-container');
-            const btnCopy = document.getElementById('btn-copy-ficha');
-            
-            resultContainer.style.display = 'block';
-            resultContainer.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Buscando en Salesforce...</div>';
-            btnCopy.style.display = 'none';
-            fichaListaParaCopiar = "";
-
-            try {
-                const res = await fetch('/api/salesforce/check-lead', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ phone: currentChat })
-                });
-
-                const data = await res.json();
-
-                if (data.exists && data.data) {
-                    currentSfClient = data.data;
-                    
-                    let execName = "Asesor";
-                    for (let [key, value] of Object.entries(executivesMap)) {
-                        if (key === currentSfClient.owner_id) execName = value;
-                    }
-
-                    // 🔥 AQUÍ ARMAMOS LA DESCRIPCIÓN INTELIGENTE 🔥
-                    let leadNeed = document.getElementById('crm-specific-interest').value;
-                    let leadCat = document.getElementById('crm-interest').value;
-                    let leadSource = document.getElementById('crm-source').value;
-                    
-                    let textoNecesidad = leadNeed ? leadNeed : (leadCat ? leadCat : "Información general");
-                    let descArmada = `Origen: ${leadSource}\nNecesidad: ${textoNecesidad}`;
-
-                    resultContainer.innerHTML = `
-                        <div style="color: #10b981; font-weight: bold; margin-bottom: 5px;">
-                            <i class="fas fa-check-circle"></i> Cliente Existente
-                        </div>
-                        <div style="margin-bottom: 8px;"><b>Nombre:</b> ${currentSfClient.nombre} | <b>Ejecutivo:</b> ${execName}</div>
-                        
-                        <div style="margin-bottom: 10px;">
-                            <label style="font-size: 0.75rem; font-weight: bold; color: var(--primary);">DESCRIPCIÓN DE LA TAREA</label>
-                            <textarea id="task-desc-input" class="crm-input" rows="2" style="font-size: 0.85rem; padding: 6px;">${descArmada}</textarea>
-                            <span style="font-size: 0.7rem; color: var(--text-muted);">Puedes editar la necesidad antes de crear la tarea.</span>
-                        </div>
-
-                        <button class="btn-small" style="width:100%; background:var(--sf-blue); color:white; border:none;" onclick="crearNuevaTareaSF()">
-                            <i class="fas fa-plus"></i> Crear Tarea 'Contactar'
-                        </button>
-                    `;
-                } else {
-                    currentSfClient = null;
-                    resultContainer.innerHTML = `
-                        <div style="color: var(--danger); font-weight: bold; margin-bottom: 5px;">
-                            <i class="fas fa-exclamation-triangle"></i> Cliente NO existe
-                        </div>
-                        <div style="color: var(--text-muted); margin-bottom: 10px;">
-                            No se encontraron registros con este número en Salesforce.
-                        </div>
-                        <button class="btn-small btn-green" style="width:100%;" onclick="crearNuevoCandidatoSF()">
-                            <i class="fas fa-user-plus"></i> Crear Nuevo Candidato
-                        </button>
-                    `;
-                }
-            } catch(e) {
-                resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error de conexión con el servidor.</div>`;
-            }
-        }
-
-        async function crearNuevaTareaSF() {
-            if(!currentSfClient) return;
-            
-            const descInput = document.getElementById('task-desc-input');
-            let leadNeed = descInput ? descInput.value : "No especificada";
-
-            const resultContainer = document.getElementById('sf-result-container');
-            resultContainer.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Creando tarea...</div>';
-
-            const payload = {
-                who_id: currentSfClient.who_id,
-                what_id: currentSfClient.what_id,
-                owner_id: currentSfClient.owner_id,
-                descripcion: leadNeed
-            };
-
-            try {
-                const res = await fetch('/api/salesforce/create-task', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
-                
-                const data = await res.json();
-                
-                if(data.success) {
-                    let leadPhone = (document.getElementById('crm-phone').value || currentChat).replace(/\D/g, '');
-                    if (leadPhone.startsWith("57") && leadPhone.length > 10) leadPhone = leadPhone.substring(2);
-
-                    fichaListaParaCopiar = `📌 Tarea: Contactar\n👤 Cliente: ${currentSfClient.nombre}\n📞 Tel: +${leadPhone}\n📦 Info: ${leadNeed.replace(/\n/g, ' ')}\n🔗 Link Tarea: ${data.link}\n📁 Link Cliente: ${currentSfClient.link}`;
-                    
-                    resultContainer.innerHTML = `
-                        <div style="color: #10b981; font-weight: bold;">
-                            <i class="fas fa-check-circle"></i> Tarea Creada Exitosamente
-                        </div>
-                    `;
-                    document.getElementById('btn-copy-ficha').style.display = 'block';
-                    showToast("✅ Tarea creada");
-                } else {
-                    resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error: ${data.message}</div>`;
-                }
-            } catch(e) {
-                resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error de conexión al crear tarea.</div>`;
-            }
-        }
-
-        async function crearNuevoCandidatoSF() {
-            const resultContainer = document.getElementById('sf-result-container');
-            resultContainer.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Creando Candidato...</div>';
-
-            try {
-                const res = await fetch('/api/salesforce/sync-lead', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ phone: currentChat })
-                });
-                
-                if (!res.ok) {
-                    const textData = await res.text();
-                    try {
-                        const jsonData = JSON.parse(textData);
-                        resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error SF: ${jsonData.message}</div>`;
-                    } catch(e) {
-                        resultContainer.innerHTML = `<div style="color:var(--danger);">❌ El servidor aún se está reiniciando</div>`;
-                    }
-                    return;
-                }
-
-                const data = await res.json();
-                if(data.success) {
-                    refreshLeads();
-                    
-                    const leadName = document.getElementById('crm-name').value || "Cliente";
-                    let leadPhone = (document.getElementById('crm-phone').value || currentChat).replace(/\D/g, '');
-                    if (leadPhone.startsWith("57") && leadPhone.length > 10) leadPhone = leadPhone.substring(2);
-                    
-                    let leadNeed = document.getElementById('crm-specific-interest').value;
-                    if (!leadNeed) leadNeed = document.getElementById('crm-interest').value;
-                    if (!leadNeed) leadNeed = "No especificada";
-                    
-                    const sfLink = `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${data.sfId}/view`;
-                    
-                    fichaListaParaCopiar = `Nombre: ${leadName}\nNum: ${leadPhone}\nLink: ${sfLink}\nNecesidad: ${leadNeed}`;
-                    
-                    resultContainer.innerHTML = `
-                        <div style="color: #10b981; font-weight: bold;">
-                            <i class="fas fa-check-circle"></i> Nuevo Candidato Creado
-                        </div>
-                    `;
-                    document.getElementById('btn-copy-ficha').style.display = 'block';
-                    showToast("✅ Lead subido a Salesforce");
-                } else {
-                    resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error: ${data.message}</div>`;
-                }
-            } catch(e) {
-                resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Fallo de red con el servidor</div>`;
-            }
-        }
-
-        async function copyLeadInfo() {
-            if(!fichaListaParaCopiar) return showToast("⚠️ No hay información para copiar.");
-            try {
-                await navigator.clipboard.writeText(fichaListaParaCopiar);
-                showToast("✅ Información copiada al portapapeles");
-            } catch(e) {
-                showToast("❌ Error copiando información.");
-            }
         }
 
     </script>
