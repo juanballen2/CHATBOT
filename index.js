@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.12 (FIX: TIEMPO REAL Y ECOS EN MESSENGER)
+ * SERVER BACKEND - v33.13 (FIX: EXTRACCIÓN Y TAREAS EN SALESFORCE)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -12,7 +12,7 @@
  * 9. FIX: (v33.12) Re-ingeniería del Webhook Omnicanal para capturar 
  * correctamente los Ecos y DMs de Messenger mapeando el ID del cliente real.
  * 10. FIX: Solución de link de SF y silencio en chat (Solo guarda ID local).
- * 11. FIX: El extractor inteligente ahora captura Ejecutivo y Origen.
+ * 11. ADD: (v33.13) Rutas de verificación de Lead y creación de Tareas (Tasks).
  * ============================================================
  */
 
@@ -660,6 +660,123 @@ app.post('/api/data/web-knowledge/delete', proteger, async (req, res) => { await
 // ============================================================
 // 🔥 INTEGRACIÓN REAL CON SALESFORCE (API / SYNC)
 // ============================================================
+
+// 1. NUEVA RUTA: Buscar si el cliente existe (Lead, Contact, Account)
+app.post('/api/salesforce/check-lead', proteger, async (req, res) => {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ success: false, message: "Falta teléfono" });
+
+    let telefonoFinal = phone.replace(/\D/g, '');
+    if (telefonoFinal.startsWith("57") && telefonoFinal.length > 10) {
+        telefonoFinal = telefonoFinal.substring(2); 
+    }
+
+    try {
+        const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
+        await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
+
+        // 1. Buscar en Lead (Candidatos no convertidos)
+        let q_lead = await sfConn.query(`SELECT Id, Name, OwnerId, Company FROM Lead WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') AND IsConverted = FALSE LIMIT 1`);
+        if (q_lead.totalSize > 0) {
+            const rec = q_lead.records[0];
+            return res.json({ 
+                success: true, 
+                exists: true, 
+                data: { 
+                    tipo: 'Candidato', 
+                    id: rec.Id, 
+                    nombre: rec.Name, 
+                    owner_id: rec.OwnerId, 
+                    who_id: rec.Id, 
+                    what_id: null, 
+                    link: `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${rec.Id}/view` 
+                } 
+            });
+        }
+
+        // 2. Buscar en Contact (Contactos convertidos)
+        let q_contact = await sfConn.query(`SELECT Id, Name, OwnerId, AccountId FROM Contact WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') LIMIT 1`);
+        if (q_contact.totalSize > 0) {
+            const rec = q_contact.records[0];
+            return res.json({ 
+                success: true, 
+                exists: true, 
+                data: { 
+                    tipo: 'Contacto', 
+                    id: rec.Id, 
+                    nombre: rec.Name, 
+                    owner_id: rec.OwnerId, 
+                    who_id: rec.Id, 
+                    what_id: rec.AccountId, 
+                    link: `https://importadoracolombia.lightning.force.com/lightning/r/Contact/${rec.Id}/view` 
+                } 
+            });
+        }
+
+        // 3. Buscar en Account (Cuentas empresariales)
+        let q_account = await sfConn.query(`SELECT Id, Name, OwnerId FROM Account WHERE Phone LIKE '%${telefonoFinal}%' LIMIT 1`);
+        if (q_account.totalSize > 0) {
+            const rec = q_account.records[0];
+            return res.json({ 
+                success: true, 
+                exists: true, 
+                data: { 
+                    tipo: 'Cuenta', 
+                    id: rec.Id, 
+                    nombre: rec.Name, 
+                    owner_id: rec.OwnerId, 
+                    who_id: null, 
+                    what_id: rec.Id, 
+                    link: `https://importadoracolombia.lightning.force.com/lightning/r/Account/${rec.Id}/view` 
+                } 
+            });
+        }
+
+        // No existe en ningún lado
+        return res.json({ success: true, exists: false });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 2. NUEVA RUTA: Crear Tarea (Contactar) a un cliente existente
+app.post('/api/salesforce/create-task', proteger, async (req, res) => {
+    const { who_id, what_id, owner_id, descripcion } = req.body;
+    try {
+        const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
+        await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
+
+        const hoy = new Date().toISOString().split('T')[0];
+        
+        const nueva_tarea = {
+            Subject: 'Contactar',
+            ActivityDate: hoy,
+            Status: 'Not Started',
+            Description: descripcion || "Sin detalle especificado",
+            OwnerId: owner_id
+        };
+
+        if (who_id) nueva_tarea.WhoId = who_id;
+        if (what_id) nueva_tarea.WhatId = what_id;
+
+        const result = await sfConn.sobject("Task").create(nueva_tarea);
+        
+        if (result.success) {
+            res.json({ 
+                success: true, 
+                taskId: result.id, 
+                link: `https://importadoracolombia.lightning.force.com/lightning/r/Task/${result.id}/view` 
+            });
+        } else {
+            res.status(500).json({ success: false, message: "Salesforce rechazó la tarea" });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+
 app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ success: false, message: "Falta teléfono" });
@@ -990,7 +1107,6 @@ app.post('/api/chat/send', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({ error: "Error interno del servidor" }); } 
 });
 
-// 🔥 FIX: Envío correcto de plantilla individual (evitando el error de [] components vacío) 🔥
 app.post('/api/chat/send-template', proteger, upload.single('file'), async (req, res) => {
     const phone = req.body.phone;
     if (!phone) return res.status(400).json({ error: "Falta teléfono" });
@@ -1023,7 +1139,6 @@ app.post('/api/chat/send-template', proteger, upload.single('file'), async (req,
             language: { code: language }
         };
 
-        // Sólo enviar components si no está vacío, sino Meta rechaza la petición
         if (components.length > 0) {
             payload.components = components;
         }
@@ -1357,116 +1472,4 @@ app.post('/webhook', async (req, res) => {
             messageQueue.set(phone, currentData);
         } 
     } catch(e) {} 
-});
-
-// ============================================================
-// 🔥 MÓDULO: EXTRACTOR INTELIGENTE INDEPENDIENTE 🔥
-// ============================================================
-
-app.get('/extractor', proteger, (req, res) => {
-    res.sendFile(path.join(__dirname, 'extractor.html'));
-});
-
-app.post('/api/extractor/process', proteger, upload.single('image'), async (req, res) => {
-    try {
-        const { type, data } = req.body;
-        let contents = [];
-
-        const promptReglas = `
-        Analiza la información provista, extrae los datos del cliente y clasifica los campos según las siguientes reglas de negocio.
-        REGLAS DE CLASIFICACIÓN PARA 'categoria_producto':
-        - "Maquinaria nueva": Equipos Shantui o especifica "nuevo".
-        - "Maquinaria usada": Hitachi, Komatsu, CAT o "usado".
-        - "Volquetas": Shacman o "volqueta".
-        - "Martillos Hidráulicos": Martillos, Beilite, Max Power.
-        - "Repuestos": motores, bombas, empaquetaduras, dientes, tren rodaje, zapatas, cadenas, filtros, aceites.
-        - "Accesorios": pontones o aditamentos.
-        - "Brazos largos": brazos largos.
-        - "Servicio": mano de obra, taller o mantenimiento.
-        - "Otros": No se puede identificar.
-
-        REGLAS DE GEOLOCALIZACIÓN PARA 'ubicacion':
-        1. Identifica departamento correspondiente de Colombia.
-        2. Si menciona Bogotá, asígnale exactamente "Bogotá".
-        3. Si no hay ubicación, pon "No proporcionado".
-
-        Devuelve ESTRICTAMENTE un JSON, sin texto adicional ni bloques de markdown (\`\`\`json):
-        {
-            "nombre": "Valor", "apellido": "Valor", "telefono": "Valor indicativo completo",
-            "producto_detalle": "Valor", "categoria_producto": "Valor clasificado",
-            "correo": "Valor", "ubicacion": "Nombre exacto del departamento o 'No proporcionado'"
-        }`;
-
-        if (type === 'text') {
-            contents = [{ role: 'user', parts: [{ text: `${promptReglas}\n\nTexto:\n${data}` }] }];
-        } else if (type === 'image' && req.file) {
-            const base64Data = req.file.buffer.toString('base64');
-            contents = [{ role: 'user', parts: [
-                { text: promptReglas },
-                { inlineData: { mimeType: req.file.mimetype, data: base64Data } }
-            ]}];
-        }
-
-        const requestBody = {
-            contents: contents,
-            generationConfig: { responseMimeType: "application/json" }
-        };
-
-        const gRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, requestBody);
-        const rawText = gRes.data.candidates[0].content.parts[0].text;
-        const extractedData = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
-
-        res.json({ success: true, data: extractedData });
-
-    } catch (error) {
-        console.error("Error en Extractor IA:", error);
-        res.status(500).json({ success: false, message: "Error procesando con IA." });
-    }
-});
-
-// 🔥 NUEVA LÓGICA DE CAPTURA DE EJECUTIVO Y ORIGEN DESDE EL EXTRACTOR 🔥
-app.post('/api/extractor/salesforce', proteger, async (req, res) => {
-    try {
-        const payload = req.body;
-        
-        let telefonoFinal = payload.telefono.replace(/\s+/g, '');
-        if (telefonoFinal.startsWith("+57")) telefonoFinal = telefonoFinal.substring(3);
-        if (telefonoFinal.startsWith("57") && telefonoFinal.length > 10) telefonoFinal = telefonoFinal.substring(2);
-
-        const sfData = {
-            FirstName: payload.nombre !== "No proporcionado" ? payload.nombre : "Cliente",
-            LastName: payload.apellido !== "No proporcionado" ? payload.apellido : "Extraído",
-            Phone: telefonoFinal,
-            Email: payload.correo !== "No proporcionado" ? payload.correo : "",
-            Company: `${payload.nombre} ${payload.apellido}`,
-            DescripciondeProducto__c: payload.producto_detalle !== "No proporcionado" ? payload.producto_detalle : "",
-            Producto_de_su_inter_s__c: payload.categoria_producto !== "No proporcionado" ? payload.categoria_producto : "Consultando",
-            Ubicaci_n__c: payload.ubicacion !== "No proporcionado" ? payload.ubicacion : "",
-            LeadSource: payload.origen || "WhatsApp" // 🔥 Ahora atrapa el origen elegido en el extractor
-        };
-
-        // 🔥 Atrapa el Ejecutivo (OwnerId) si se eligió uno válido
-        if (payload.ejecutivo && payload.ejecutivo.startsWith("005")) {
-            sfData.OwnerId = payload.ejecutivo;
-        }
-
-        const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
-        await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
-
-        const search = await sfConn.query(`SELECT Id FROM Lead WHERE Phone = '${telefonoFinal}'`);
-        if (search.totalSize > 0) {
-            return res.status(400).json({ success: false, message: "El número ya existe en Salesforce." });
-        }
-
-        const result = await sfConn.sobject("Lead").create(sfData);
-        
-        if (result.success) {
-            res.json({ success: true, sfId: result.id });
-        } else {
-            res.status(500).json({ success: false, message: "Salesforce rechazó la creación." });
-        }
-    } catch (error) {
-        console.error("Error Salesforce Extractor:", error);
-        res.status(500).json({ success: false, message: error.message });
-    }
 });
