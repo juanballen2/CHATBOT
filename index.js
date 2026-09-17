@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.15 (FIX: TIPO DE MEDIA DINÁMICO EN PLANTILLAS)
+ * SERVER BACKEND - v33.16 (FIX: MODELO 2.5-FLASH Y RUTA EXTRACTOR)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -14,7 +14,9 @@
  * 11. ADD: Rutas de verificación de Lead y creación de Tareas (Tasks).
  * 12. FIX: Estado de Tareas cambiado de 'Not Started' a 'Open'.
  * 13. FIX: Manejo robusto de errores de Gemini en el Extractor Inteligente.
- * 14. FIX: (v33.15) El enviador de plantillas ya detecta videos correctamente.
+ * 14. FIX: El enviador de plantillas ya detecta videos correctamente.
+ * 15. FIX: (v33.16) Corrección del modelo a gemini-2.5-flash en el extractor.
+ * 16. FIX: (v33.16) Reubicación de la ruta /extractor para evitar error 404.
  * ============================================================
  */
 
@@ -272,7 +274,6 @@ async function enviarWhatsApp(to, content, type = "text") {
         });
         return true;
     } catch (e) { 
-        // 🔥 FIX: Mostrar el error explícito de Meta en la consola 🔥
         console.error("❌ RECHAZO DE META:", e.response ? JSON.stringify(e.response.data) : e.message);
         return false; 
     }
@@ -290,6 +291,24 @@ async function enviarOmnicanal(recipientId, text, channel) {
         return false;
     }
 }
+
+// ============================================================
+// 🔥 RUTAS DE LA INTERFAZ WEB 🔥
+// ============================================================
+
+app.post('/auth', (req, res) => { if (req.body.user === ADMIN_USER && req.body.pass === ADMIN_PASS) { req.session.isLogged = true; res.json({success:true}); } else { res.status(401).json({success:false}); } });
+app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
+app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
+app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
+
+app.get('/inbox', proteger, (req, res) => res.sendFile(path.join(__dirname, 'inbox.html')));
+app.get('/inbox.css', (req, res) => res.sendFile(path.join(__dirname, 'inbox.css')));
+app.get('/inbox.js', (req, res) => res.sendFile(path.join(__dirname, 'inbox.js')));
+
+// 🔥 FIX: RUTA DEL EXTRACTOR MOVIDA AQUÍ PARA EVITAR EL ERROR 404 (Cannot GET /extractor) 🔥
+app.get('/extractor', proteger, (req, res) => {
+    res.sendFile(path.join(__dirname, 'extractor.html'));
+});
 
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
     const mediaId = req.params.id ? req.params.id.replace(/\D/g, '') : '';
@@ -590,21 +609,6 @@ function iniciarCronJobs() {
     }, 10 * 60 * 1000); 
 }
 
-// --- 11. RUTAS API ---
-app.post('/auth', (req, res) => { if (req.body.user === ADMIN_USER && req.body.pass === ADMIN_PASS) { req.session.isLogged = true; res.json({success:true}); } else { res.status(401).json({success:false}); } });
-app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
-app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
-app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
-
-app.get('/inbox', proteger, (req, res) => res.sendFile(path.join(__dirname, 'inbox.html')));
-app.get('/inbox.css', (req, res) => res.sendFile(path.join(__dirname, 'inbox.css')));
-app.get('/inbox.js', (req, res) => res.sendFile(path.join(__dirname, 'inbox.js')));
-
-// 🔥 RUTA DEL EXTRACTOR 🔥
-app.get('/extractor', proteger, (req, res) => {
-    res.sendFile(path.join(__dirname, 'extractor.html'));
-});
-
 app.get('/api/data/:type', proteger, async (req, res) => {
     const t = req.params.type;
     if (t === 'leads') res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
@@ -670,7 +674,7 @@ app.post('/api/data/web-knowledge/delete', proteger, async (req, res) => { await
 // 🔥 INTEGRACIÓN REAL CON SALESFORCE (API / SYNC)
 // ============================================================
 
-// 1. NUEVA RUTA: Buscar si el cliente existe (Lead, Contact, Account)
+// 1. Buscar si el cliente existe (Lead, Contact, Account)
 app.post('/api/salesforce/check-lead', proteger, async (req, res) => {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ success: false, message: "Falta teléfono" });
@@ -684,7 +688,6 @@ app.post('/api/salesforce/check-lead', proteger, async (req, res) => {
         const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
         await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
 
-        // 1. Buscar en Lead (Candidatos no convertidos)
         let q_lead = await sfConn.query(`SELECT Id, Name, OwnerId, Company FROM Lead WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') AND IsConverted = FALSE LIMIT 1`);
         if (q_lead.totalSize > 0) {
             const rec = q_lead.records[0];
@@ -692,18 +695,12 @@ app.post('/api/salesforce/check-lead', proteger, async (req, res) => {
                 success: true, 
                 exists: true, 
                 data: { 
-                    tipo: 'Candidato', 
-                    id: rec.Id, 
-                    nombre: rec.Name, 
-                    owner_id: rec.OwnerId, 
-                    who_id: rec.Id, 
-                    what_id: null, 
+                    tipo: 'Candidato', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: rec.Id, what_id: null, 
                     link: `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${rec.Id}/view` 
                 } 
             });
         }
 
-        // 2. Buscar en Contact (Contactos convertidos)
         let q_contact = await sfConn.query(`SELECT Id, Name, OwnerId, AccountId FROM Contact WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') LIMIT 1`);
         if (q_contact.totalSize > 0) {
             const rec = q_contact.records[0];
@@ -711,18 +708,12 @@ app.post('/api/salesforce/check-lead', proteger, async (req, res) => {
                 success: true, 
                 exists: true, 
                 data: { 
-                    tipo: 'Contacto', 
-                    id: rec.Id, 
-                    nombre: rec.Name, 
-                    owner_id: rec.OwnerId, 
-                    who_id: rec.Id, 
-                    what_id: rec.AccountId, 
+                    tipo: 'Contacto', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: rec.Id, what_id: rec.AccountId, 
                     link: `https://importadoracolombia.lightning.force.com/lightning/r/Contact/${rec.Id}/view` 
                 } 
             });
         }
 
-        // 3. Buscar en Account (Cuentas empresariales)
         let q_account = await sfConn.query(`SELECT Id, Name, OwnerId FROM Account WHERE Phone LIKE '%${telefonoFinal}%' LIMIT 1`);
         if (q_account.totalSize > 0) {
             const rec = q_account.records[0];
@@ -730,18 +721,12 @@ app.post('/api/salesforce/check-lead', proteger, async (req, res) => {
                 success: true, 
                 exists: true, 
                 data: { 
-                    tipo: 'Cuenta', 
-                    id: rec.Id, 
-                    nombre: rec.Name, 
-                    owner_id: rec.OwnerId, 
-                    who_id: null, 
-                    what_id: rec.Id, 
+                    tipo: 'Cuenta', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: null, what_id: rec.Id, 
                     link: `https://importadoracolombia.lightning.force.com/lightning/r/Account/${rec.Id}/view` 
                 } 
             });
         }
 
-        // No existe en ningún lado
         return res.json({ success: true, exists: false });
 
     } catch (error) {
@@ -749,7 +734,7 @@ app.post('/api/salesforce/check-lead', proteger, async (req, res) => {
     }
 });
 
-// 2. NUEVA RUTA: Crear Tarea (Contactar) a un cliente existente
+// 2. Crear Tarea (Contactar) a un cliente existente
 app.post('/api/salesforce/create-task', proteger, async (req, res) => {
     const { who_id, what_id, owner_id, descripcion } = req.body;
     try {
@@ -761,7 +746,7 @@ app.post('/api/salesforce/create-task', proteger, async (req, res) => {
         const nueva_tarea = {
             Subject: 'Contactar',
             ActivityDate: hoy,
-            Status: 'Open',
+            Status: 'Open', 
             Description: descripcion || "Sin detalle especificado",
             OwnerId: owner_id
         };
@@ -1116,7 +1101,6 @@ app.post('/api/chat/send', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({ error: "Error interno del servidor" }); } 
 });
 
-// 🔥 FIX: Envío correcto de plantilla individual (evitando el error de [] components vacío) y detecta correctamente videos 🔥
 app.post('/api/chat/send-template', proteger, upload.single('file'), async (req, res) => {
     const phone = req.body.phone;
     if (!phone) return res.status(400).json({ error: "Falta teléfono" });
@@ -1135,7 +1119,6 @@ app.post('/api/chat/send-template', proteger, upload.single('file'), async (req,
         if (req.file) {
             const mediaId = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname);
             if (mediaId) {
-                // 🔥 FIX: Detección dinámica del tipo de multimedia (video, image, document)
                 let mediaType = 'document';
                 if (req.file.mimetype.startsWith('image/')) mediaType = 'image';
                 else if (req.file.mimetype.startsWith('video/')) mediaType = 'video';
@@ -1154,7 +1137,6 @@ app.post('/api/chat/send-template', proteger, upload.single('file'), async (req,
             language: { code: language }
         };
 
-        // Sólo enviar components si no está vacío, sino Meta rechaza la petición
         if (components.length > 0) {
             payload.components = components;
         }
@@ -1547,10 +1529,11 @@ app.post('/api/extractor/process', proteger, upload.single('image'), async (req,
 
         const requestBody = {
             contents: contents,
+            // 🔥 CORRECCIÓN A GEMINI 2.5 FLASH 🔥
             generationConfig: { responseMimeType: "application/json" }
         };
 
-        const gRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, requestBody);
+        const gRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, requestBody);
         const rawText = gRes.data.candidates[0].content.parts[0].text;
         const extractedData = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
 
@@ -1563,6 +1546,7 @@ app.post('/api/extractor/process', proteger, upload.single('image'), async (req,
     }
 });
 
+// 🔥 LÓGICA DE CAPTURA DE EJECUTIVO Y ORIGEN DESDE EL EXTRACTOR 🔥
 app.post('/api/extractor/salesforce', proteger, async (req, res) => {
     try {
         const payload = req.body;
