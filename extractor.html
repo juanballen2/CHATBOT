@@ -56,7 +56,6 @@
         .form-input { padding: 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; color: var(--text); outline: none; background: var(--bg-main); font-weight: 500; }
         .form-input:focus { border-color: var(--primary); background: var(--panel); }
 
-        /* Estilo añadido para que los selects se vean idénticos al CRM */
         select.form-input {
             appearance: none;
             background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23515050%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
@@ -103,7 +102,6 @@
             </div>
         </div>
 
-        <!-- TARJETA DE REVISIÓN CON LOS NUEVOS DESPLEGABLES -->
         <div class="card" id="results-card" style="display: none;">
             <h2 style="font-size: 1.2rem; margin-bottom: 5px; color: var(--primary); border-bottom: 2px solid var(--bg-main); padding-bottom: 10px;">
                 <i class="fas fa-check-circle"></i> Revisión de Datos Extraídos
@@ -159,7 +157,6 @@
             <button class="btn-primary" id="btn-sync-sf" style="margin-top: 25px;" onclick="enviarSalesforce()"><i class="fas fa-cloud-upload-alt"></i> Confirmar y Cargar a Salesforce</button>
         </div>
 
-        <!-- NUEVA TARJETA DE ÉXITO CON BOTÓN COPIAR -->
         <div class="card" id="success-card" style="display: none; text-align: center; border: 2px solid #10b981; background: #f0fdf4;">
             <h2 style="font-size: 1.5rem; margin-bottom: 10px; color: #10b981;">
                 <i class="fas fa-check-circle"></i> ¡Lead Creado en Salesforce!
@@ -181,7 +178,7 @@
 
     <script>
         let currentImageBlob = null;
-        let fichaListaParaCopiar = ""; // Variable global para guardar la ficha generada
+        let fichaListaParaCopiar = ""; 
 
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -198,7 +195,6 @@
             document.getElementById('btn-process-image').disabled = true;
         }
 
-        // LÓGICA DE CAPTURA DEL PORTAPAPELES (Ctrl+V)
         const pasteArea = document.getElementById('paste-area');
         pasteArea.addEventListener('paste', (e) => {
             e.preventDefault();
@@ -241,19 +237,15 @@
             try {
                 const res = await fetch('/api/extractor/process', { method: 'POST', body: formData });
                 
-                // SEGURO ANTI-SESIONES EXPIRADAS
                 if (res.status === 401 || res.redirected) {
                     window.location.href = '/login';
                     return;
                 }
-                
-                if (!res.ok) {
-                    throw new Error(`Error en el servidor: ${res.status}`);
-                }
 
-                const json = await res.json();
+                // 🔥 FIX: Aquí atrapamos el error exacto del backend (ej: falta API KEY)
+                const json = await res.json().catch(() => null);
 
-                if (json.success && json.data) {
+                if (res.ok && json && json.success) {
                     document.getElementById('success-card').style.display = 'none';
                     document.getElementById('results-card').style.display = 'block';
                     
@@ -264,7 +256,6 @@
                     document.getElementById('sf-detalle').value = json.data.producto_detalle || '';
                     document.getElementById('sf-ubicacion').value = json.data.ubicacion || '';
                     
-                    // Auto-seleccionar la categoría analizada por la IA en el menú desplegable
                     const catSelect = document.getElementById('sf-categoria');
                     let aiCat = json.data.categoria_producto || '';
                     let found = false;
@@ -275,14 +266,15 @@
                             break;
                         }
                     }
-                    if(!found) catSelect.value = "Consultando"; // Fallback de seguridad
+                    if(!found) catSelect.value = "Consultando"; 
                     
                     document.getElementById('results-card').scrollIntoView({ behavior: 'smooth' });
                 } else {
-                    alert("Error en el análisis: " + json.message);
+                    // Muestra el mensaje EXACTO de por qué falló
+                    alert("❌ Fallo en la IA: " + (json ? json.message : `Error de Servidor (${res.status})`));
                 }
             } catch (error) {
-                alert("Error de conexión con el servidor. Por favor, revisa que el backend esté respondiendo o reinicia tu sesión.");
+                alert("❌ Error de conexión de red.");
             } finally {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -313,14 +305,9 @@
                     body: JSON.stringify(payload)
                 });
                 
-                // SEGURO ANTI-SESIONES EXPIRADAS
                 if (res.status === 401 || res.redirected) {
                     window.location.href = '/login';
                     return;
-                }
-
-                if (!res.ok) {
-                    throw new Error(`Error en Salesforce: ${res.status}`);
                 }
 
                 const result = await res.json();
