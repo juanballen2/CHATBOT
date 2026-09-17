@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.13 (FIX: EXTRACCIÓN Y TAREAS EN SALESFORCE)
+ * SERVER BACKEND - v33.14 (FIX: ROBUSTEZ EN EXTRACTOR IA)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -14,6 +14,7 @@
  * 10. FIX: Solución de link de SF y silencio en chat (Solo guarda ID local).
  * 11. ADD: (v33.13) Rutas de verificación de Lead y creación de Tareas (Tasks).
  * 12. FIX: Estado de Tareas cambiado de 'Not Started' a 'Open' para visualización.
+ * 13. FIX: Manejo robusto de errores de Gemini en el Extractor Inteligente.
  * ============================================================
  */
 
@@ -1492,6 +1493,10 @@ app.get('/extractor', proteger, (req, res) => {
 
 app.post('/api/extractor/process', proteger, upload.single('image'), async (req, res) => {
     try {
+        if (!API_KEY || API_KEY.trim() === '' || API_KEY === 'undefined') {
+            return res.status(500).json({ success: false, message: "⚠️ GEMINI_API_KEY no está configurada en las Variables de Entorno de Railway." });
+        }
+
         const { type, data } = req.body;
         let contents = [];
 
@@ -1542,12 +1547,13 @@ app.post('/api/extractor/process', proteger, upload.single('image'), async (req,
         res.json({ success: true, data: extractedData });
 
     } catch (error) {
-        console.error("Error en Extractor IA:", error);
-        res.status(500).json({ success: false, message: "Error procesando con IA." });
+        const detail = error.response?.data?.error?.message || error.message;
+        console.error("Error en Extractor IA:", detail);
+        res.status(500).json({ success: false, message: `Fallo en la IA: ${detail}` });
     }
 });
 
-// 🔥 NUEVA LÓGICA DE CAPTURA DE EJECUTIVO Y ORIGEN DESDE EL EXTRACTOR 🔥
+// 🔥 LÓGICA DE CAPTURA DE EJECUTIVO Y ORIGEN DESDE EL EXTRACTOR 🔥
 app.post('/api/extractor/salesforce', proteger, async (req, res) => {
     try {
         const payload = req.body;
@@ -1565,10 +1571,9 @@ app.post('/api/extractor/salesforce', proteger, async (req, res) => {
             DescripciondeProducto__c: payload.producto_detalle !== "No proporcionado" ? payload.producto_detalle : "",
             Producto_de_su_inter_s__c: payload.categoria_producto !== "No proporcionado" ? payload.categoria_producto : "Consultando",
             Ubicaci_n__c: payload.ubicacion !== "No proporcionado" ? payload.ubicacion : "",
-            LeadSource: payload.origen || "WhatsApp" // 🔥 Ahora atrapa el origen elegido en el extractor
+            LeadSource: payload.origen || "WhatsApp" 
         };
 
-        // 🔥 Atrapa el Ejecutivo (OwnerId) si se eligió uno válido
         if (payload.ejecutivo && payload.ejecutivo.startsWith("005")) {
             sfData.OwnerId = payload.ejecutivo;
         }
