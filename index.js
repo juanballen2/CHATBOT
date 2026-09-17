@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.14 (FIX: ROBUSTEZ EN EXTRACTOR IA)
+ * SERVER BACKEND - v33.15 (FIX: TIPO DE MEDIA DINÁMICO EN PLANTILLAS)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -9,12 +9,12 @@
  * 6. ADD: Los comentarios ahora crean un chat separado (ID_comentarios).
  * 7. FIX: Sanitización Regex en rutas Bulk/Action para DMs originales.
  * 8. ADD: Rutas Nativas para Extractor Inteligente (/extractor).
- * 9. FIX: (v33.12) Re-ingeniería del Webhook Omnicanal para capturar 
- * correctamente los Ecos y DMs de Messenger mapeando el ID del cliente real.
+ * 9. FIX: Re-ingeniería del Webhook Omnicanal para capturar Ecos.
  * 10. FIX: Solución de link de SF y silencio en chat (Solo guarda ID local).
- * 11. ADD: (v33.13) Rutas de verificación de Lead y creación de Tareas (Tasks).
- * 12. FIX: Estado de Tareas cambiado de 'Not Started' a 'Open' para visualización.
+ * 11. ADD: Rutas de verificación de Lead y creación de Tareas (Tasks).
+ * 12. FIX: Estado de Tareas cambiado de 'Not Started' a 'Open'.
  * 13. FIX: Manejo robusto de errores de Gemini en el Extractor Inteligente.
+ * 14. FIX: (v33.15) El enviador de plantillas ya detecta videos correctamente.
  * ============================================================
  */
 
@@ -272,6 +272,8 @@ async function enviarWhatsApp(to, content, type = "text") {
         });
         return true;
     } catch (e) { 
+        // 🔥 FIX: Mostrar el error explícito de Meta en la consola 🔥
+        console.error("❌ RECHAZO DE META:", e.response ? JSON.stringify(e.response.data) : e.message);
         return false; 
     }
 }
@@ -759,7 +761,7 @@ app.post('/api/salesforce/create-task', proteger, async (req, res) => {
         const nueva_tarea = {
             Subject: 'Contactar',
             ActivityDate: hoy,
-            Status: 'Open', // 🔥 FIX: Cambiado a 'Open' para visualización en Salesforce
+            Status: 'Open',
             Description: descripcion || "Sin detalle especificado",
             OwnerId: owner_id
         };
@@ -1114,7 +1116,7 @@ app.post('/api/chat/send', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({ error: "Error interno del servidor" }); } 
 });
 
-// 🔥 FIX: Envío correcto de plantilla individual (evitando el error de [] components vacío) 🔥
+// 🔥 FIX: Envío correcto de plantilla individual (evitando el error de [] components vacío) y detecta correctamente videos 🔥
 app.post('/api/chat/send-template', proteger, upload.single('file'), async (req, res) => {
     const phone = req.body.phone;
     if (!phone) return res.status(400).json({ error: "Falta teléfono" });
@@ -1133,12 +1135,17 @@ app.post('/api/chat/send-template', proteger, upload.single('file'), async (req,
         if (req.file) {
             const mediaId = await uploadToMeta(req.file.buffer, req.file.mimetype, req.file.originalname);
             if (mediaId) {
+                // 🔥 FIX: Detección dinámica del tipo de multimedia (video, image, document)
+                let mediaType = 'document';
+                if (req.file.mimetype.startsWith('image/')) mediaType = 'image';
+                else if (req.file.mimetype.startsWith('video/')) mediaType = 'video';
+
                 components.push({
                     type: "header",
-                    parameters: [{ type: "image", image: { id: mediaId } }]
+                    parameters: [{ type: mediaType, [mediaType]: { id: mediaId } }]
                 });
             } else {
-                return res.status(500).json({ error: "Meta rechazó la carga de la imagen." });
+                return res.status(500).json({ error: "Meta rechazó la carga del archivo." });
             }
         }
 
@@ -1166,9 +1173,10 @@ app.post('/api/chat/send-template', proteger, upload.single('file'), async (req,
 
             res.json({ success: true });
         } else {
-            res.status(500).json({ error: "Rechazado por Meta (Revisa que el idioma coincida y el nombre sea exacto)" });
+            res.status(500).json({ error: "Rechazado por Meta (Revisa la consola de tu servidor para ver el mensaje exacto de Meta)" });
         }
     } catch (e) {
+        console.error("Error enviando plantilla:", e);
         res.status(500).json({ error: "Error interno enviando plantilla" });
     }
 });
@@ -1187,8 +1195,10 @@ app.post('/api/chat/bulk-excel', proteger, upload.fields([{ name: 'excel', maxCo
 
         if (req.files.media && req.files.media[0]) {
             const mediaFile = req.files.media[0];
-            if (mediaFile.mimetype.startsWith('video')) {
+            if (mediaFile.mimetype.startsWith('video/')) {
                 mediaType = 'video';
+            } else if (mediaFile.mimetype.startsWith('application/')) {
+                mediaType = 'document';
             }
             
             const safeName = mediaFile.originalname.replace(/[^a-zA-Z0-9.]/g, '_') || `archivo.${mediaType === 'video' ? 'mp4' : 'jpg'}`;
@@ -1553,7 +1563,6 @@ app.post('/api/extractor/process', proteger, upload.single('image'), async (req,
     }
 });
 
-// 🔥 LÓGICA DE CAPTURA DE EJECUTIVO Y ORIGEN DESDE EL EXTRACTOR 🔥
 app.post('/api/extractor/salesforce', proteger, async (req, res) => {
     try {
         const payload = req.body;
