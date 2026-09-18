@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.16 (FIX: MODELO 2.5-FLASH Y RUTA EXTRACTOR)
+ * SERVER BACKEND - v33.18 (FIX: SANITIZACIÓN ESTRICTA PICKLISTS SALESFORCE)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -15,8 +15,9 @@
  * 12. FIX: Estado de Tareas cambiado de 'Not Started' a 'Open'.
  * 13. FIX: Manejo robusto de errores de Gemini en el Extractor Inteligente.
  * 14. FIX: El enviador de plantillas ya detecta videos correctamente.
- * 15. FIX: (v33.16) Corrección del modelo a gemini-2.5-flash en el extractor.
- * 16. FIX: (v33.16) Reubicación de la ruta /extractor para evitar error 404.
+ * 15. FIX: Corrección del modelo a gemini-2.5-flash en el extractor.
+ * 16. FIX: Reubicación de la ruta /extractor para evitar error 404.
+ * 17. FIX: (v33.18) Escudos de sanitización Picklist (Valle, Otros) para SF.
  * ============================================================
  */
 
@@ -218,17 +219,18 @@ function analizarTextoFuente(texto) {
     return null;
 }
 
+// 🔥 ACTUALIZADO: Diccionario para procesar el departamento en el chat
 function obtenerDepartamento(ciudad) {
     if (!ciudad) return null;
     const c = ciudad.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
     const mapa = {
-        "medellin": "Antioquia", "bogota": "Bogotá", "cali": "Valle del Cauca", "barranquilla": "Atlántico",
+        "medellin": "Antioquia", "bogota": "Bogotá", "cali": "Valle", "barranquilla": "Atlántico",
         "cartagena": "Bolívar", "bucaramanga": "Santander", "pereira": "Risaralda", "manizales": "Caldas",
-        "armenia": "Quindío", "cucuta": "Norte de Santander", "ibague": "Tolima", "villavicencio": "Meta",
+        "armenia": "Quindío", "cucuta": "Norte De Santander", "ibague": "Tolima", "villavicencio": "Meta",
         "neiva": "Huila", "santa marta": "Magdalena", "pasto": "Nariño", "popayan": "Cauca",
         "valledupar": "Cesar", "monteria": "Córdoba", "sincelejo": "Sucre", "riohacha": "La Guajira",
         "florencia": "Caquetá", "yopal": "Casanare", "quibdo": "Chocó", "arauca": "Arauca",
-        "mocoa": "Putumayo", "leticia": "Amazonas", "san andres": "San Andrés y Providencia",
+        "mocoa": "Putumayo", "leticia": "Amazonas", "san andres": "San Andrés Y Providencia",
         "san jose del guaviare": "Guaviare", "tunja": "Boyacá"
     };
     return mapa[c] || null;
@@ -305,7 +307,6 @@ app.get('/inbox', proteger, (req, res) => res.sendFile(path.join(__dirname, 'inb
 app.get('/inbox.css', (req, res) => res.sendFile(path.join(__dirname, 'inbox.css')));
 app.get('/inbox.js', (req, res) => res.sendFile(path.join(__dirname, 'inbox.js')));
 
-// 🔥 FIX: RUTA DEL EXTRACTOR MOVIDA AQUÍ PARA EVITAR EL ERROR 404 (Cannot GET /extractor) 🔥
 app.get('/extractor', proteger, (req, res) => {
     res.sendFile(path.join(__dirname, 'extractor.html'));
 });
@@ -418,7 +419,7 @@ async function procesarConICBOT(dbMsg, aiMsg, phone, name = "Cliente", isFile = 
     const biz = await getCfg('biz_profile', {});
     const history = (await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id DESC LIMIT 15", [phone])).reverse();
     
-    let memoriaDatos = `ID CLIENTE: ${phone}\nNombre en WhatsApp (No confiable): ${name}\n`;
+    let memoriaDatos = `ID CLIENTE: ${phone}\nNombre en WhatsApp (No confiable):${name}\n`;
     if (lead) {
         if (lead.nombre) memoriaDatos += `Nombre verificado: ${lead.nombre}\n`;
         if (lead.ciudad) memoriaDatos += `Ciudad: ${lead.ciudad}\n`;
@@ -459,7 +460,7 @@ Inventario: ${JSON.stringify(stock)}
     "apagar_bot": false
   }
 }
-Categorías permitidas: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos Hidráulicos, Brazos largos, Accesorios, Repuestos, Servicio, Otro, Consultando.
+Categorías permitidas: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos Hidráulicos, Brazos largos, Accesorios, Repuestos, Servicio, Otros.
     `;
 
     const chatContents = [];
@@ -518,7 +519,7 @@ async function gestionarLead(phone, info, fbName, oldLead) {
     let name = limpiarDato(info.nombre) || (oldLead && oldLead.nombre && oldLead.nombre !== fbName ? oldLead.nombre : fbName);
     let ciudadLimpia = limpiarDato(info.ciudad); 
     let dpto = obtenerDepartamento(ciudadLimpia) || (oldLead ? oldLead.departamento : null);
-    let interesLimpio = limpiarDato(info.categoria_interes) || limpiarDato(info.interes) || (oldLead ? oldLead.interes : "Consultando");
+    let interesLimpio = limpiarDato(info.categoria_interes) || limpiarDato(info.interes) || (oldLead ? oldLead.interes : "Otros");
     let productoLimpio = limpiarDato(info.producto_especifico) || (oldLead ? oldLead.producto_especifico : null);
     let correoLimpio = limpiarDato(info.correo) || (oldLead ? oldLead.correo : null);
     let farewellReset = (oldLead && !oldLead.fecha) ? ", farewell_sent = 0" : "";
@@ -674,6 +675,31 @@ app.post('/api/data/web-knowledge/delete', proteger, async (req, res) => { await
 // 🔥 INTEGRACIÓN REAL CON SALESFORCE (API / SYNC)
 // ============================================================
 
+// --- ESCUDOS DE PROTECCIÓN PARA PICKLISTS (LISTAS RESTRINGIDAS EN SF) ---
+function limpiarCategoriaSF(cat) {
+    if (!cat) return "Otros";
+    const validas = ["Maquinaria nueva", "Maquinaria usada", "Volquetas", "Martillos Hidráulicos", "Brazos largos", "Accesorios", "Repuestos", "Servicio", "Otros"];
+    if (cat === "Consultando" || cat === "Otro") return "Otros";
+    if (validas.includes(cat)) return cat;
+    return "Otros"; // Valor por defecto si manda cualquier otra cosa
+}
+
+function limpiarUbicacionSF(ubi) {
+    if (!ubi) return "";
+    const u = ubi.trim();
+    if (u.toLowerCase().includes("valle del cauca") || u.toLowerCase() === "valle") return "Valle";
+    if (u.toLowerCase() === "norte de santander") return "Norte De Santander";
+    if (u.toLowerCase() === "san andres" || u.toLowerCase().includes("providencia")) return "San Andrés Y Providencia";
+    if (u.toLowerCase() === "bogota" || u.toLowerCase() === "bogotá d.c.") return "Bogotá";
+    
+    const validas = ["Amazonas","Antioquia","Arauca","Atlántico","Bolívar","Bogotá","Boyacá","Caldas","Caquetá","Casanare","Cauca","Cesar","Chocó","Córdoba","Cundinamarca","Distrito Capital","Guainía","Guaviare","Huila","La Guajira","Magdalena","Meta","Nariño","Norte De Santander","Putumayo","Quindío","Risaralda","San Andrés Y Providencia","Santander","Sucre","Tolima","Valle","Vaupés","Vichada"];
+    
+    if (validas.includes(u)) return u;
+    
+    // Si no es un match exacto, no enviamos nada para no romper Salesforce
+    return ""; 
+}
+
 // 1. Buscar si el cliente existe (Lead, Contact, Account)
 app.post('/api/salesforce/check-lead', proteger, async (req, res) => {
     const { phone } = req.body;
@@ -688,7 +714,7 @@ app.post('/api/salesforce/check-lead', proteger, async (req, res) => {
         const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
         await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
 
-        let q_lead = await sfConn.query(`SELECT Id, Name, OwnerId, Company FROM Lead WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') AND IsConverted = FALSE LIMIT 1`);
+        let q_lead = await sfConn.query(`SELECT Id, Name, OwnerId, Company FROM Lead WHERE (Phone LIKE '%${telefonoFinal}\%' OR MobilePhone LIKE '\%${telefonoFinal}%') AND IsConverted = FALSE LIMIT 1`);
         if (q_lead.totalSize > 0) {
             const rec = q_lead.records[0];
             return res.json({ 
@@ -701,7 +727,7 @@ app.post('/api/salesforce/check-lead', proteger, async (req, res) => {
             });
         }
 
-        let q_contact = await sfConn.query(`SELECT Id, Name, OwnerId, AccountId FROM Contact WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') LIMIT 1`);
+        let q_contact = await sfConn.query(`SELECT Id, Name, OwnerId, AccountId FROM Contact WHERE (Phone LIKE '%${telefonoFinal}\%' OR MobilePhone LIKE '\%${telefonoFinal}%') LIMIT 1`);
         if (q_contact.totalSize > 0) {
             const rec = q_contact.records[0];
             return res.json({ 
@@ -803,6 +829,12 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
             telefonoFinal = telefonoFinal.substring(2); 
         }
 
+        // 🔥 FILTRO DE PROTECCIÓN PARA PICKLIST: 'Consultando' -> 'Otros'
+        let interesLimpio = limpiarCategoriaSF(lead.interes);
+        
+        // 🔥 FILTRO DE PROTECCIÓN PARA PICKLIST: Limpieza estricta de Departamento
+        let dptoSF = limpiarUbicacionSF(lead.departamento || lead.ciudad);
+
         const sfData = {
             FirstName: firstName,
             LastName: lastName,
@@ -810,8 +842,8 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
             Email: lead.correo || "",
             Company: lead.nombre || "Cliente ICC",
             DescripciondeProducto__c: lead.producto_especifico || "",
-            Producto_de_su_inter_s__c: lead.interes || "Consultando",
-            Ubicaci_n__c: lead.departamento || lead.ciudad || "",
+            Producto_de_su_inter_s__c: interesLimpio, // 🔥 Se inyecta el valor seguro
+            Ubicaci_n__c: dptoSF, // 🔥 Se inyecta el valor seguro
             LeadSource: leadSource
         };
 
@@ -869,12 +901,18 @@ app.post('/api/salesforce/sync-bulk', proteger, async (req, res) => {
                     telefonoFinal = telefonoFinal.substring(2); 
                 }
 
+                // 🔥 FILTRO DE PROTECCIÓN PARA PICKLIST: 'Consultando' -> 'Otros'
+                let interesLimpio = limpiarCategoriaSF(lead.interes);
+                
+                // 🔥 FILTRO DE PROTECCIÓN PARA PICKLIST: Limpieza estricta de Departamento
+                let dptoSF = limpiarUbicacionSF(lead.departamento || lead.ciudad);
+
                 const sfData = {
                     FirstName: firstName, LastName: lastName, Phone: telefonoFinal,
                     Email: lead.correo || "", Company: lead.nombre || "Cliente ICC",
                     DescripciondeProducto__c: lead.producto_especifico || "",
-                    Producto_de_su_inter_s__c: lead.interes || "Consultando",
-                    Ubicaci_n__c: lead.departamento || lead.ciudad || "",
+                    Producto_de_su_inter_s__c: interesLimpio, // 🔥 Valor seguro
+                    Ubicaci_n__c: dptoSF, // 🔥 Valor seguro
                     LeadSource: leadSource
                 };
 
@@ -905,7 +943,7 @@ app.post('/api/chat/analyze-lead', proteger, async (req, res) => {
         const history = await db.all("SELECT role, text FROM history WHERE phone = ? ORDER BY id ASC LIMIT 50", [phone]);
         if (!history || history.length === 0) return res.json({ success: false, message: "No hay historial para analizar." });
 
-        let convoText = history.map(h => `${h.role === 'user' ? 'Cliente' : 'Asesor'}: ${h.text}`).join('\n');
+        let convoText = history.map(h => `${h.role === 'user' ? 'Cliente' : 'Asesor'}:${h.text}`).join('\n');
 
         const promptEstractor = `
         Actúa como un analista de datos experto. Lee la siguiente conversación entre un cliente y un asesor de ventas de maquinaria pesada.
@@ -920,7 +958,7 @@ app.post('/api/chat/analyze-lead', proteger, async (req, res) => {
           "nombre": "Nombre del cliente si lo dijo",
           "ciudad": "Ciudad si la mencionó",
           "correo": "Correo electrónico si lo dio",
-          "categoria_interes": "Una de: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos Hidráulicos, Brazos largos, Accesorios, Repuestos, Servicio, Otro, Consultando",
+          "categoria_interes": "Una de: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos Hidráulicos, Brazos largos, Accesorios, Repuestos, Servicio, Otros",
           "producto_especifico": "Modelo exacto o detalle de lo que busca"
         }`;
 
@@ -1337,7 +1375,7 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                         io.emit('new_message', { phone: targetId, role: role, text: text, time: timestamp });
                         io.emit('update_chats_list');
 
-                        console.log(`📢 TIEMPO REAL (${source.toUpperCase()}) - ChatID: ${targetId} | Rol: ${role} | Msj: ${text}`);
+                        console.log(`📢 TIEMPO REAL (${source.toUpperCase()}) - ChatID:${targetId} | Rol: ${role} \vert{} Msj:${text}`);
                     }
                 }
 
@@ -1367,7 +1405,7 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                         io.emit('new_message', { phone: targetId, role: 'user', text: text, time: timestamp, msg_type: 'comment', media_id: mediaId });
                         io.emit('update_chats_list');
 
-                        console.log(`📣 ${source.toUpperCase()} COMENTARIO - De: ${senderName} | Msj: ${rawText} | PostID: ${mediaId}`);
+                        console.log(`📣 ${source.toUpperCase()} COMENTARIO - De:${senderName} | Msj: ${rawText} \vert{} PostID:${mediaId}`);
                     }
                 }
             }
@@ -1427,9 +1465,9 @@ app.post('/webhook', async (req, res) => {
                 isFile = true; 
                 let caption = msg[msg.type]?.caption || ""; 
                 if (msg[msg.type] && msg[msg.type].id) {
-                    userMsg = `[MEDIA:${msg.type.toUpperCase()}:${msg[msg.type].id}] ${caption}`; 
+                    userMsg = `[MEDIA:${msg.type.toUpperCase()}:${msg[msg.type].id}]${caption}`; 
                 } else {
-                    userMsg = `[EVENTO:${msg.type.toUpperCase()}] ${caption}`;
+                    userMsg = `[EVENTO:${msg.type.toUpperCase()}]${caption}`;
                 }
             } 
             
@@ -1479,10 +1517,6 @@ app.post('/webhook', async (req, res) => {
 // 🔥 MÓDULO: EXTRACTOR INTELIGENTE INDEPENDIENTE 🔥
 // ============================================================
 
-app.get('/extractor', proteger, (req, res) => {
-    res.sendFile(path.join(__dirname, 'extractor.html'));
-});
-
 app.post('/api/extractor/process', proteger, upload.single('image'), async (req, res) => {
     try {
         if (!API_KEY || API_KEY.trim() === '' || API_KEY === 'undefined') {
@@ -1529,7 +1563,6 @@ app.post('/api/extractor/process', proteger, upload.single('image'), async (req,
 
         const requestBody = {
             contents: contents,
-            // 🔥 CORRECCIÓN A GEMINI 2.5 FLASH 🔥
             generationConfig: { responseMimeType: "application/json" }
         };
 
@@ -1546,7 +1579,6 @@ app.post('/api/extractor/process', proteger, upload.single('image'), async (req,
     }
 });
 
-// 🔥 LÓGICA DE CAPTURA DE EJECUTIVO Y ORIGEN DESDE EL EXTRACTOR 🔥
 app.post('/api/extractor/salesforce', proteger, async (req, res) => {
     try {
         const payload = req.body;
@@ -1555,6 +1587,10 @@ app.post('/api/extractor/salesforce', proteger, async (req, res) => {
         if (telefonoFinal.startsWith("+57")) telefonoFinal = telefonoFinal.substring(3);
         if (telefonoFinal.startsWith("57") && telefonoFinal.length > 10) telefonoFinal = telefonoFinal.substring(2);
 
+        // 🔥 FILTRO DE PROTECCIÓN ESTRICTA PICKLIST SF 🔥
+        let categoriaLimpia = limpiarCategoriaSF(payload.categoria_producto);
+        let dptoSF = limpiarUbicacionSF(payload.ubicacion);
+
         const sfData = {
             FirstName: payload.nombre !== "No proporcionado" ? payload.nombre : "Cliente",
             LastName: payload.apellido !== "No proporcionado" ? payload.apellido : "Extraído",
@@ -1562,8 +1598,8 @@ app.post('/api/extractor/salesforce', proteger, async (req, res) => {
             Email: payload.correo !== "No proporcionado" ? payload.correo : "",
             Company: `${payload.nombre} ${payload.apellido}`,
             DescripciondeProducto__c: payload.producto_detalle !== "No proporcionado" ? payload.producto_detalle : "",
-            Producto_de_su_inter_s__c: payload.categoria_producto !== "No proporcionado" ? payload.categoria_producto : "Consultando",
-            Ubicaci_n__c: payload.ubicacion !== "No proporcionado" ? payload.ubicacion : "",
+            Producto_de_su_inter_s__c: categoriaLimpia, // 🔥 Valor Sanitizado
+            Ubicaci_n__c: dptoSF, // 🔥 Valor Sanitizado
             LeadSource: payload.origen || "WhatsApp" 
         };
 
