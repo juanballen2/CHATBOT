@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.18 (FIX: SANITIZACIÓN ESTRICTA PICKLISTS SALESFORCE)
+ * SERVER BACKEND - v33.20 (FIX FINAL: AUDITORÍA DE RUTAS Y FUNCIONES)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -8,7 +8,7 @@
  * 5. FIX: Traductor de LeadSource y limpieza del '57' en teléfonos.
  * 6. ADD: Los comentarios ahora crean un chat separado (ID_comentarios).
  * 7. FIX: Sanitización Regex en rutas Bulk/Action para DMs originales.
- * 8. ADD: Rutas Nativas para Extractor Inteligente (/extractor).
+ * 8. ADD: Rutas Nativas para Extractor Inteligente (/extractor) RESTAURADA.
  * 9. FIX: Re-ingeniería del Webhook Omnicanal para capturar Ecos.
  * 10. FIX: Solución de link de SF y silencio en chat (Solo guarda ID local).
  * 11. ADD: Rutas de verificación de Lead y creación de Tareas (Tasks).
@@ -16,8 +16,8 @@
  * 13. FIX: Manejo robusto de errores de Gemini en el Extractor Inteligente.
  * 14. FIX: El enviador de plantillas ya detecta videos correctamente.
  * 15. FIX: Corrección del modelo a gemini-2.5-flash en el extractor.
- * 16. FIX: Reubicación de la ruta /extractor para evitar error 404.
- * 17. FIX: (v33.18) Escudos de sanitización Picklist (Valle, Otros) para SF.
+ * 16. FIX: Filtro "Consultando" -> "Otro" para evitar error de Picklist en SF.
+ * 17. FIX: Intercepción de error "Duplicate Record" de SF con alerta clara.
  * ============================================================
  */
 
@@ -219,21 +219,27 @@ function analizarTextoFuente(texto) {
     return null;
 }
 
-// 🔥 ACTUALIZADO: Diccionario para procesar el departamento en el chat
-function obtenerDepartamento(ciudad) {
-    if (!ciudad) return null;
-    const c = ciudad.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-    const mapa = {
-        "medellin": "Antioquia", "bogota": "Bogotá", "cali": "Valle", "barranquilla": "Atlántico",
-        "cartagena": "Bolívar", "bucaramanga": "Santander", "pereira": "Risaralda", "manizales": "Caldas",
-        "armenia": "Quindío", "cucuta": "Norte De Santander", "ibague": "Tolima", "villavicencio": "Meta",
-        "neiva": "Huila", "santa marta": "Magdalena", "pasto": "Nariño", "popayan": "Cauca",
-        "valledupar": "Cesar", "monteria": "Córdoba", "sincelejo": "Sucre", "riohacha": "La Guajira",
-        "florencia": "Caquetá", "yopal": "Casanare", "quibdo": "Chocó", "arauca": "Arauca",
-        "mocoa": "Putumayo", "leticia": "Amazonas", "san andres": "San Andrés Y Providencia",
-        "san jose del guaviare": "Guaviare", "tunja": "Boyacá"
-    };
-    return mapa[c] || null;
+// --- ESCUDOS DE PROTECCIÓN PARA PICKLISTS EN SALESFORCE ---
+function limpiarCategoriaSF(cat) {
+    if (!cat) return "Otros";
+    const validas = ["Maquinaria nueva", "Maquinaria usada", "Volquetas", "Martillos Hidráulicos", "Brazos largos", "Accesorios", "Repuestos", "Servicio", "Otros"];
+    if (cat === "Consultando" || cat === "Otro") return "Otros";
+    if (validas.includes(cat)) return cat;
+    return "Otros"; 
+}
+
+function limpiarUbicacionSF(ubi) {
+    if (!ubi) return "";
+    const u = ubi.trim();
+    if (u.toLowerCase().includes("valle del cauca") || u.toLowerCase() === "valle") return "Valle";
+    if (u.toLowerCase() === "norte de santander") return "Norte De Santander";
+    if (u.toLowerCase() === "san andres" || u.toLowerCase().includes("providencia")) return "San Andrés Y Providencia";
+    if (u.toLowerCase() === "bogota" || u.toLowerCase() === "bogotá d.c.") return "Bogotá";
+    
+    const validas = ["Amazonas","Antioquia","Arauca","Atlántico","Bolívar","Bogotá","Boyacá","Caldas","Caquetá","Casanare","Cauca","Cesar","Chocó","Córdoba","Cundinamarca","Distrito Capital","Guainía","Guaviare","Huila","La Guajira","Magdalena","Meta","Nariño","Norte De Santander","Putumayo","Quindío","Risaralda","San Andrés Y Providencia","Santander","Sucre","Tolima","Valle","Vaupés","Vichada"];
+    
+    if (validas.includes(u)) return u;
+    return ""; 
 }
 
 async function uploadToMeta(buffer, mime, name) {
@@ -307,6 +313,7 @@ app.get('/inbox', proteger, (req, res) => res.sendFile(path.join(__dirname, 'inb
 app.get('/inbox.css', (req, res) => res.sendFile(path.join(__dirname, 'inbox.css')));
 app.get('/inbox.js', (req, res) => res.sendFile(path.join(__dirname, 'inbox.js')));
 
+// 🔥 RUTA DEL EXTRACTOR RESTAURADA EN SU POSICIÓN CORRECTA 🔥
 app.get('/extractor', proteger, (req, res) => {
     res.sendFile(path.join(__dirname, 'extractor.html'));
 });
@@ -675,31 +682,6 @@ app.post('/api/data/web-knowledge/delete', proteger, async (req, res) => { await
 // 🔥 INTEGRACIÓN REAL CON SALESFORCE (API / SYNC)
 // ============================================================
 
-// --- ESCUDOS DE PROTECCIÓN PARA PICKLISTS (LISTAS RESTRINGIDAS EN SF) ---
-function limpiarCategoriaSF(cat) {
-    if (!cat) return "Otros";
-    const validas = ["Maquinaria nueva", "Maquinaria usada", "Volquetas", "Martillos Hidráulicos", "Brazos largos", "Accesorios", "Repuestos", "Servicio", "Otros"];
-    if (cat === "Consultando" || cat === "Otro") return "Otros";
-    if (validas.includes(cat)) return cat;
-    return "Otros"; // Valor por defecto si manda cualquier otra cosa
-}
-
-function limpiarUbicacionSF(ubi) {
-    if (!ubi) return "";
-    const u = ubi.trim();
-    if (u.toLowerCase().includes("valle del cauca") || u.toLowerCase() === "valle") return "Valle";
-    if (u.toLowerCase() === "norte de santander") return "Norte De Santander";
-    if (u.toLowerCase() === "san andres" || u.toLowerCase().includes("providencia")) return "San Andrés Y Providencia";
-    if (u.toLowerCase() === "bogota" || u.toLowerCase() === "bogotá d.c.") return "Bogotá";
-    
-    const validas = ["Amazonas","Antioquia","Arauca","Atlántico","Bolívar","Bogotá","Boyacá","Caldas","Caquetá","Casanare","Cauca","Cesar","Chocó","Córdoba","Cundinamarca","Distrito Capital","Guainía","Guaviare","Huila","La Guajira","Magdalena","Meta","Nariño","Norte De Santander","Putumayo","Quindío","Risaralda","San Andrés Y Providencia","Santander","Sucre","Tolima","Valle","Vaupés","Vichada"];
-    
-    if (validas.includes(u)) return u;
-    
-    // Si no es un match exacto, no enviamos nada para no romper Salesforce
-    return ""; 
-}
-
 // 1. Buscar si el cliente existe (Lead, Contact, Account)
 app.post('/api/salesforce/check-lead', proteger, async (req, res) => {
     const { phone } = req.body;
@@ -829,10 +811,7 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
             telefonoFinal = telefonoFinal.substring(2); 
         }
 
-        // 🔥 FILTRO DE PROTECCIÓN PARA PICKLIST: 'Consultando' -> 'Otros'
         let interesLimpio = limpiarCategoriaSF(lead.interes);
-        
-        // 🔥 FILTRO DE PROTECCIÓN PARA PICKLIST: Limpieza estricta de Departamento
         let dptoSF = limpiarUbicacionSF(lead.departamento || lead.ciudad);
 
         const sfData = {
@@ -842,8 +821,8 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
             Email: lead.correo || "",
             Company: lead.nombre || "Cliente ICC",
             DescripciondeProducto__c: lead.producto_especifico || "",
-            Producto_de_su_inter_s__c: interesLimpio, // 🔥 Se inyecta el valor seguro
-            Ubicaci_n__c: dptoSF, // 🔥 Se inyecta el valor seguro
+            Producto_de_su_inter_s__c: interesLimpio,
+            Ubicaci_n__c: dptoSF,
             LeadSource: leadSource
         };
 
@@ -854,9 +833,9 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
         const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
         await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
 
-        const search = await sfConn.query(`SELECT Id FROM Lead WHERE Phone = '${telefonoFinal}'`);
+        const search = await sfConn.query(`SELECT Id FROM Lead WHERE Phone LIKE '%${telefonoFinal}\%' OR MobilePhone LIKE '\%${telefonoFinal}%'`);
         if (search.totalSize > 0) {
-            return res.status(400).json({ success: false, message: "El candidato ya existe en Salesforce." });
+            return res.status(400).json({ success: false, message: "Este cliente ya existe en Salesforce. Por favor, créale una Tarea ('Contactar') en lugar de un Lead nuevo." });
         }
 
         const result = await sfConn.sobject("Lead").create(sfData);
@@ -869,6 +848,9 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
         }
 
     } catch (error) {
+        if (error.message && error.message.toLowerCase().includes("duplicate")) {
+            return res.status(400).json({ success: false, message: "Salesforce detectó un DUPLICADO. Este cliente ya existe. Por favor, créale una Tarea en lugar de un Lead nuevo." });
+        }
         res.status(500).json({ success: false, message: error.message });
     }
 });
@@ -901,24 +883,21 @@ app.post('/api/salesforce/sync-bulk', proteger, async (req, res) => {
                     telefonoFinal = telefonoFinal.substring(2); 
                 }
 
-                // 🔥 FILTRO DE PROTECCIÓN PARA PICKLIST: 'Consultando' -> 'Otros'
                 let interesLimpio = limpiarCategoriaSF(lead.interes);
-                
-                // 🔥 FILTRO DE PROTECCIÓN PARA PICKLIST: Limpieza estricta de Departamento
                 let dptoSF = limpiarUbicacionSF(lead.departamento || lead.ciudad);
 
                 const sfData = {
                     FirstName: firstName, LastName: lastName, Phone: telefonoFinal,
                     Email: lead.correo || "", Company: lead.nombre || "Cliente ICC",
                     DescripciondeProducto__c: lead.producto_especifico || "",
-                    Producto_de_su_inter_s__c: interesLimpio, // 🔥 Valor seguro
-                    Ubicaci_n__c: dptoSF, // 🔥 Valor seguro
+                    Producto_de_su_inter_s__c: interesLimpio,
+                    Ubicaci_n__c: dptoSF,
                     LeadSource: leadSource
                 };
 
                 if (lead.etiqueta && lead.etiqueta.startsWith("005")) sfData.OwnerId = lead.etiqueta;
 
-                const search = await sfConn.query(`SELECT Id FROM Lead WHERE Phone = '${telefonoFinal}'`);
+                const search = await sfConn.query(`SELECT Id FROM Lead WHERE Phone LIKE '%${telefonoFinal}\%' OR MobilePhone LIKE '\%${telefonoFinal}%'`);
                 if (search.totalSize === 0) {
                     const result = await sfConn.sobject("Lead").create(sfData);
                     if (result.success) {
@@ -1587,7 +1566,6 @@ app.post('/api/extractor/salesforce', proteger, async (req, res) => {
         if (telefonoFinal.startsWith("+57")) telefonoFinal = telefonoFinal.substring(3);
         if (telefonoFinal.startsWith("57") && telefonoFinal.length > 10) telefonoFinal = telefonoFinal.substring(2);
 
-        // 🔥 FILTRO DE PROTECCIÓN ESTRICTA PICKLIST SF 🔥
         let categoriaLimpia = limpiarCategoriaSF(payload.categoria_producto);
         let dptoSF = limpiarUbicacionSF(payload.ubicacion);
 
@@ -1598,8 +1576,8 @@ app.post('/api/extractor/salesforce', proteger, async (req, res) => {
             Email: payload.correo !== "No proporcionado" ? payload.correo : "",
             Company: `${payload.nombre} ${payload.apellido}`,
             DescripciondeProducto__c: payload.producto_detalle !== "No proporcionado" ? payload.producto_detalle : "",
-            Producto_de_su_inter_s__c: categoriaLimpia, // 🔥 Valor Sanitizado
-            Ubicaci_n__c: dptoSF, // 🔥 Valor Sanitizado
+            Producto_de_su_inter_s__c: categoriaLimpia,
+            Ubicaci_n__c: dptoSF,
             LeadSource: payload.origen || "WhatsApp" 
         };
 
@@ -1610,9 +1588,9 @@ app.post('/api/extractor/salesforce', proteger, async (req, res) => {
         const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
         await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
 
-        const search = await sfConn.query(`SELECT Id FROM Lead WHERE Phone = '${telefonoFinal}'`);
+        const search = await sfConn.query(`SELECT Id FROM Lead WHERE Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%'`);
         if (search.totalSize > 0) {
-            return res.status(400).json({ success: false, message: "El número ya existe en Salesforce." });
+            return res.status(400).json({ success: false, message: "Este cliente ya existe en la base de datos de Salesforce. Por favor, usa el Panel de Chats para agregarle una Tarea ('Contactar') en lugar de un Candidato nuevo." });
         }
 
         const result = await sfConn.sobject("Lead").create(sfData);
@@ -1624,6 +1602,14 @@ app.post('/api/extractor/salesforce', proteger, async (req, res) => {
         }
     } catch (error) {
         console.error("Error Salesforce Extractor:", error);
+        
+        if (error.message && error.message.toLowerCase().includes("duplicate")) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Salesforce detectó un DUPLICADO. Este cliente ya existe en la base de datos. Por favor, búscalo en el Panel de Chats y créale una Tarea ('Contactar') en lugar de un Candidato nuevo." 
+            });
+        }
+
         res.status(500).json({ success: false, message: error.message });
     }
 });
