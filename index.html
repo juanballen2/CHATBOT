@@ -281,7 +281,6 @@
             <span class="badge-nav" id="badge-omni">0</span>
         </a>
 
-        <!-- 🔥 BOTÓN AL EXTRACTOR 🔥 -->
         <a href="/extractor" class="nav-btn" title="Extractor Inteligente">
             <i class="fas fa-magic" style="color: #E9521E;"></i>
         </a>
@@ -385,8 +384,43 @@
                     <input id="crm-email" class="crm-input" type="email" placeholder="Correo Electrónico">
                     <input id="crm-city" class="crm-input" placeholder="Ciudad">
                     
-                    <!-- 🔥 CASILLA DE DEPARTAMENTO DESBLOQUEADA 🔥 -->
-                    <input id="crm-dept" class="crm-input" placeholder="Departamento">
+                    <select id="crm-dept" class="crm-input">
+                        <option value="">--Ninguno--</option>
+                        <option value="Amazonas">Amazonas</option>
+                        <option value="Antioquia">Antioquia</option>
+                        <option value="Arauca">Arauca</option>
+                        <option value="Atlántico">Atlántico</option>
+                        <option value="Bolívar">Bolívar</option>
+                        <option value="Bogotá">Bogotá</option>
+                        <option value="Boyacá">Boyacá</option>
+                        <option value="Caldas">Caldas</option>
+                        <option value="Caquetá">Caquetá</option>
+                        <option value="Casanare">Casanare</option>
+                        <option value="Cauca">Cauca</option>
+                        <option value="Cesar">Cesar</option>
+                        <option value="Chocó">Chocó</option>
+                        <option value="Córdoba">Córdoba</option>
+                        <option value="Cundinamarca">Cundinamarca</option>
+                        <option value="Distrito Capital">Distrito Capital</option>
+                        <option value="Guainía">Guainía</option>
+                        <option value="Guaviare">Guaviare</option>
+                        <option value="Huila">Huila</option>
+                        <option value="La Guajira">La Guajira</option>
+                        <option value="Magdalena">Magdalena</option>
+                        <option value="Meta">Meta</option>
+                        <option value="Nariño">Nariño</option>
+                        <option value="Norte De Santander">Norte De Santander</option>
+                        <option value="Putumayo">Putumayo</option>
+                        <option value="Quindío">Quindío</option>
+                        <option value="Risaralda">Risaralda</option>
+                        <option value="San Andrés Y Providencia">San Andrés Y Providencia</option>
+                        <option value="Santander">Santander</option>
+                        <option value="Sucre">Sucre</option>
+                        <option value="Tolima">Tolima</option>
+                        <option value="Valle">Valle</option>
+                        <option value="Vaupés">Vaupés</option>
+                        <option value="Vichada">Vichada</option>
+                    </select>
                     
                     <div class="crm-title" style="margin-top:20px;"><i class="fas fa-bullseye"></i> Perfilamiento</div>
                     <select id="crm-interest" class="crm-input">
@@ -399,8 +433,7 @@
                         <option value="Accesorios">Accesorios</option>
                         <option value="Repuestos">Repuestos</option>
                         <option value="Servicio">Servicio</option>
-                        <option value="Otro">Otro</option>
-                        <option value="Consultando">Consultando</option>
+                        <option value="Otros">Otros</option>
                     </select>
                     <input id="crm-specific-interest" class="crm-input" placeholder="Detalle (Ej: Volvo 50 tons, Retro...)">
 
@@ -408,7 +441,7 @@
                     <select id="crm-executive" class="crm-input">
                         <option value="Pendiente">Pendiente (Sin Asignar)</option>
                         <option value="005Dn000007mWFhIAM">Luz</option>
-                        <option value="005UO000000PdB3YAK">Felipe</option>
+                        <option value="005UO000000PdB3YAK">Nelson</option>
                         <option value="005Dn000005u1yTIAQ">Mario</option>
                         <option value="005Dn000005u27NIAQ">Marcos</option>
                         <option value="005Dn000005u22vIAA">Fabio</option>
@@ -425,14 +458,12 @@
                         <option value="WhatsApp">WhatsApp</option>
                     </select>
 
-                    <!-- 🔥 BOTÓN NUEVO: PROCESAR LEAD EN SF 🔥 -->
                     <div id="sf-action-container" style="margin-top:15px; border-top: 1px solid var(--border); padding-top: 15px;">
                         <button class="btn-small btn-blue" style="width:100%; background:var(--sf-blue); color:white; border:none;" onclick="procesarLeadSF()">
                             <i class="fas fa-search"></i> Procesar Lead en Salesforce
                         </button>
                     </div>
 
-                    <!-- CAJA DE RESULTADOS DINÁMICA DE SALESFORCE -->
                     <div id="sf-result-container" style="display:none; margin-top: 15px; padding: 10px; background: var(--panel); border-radius: 8px; border: 1px solid var(--border); font-size: 0.85rem;">
                     </div>
 
@@ -627,7 +658,6 @@
         </div>
     </div>
 
-    <!-- MODAL DE PLANTILLAS -->
     <div id="template-modal" class="modal-overlay" onclick="closeModal('template-modal')">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-title" id="tpl-modal-title"><i class="fas fa-bullhorn" style="color:var(--primary);"></i> Enviar Plantilla</div>
@@ -786,7 +816,7 @@
 
         const executivesMap = {
             "005Dn000007mWFhIAM": "Luz",
-            "005UO000000PdB3YAK": "Felipe",
+            "005UO000000PdB3YAK": "Nelson",
             "005Dn000005u1yTIAQ": "Mario",
             "005Dn000005u27NIAQ": "Marcos",
             "005Dn000005u22vIAA": "Fabio",
@@ -953,13 +983,19 @@
 
             try {
                 const res = await fetch('/api/chat/bulk-excel', { method:'POST', body: fd });
-                const data = await res.json();
                 
-                if(data.success) {
+                if (res.status === 401 || res.redirected) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                const data = await res.json().catch(() => null);
+                
+                if(res.ok && data && data.success) {
                     alert(`🎉 CAMPAÑA FINALIZADA 🎉\n\n✅ Enviados con éxito: ${data.sent}\n❌ Fallidos: ${data.failed}`);
                     refreshLeads();
                 } else {
-                    alert("❌ Ocurrió un error: " + data.error);
+                    alert("❌ Ocurrió un error en la campaña: " + (data ? data.error : "Desconocido"));
                 }
             } catch(e) {
                 alert("❌ Error de red lanzando la campaña.");
@@ -969,7 +1005,6 @@
             }
         }
 
-        // 🔥 FUNCIONALIDAD MEJORADA: PROCESAR LEAD O CREAR TAREA EN SALESFORCE DESDE EL PANEL DE CHAT 🔥
         let currentSfClient = null;
         let fichaListaParaCopiar = "";
 
@@ -1007,7 +1042,6 @@
                         if (key === currentSfClient.owner_id) execName = value;
                     }
 
-                    // 🔥 AQUÍ ARMAMOS LA DESCRIPCIÓN INTELIGENTE 🔥
                     let leadNeed = document.getElementById('crm-specific-interest').value;
                     let leadCat = document.getElementById('crm-interest').value;
                     let leadSource = document.getElementById('crm-source').value;
@@ -1112,13 +1146,14 @@
                     body: JSON.stringify({ phone: currentChat })
                 });
                 
-                if (res.status === 401 || res.redirected || !res.ok) {
+                if (res.status === 401 || res.redirected) {
                     window.location.href = '/login';
                     return;
                 }
 
-                const data = await res.json();
-                if(data.success) {
+                const data = await res.json().catch(() => null);
+
+                if(res.ok && data && data.success) {
                     refreshLeads();
                     
                     const leadName = document.getElementById('crm-name').value || "Cliente";
@@ -1141,7 +1176,8 @@
                     document.getElementById('btn-copy-ficha').style.display = 'block';
                     showToast("✅ Lead subido a Salesforce");
                 } else {
-                    resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error: ${data.message}</div>`;
+                    // 🔥 Muestra EXACTAMENTE qué campo rebotó Salesforce
+                    resultContainer.innerHTML = `<div style="color:var(--danger);">⚠️ Error en Salesforce:<br>${data ? data.message : "Error desconocido"}</div>`;
                 }
             } catch(e) {
                 resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Fallo de red con el servidor. Verifica tu sesión.</div>`;
@@ -1282,10 +1318,10 @@
             showToast("Enviando plantilla e imagen a Meta... ⏳");
             try {
                 const res = await fetch('/api/chat/send-template', { method: 'POST', body: formData });
-                if (res.status === 401 || res.redirected || !res.ok) { window.location.href = '/login'; return; }
-                const data = await res.json();
-                if(data.success) showToast("✅ Plantilla enviada con éxito");
-                else showToast("❌ Error Meta: " + (data.error || "Desconocido"));
+                if (res.status === 401 || res.redirected) { window.location.href = '/login'; return; }
+                const data = await res.json().catch(() => null);
+                if(res.ok && data && data.success) showToast("✅ Plantilla enviada con éxito");
+                else showToast("❌ Error Meta: " + (data ? data.error : "Desconocido"));
             } catch(e) {
                 showToast("❌ Fallo de red al conectar con el servidor.");
             }
@@ -1330,7 +1366,11 @@
         }
 
         function viewLeadDetails(phone) {
-            fetch('/api/data/leads').then(r => r.json()).then(leads => {
+            fetch('/api/data/leads').then(r => {
+                if (r.status === 401 || r.redirected) { window.location.href = '/login'; return; }
+                return r.json();
+            }).then(leads => {
+                if(!leads) return;
                 const lead = leads.find(l => l.phone === phone);
                 if(lead) {
                     let html = '<table class="data-table" style="width:100%;">';
@@ -1905,21 +1945,32 @@
             if(lead) { 
                 document.getElementById('crm-name').value = lead.nombre || ""; 
                 document.getElementById('crm-city').value = lead.ciudad || ""; 
-                document.getElementById('crm-dept').value = lead.departamento || ""; 
                 document.getElementById('crm-email').value = lead.correo || ""; 
                 document.getElementById('crm-specific-interest').value = lead.producto_especifico || ""; 
                 
-                let interestSelect = document.getElementById('crm-interest'); 
-                let foundInterest = false;
-                
-                if(lead.interes) { 
-                    for(let opt of interestSelect.options) { 
-                        if(opt.value.toUpperCase() === lead.interes.toUpperCase()) { 
-                            interestSelect.value = opt.value; foundInterest = true; break; 
-                        } 
-                    } 
-                    if(!foundInterest) interestSelect.value = "Consultando"; 
+                // Cargar Departamento en Select
+                let deptSelect = document.getElementById('crm-dept'); 
+                let aiDept = lead.departamento || "";
+                let foundDept = false;
+                for(let i=0; i<deptSelect.options.length; i++){
+                    if(deptSelect.options[i].value.toLowerCase() === aiDept.toLowerCase()){
+                        deptSelect.selectedIndex = i;
+                        foundDept = true; break;
+                    }
                 }
+                if(!foundDept) deptSelect.value = "";
+                
+                // Cargar Categoría en Select
+                let interestSelect = document.getElementById('crm-interest'); 
+                let aiCat = lead.interes || "";
+                let foundCat = false;
+                for(let i=0; i<interestSelect.options.length; i++) { 
+                    if(interestSelect.options[i].value.toLowerCase() === aiCat.toLowerCase()) { 
+                        interestSelect.selectedIndex = i; 
+                        foundCat = true; break; 
+                    } 
+                } 
+                if(!foundCat) interestSelect.value = "Otros"; 
                 
                 let execSelect = document.getElementById('crm-executive'); 
                 if (lead.etiqueta && executivesMap[lead.etiqueta]) { execSelect.value = lead.etiqueta; } 
@@ -2245,6 +2296,192 @@
             } catch (e) { showToast("❌ Error actualizando la web"); } finally { btn.innerHTML = originalHTML; btn.disabled = false; }
         }
 
+        let currentSfClient = null;
+        let fichaListaParaCopiar = "";
+
+        async function procesarLeadSF() {
+            if(!currentChat) return showToast("⚠️ Abre un chat primero.");
+            
+            const btnContainer = document.getElementById('sf-action-container');
+            const resultContainer = document.getElementById('sf-result-container');
+            const btnCopy = document.getElementById('btn-copy-ficha');
+            
+            resultContainer.style.display = 'block';
+            resultContainer.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Buscando en Salesforce...</div>';
+            btnCopy.style.display = 'none';
+            fichaListaParaCopiar = "";
+
+            try {
+                const res = await fetch('/api/salesforce/check-lead', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ phone: currentChat })
+                });
+
+                if (res.status === 401 || res.redirected || !res.ok) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                const data = await res.json();
+
+                if (data.exists && data.data) {
+                    currentSfClient = data.data;
+                    
+                    let execName = "Asesor";
+                    for (let [key, value] of Object.entries(executivesMap)) {
+                        if (key === currentSfClient.owner_id) execName = value;
+                    }
+
+                    let leadNeed = document.getElementById('crm-specific-interest').value;
+                    let leadCat = document.getElementById('crm-interest').value;
+                    let leadSource = document.getElementById('crm-source').value;
+                    
+                    let textoNecesidad = leadNeed ? leadNeed : (leadCat ? leadCat : "Información general");
+                    let descArmada = `Origen: ${leadSource}\nNecesidad: ${textoNecesidad}`;
+
+                    resultContainer.innerHTML = `
+                        <div style="color: #10b981; font-weight: bold; margin-bottom: 5px;">
+                            <i class="fas fa-check-circle"></i> Cliente Existente
+                        </div>
+                        <div style="margin-bottom: 8px;"><b>Nombre:</b> ${currentSfClient.nombre} | <b>Ejecutivo:</b> ${execName}</div>
+                        
+                        <div style="margin-bottom: 10px;">
+                            <label style="font-size: 0.75rem; font-weight: bold; color: var(--primary);">DESCRIPCIÓN DE LA TAREA</label>
+                            <textarea id="task-desc-input" class="crm-input" rows="2" style="font-size: 0.85rem; padding: 6px;">${descArmada}</textarea>
+                            <span style="font-size: 0.7rem; color: var(--text-muted);">Puedes editar la necesidad antes de crear la tarea.</span>
+                        </div>
+
+                        <button class="btn-small" style="width:100%; background:var(--sf-blue); color:white; border:none;" onclick="crearNuevaTareaSF()">
+                            <i class="fas fa-plus"></i> Crear Tarea 'Contactar'
+                        </button>
+                    `;
+                } else {
+                    currentSfClient = null;
+                    resultContainer.innerHTML = `
+                        <div style="color: var(--danger); font-weight: bold; margin-bottom: 5px;">
+                            <i class="fas fa-exclamation-triangle"></i> Cliente NO existe
+                        </div>
+                        <div style="color: var(--text-muted); margin-bottom: 10px;">
+                            No se encontraron registros con este número en Salesforce.
+                        </div>
+                        <button class="btn-small btn-green" style="width:100%;" onclick="crearNuevoCandidatoSF()">
+                            <i class="fas fa-user-plus"></i> Crear Nuevo Candidato
+                        </button>
+                    `;
+                }
+            } catch(e) {
+                resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error de conexión con el servidor. Verifica tu sesión.</div>`;
+            }
+        }
+
+        async function crearNuevaTareaSF() {
+            if(!currentSfClient) return;
+            
+            const descInput = document.getElementById('task-desc-input');
+            let leadNeed = descInput ? descInput.value : "No especificada";
+
+            const resultContainer = document.getElementById('sf-result-container');
+            resultContainer.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Creando tarea...</div>';
+
+            const payload = {
+                who_id: currentSfClient.who_id,
+                what_id: currentSfClient.what_id,
+                owner_id: currentSfClient.owner_id,
+                descripcion: leadNeed
+            };
+
+            try {
+                const res = await fetch('/api/salesforce/create-task', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                
+                if (res.status === 401 || res.redirected || !res.ok) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                const data = await res.json();
+                
+                if(data.success) {
+                    let leadPhone = (document.getElementById('crm-phone').value || currentChat).replace(/\D/g, '');
+                    if (leadPhone.startsWith("57") && leadPhone.length > 10) leadPhone = leadPhone.substring(2);
+
+                    fichaListaParaCopiar = `📌 Tarea: Contactar\n👤 Cliente: ${currentSfClient.nombre}\n📞 Tel: +${leadPhone}\n📦 Info: ${leadNeed.replace(/\n/g, ' ')}\n🔗 Link Tarea: ${data.link}\n📁 Link Cliente: ${currentSfClient.link}`;
+                    
+                    resultContainer.innerHTML = `
+                        <div style="color: #10b981; font-weight: bold;">
+                            <i class="fas fa-check-circle"></i> Tarea Creada Exitosamente
+                        </div>
+                    `;
+                    document.getElementById('btn-copy-ficha').style.display = 'block';
+                    showToast("✅ Tarea creada");
+                } else {
+                    resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error: ${data.message}</div>`;
+                }
+            } catch(e) {
+                resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error de conexión al crear tarea. Verifica tu sesión.</div>`;
+            }
+        }
+
+        async function crearNuevoCandidatoSF() {
+            const resultContainer = document.getElementById('sf-result-container');
+            resultContainer.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Creando Candidato...</div>';
+
+            try {
+                const res = await fetch('/api/salesforce/sync-lead', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ phone: currentChat })
+                });
+                
+                if (res.status === 401 || res.redirected || !res.ok) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                const data = await res.json();
+                if(data.success) {
+                    refreshLeads();
+                    
+                    const leadName = document.getElementById('crm-name').value || "Cliente";
+                    let leadPhone = (document.getElementById('crm-phone').value || currentChat).replace(/\D/g, '');
+                    if (leadPhone.startsWith("57") && leadPhone.length > 10) leadPhone = leadPhone.substring(2);
+                    
+                    let leadNeed = document.getElementById('crm-specific-interest').value;
+                    if (!leadNeed) leadNeed = document.getElementById('crm-interest').value;
+                    if (!leadNeed) leadNeed = "No especificada";
+                    
+                    const sfLink = `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${data.sfId}/view`;
+                    
+                    fichaListaParaCopiar = `Nombre: ${leadName}\nNum: ${leadPhone}\nLink: ${sfLink}\nNecesidad: ${leadNeed}`;
+                    
+                    resultContainer.innerHTML = `
+                        <div style="color: #10b981; font-weight: bold;">
+                            <i class="fas fa-check-circle"></i> Nuevo Candidato Creado
+                        </div>
+                    `;
+                    document.getElementById('btn-copy-ficha').style.display = 'block';
+                    showToast("✅ Lead subido a Salesforce");
+                } else {
+                    resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error: ${data.message}</div>`;
+                }
+            } catch(e) {
+                resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Fallo de red con el servidor. Verifica tu sesión.</div>`;
+            }
+        }
+
+        async function copyLeadInfo() {
+            if(!fichaListaParaCopiar) return showToast("⚠️ No hay información para copiar.");
+            try {
+                await navigator.clipboard.writeText(fichaListaParaCopiar);
+                showToast("✅ Información copiada al portapapeles");
+            } catch(e) {
+                showToast("❌ Error copiando información.");
+            }
+        }
     </script>
 </body>
 </html>
