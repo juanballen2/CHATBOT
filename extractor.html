@@ -124,27 +124,61 @@
                         <option value="Accesorios">Accesorios</option>
                         <option value="Repuestos">Repuestos</option>
                         <option value="Servicio">Servicio</option>
-                        <option value="Otro">Otro</option>
-                        <option value="Consultando">Consultando</option>
+                        <option value="Otros">Otros</option>
                     </select>
                 </div>
                 
-                <div class="form-group"><label class="form-label">Departamento Homologado</label><input type="text" id="sf-ubicacion" class="form-input"></div>
+                <div class="form-group"><label class="form-label">Departamento Homologado</label>
+                    <select id="sf-ubicacion" class="form-input">
+                        <option value="">--Ninguno--</option>
+                        <option value="Amazonas">Amazonas</option>
+                        <option value="Antioquia">Antioquia</option>
+                        <option value="Arauca">Arauca</option>
+                        <option value="Atlántico">Atlántico</option>
+                        <option value="Bolívar">Bolívar</option>
+                        <option value="Bogotá">Bogotá</option>
+                        <option value="Boyacá">Boyacá</option>
+                        <option value="Caldas">Caldas</option>
+                        <option value="Caquetá">Caquetá</option>
+                        <option value="Casanare">Casanare</option>
+                        <option value="Cauca">Cauca</option>
+                        <option value="Cesar">Cesar</option>
+                        <option value="Chocó">Chocó</option>
+                        <option value="Córdoba">Córdoba</option>
+                        <option value="Cundinamarca">Cundinamarca</option>
+                        <option value="Distrito Capital">Distrito Capital</option>
+                        <option value="Guainía">Guainía</option>
+                        <option value="Guaviare">Guaviare</option>
+                        <option value="Huila">Huila</option>
+                        <option value="La Guajira">La Guajira</option>
+                        <option value="Magdalena">Magdalena</option>
+                        <option value="Meta">Meta</option>
+                        <option value="Nariño">Nariño</option>
+                        <option value="Norte De Santander">Norte De Santander</option>
+                        <option value="Putumayo">Putumayo</option>
+                        <option value="Quindío">Quindío</option>
+                        <option value="Risaralda">Risaralda</option>
+                        <option value="San Andrés Y Providencia">San Andrés Y Providencia</option>
+                        <option value="Santander">Santander</option>
+                        <option value="Sucre">Sucre</option>
+                        <option value="Tolima">Tolima</option>
+                        <option value="Valle">Valle</option>
+                        <option value="Vaupés">Vaupés</option>
+                        <option value="Vichada">Vichada</option>
+                    </select>
+                </div>
 
                 <div class="form-group"><label class="form-label">Ejecutivo Asignado</label>
                     <select id="sf-ejecutivo" class="form-input">
                         <option value="Pendiente">Pendiente (Sin Asignar)</option>
                         <option value="005Dn000007mWFhIAM">Luz</option>
-                        <option value="005UO000000PdB3YAK">Felipe</option>
+                        <option value="005UO000000PdB3YAK">Nelson</option>
                         <option value="005Dn000005u1yTIAQ">Mario</option>
                         <option value="005Dn000005u27NIAQ">Marcos</option>
                         <option value="005Dn000005u22vIAA">Fabio</option>
                         <option value="005Dn000005u2BkIAI">Diana</option>
                         <option value="005Dn000007H1EUIA0">Marketing</option>
                         <option value="005Dn000003Z5vbIAC">Oscar</option>
-                        <option value="005Dn000007H1FDIA0">Andres</option>
-                        <option value="005Dn00000145LfIAI">Sebastian</option>
-                        <option value="005Dn000007IKydIAG">Lorena</option>
                     </select>
                 </div>
 
@@ -182,21 +216,6 @@
     <script>
         let currentImageBlob = null;
         let fichaListaParaCopiar = ""; 
-
-        const executivesMap = {
-            "005Dn000007mWFhIAM": "Luz",
-            "005UO000000PdB3YAK": "Felipe",
-            "005Dn000005u1yTIAQ": "Mario",
-            "005Dn000005u27NIAQ": "Marcos",
-            "005Dn000005u22vIAA": "Fabio",
-            "005Dn000005u2BkIAI": "Diana",
-            "005Dn000007H1EUIA0": "Marketing",
-            "005Dn000003Z5vbIAC": "Oscar",
-            "005Dn000007H1FDIA0": "Andres",
-            "005Dn00000145LfIAI": "Sebastian",
-            "005Dn000007IKydIAG": "Lorena",
-            "Pendiente": "Pendiente (Sin Asignar)"
-        };
 
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -259,7 +278,7 @@
                     window.location.href = '/login';
                     return;
                 }
-
+                
                 const json = await res.json().catch(() => null);
 
                 if (res.ok && json && json.success) {
@@ -271,23 +290,34 @@
                     document.getElementById('sf-telefono').value = json.data.telefono || '';
                     document.getElementById('sf-correo').value = json.data.correo || '';
                     document.getElementById('sf-detalle').value = json.data.producto_detalle || '';
-                    document.getElementById('sf-ubicacion').value = json.data.ubicacion || '';
                     
                     const catSelect = document.getElementById('sf-categoria');
                     let aiCat = json.data.categoria_producto || '';
-                    let found = false;
+                    let foundCat = false;
                     for(let i = 0; i < catSelect.options.length; i++) {
                         if(catSelect.options[i].value.toLowerCase() === aiCat.toLowerCase()) {
                             catSelect.selectedIndex = i;
-                            found = true; 
+                            foundCat = true; 
                             break;
                         }
                     }
-                    if(!found) catSelect.value = "Consultando"; 
+                    if(!foundCat) catSelect.value = "Otros"; 
+
+                    const deptSelect = document.getElementById('sf-ubicacion');
+                    let aiDept = json.data.ubicacion || '';
+                    let foundDept = false;
+                    for(let i = 0; i < deptSelect.options.length; i++) {
+                        if(deptSelect.options[i].value.toLowerCase() === aiDept.toLowerCase()) {
+                            deptSelect.selectedIndex = i;
+                            foundDept = true; 
+                            break;
+                        }
+                    }
+                    if(!foundDept) deptSelect.value = ""; 
                     
                     document.getElementById('results-card').scrollIntoView({ behavior: 'smooth' });
                 } else {
-                    alert("❌ Fallo en la IA: " + (json ? json.message : `Error de Servidor (${res.status})`));
+                    alert("❌ Fallo en la IA:\n" + (json ? json.message : `Error de Servidor (${res.status})`));
                 }
             } catch (error) {
                 alert("❌ Error de conexión de red.");
@@ -326,24 +356,20 @@
                     return;
                 }
 
-                if (!res.ok) {
-                    throw new Error(`Error en Salesforce: ${res.status}`);
-                }
+                const result = await res.json().catch(() => null);
 
-                const result = await res.json();
-
-                if (result.success) {
+                if (res.ok && result && result.success) {
                     document.getElementById('results-card').style.display = 'none';
                     
                     const sfLink = `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${result.sfId}/view`;
                     document.getElementById('success-link').href = sfLink;
 
-                    const leadName = payload.nombre !== "No proporcionado" ? payload.nombre + " " + payload.apellido : "Cliente Extraído";
+                    const leadName = payload.nombre && payload.nombre !== "No proporcionado" ? payload.nombre + " " + payload.apellido : "Cliente Extraído";
                     
                     let leadPhone = payload.telefono.replace(/\D/g, '');
                     if (leadPhone.startsWith("57") && leadPhone.length > 10) leadPhone = leadPhone.substring(2);
                     
-                    let leadNeed = payload.producto_detalle !== "No proporcionado" && payload.producto_detalle !== "" ? payload.producto_detalle : payload.categoria_producto;
+                    let leadNeed = payload.producto_detalle && payload.producto_detalle !== "No proporcionado" && payload.producto_detalle !== "" ? payload.producto_detalle : payload.categoria_producto;
                     if (!leadNeed) leadNeed = "No especificada";
 
                     fichaListaParaCopiar = `Nombre: ${leadName.trim()}\nNum: ${leadPhone}\nLink: ${sfLink}\nNecesidad: ${leadNeed}`;
@@ -352,10 +378,10 @@
                     document.getElementById('success-card').scrollIntoView({ behavior: 'smooth' });
 
                 } else {
-                    alert("⚠️ Error en Salesforce: " + result.message);
+                    alert("⚠️ Error en Salesforce:\n" + (result ? result.message : "Error desconocido o de red."));
                 }
             } catch (error) {
-                alert("Fallo de red al enviar a Salesforce.");
+                alert("Fallo de red al enviar a Salesforce. Revisa tu conexión.");
             } finally {
                 btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Confirmar y Cargar a Salesforce';
                 btn.disabled = false;
