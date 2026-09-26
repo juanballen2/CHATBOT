@@ -43,7 +43,6 @@
         .input-box { width: 100%; padding: 15px; border: 2px dashed var(--border); border-radius: 8px; font-size: 1rem; color: var(--text); outline: none; transition: 0.2s; resize: vertical; min-height: 120px; }
         .input-box:focus { border-color: var(--primary); }
         
-        /* Zona de Arrastrar y Pegar */
         .paste-area { width: 100%; height: 180px; border: 2px dashed var(--border); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); background: #FAFAFA; cursor: pointer; transition: 0.2s; position: relative; overflow: hidden; }
         .paste-area.dragover { border-color: var(--primary); background: rgba(233, 81, 29, 0.1); transform: scale(1.02); }
         .paste-area:hover { border-color: var(--primary); background: rgba(233, 81, 29, 0.05); }
@@ -96,7 +95,6 @@
             <p>Extrae datos del RUT, Fotos o Texto con IA y genera cotizaciones en PDF</p>
         </div>
 
-        <!-- SECCIÓN 1: EXTRACCIÓN DE DATOS CON IA -->
         <div class="card">
             <h2 style="font-size: 1.1rem; margin-bottom: 15px; color: var(--primary);"><i class="fas fa-robot"></i> 1. Extraer Datos del Cliente (Opcional)</h2>
             <div class="tabs">
@@ -119,7 +117,6 @@
             </div>
         </div>
 
-        <!-- SECCIÓN 2: FORMULARIO Y PRODUCTOS -->
         <div class="card" id="quote-card">
             <h2 style="font-size: 1.2rem; margin-bottom: 15px; color: var(--primary); border-bottom: 2px solid var(--bg-main); padding-bottom: 10px;">
                 <i class="fas fa-building"></i> 2. Datos para la Cotización
@@ -176,7 +173,6 @@
         </div>
     </div>
 
-    <!-- PLANTILLA OCULTA PARA EL PDF -->
     <div id="pdf-template" style="display: none; width: 800px; padding: 40px; background: white; color: black; font-family: 'Helvetica', sans-serif;">
         <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #E9511D; padding-bottom: 20px; margin-bottom: 30px;">
             <img src="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" style="height: 60px;">
@@ -224,7 +220,6 @@
     </div>
 
     <script>
-        // --- 1. BASE DE DATOS DE PRODUCTOS (10 Productos REALES ICC) ---
         const inventoryDB = [
             { sku: "HIT-EX200-B", name: "Bomba Hidráulica Principal Hitachi EX200", brand: "Hitachi", price: 8500000 },
             { sku: "CUM-6L-S01", name: "Sensor de Presión Cummins 6LTAA8.9", brand: "Cummins", price: 350000 },
@@ -248,7 +243,6 @@
             event.currentTarget.classList.add('active');
         }
 
-        // --- 2. EVENTOS ARRASTRAR Y PEGAR ---
         const pasteArea = document.getElementById('paste-area');
         
         pasteArea.addEventListener('dragover', (e) => {
@@ -291,7 +285,6 @@
             reader.readAsDataURL(file);
         }
 
-        // --- 3. CONEXIÓN REAL CON IA ---
         async function procesarConIA(type) {
             const btn = document.getElementById(`btn-process-${type}`);
             const originalText = btn.innerHTML;
@@ -306,7 +299,7 @@
                 if (!text) return alert("Pega algún texto primero.");
                 formData.append('data', text);
             } else {
-                if (!currentImageBlob) return alert("Pega una imagen primero.");
+                if (!currentImageBlob) return alert("Sube o pega una imagen primero.");
                 formData.append('image', currentImageBlob, 'rut_captura.png');
             }
 
@@ -340,14 +333,12 @@
             }
         }
 
-        // --- 4. BUSCADOR DINÁMICO DE PRODUCTOS ---
         const formatCurrency = (num) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(num);
 
         function filterProducts() {
             const query = document.getElementById('search-input').value.toLowerCase();
             const resultsBox = document.getElementById('search-results');
             
-            // Si no hay texto o se hizo clic, mostramos todo el inventario por defecto
             let filtered = inventoryDB;
             
             if (query.length > 0) {
@@ -384,7 +375,6 @@
             if (!e.target.closest('.search-container')) document.getElementById('search-results').style.display = 'none';
         });
 
-        // --- 5. LÓGICA DE LA TABLA DE COTIZACIÓN ---
         function addProduct(sku) {
             const product = inventoryDB.find(p => p.sku === sku);
             if (!product) return;
@@ -469,7 +459,6 @@
             window.currentTotals = { grossSubtotal, totalDiscount, taxableBase, taxAmount, grandTotal };
         }
 
-        // --- 6. GENERADOR DE PDF ---
         function generatePDF() {
             if (currentQuoteItems.length === 0) return alert("Agrega al menos un producto para generar el PDF.");
             
