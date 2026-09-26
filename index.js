@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.20 (FIX FINAL: AUDITORÍA DE RUTAS Y FUNCIONES)
+ * SERVER BACKEND - v33.21 (FIX FINAL + PROTOTIPO COTIZADOR)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -18,6 +18,7 @@
  * 15. FIX: Corrección del modelo a gemini-2.5-flash en el extractor.
  * 16. FIX: Filtro "Consultando" -> "Otro" para evitar error de Picklist en SF.
  * 17. FIX: Intercepción de error "Duplicate Record" de SF con alerta clara.
+ * 18. ADD: Ruta pública oculta /prototipo-cotizador para tarea escolar.
  * ============================================================
  */
 
@@ -316,6 +317,11 @@ app.get('/inbox.js', (req, res) => res.sendFile(path.join(__dirname, 'inbox.js')
 // 🔥 RUTA DEL EXTRACTOR RESTAURADA EN SU POSICIÓN CORRECTA 🔥
 app.get('/extractor', proteger, (req, res) => {
     res.sendFile(path.join(__dirname, 'extractor.html'));
+});
+
+// 🔥 RUTA OCULTA Y PÚBLICA PARA LA TAREA DEL COTIZADOR 🔥
+app.get('/prototipo-cotizador', (req, res) => {
+    res.sendFile(path.join(__dirname, 'cotizador.html'));
 });
 
 app.get('/api/media-proxy/:id', proteger, async (req, res) => {
