@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cotizador IA - Importadora Casa Colombia</title>
+    <link rel="icon" href="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" type="image/svg+xml">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #E9511D; 
+            --bg-main: #F5F7F9;
+            --panel: #FFFFFF;
+            --border: #E0E6ED;
+            --text: #464445;
+            --text-muted: #8892A0;
+            --sf-blue: #00a1e0;
+            --success: #10b981;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Quicksand', sans-serif; }
+        body { background-color: var(--bg-main); color: var(--text); padding: 40px 20px; display: flex; justify-content: center; }
+        
+        .container { max-width: 1000px; width: 100%; }
+        
+        .header { text-align: center; margin-bottom: 30px; }
+        .header img { width: 180px; margin-bottom: 15px; }
+        .header h1 { font-size: 1.8rem; font-weight: 700; color: var(--text); }
+        .header p { color: var(--text-muted); font-weight: 500; }
+
+        .card { background: var(--panel); border-radius: 12px; padding: 30px; box-shadow: 0 8px 24px rgba(0,0,0,0.04); border: 1px solid var(--border); margin-bottom: 20px; }
+        
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid var(--border); padding-bottom: 10px; flex-wrap: wrap; }
+        .tab-btn { background: transparent; border: none; font-size: 1rem; font-weight: 600; color: var(--text-muted); cursor: pointer; padding: 10px 20px; border-radius: 8px; transition: 0.2s; }
+        .tab-btn.active { color: var(--primary); background: rgba(233, 81, 29, 0.1); }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        .input-box { width: 100%; padding: 15px; border: 2px dashed var(--border); border-radius: 8px; font-size: 1rem; color: var(--text); outline: none; transition: 0.2s; resize: vertical; min-height: 120px; }
+        .input-box:focus { border-color: var(--primary); }
+
+        .paste-area { width: 100%; height: 180px; border: 2px dashed var(--border); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); background: #FAFAFA; cursor: pointer; transition: 0.2s; position: relative; overflow: hidden; }
+        .paste-area:hover { border-color: var(--primary); background: rgba(233, 81, 29, 0.05); }
+        .paste-area img { position: absolute; width: 100%; height: 100%; object-fit: contain; display: none; background: #000; }
+
+        .btn-primary { background: var(--primary); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: 0.2s; display: inline-flex; justify-content: center; align-items: center; gap: 8px; }
+        .btn-primary:hover { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(233, 81, 29, 0.3); }
+        .btn-primary:disabled { background: #CCC; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); padding: 12px 20px; border-radius: 8px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: 0.2s; display: inline-flex; justify-content: center; align-items: center; gap: 8px; }
+        .btn-outline:hover { background: var(--bg-main); border-color: var(--text-muted); }
+
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; }
+        .form-group.full { grid-column: span 2; }
+        .form-label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .form-input { padding: 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; color: var(--text); outline: none; background: var(--bg-main); font-weight: 500; }
+        .form-input:focus { border-color: var(--primary); background: var(--panel); }
+
+        /* Estilos de la Tabla de Cotización */
+        .quote-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .quote-table th { background: var(--bg-main); padding: 12px; text-align: left; font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; border-bottom: 2px solid var(--border); }
+        .quote-table td { padding: 12px; border-bottom: 1px solid var(--border); font-size: 0.95rem; vertical-align: middle; }
+        .quote-table input[type="number"] { width: 80px; padding: 6px; border: 1px solid var(--border); border-radius: 4px; text-align: right; }
+        .item-remove { color: #ef4444; cursor: pointer; background: none; border: none; font-size: 1.2rem; }
+        
+        .totals-box { width: 300px; float: right; margin-top: 20px; background: var(--bg-main); padding: 20px; border-radius: 8px; border: 1px solid var(--border); }
+        .totals-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 1rem; color: var(--text); }
+        .totals-row.grand-total { font-size: 1.3rem; font-weight: 700; color: var(--primary); border-top: 2px solid var(--border); padding-top: 10px; margin-top: 5px; }
+
+        .action-buttons { display: flex; gap: 15px; margin-top: 40px; clear: both; flex-wrap: wrap; }
+        
+        .nav-back { position: absolute; top: 20px; left: 20px; color: var(--text-muted); text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+        .nav-back:hover { color: var(--primary); }
+
+        .file-upload-wrapper { position: relative; width: 100%; height: 120px; border: 2px dashed var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; background: #FAFAFA; cursor: pointer; }
+        .file-upload-wrapper input[type="file"] { position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <a href="#" class="nav-back"><i class="fas fa-arrow-left"></i> Volver al CRM</a>
+
+    <div class="container">
+        <div class="header">
+            <img src="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" alt="ICC Logo">
+            <h1>Cotizador Inteligente</h1>
+            <p>Genera cotizaciones leyendo requerimientos de texto, imágenes o PDFs.</p>
+        </div>
+
+        <div class="card">
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('text')"><i class="fas fa-comment-alt"></i> Pegar Texto</button>
+                <button class="tab-btn" onclick="switchTab('image')"><i class="fas fa-camera"></i> Pegar Captura</button>
+                <button class="tab-btn" onclick="switchTab('file')"><i class="fas fa-file-pdf"></i> Subir PDF/Archivo</button>
+            </div>
+
+            <div id="tab-text" class="tab-content active">
+                <textarea id="raw-text" class="input-box" placeholder="Pega el mensaje del cliente pidiendo repuestos aquí..."></textarea>
+                <button class="btn-primary" style="margin-top: 15px; width: 100%;" id="btn-process-text" onclick="simulateAIProcessing()"><i class="fas fa-brain"></i> Extraer Productos y Cotizar</button>
+            </div>
+
+            <div id="tab-image" class="tab-content">
+                <div class="paste-area" id="paste-area" tabindex="0">
+                    <i class="fas fa-clipboard" style="font-size: 3rem; margin-bottom: 10px;"></i>
+                    <p>Haz clic aquí y presiona <b>Ctrl+V</b> para pegar la captura de pantalla</p>
+                    <img id="preview-image" src="" alt="Vista previa">
+                </div>
+                <button class="btn-primary" style="margin-top: 15px; width: 100%;" id="btn-process-image" onclick="simulateAIProcessing()" disabled><i class="fas fa-magic"></i> Procesar Captura</button>
+            </div>
+
+            <div id="tab-file" class="tab-content">
+                <div class="file-upload-wrapper">
+                    <input type="file" id="file-input" accept=".pdf,.doc,.docx">
+                    <div style="text-align: center; color: var(--text-muted);">
+                        <i class="fas fa-cloud-upload-alt" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                        <p>Haz clic o arrastra un archivo PDF con el requerimiento</p>
+                    </div>
+                </div>
+                <p id="file-name" style="margin-top: 10px; font-weight: 600; color: var(--primary); text-align: center;"></p>
+                <button class="btn-primary" style="margin-top: 15px; width: 100%;" id="btn-process-file" onclick="simulateAIProcessing()" disabled><i class="fas fa-file-invoice"></i> Leer Archivo</button>
+            </div>
+        </div>
+
+        <!-- RESULTADOS Y COTIZADOR -->
+        <div class="card" id="quote-card" style="display: none;">
+            <h2 style="font-size: 1.2rem; margin-bottom: 15px; color: var(--primary); border-bottom: 2px solid var(--bg-main); padding-bottom: 10px;">
+                <i class="fas fa-user-tag"></i> Datos del Cliente
+            </h2>
+            <div class="form-grid" style="margin-bottom: 30px;">
+                <div class="form-group"><label class="form-label">Nombre</label><input type="text" id="cli-nombre" class="form-input"></div>
+                <div class="form-group"><label class="form-label">Teléfono / Empresa</label><input type="text" id="cli-tel" class="form-input"></div>
+            </div>
+
+            <h2 style="font-size: 1.2rem; margin-bottom: 15px; color: var(--primary); border-bottom: 2px solid var(--bg-main); padding-bottom: 10px; display: flex; justify-content: space-between;">
+                <span><i class="fas fa-box-open"></i> Productos Cotizados</span>
+                <button class="btn-outline" style="padding: 5px 10px; font-size: 0.8rem;" onclick="alert('Aquí se abriría un buscador de inventario')"><i class="fas fa-plus"></i> Añadir Manual</button>
+            </h2>
+            
+            <div style="overflow-x: auto;">
+                <table class="quote-table">
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Descripción del Producto</th>
+                            <th style="text-align: right;">Precio Unit. (COP)</th>
+                            <th style="text-align: center;">Cant.</th>
+                            <th style="text-align: center;">% Dcto</th>
+                            <th style="text-align: right;">Subtotal</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="quote-tbody">
+                        <!-- Llenado dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="totals-box">
+                <div class="totals-row">
+                    <span>Subtotal Bruto:</span>
+                    <span id="txt-subtotal">$0</span>
+                </div>
+                <div class="totals-row">
+                    <span>Descuento Total:</span>
+                    <span id="txt-discount" style="color: #ef4444;">-$0</span>
+                </div>
+                <div class="totals-row">
+                    <span>Base Gravable:</span>
+                    <span id="txt-base">$0</span>
+                </div>
+                <div class="totals-row">
+                    <span>IVA (19%):</span>
+                    <span id="txt-tax">$0</span>
+                </div>
+                <div class="totals-row grand-total">
+                    <span>TOTAL:</span>
+                    <span id="txt-total">$0</span>
+                </div>
+            </div>
+
+            <!-- BOTONES DE ACCIÓN CRM -->
+            <div class="action-buttons">
+                <button class="btn-primary" style="background: var(--sf-blue);" onclick="mockCRMAction('Lead')">
+                    <i class="fas fa-user-plus"></i> Crear Lead
+                </button>
+                <button class="btn-primary" style="background: #f59e0b;" onclick="mockCRMAction('Oportunidad')">
+                    <i class="fas fa-hand-holding-usd"></i> Crear Oportunidad
+                </button>
+                <button class="btn-primary" style="background: #8b5cf6;" onclick="mockCRMAction('Tarea')">
+                    <i class="fas fa-tasks"></i> Crear Tarea
+                </button>
+                <button class="btn-primary" style="flex-grow: 1; justify-content: center; background: var(--success);" onclick="mockCRMAction('Cotización PDF')">
+                    <i class="fas fa-file-pdf"></i> Generar Cotización PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- BASE DE DATOS MOCK DE INVENTARIO (10 Productos storeicc.com) ---
+        const inventoryDB = [
+            { sku: "CUM-6LT-001", name: "Sensor de Presión Cummins 6LTAA8.9", price: 350000 },
+            { sku: "HIT-EX200-02", name: "Bomba Hidráulica Principal Hitachi EX200", price: 8500000 },
+            { sku: "SHA-F300-03", name: "Filtro de Aire Shacman F3000", price: 125000 },
+            { sku: "KOM-PC200-04", name: "Kit de Empaquetadura Komatsu PC200", price: 450000 },
+            { sku: "CAT-320-05", name: "Diente de Cuchara excavadora CAT 320", price: 85000 },
+            { sku: "FLT-LF9009", name: "Filtro de Aceite Fleetguard LF9009", price: 95000 },
+            { sku: "CUM-4BT-07", name: "Inyector de Combustible Cummins 4BT", price: 650000 },
+            { sku: "VOL-FMX-08", name: "Compresor de Aire Aire Volvo FMX", price: 2100000 },
+            { sku: "ISU-NPR-09", name: "Disco de Embrague Isuzu NPR", price: 580000 },
+            { sku: "LUB-15W40-10", name: "Aceite de Motor 15W40 Caneca 5 Galones", price: 280000 }
+        ];
+
+        let currentQuoteItems = [];
+        const TAX_RATE = 0.19; // IVA 19% Colombia
+
+        // --- MANEJO DE PESTAÑAS Y ARCHIVOS ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+
+        const pasteArea = document.getElementById('paste-area');
+        pasteArea.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            for (let index in items) {
+                if (items[index].kind === 'file') {
+                    const blob = items[index].getAsFile();
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const img = document.getElementById('preview-image');
+                        img.src = event.target.result;
+                        img.style.display = 'block';
+                        document.getElementById('btn-process-image').disabled = false;
+                    };
+                    reader.readAsDataURL(blob);
+                }
+            }
+        });
+
+        document.getElementById('file-input').addEventListener('change', function(e) {
+            if(this.files && this.files[0]) {
+                document.getElementById('file-name').innerText = "Archivo cargado: " + this.files[0].name;
+                document.getElementById('btn-process-file').disabled = false;
+            }
+        });
+
+        // --- SIMULACIÓN DE EXTRACCIÓN CON IA ---
+        function simulateAIProcessing() {
+            const btns = document.querySelectorAll('.btn-primary');
+            btns.forEach(b => { if(b.id.includes('process')) b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Leyendo requerimiento...' });
+            
+            // Simular tiempo de respuesta de red/IA
+            setTimeout(() => {
+                document.getElementById('quote-card').style.display = 'block';
+                document.getElementById('quote-card').scrollIntoView({ behavior: 'smooth' });
+                
+                // Mock datos de cliente extraidos
+                document.getElementById('cli-nombre').value = "Constructora Civil S.A.S";
+                document.getElementById('cli-tel').value = "310 999 8888";
+
+                // Simular que la IA encontró 2 productos del inventario
+                currentQuoteItems = [
+                    { ...inventoryDB[0], qty: 2, discount: 5 }, // Sensor
+                    { ...inventoryDB[5], qty: 5, discount: 0 }  // Filtro
+                ];
+
+                renderTable();
+                
+                btns.forEach(b => { 
+                    if(b.id === 'btn-process-text') b.innerHTML = '<i class="fas fa-brain"></i> Extraer Productos y Cotizar';
+                    if(b.id === 'btn-process-image') b.innerHTML = '<i class="fas fa-magic"></i> Procesar Captura';
+                    if(b.id === 'btn-process-file') b.innerHTML = '<i class="fas fa-file-invoice"></i> Leer Archivo';
+                });
+            }, 1500);
+        }
+
+        // --- LÓGICA DE COTIZADOR ---
+        const formatCurrency = (num) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(num);
+
+        function renderTable() {
+            const tbody = document.getElementById('quote-tbody');
+            tbody.innerHTML = '';
+
+            currentQuoteItems.forEach((item, index) => {
+                const subtotal = item.price * item.qty;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${item.sku}</strong></td>
+                    <td>${item.name}</td>
+                    <td style="text-align: right;">${formatCurrency(item.price)}</td>
+                    <td style="text-align: center;">
+                        <input type="number" min="1" value="${item.qty}" onchange="updateItem(${index}, 'qty', this.value)">
+                    </td>
+                    <td style="text-align: center;">
+                        <input type="number" min="0" max="100" value="${item.discount}" onchange="updateItem(${index}, 'discount', this.value)">
+                    </td>
+                    <td style="text-align: right; font-weight: 600;">${formatCurrency(subtotal * (1 - (item.discount/100)))}</td>
+                    <td style="text-align: center;">
+                        <button class="item-remove" onclick="removeItem(${index})"><i class="fas fa-trash-alt"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            calculateTotals();
+        }
+
+        function updateItem(index, field, value) {
+            currentQuoteItems[index][field] = parseFloat(value) || 0;
+            renderTable();
+        }
+
+        function removeItem(index) {
+            currentQuoteItems.splice(index, 1);
+            renderTable();
+        }
+
+        function calculateTotals() {
+            let grossSubtotal = 0;
+            let totalDiscount = 0;
+
+            currentQuoteItems.forEach(item => {
+                const lineGross = item.price * item.qty;
+                const lineDiscount = lineGross * (item.discount / 100);
+                grossSubtotal += lineGross;
+                totalDiscount += lineDiscount;
+            });
+
+            const taxableBase = grossSubtotal - totalDiscount;
+            const taxAmount = taxableBase * TAX_RATE;
+            const grandTotal = taxableBase + taxAmount;
+
+            document.getElementById('txt-subtotal').innerText = formatCurrency(grossSubtotal);
+            document.getElementById('txt-discount').innerText = "-" + formatCurrency(totalDiscount);
+            document.getElementById('txt-base').innerText = formatCurrency(taxableBase);
+            document.getElementById('txt-tax').innerText = formatCurrency(taxAmount);
+            document.getElementById('txt-total').innerText = formatCurrency(grandTotal);
+        }
+
+        // --- MOCK ACCIONES CRM ---
+        function mockCRMAction(action) {
+            if(action === 'Cotización PDF') {
+                alert("Simulación: Descargando Cotizacion_ConstructoraCivil.pdf con membrete ICC...");
+            } else {
+                alert(`Simulación: Conectando con API de Salesforce para crear [${action}]... ¡Éxito!`);
+            }
+        }
+    </script>
+</body>
+</html>
