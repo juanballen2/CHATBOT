@@ -43,7 +43,7 @@
         .input-box { width: 100%; padding: 15px; border: 2px dashed var(--border); border-radius: 8px; font-size: 1rem; color: var(--text); outline: none; transition: 0.2s; resize: vertical; min-height: 120px; }
         .input-box:focus { border-color: var(--primary); }
         
-        .paste-area { width: 100%; height: 180px; border: 2px dashed var(--border); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); background: #FAFAFA; cursor: pointer; transition: 0.2s; position: relative; overflow: hidden; }
+        .paste-area { width: 100%; height: 180px; border: 2px dashed var(--border); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); background: #FAFAFA; cursor: pointer; transition: 0.2s; position: relative; overflow: hidden; text-align: center; padding: 20px; }
         .paste-area.dragover { border-color: var(--primary); background: rgba(233, 81, 29, 0.1); transform: scale(1.02); }
         .paste-area:hover { border-color: var(--primary); background: rgba(233, 81, 29, 0.05); }
         .paste-area img { position: absolute; width: 100%; height: 100%; object-fit: contain; display: none; background: #000; z-index: 2; }
@@ -98,17 +98,17 @@
         <div class="card">
             <h2 style="font-size: 1.1rem; margin-bottom: 15px; color: var(--primary);"><i class="fas fa-robot"></i> 1. Extraer Datos del Cliente (Opcional)</h2>
             <div class="tabs">
-                <button class="tab-btn active" onclick="switchTab('image')"><i class="fas fa-file-invoice"></i> Leer RUT o Foto</button>
+                <button class="tab-btn active" onclick="switchTab('image')"><i class="fas fa-file-invoice"></i> Leer RUT (PDF o Foto)</button>
                 <button class="tab-btn" onclick="switchTab('text')"><i class="fas fa-comment-alt"></i> Leer Texto / WhatsApp</button>
             </div>
 
             <div id="tab-image" class="tab-content active">
                 <div class="paste-area" id="paste-area" tabindex="0">
-                    <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; margin-bottom: 10px; pointer-events: none;"></i>
-                    <p style="pointer-events: none;"><b>Arrastra y suelta</b> un RUT o imagen aquí, o presiona <b>Ctrl+V</b> para pegar</p>
+                    <i id="upload-icon" class="fas fa-cloud-upload-alt" style="font-size: 3rem; margin-bottom: 10px; pointer-events: none;"></i>
+                    <p id="upload-text" style="pointer-events: none;"><b>Arrastra y suelta</b> un RUT (PDF/Imagen) aquí, o presiona <b>Ctrl+V</b> para pegar</p>
                     <img id="preview-image" src="" alt="Vista previa">
                 </div>
-                <button class="btn-primary" id="btn-process-image" onclick="procesarConIA('image')" disabled><i class="fas fa-magic"></i> Extraer Datos de la Imagen</button>
+                <button class="btn-primary" id="btn-process-image" onclick="procesarConIA('image')" disabled><i class="fas fa-magic"></i> Extraer Datos con IA</button>
             </div>
 
             <div id="tab-text" class="tab-content">
@@ -173,6 +173,7 @@
         </div>
     </div>
 
+    <!-- PLANTILLA OCULTA PARA EL PDF -->
     <div id="pdf-template" style="display: none; width: 800px; padding: 40px; background: white; color: black; font-family: 'Helvetica', sans-serif;">
         <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #E9511D; padding-bottom: 20px; margin-bottom: 30px;">
             <img src="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" style="height: 60px;">
@@ -245,15 +246,8 @@
 
         const pasteArea = document.getElementById('paste-area');
         
-        pasteArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            pasteArea.classList.add('dragover');
-        });
-        
-        pasteArea.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            pasteArea.classList.remove('dragover');
-        });
+        pasteArea.addEventListener('dragover', (e) => { e.preventDefault(); pasteArea.classList.add('dragover'); });
+        pasteArea.addEventListener('dragleave', (e) => { e.preventDefault(); pasteArea.classList.remove('dragover'); });
         
         pasteArea.addEventListener('drop', (e) => {
             e.preventDefault();
@@ -275,14 +269,27 @@
 
         function loadImageData(file) {
             currentImageBlob = file;
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const img = document.getElementById('preview-image');
-                img.src = event.target.result;
-                img.style.display = 'block';
-                document.getElementById('btn-process-image').disabled = false;
-            };
-            reader.readAsDataURL(file);
+            const img = document.getElementById('preview-image');
+            const icon = document.getElementById('upload-icon');
+            const text = document.getElementById('upload-text');
+
+            if (file.type === 'application/pdf') {
+                img.style.display = 'none';
+                icon.className = 'fas fa-file-pdf';
+                icon.style.color = '#ef4444';
+                text.innerHTML = `<b>RUT/PDF Cargado:</b> ${file.name}`;
+            } else {
+                icon.className = 'fas fa-image';
+                icon.style.color = 'var(--primary)';
+                text.innerHTML = `<b>Imagen Cargada:</b> Lista para procesar`;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    img.src = event.target.result;
+                    img.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+            document.getElementById('btn-process-image').disabled = false;
         }
 
         async function procesarConIA(type) {
@@ -299,13 +306,29 @@
                 if (!text) return alert("Pega algún texto primero.");
                 formData.append('data', text);
             } else {
-                if (!currentImageBlob) return alert("Sube o pega una imagen primero.");
-                formData.append('image', currentImageBlob, 'rut_captura.png');
+                if (!currentImageBlob) return alert("Sube o pega un archivo primero.");
+                // Aunque sea PDF, lo mandamos. La IA lo lee igual.
+                formData.append('image', currentImageBlob, 'documento_rut.' + (currentImageBlob.type.includes('pdf') ? 'pdf' : 'png'));
             }
 
             try {
                 const res = await fetch('/api/extractor/process', { method: 'POST', body: formData });
-                const json = await res.json();
+                
+                // Caza-errores por si Railway manda a login o crashea
+                if (res.redirected && res.url.includes('/login')) {
+                    alert("❌ ERROR: El servidor bloqueó la subida. Verifica que actualizaste el index.js en GitHub o espera a que Railway termine de compilar (Deploying).");
+                    return;
+                }
+
+                const textRes = await res.text();
+                let json;
+                try {
+                    json = JSON.parse(textRes);
+                } catch(e) {
+                    console.error("El servidor NO devolvió JSON:", textRes);
+                    alert("❌ ERROR CRÍTICO DEL SERVIDOR. Revisa la consola o espera que Railway reinicie.");
+                    return;
+                }
 
                 if (res.ok && json.success) {
                     const data = json.data;
@@ -321,12 +344,13 @@
                         document.getElementById('search-input').value = data.producto_detalle;
                         filterProducts();
                     }
-                    alert("✅ Datos extraídos correctamente. Revisa el formulario.");
+                    alert("✅ ¡Datos extraídos del documento correctamente!");
                 } else {
-                    alert("❌ Fallo en la extracción: " + (json.message || "Error desconocido"));
+                    alert("❌ Fallo en la extracción: " + (json.message || "La IA no pudo leer este archivo."));
                 }
             } catch (error) {
-                alert("❌ Error de conexión con el servidor.");
+                console.error("Fetch Error:", error);
+                alert("❌ Falló la conexión. ¿Tienes internet o el servidor está apagado?");
             } finally {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -340,13 +364,8 @@
             const resultsBox = document.getElementById('search-results');
             
             let filtered = inventoryDB;
-            
             if (query.length > 0) {
-                filtered = inventoryDB.filter(p => 
-                    p.name.toLowerCase().includes(query) || 
-                    p.sku.toLowerCase().includes(query) || 
-                    p.brand.toLowerCase().includes(query)
-                );
+                filtered = inventoryDB.filter(p => p.name.toLowerCase().includes(query) || p.sku.toLowerCase().includes(query) || p.brand.toLowerCase().includes(query));
             }
 
             if (filtered.length > 0) {
@@ -380,11 +399,7 @@
             if (!product) return;
 
             const existing = currentQuoteItems.find(i => i.sku === sku);
-            if (existing) {
-                existing.qty += 1;
-            } else {
-                currentQuoteItems.push({ ...product, qty: 1, discount: 0 });
-            }
+            if (existing) { existing.qty += 1; } else { currentQuoteItems.push({ ...product, qty: 1, discount: 0 }); }
 
             document.getElementById('search-input').value = "";
             document.getElementById('search-results').style.display = 'none';
@@ -403,7 +418,6 @@
 
         function renderTable() {
             const tbody = document.getElementById('quote-tbody');
-            
             if (currentQuoteItems.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">Busca un producto y agrégalo a la cotización</td></tr>';
                 calculateTotals();
@@ -418,32 +432,22 @@
                     <td><strong>${item.sku}</strong></td>
                     <td>${item.name}</td>
                     <td style="text-align: right;">${formatCurrency(item.price)}</td>
-                    <td style="text-align: center;">
-                        <input type="number" min="1" value="${item.qty}" onchange="updateItem(${index}, 'qty', this.value)">
-                    </td>
-                    <td style="text-align: center;">
-                        <input type="number" min="0" max="100" value="${item.discount}" onchange="updateItem(${index}, 'discount', this.value)">
-                    </td>
+                    <td style="text-align: center;"><input type="number" min="1" value="${item.qty}" onchange="updateItem(${index}, 'qty', this.value)"></td>
+                    <td style="text-align: center;"><input type="number" min="0" max="100" value="${item.discount}" onchange="updateItem(${index}, 'discount', this.value)"></td>
                     <td style="text-align: right; font-weight: 600;">${formatCurrency(subtotal * (1 - (item.discount/100)))}</td>
-                    <td style="text-align: center;">
-                        <button class="item-remove" onclick="removeItem(${index})"><i class="fas fa-times-circle"></i></button>
-                    </td>
+                    <td style="text-align: center;"><button class="item-remove" onclick="removeItem(${index})"><i class="fas fa-times-circle"></i></button></td>
                 `;
                 tbody.appendChild(tr);
             });
-
             calculateTotals();
         }
 
         function calculateTotals() {
-            let grossSubtotal = 0;
-            let totalDiscount = 0;
-
+            let grossSubtotal = 0; let totalDiscount = 0;
             currentQuoteItems.forEach(item => {
                 const lineGross = item.price * item.qty;
-                const lineDiscount = lineGross * (item.discount / 100);
                 grossSubtotal += lineGross;
-                totalDiscount += lineDiscount;
+                totalDiscount += lineGross * (item.discount / 100);
             });
 
             const taxableBase = grossSubtotal - totalDiscount;
@@ -463,7 +467,6 @@
             if (currentQuoteItems.length === 0) return alert("Agrega al menos un producto para generar el PDF.");
             
             const clientName = document.getElementById('cli-nombre').value || "Cliente Mostrador";
-            
             document.getElementById('pdf-date').innerText = new Date().toLocaleDateString('es-CO');
             document.getElementById('pdf-cliente').innerText = clientName;
             document.getElementById('pdf-nit').innerText = document.getElementById('cli-nit').value || "No registrado";
@@ -491,17 +494,8 @@
             const element = document.getElementById('pdf-template');
             element.style.display = 'block';
 
-            const opt = {
-                margin:       10,
-                filename:     `Cotizacion_ICC_${clientName.replace(/\s+/g, '_')}.pdf`,
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2, useCORS: true },
-                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            };
-
-            html2pdf().set(opt).from(element).save().then(() => {
-                element.style.display = 'none';
-            });
+            const opt = { margin: 10, filename: `Cotizacion_ICC_${clientName.replace(/\s+/g, '_')}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } };
+            html2pdf().set(opt).from(element).save().then(() => { element.style.display = 'none'; });
         }
     </script>
 </body>
