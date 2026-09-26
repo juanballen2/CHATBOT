@@ -7,7 +7,6 @@
     <link rel="icon" href="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" type="image/svg+xml">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- LIBRERÍA PARA GENERAR PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     
     <style>
@@ -34,7 +33,6 @@
 
         .card { background: var(--panel); border-radius: 12px; padding: 30px; box-shadow: 0 8px 24px rgba(0,0,0,0.04); border: 1px solid var(--border); margin-bottom: 20px; }
         
-        /* Pestañas */
         .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid var(--border); padding-bottom: 10px; flex-wrap: wrap; }
         .tab-btn { background: transparent; border: none; font-size: 1rem; font-weight: 600; color: var(--text-muted); cursor: pointer; padding: 10px 20px; border-radius: 8px; transition: 0.2s; }
         .tab-btn.active { color: var(--primary); background: rgba(233, 81, 29, 0.1); }
@@ -42,14 +40,15 @@
         .tab-content.active { display: block; animation: fadeIn 0.3s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* Entradas de Datos */
         .input-box { width: 100%; padding: 15px; border: 2px dashed var(--border); border-radius: 8px; font-size: 1rem; color: var(--text); outline: none; transition: 0.2s; resize: vertical; min-height: 120px; }
         .input-box:focus { border-color: var(--primary); }
+        
+        /* Zona de Arrastrar y Pegar */
         .paste-area { width: 100%; height: 180px; border: 2px dashed var(--border); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); background: #FAFAFA; cursor: pointer; transition: 0.2s; position: relative; overflow: hidden; }
+        .paste-area.dragover { border-color: var(--primary); background: rgba(233, 81, 29, 0.1); transform: scale(1.02); }
         .paste-area:hover { border-color: var(--primary); background: rgba(233, 81, 29, 0.05); }
-        .paste-area img { position: absolute; width: 100%; height: 100%; object-fit: contain; display: none; background: #000; }
+        .paste-area img { position: absolute; width: 100%; height: 100%; object-fit: contain; display: none; background: #000; z-index: 2; }
 
-        /* Botones */
         .btn-primary { background: var(--primary); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: 0.2s; display: inline-flex; justify-content: center; align-items: center; gap: 8px; width: 100%; margin-top: 15px; }
         .btn-primary:hover { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(233, 81, 29, 0.3); }
         .btn-primary:disabled { background: #CCC; cursor: not-allowed; transform: none; box-shadow: none; }
@@ -57,7 +56,6 @@
         .btn-action { background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 10px 15px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
         .btn-action:hover { background: var(--bg-main); border-color: var(--text-muted); }
 
-        /* Buscador de Productos */
         .search-container { position: relative; margin-bottom: 20px; }
         .search-input { width: 100%; padding: 12px 15px 12px 40px; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; outline: none; }
         .search-input:focus { border-color: var(--primary); }
@@ -69,7 +67,6 @@
         .search-item-sku { font-size: 0.75rem; color: var(--text-muted); }
         .search-item-price { font-weight: 700; color: var(--primary); font-size: 0.9rem; }
 
-        /* Formularios y Tablas */
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
         .form-group { display: flex; flex-direction: column; gap: 5px; }
         .form-label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
@@ -109,8 +106,8 @@
 
             <div id="tab-image" class="tab-content active">
                 <div class="paste-area" id="paste-area" tabindex="0">
-                    <i class="fas fa-clipboard" style="font-size: 3rem; margin-bottom: 10px;"></i>
-                    <p>Haz clic aquí y presiona <b>Ctrl+V</b> para pegar el RUT o captura</p>
+                    <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; margin-bottom: 10px; pointer-events: none;"></i>
+                    <p style="pointer-events: none;"><b>Arrastra y suelta</b> un RUT o imagen aquí, o presiona <b>Ctrl+V</b> para pegar</p>
                     <img id="preview-image" src="" alt="Vista previa">
                 </div>
                 <button class="btn-primary" id="btn-process-image" onclick="procesarConIA('image')" disabled><i class="fas fa-magic"></i> Extraer Datos de la Imagen</button>
@@ -140,7 +137,7 @@
             
             <div class="search-container">
                 <i class="fas fa-search search-icon"></i>
-                <input type="text" id="search-input" class="search-input" placeholder="Buscar repuesto por nombre, marca o SKU (Ej: Cummins, Bomba, Filtro)..." oninput="filterProducts()">
+                <input type="text" id="search-input" class="search-input" placeholder="Haz clic para ver los productos o buscar por nombre..." oninput="filterProducts()" onfocus="filterProducts()">
                 <div id="search-results" class="search-results"></div>
             </div>
             
@@ -243,34 +240,58 @@
 
         let currentQuoteItems = [];
         let currentImageBlob = null;
-        const TAX_RATE = 0.19; // IVA 19%
+        const TAX_RATE = 0.19;
 
-        // --- 2. MANEJO DE PESTAÑAS Y PEGAR IMÁGENES ---
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active'));
             document.getElementById(`tab-${tabId}`).classList.add('active');
             event.currentTarget.classList.add('active');
         }
 
-        document.getElementById('paste-area').addEventListener('paste', (e) => {
+        // --- 2. EVENTOS ARRASTRAR Y PEGAR ---
+        const pasteArea = document.getElementById('paste-area');
+        
+        pasteArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            pasteArea.classList.add('dragover');
+        });
+        
+        pasteArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            pasteArea.classList.remove('dragover');
+        });
+        
+        pasteArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            pasteArea.classList.remove('dragover');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                loadImageData(e.dataTransfer.files[0]);
+            }
+        });
+
+        pasteArea.addEventListener('paste', (e) => {
             e.preventDefault();
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
             for (let index in items) {
                 if (items[index].kind === 'file') {
-                    currentImageBlob = items[index].getAsFile();
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                        const img = document.getElementById('preview-image');
-                        img.src = event.target.result;
-                        img.style.display = 'block';
-                        document.getElementById('btn-process-image').disabled = false;
-                    };
-                    reader.readAsDataURL(currentImageBlob);
+                    loadImageData(items[index].getAsFile());
                 }
             }
         });
 
-        // --- 3. CONEXIÓN REAL CON IA (EXTRAE DATOS DEL RUT O TEXTO) ---
+        function loadImageData(file) {
+            currentImageBlob = file;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = document.getElementById('preview-image');
+                img.src = event.target.result;
+                img.style.display = 'block';
+                document.getElementById('btn-process-image').disabled = false;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // --- 3. CONEXIÓN REAL CON IA ---
         async function procesarConIA(type) {
             const btn = document.getElementById(`btn-process-${type}`);
             const originalText = btn.innerHTML;
@@ -290,14 +311,11 @@
             }
 
             try {
-                // LLAMADA AL ENDPOINT REAL QUE YA TIENES EN INDEX.JS
                 const res = await fetch('/api/extractor/process', { method: 'POST', body: formData });
                 const json = await res.json();
 
                 if (res.ok && json.success) {
                     const data = json.data;
-                    
-                    // Llenar el formulario con los datos extraídos
                     let nombreFull = "";
                     if (data.nombre !== "No proporcionado") nombreFull += data.nombre;
                     if (data.apellido !== "No proporcionado") nombreFull += " " + data.apellido;
@@ -306,12 +324,10 @@
                     document.getElementById('cli-tel').value = data.telefono !== "No proporcionado" ? data.telefono : "";
                     document.getElementById('cli-ciudad').value = data.ubicacion !== "No proporcionado" ? data.ubicacion : "";
                     
-                    // Si la IA detectó un producto, lo ponemos en el buscador para ayudar al asesor
                     if (data.producto_detalle && data.producto_detalle !== "No proporcionado") {
                         document.getElementById('search-input').value = data.producto_detalle;
                         filterProducts();
                     }
-
                     alert("✅ Datos extraídos correctamente. Revisa el formulario.");
                 } else {
                     alert("❌ Fallo en la extracción: " + (json.message || "Error desconocido"));
@@ -331,27 +347,32 @@
             const query = document.getElementById('search-input').value.toLowerCase();
             const resultsBox = document.getElementById('search-results');
             
-            if (query.length < 2) {
-                resultsBox.style.display = 'none';
-                return;
+            // Si no hay texto o se hizo clic, mostramos todo el inventario por defecto
+            let filtered = inventoryDB;
+            
+            if (query.length > 0) {
+                filtered = inventoryDB.filter(p => 
+                    p.name.toLowerCase().includes(query) || 
+                    p.sku.toLowerCase().includes(query) || 
+                    p.brand.toLowerCase().includes(query)
+                );
             }
 
-            const filtered = inventoryDB.filter(p => 
-                p.name.toLowerCase().includes(query) || 
-                p.sku.toLowerCase().includes(query) || 
-                p.brand.toLowerCase().includes(query)
-            );
-
             if (filtered.length > 0) {
-                resultsBox.innerHTML = filtered.map(p => `
-                    <div class="search-item" onclick="addProduct('${p.sku}')">
-                        <div>
-                            <div class="search-item-title">${p.name}</div>
-                            <div class="search-item-sku">${p.sku} • ${p.brand}</div>
-                        </div>
-                        <div class="search-item-price">${formatCurrency(p.price)}</div>
+                resultsBox.innerHTML = `
+                    <div style="padding: 8px 15px; font-size: 0.8rem; background: var(--bg-main); color: var(--text-muted); font-weight: bold;">
+                        ${query.length === 0 ? 'PRODUCTOS SUGERIDOS PARA LA PRUEBA' : 'RESULTADOS DE BÚSQUEDA'}
                     </div>
-                `).join('');
+                    ${filtered.map(p => `
+                        <div class="search-item" onclick="addProduct('${p.sku}')">
+                            <div>
+                                <div class="search-item-title">${p.name}</div>
+                                <div class="search-item-sku">${p.sku} •${p.brand}</div>
+                            </div>
+                            <div class="search-item-price">${formatCurrency(p.price)}</div>
+                        </div>
+                    `).join('')}
+                `;
                 resultsBox.style.display = 'block';
             } else {
                 resultsBox.innerHTML = '<div class="search-item"><div class="search-item-title" style="color:var(--text-muted);">No se encontraron repuestos</div></div>';
@@ -359,7 +380,6 @@
             }
         }
 
-        // Ocultar buscador al hacer clic afuera
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.search-container')) document.getElementById('search-results').style.display = 'none';
         });
@@ -369,7 +389,6 @@
             const product = inventoryDB.find(p => p.sku === sku);
             if (!product) return;
 
-            // Revisar si ya existe para sumar cantidad
             const existing = currentQuoteItems.find(i => i.sku === sku);
             if (existing) {
                 existing.qty += 1;
@@ -447,7 +466,6 @@
             document.getElementById('txt-tax').innerText = formatCurrency(taxAmount);
             document.getElementById('txt-total').innerText = formatCurrency(grandTotal);
 
-            // Guardar para el PDF
             window.currentTotals = { grossSubtotal, totalDiscount, taxableBase, taxAmount, grandTotal };
         }
 
@@ -457,14 +475,12 @@
             
             const clientName = document.getElementById('cli-nombre').value || "Cliente Mostrador";
             
-            // Llenar datos de la plantilla oculta
             document.getElementById('pdf-date').innerText = new Date().toLocaleDateString('es-CO');
             document.getElementById('pdf-cliente').innerText = clientName;
             document.getElementById('pdf-nit').innerText = document.getElementById('cli-nit').value || "No registrado";
             document.getElementById('pdf-tel').innerText = document.getElementById('cli-tel').value || "No registrado";
             document.getElementById('pdf-ciudad').innerText = document.getElementById('cli-ciudad').value || "Bogotá";
 
-            // Llenar tabla del PDF
             const pdfTbody = document.getElementById('pdf-tbody');
             pdfTbody.innerHTML = currentQuoteItems.map(item => `
                 <tr style="border-bottom: 1px solid #EEE;">
@@ -476,7 +492,6 @@
                 </tr>
             `).join('');
 
-            // Llenar totales del PDF
             const t = window.currentTotals;
             document.getElementById('pdf-subtotal').innerText = formatCurrency(t.grossSubtotal);
             document.getElementById('pdf-discount').innerText = "-" + formatCurrency(t.totalDiscount);
@@ -484,11 +499,9 @@
             document.getElementById('pdf-tax').innerText = formatCurrency(t.taxAmount);
             document.getElementById('pdf-total').innerText = formatCurrency(t.grandTotal);
 
-            // Mostrar temporalmente para que html2pdf lo capture
             const element = document.getElementById('pdf-template');
             element.style.display = 'block';
 
-            // Configuración del PDF
             const opt = {
                 margin:       10,
                 filename:     `Cotizacion_ICC_${clientName.replace(/\s+/g, '_')}.pdf`,
@@ -497,9 +510,8 @@
                 jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
 
-            // Generar y descargar
             html2pdf().set(opt).from(element).save().then(() => {
-                element.style.display = 'none'; // Volver a ocultar
+                element.style.display = 'none';
             });
         }
     </script>
