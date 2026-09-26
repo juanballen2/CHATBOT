@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.21 (FIX FINAL + PROTOTIPO COTIZADOR)
+ * SERVER BACKEND - v33.25 (FIX DEFINITIVO: COTIZADOR PÚBLICO Y LECTURA DE RUT/PDF)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -19,6 +19,8 @@
  * 16. FIX: Filtro "Consultando" -> "Otro" para evitar error de Picklist en SF.
  * 17. FIX: Intercepción de error "Duplicate Record" de SF con alerta clara.
  * 18. ADD: Ruta pública oculta /prototipo-cotizador para tarea escolar.
+ * 19. FIX: Ruta /api/extractor/process TOTALMENTE PÚBLICA sin 'proteger'.
+ * 20. FIX: Soporte nativo de base64 para PDFs pesados en Gemini 2.5.
  * ============================================================
  */
 
@@ -314,7 +316,6 @@ app.get('/inbox', proteger, (req, res) => res.sendFile(path.join(__dirname, 'inb
 app.get('/inbox.css', (req, res) => res.sendFile(path.join(__dirname, 'inbox.css')));
 app.get('/inbox.js', (req, res) => res.sendFile(path.join(__dirname, 'inbox.js')));
 
-// 🔥 RUTA DEL EXTRACTOR RESTAURADA EN SU POSICIÓN CORRECTA 🔥
 app.get('/extractor', proteger, (req, res) => {
     res.sendFile(path.join(__dirname, 'extractor.html'));
 });
@@ -1502,10 +1503,11 @@ app.post('/webhook', async (req, res) => {
 // 🔥 MÓDULO: EXTRACTOR INTELIGENTE INDEPENDIENTE 🔥
 // ============================================================
 
-app.post('/api/extractor/process', proteger, upload.single('image'), async (req, res) => {
+// PÚBLICO: NO LLEVA 'proteger' para que funcione el cotizador enlazado sin contraseña
+app.post('/api/extractor/process', upload.single('image'), async (req, res) => {
     try {
         if (!API_KEY || API_KEY.trim() === '' || API_KEY === 'undefined') {
-            return res.status(500).json({ success: false, message: "⚠️ GEMINI_API_KEY no está configurada en las Variables de Entorno de Railway." });
+            return res.status(500).json({ success: false, message: "⚠️ GEMINI_API_KEY no está configurada." });
         }
 
         const { type, data } = req.body;
@@ -1540,6 +1542,7 @@ app.post('/api/extractor/process', proteger, upload.single('image'), async (req,
             contents = [{ role: 'user', parts: [{ text: `${promptReglas}\n\nTexto:\n${data}` }] }];
         } else if (type === 'image' && req.file) {
             const base64Data = req.file.buffer.toString('base64');
+            // La IA soporta base64 nativo tanto para imágenes como para PDF si enviamos el mimetype correcto
             contents = [{ role: 'user', parts: [
                 { text: promptReglas },
                 { inlineData: { mimeType: req.file.mimetype, data: base64Data } }
@@ -1560,10 +1563,12 @@ app.post('/api/extractor/process', proteger, upload.single('image'), async (req,
     } catch (error) {
         const detail = error.response?.data?.error?.message || error.message;
         console.error("Error en Extractor IA:", detail);
+        // Ahora siempre aseguramos un JSON de vuelta, para evitar el error de parsing en el frontend
         res.status(500).json({ success: false, message: `Fallo en la IA: ${detail}` });
     }
 });
 
+// INTERNO: SÍ LLEVA 'proteger' para que no cualquiera pueda subir leads a Salesforce
 app.post('/api/extractor/salesforce', proteger, async (req, res) => {
     try {
         const payload = req.body;
