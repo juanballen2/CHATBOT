@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.25 (FIX DEFINITIVO: COTIZADOR PÚBLICO Y LECTURA DE RUT/PDF)
+ * SERVER BACKEND - v33.26 (FIX DEFINITIVO: LOGGER DE ERRORES GEMINI)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -21,6 +21,7 @@
  * 18. ADD: Ruta pública oculta /prototipo-cotizador para tarea escolar.
  * 19. FIX: Ruta /api/extractor/process TOTALMENTE PÚBLICA sin 'proteger'.
  * 20. FIX: Soporte nativo de base64 para PDFs pesados en Gemini 2.5.
+ * 21. FIX: Agregado Logger de Errores Reales de Gemini en el ChatBot.
  * ============================================================
  */
 
@@ -522,6 +523,7 @@ Categorías permitidas: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos
 
         return reply;
     } catch (e) { 
+        console.error("❌ ERROR REAL DE GEMINI:", e.response ? JSON.stringify(e.response.data) : e.message);
         return "Dame un momento, estoy verificando esa información."; 
     }
 }
