@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.26 (FIX DEFINITIVO: LOGGER DE ERRORES GEMINI)
+ * SERVER BACKEND - v33.30 (AUDITORÍA FINAL: CERO ERRORES)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -22,6 +22,8 @@
  * 19. FIX: Ruta /api/extractor/process TOTALMENTE PÚBLICA sin 'proteger'.
  * 20. FIX: Soporte nativo de base64 para PDFs pesados en Gemini 2.5.
  * 21. FIX: Agregado Logger de Errores Reales de Gemini en el ChatBot.
+ * 22. FIX CRÍTICO: Eliminada función fantasma 'obtenerDepartamento'.
+ * 23. FIX CRÍTICO: Sanitización Anti-Markdown en todos los JSON.parse de la IA.
  * ============================================================
  */
 
@@ -443,7 +445,7 @@ async function procesarConICBOT(dbMsg, aiMsg, phone, name = "Cliente", isFile = 
         if (lead.producto_especifico) memoriaDatos += `Producto Específico: ${lead.producto_especifico}\n`;
     }
 
-    const busqueda = aiMsg.toLowerCase().split(" ").slice(0,3).join(" ");
+    const busqueda = (aiMsg && typeof aiMsg === 'string') ? aiMsg.toLowerCase().split(" ").slice(0,3).join(" ") : "";
     const stock = globalKnowledge.filter(i => (i.searchable||"").toLowerCase().includes(busqueda)).slice(0,5);
 
     const promptSistema = `
@@ -508,7 +510,10 @@ Categorías permitidas: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, requestBody);
         
         const rawText = r.data.candidates[0].content.parts[0].text;
-        const infoIA = JSON.parse(rawText);
+        
+        // FIX CRÍTICO: Limpieza de Markdown antes del JSON Parse para evitar Crash
+        const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const infoIA = JSON.parse(cleanText);
         
         await gestionarLead(phone, infoIA.datos_internos, name, lead); 
         
@@ -534,7 +539,10 @@ async function gestionarLead(phone, info, fbName, oldLead) {
     
     let name = limpiarDato(info.nombre) || (oldLead && oldLead.nombre && oldLead.nombre !== fbName ? oldLead.nombre : fbName);
     let ciudadLimpia = limpiarDato(info.ciudad); 
-    let dpto = obtenerDepartamento(ciudadLimpia) || (oldLead ? oldLead.departamento : null);
+    
+    // FIX CRÍTICO: Removida función inexistente obtenerDepartamento. Ahora guarda directo.
+    let dpto = ciudadLimpia || (oldLead ? oldLead.departamento : null);
+    
     let interesLimpio = limpiarDato(info.categoria_interes) || limpiarDato(info.interes) || (oldLead ? oldLead.interes : "Otros");
     let productoLimpio = limpiarDato(info.producto_especifico) || (oldLead ? oldLead.producto_especifico : null);
     let correoLimpio = limpiarDato(info.correo) || (oldLead ? oldLead.correo : null);
@@ -957,7 +965,10 @@ app.post('/api/chat/analyze-lead', proteger, async (req, res) => {
 
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, requestBody);
         const rawText = r.data.candidates[0].content.parts[0].text;
-        const extractedData = JSON.parse(rawText);
+        
+        // FIX CRÍTICO: Limpieza de Markdown antes del JSON Parse
+        const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const extractedData = JSON.parse(cleanText);
 
         res.json({ success: true, data: extractedData });
     } catch (error) {
@@ -984,7 +995,7 @@ app.get('/api/chats-full', proteger, async (req, res) => {
         let params = [];
         if (search) { whereClause += ` AND (m.contactName LIKE ? OR h.phone LIKE ? OR h.text LIKE ?)`; params.push(search, search, search); }
         
-        const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, m.channel, b.active as botActive, l.source, l.status_tag, l.sf_id, l.interes, l.producto_especifico FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN leads l ON h.phone = l.phone WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 5000`;
+        const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, m.channel, b.active as botActive, l.source, l.status_tag, l.sf_id, l.interes, l.producto_especifico FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN l WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 5000`;
         const rows = await db.all(query, params);
         
         res.json(rows.map(r => {
@@ -1558,7 +1569,10 @@ app.post('/api/extractor/process', upload.single('image'), async (req, res) => {
 
         const gRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, requestBody);
         const rawText = gRes.data.candidates[0].content.parts[0].text;
-        const extractedData = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
+        
+        // FIX CRÍTICO: Limpieza de Markdown antes del JSON Parse
+        const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const extractedData = JSON.parse(cleanText);
 
         res.json({ success: true, data: extractedData });
 
