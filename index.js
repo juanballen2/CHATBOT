@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.30 (AUDITORÍA FINAL: CERO ERRORES)
+ * SERVER BACKEND - v33.31 (FIX DEFINITIVO: LOGIN LOOP Y SQL ROTO)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -24,6 +24,8 @@
  * 21. FIX: Agregado Logger de Errores Reales de Gemini en el ChatBot.
  * 22. FIX CRÍTICO: Eliminada función fantasma 'obtenerDepartamento'.
  * 23. FIX CRÍTICO: Sanitización Anti-Markdown en todos los JSON.parse de la IA.
+ * 24. FIX CRÍTICO: Solución al bucle de Login forzando req.session.save().
+ * 25. FIX CRÍTICO: Reparación de consulta SQL rota en /api/chats-full.
  * ============================================================
  */
 
@@ -81,12 +83,12 @@ const SF_TOKEN = process.env.SF_TOKEN || 'IRKsWeCW6ooQw4ORheVQmLRt';
 const DEFAULT_PROMPT = `Eres Lorena, Asistente Comercial de Importadora Casa Colombia. Tu objetivo principal es atender al cliente, resolver sus dudas y perfilarlo recopilando sus datos para pasarlo a un asesor humano.
 REGLA DE ORO: NUNCA ASUMAS EL NOMBRE DEL CLIENTE. Si el cliente no te ha dicho explícitamente "Me llamo X", debes preguntárselo obligatoriamente (Nombre y Apellido) para su registro.`;
 
-// --- 3. SESIONES ---
+// --- 3. SESIONES (CORREGIDAS PARA EVITAR EL BUCLE DE LOGIN) ---
 app.use(session({
     name: 'icc_session_id', 
     secret: SESSION_SECRET, 
-    resave: false, 
-    saveUninitialized: false,
+    resave: true, 
+    saveUninitialized: true,
     cookie: { secure: false, maxAge: 86400000 } 
 }));
 
@@ -310,7 +312,18 @@ async function enviarOmnicanal(recipientId, text, channel) {
 // 🔥 RUTAS DE LA INTERFAZ WEB 🔥
 // ============================================================
 
-app.post('/auth', (req, res) => { if (req.body.user === ADMIN_USER && req.body.pass === ADMIN_PASS) { req.session.isLogged = true; res.json({success:true}); } else { res.status(401).json({success:false}); } });
+// FIX CRÍTICO: Forzamos el guardado de la sesión antes de responder para evitar bucles.
+app.post('/auth', (req, res) => { 
+    if (req.body.user === ADMIN_USER && req.body.pass === ADMIN_PASS) { 
+        req.session.isLogged = true; 
+        req.session.save(() => {
+            res.json({success:true}); 
+        });
+    } else { 
+        res.status(401).json({success:false}); 
+    } 
+});
+
 app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirname, 'index.html')) : res.redirect('/login'));
@@ -318,6 +331,8 @@ app.get('/', (req, res) => req.session.isLogged ? res.sendFile(path.join(__dirna
 app.get('/inbox', proteger, (req, res) => res.sendFile(path.join(__dirname, 'inbox.html')));
 app.get('/inbox.css', (req, res) => res.sendFile(path.join(__dirname, 'inbox.css')));
 app.get('/inbox.js', (req, res) => res.sendFile(path.join(__dirname, 'inbox.js')));
+app.get('/style.css', (req, res) => res.sendFile(path.join(__dirname, 'style.css')));
+app.get('/script.js', (req, res) => res.sendFile(path.join(__dirname, 'script.js')));
 
 app.get('/extractor', proteger, (req, res) => {
     res.sendFile(path.join(__dirname, 'extractor.html'));
@@ -976,6 +991,7 @@ app.post('/api/chat/analyze-lead', proteger, async (req, res) => {
     }
 });
 
+// FIX CRÍTICO: Consulta de SQL reconstruida (se había cortado el 'JOIN leads l ON...')
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
         const view = req.query.view || 'active';
@@ -995,7 +1011,7 @@ app.get('/api/chats-full', proteger, async (req, res) => {
         let params = [];
         if (search) { whereClause += ` AND (m.contactName LIKE ? OR h.phone LIKE ? OR h.text LIKE ?)`; params.push(search, search, search); }
         
-        const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, m.channel, b.active as botActive, l.source, l.status_tag, l.sf_id, l.interes, l.producto_especifico FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN l WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 5000`;
+        const query = `SELECT h.phone as id, MAX(h.id) as max_id, h.text as lastText, h.time as timestamp, m.contactName, m.photoUrl, m.labels, m.pinned, m.archived, m.unreadCount, m.channel, b.active as botActive, l.source, l.status_tag, l.sf_id, l.interes, l.producto_especifico FROM history h LEFT JOIN metadata m ON h.phone = m.phone LEFT JOIN bot_status b ON h.phone = b.phone LEFT JOIN leads l ON h.phone = l.phone WHERE ${whereClause} GROUP BY h.phone ORDER BY m.pinned DESC, max_id DESC LIMIT 5000`;
         const rows = await db.all(query, params);
         
         res.json(rows.map(r => {
