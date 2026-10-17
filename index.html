@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICBOT V33.9 - Panel Principal & Campañas</title>
+    <title>ICBOT V33.32 - Panel Principal & Campañas</title>
     <link rel="icon" href="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" type="image/svg+xml">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -193,9 +193,9 @@
         select.crm-input { appearance: none; cursor: pointer; background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23515050%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E"); background-repeat: no-repeat; background-position: right 10px top 50%; background-size: 10px auto; }
         
         .tag-container { display: flex; flex-wrap: wrap; gap: 6px; }
-        .tag { padding: 4px 10px; border-radius: 99px; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border); color: var(--text-muted); background: var(--bg-main); transition: 0.2s; font-weight: 500; }
+        .tag { padding: 4px 10px; border-radius: 99px; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border); color: var(--text-muted); background: var(--bg-main); transition: 0.2s; font-weight: 500; user-select: none; }
         .tag:hover { transform: scale(1.05); }
-        .tag.selected { border-color: var(--primary); background: var(--primary); color: #fff; }
+        .tag.selected { border-color: var(--primary); background: var(--primary); color: #fff !important; }
         
         .switch-container { display: flex; align-items: center; justify-content: space-between; font-weight: 500; }
         .switch { position: relative; display: inline-block; width: 36px; height: 20px; }
@@ -595,7 +595,7 @@
                             <span class="config-subtitle">Sube tu base de datos de productos para que la IA sepa precios y disponibilidad en tiempo real.</span>
                             <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center; background: var(--panel); padding: 10px; border-radius: 8px;">
                                 <input type="file" id="csv-upload" accept=".csv, .xlsx, .xls" style="flex:1; font-size:0.85rem;">
-                                <button class="btn-small btn-green" onclick="uploadCSV()"><i class="fas fa-upload"></i> Cargar Archivo</button>
+                                <button class="btn-small btn-green" onclick="uploadCSV(event)"><i class="fas fa-upload"></i> Cargar Archivo</button>
                                 <button class="btn-small btn-blue" onclick="loadInventoryPreview()" title="Refrescar vista"><i class="fas fa-sync"></i></button>
                                 <button class="btn-small btn-red" onclick="clearInventory()" title="Borrar todo el inventario"><i class="fas fa-trash-alt"></i></button>
                             </div>
@@ -607,7 +607,7 @@
                             <span class="config-subtitle">Añade un enlace para que el bot memorice su información.</span>
                             <div class="config-input-group">
                                 <input type="text" id="web-url-input" class="cfg-input" placeholder="https://tuempresa.com/volquetas">
-                                <button class="btn-small btn-green" onclick="scanWeb()"><i class="fas fa-plus"></i> Añadir</button>
+                                <button class="btn-small btn-green" onclick="scanWeb(event)"><i class="fas fa-plus"></i> Añadir</button>
                             </div>
                             <ul class="item-list" id="web-knowledge-list" style="margin-top: 15px; max-height: 250px; overflow-y: auto;"></ul>
                         </div>
@@ -632,8 +632,9 @@
 
                         <div class="config-card" style="flex: 1;">
                             <div class="config-header">Etiquetas Visuales</div>
+                            <span class="config-subtitle">Crea etiquetas y asígnalas a tus chats con un clic.</span>
                             <div class="config-input-group">
-                                <input type="text" id="tag-name" class="cfg-input" placeholder="Nombre (Ej: VIP)">
+                                <input type="text" id="tag-name" class="cfg-input" placeholder="Nombre (Ej: VIP, Cotizado)">
                                 <input type="color" id="tag-color" value="#E9521E" style="width:45px; height:40px; padding:2px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
                                 <button class="btn-small btn-green" onclick="addTag()"><i class="fas fa-plus"></i></button>
                             </div>
@@ -642,6 +643,7 @@
                         
                         <div class="config-card" style="flex: 1;">
                             <div class="config-header">Respuestas Rápidas</div>
+                            <span class="config-subtitle">Atajos para responder más rápido en el chat.</span>
                             <div style="display: flex; flex-direction: column; gap: 10px;">
                                 <div class="config-input-group">
                                     <input type="text" id="short-key" class="cfg-input" placeholder="/hola" style="width:30%;">
@@ -790,7 +792,7 @@
     </div>
 
     <div id="context-menu">
-        <div class="ctx-item" id="ctx-pin" onclick="togglePinContext()"><i class="fas fa-thumbtack"></i> <span>Fijar Chat</span></div>
+        <div class="ctx-item" id="ctx-pin" onclick="contextAction('toggle_pin')"><i class="fas fa-thumbtack"></i> <span>Fijar Chat</span></div>
         <div class="ctx-item" onclick="quickLabel()"><i class="fas fa-tag"></i> Etiquetar</div>
         <div class="ctx-item" id="ctx-archive" onclick="contextAction('toggle_archive')"><i class="fas fa-archive"></i> <span>Archivar</span></div>
         <div class="ctx-divider"></div>
@@ -811,6 +813,7 @@
         let currentInventory = []; 
         let bulkMode = false;
         let selectedChats = new Set();
+        let lastCheckedIndex = -1;
         let msgToForward = null;
         
         window._cachedTags = []; 
@@ -827,17 +830,16 @@
             "Pendiente": "Pendiente (Sin Asignar)"
         };
 
-        window.onload = function() { 
-            startSyncLoop(); 
-            refreshLeads(); 
-            loadAllConfig(); 
-            loadTagFilterOptions(); 
-            
+        window.onload = async function() { 
             const savedTheme = localStorage.getItem('theme') || 'light';
             document.body.setAttribute('data-theme', savedTheme);
             updateThemeIcon(savedTheme);
 
-            // 🔥 FIX: Leer la URL para abrir automáticamente la pestaña correcta
+            await loadTagFilterOptions(); 
+            startSyncLoop(); 
+            refreshLeads(); 
+            loadAllConfig(); 
+
             const params = new URLSearchParams(window.location.search);
             const tab = params.get('tab');
             if (tab) {
@@ -845,7 +847,7 @@
             }
 
             document.addEventListener('click', (e) => { 
-                if(!e.target.closest('.chat-item')) {
+                if(!e.target.closest('.chat-item') && !e.target.closest('#context-menu')) {
                     document.getElementById('context-menu').style.display = 'none'; 
                 }
             }); 
@@ -853,6 +855,17 @@
 
         socket.on('update_chats_list', () => { 
             syncChats(); 
+        });
+
+        // 🔥 FIX TIEMPO REAL: Escuchar cambios de etiquetas sin recargar la página 🔥
+        socket.on('tags_updated', (tags) => {
+            if (Array.isArray(tags)) {
+                window._cachedTags = tags;
+                populateTagDropdowns(tags);
+                if (currentChat) renderCRMTags(tags);
+                renderChatList();
+                loadAllConfig();
+            }
         });
 
         socket.on('new_message', (msg) => {
@@ -1019,7 +1032,9 @@
         async function procesarLeadSF() {
             if(!currentChat) return showToast("⚠️ Abre un chat primero.");
             
-            const btnContainer = document.getElementById('sf-action-container');
+            // Auto-guardar antes de buscar/procesar
+            await saveLeadManual(true);
+
             const resultContainer = document.getElementById('sf-result-container');
             const btnCopy = document.getElementById('btn-copy-ficha');
             
@@ -1043,36 +1058,7 @@
                 const data = await res.json();
 
                 if (data.exists && data.data) {
-                    currentSfClient = data.data;
-                    
-                    let execName = "Asesor";
-                    for (let [key, value] of Object.entries(executivesMap)) {
-                        if (key === currentSfClient.owner_id) execName = value;
-                    }
-
-                    let leadNeed = document.getElementById('crm-specific-interest').value;
-                    let leadCat = document.getElementById('crm-interest').value;
-                    let leadSource = document.getElementById('crm-source').value;
-                    
-                    let textoNecesidad = leadNeed ? leadNeed : (leadCat ? leadCat : "Información general");
-                    let descArmada = `Origen: ${leadSource}\nNecesidad: ${textoNecesidad}`;
-
-                    resultContainer.innerHTML = `
-                        <div style="color: #10b981; font-weight: bold; margin-bottom: 5px;">
-                            <i class="fas fa-check-circle"></i> Cliente Existente
-                        </div>
-                        <div style="margin-bottom: 8px;"><b>Nombre:</b> ${currentSfClient.nombre} | <b>Ejecutivo:</b> ${execName}</div>
-                        
-                        <div style="margin-bottom: 10px;">
-                            <label style="font-size: 0.75rem; font-weight: bold; color: var(--primary);">DESCRIPCIÓN DE LA TAREA</label>
-                            <textarea id="task-desc-input" class="crm-input" rows="2" style="font-size: 0.85rem; padding: 6px;">${descArmada}</textarea>
-                            <span style="font-size: 0.7rem; color: var(--text-muted);">Puedes editar la necesidad antes de crear la tarea.</span>
-                        </div>
-
-                        <button class="btn-small" style="width:100%; background:var(--sf-blue); color:white; border:none;" onclick="crearNuevaTareaSF()">
-                            <i class="fas fa-plus"></i> Crear Tarea 'Contactar'
-                        </button>
-                    `;
+                    mostrarFormularioTareaExistente(data.data);
                 } else {
                     currentSfClient = null;
                     resultContainer.innerHTML = `
@@ -1090,6 +1076,40 @@
             } catch(e) {
                 resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Error de conexión con el servidor. Verifica tu sesión.</div>`;
             }
+        }
+
+        function mostrarFormularioTareaExistente(sfClientData) {
+            currentSfClient = sfClientData;
+            const resultContainer = document.getElementById('sf-result-container');
+            
+            let execName = "Asesor";
+            for (let [key, value] of Object.entries(executivesMap)) {
+                if (key === currentSfClient.owner_id) execName = value;
+            }
+
+            let leadNeed = document.getElementById('crm-specific-interest').value;
+            let leadCat = document.getElementById('crm-interest').value;
+            let leadSource = document.getElementById('crm-source').value;
+            
+            let textoNecesidad = leadNeed ? leadNeed : (leadCat ? leadCat : "Información general");
+            let descArmada = `Origen: ${leadSource}\nNecesidad: ${textoNecesidad}`;
+
+            resultContainer.innerHTML = `
+                <div style="color: #10b981; font-weight: bold; margin-bottom: 5px;">
+                    <i class="fas fa-check-circle"></i> Cliente Existente (${currentSfClient.tipo || 'Registro'})
+                </div>
+                <div style="margin-bottom: 8px;"><b>Nombre:</b> ${currentSfClient.nombre} | <b>Ejecutivo:</b> ${execName}</div>
+                
+                <div style="margin-bottom: 10px;">
+                    <label style="font-size: 0.75rem; font-weight: bold; color: var(--primary);">DESCRIPCIÓN DE LA TAREA</label>
+                    <textarea id="task-desc-input" class="crm-input" rows="2" style="font-size: 0.85rem; padding: 6px;">${descArmada}</textarea>
+                    <span style="font-size: 0.7rem; color: var(--text-muted);">Puedes editar la necesidad antes de crear la tarea.</span>
+                </div>
+
+                <button class="btn-small" style="width:100%; background:var(--sf-blue); color:white; border:none;" onclick="crearNuevaTareaSF()">
+                    <i class="fas fa-plus"></i> Crear Tarea 'Contactar'
+                </button>
+            `;
         }
 
         async function crearNuevaTareaSF() {
@@ -1132,6 +1152,7 @@
                         <div style="color: #10b981; font-weight: bold;">
                             <i class="fas fa-check-circle"></i> Tarea Creada Exitosamente
                         </div>
+                        <a href="${data.link}" target="_blank" style="font-size:0.8rem; color:var(--sf-blue); text-decoration:underline; display:block; margin-top:5px;">Abrir Tarea en Salesforce</a>
                     `;
                     document.getElementById('btn-copy-ficha').style.display = 'block';
                     showToast("✅ Tarea creada");
@@ -1145,7 +1166,9 @@
 
         async function crearNuevoCandidatoSF() {
             const resultContainer = document.getElementById('sf-result-container');
-            resultContainer.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Creando Candidato...</div>';
+            resultContainer.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Guardando y creando Candidato...</div>';
+
+            await saveLeadManual(true);
 
             try {
                 const res = await fetch('/api/salesforce/sync-lead', {
@@ -1180,14 +1203,59 @@
                         <div style="color: #10b981; font-weight: bold;">
                             <i class="fas fa-check-circle"></i> Nuevo Candidato Creado
                         </div>
+                        <a href="${sfLink}" target="_blank" style="font-size:0.8rem; color:var(--sf-blue); text-decoration:underline; display:block; margin-top:5px;">Ver Candidato en Salesforce</a>
                     `;
                     document.getElementById('btn-copy-ficha').style.display = 'block';
                     showToast("✅ Lead subido a Salesforce");
                 } else {
-                    resultContainer.innerHTML = `<div style="color:var(--danger);">⚠️ Error en Salesforce:<br>${data ? data.message : "Error desconocido"}</div>`;
+                    if (data && data.isDuplicate && data.existingRecord) {
+                        mostrarFormularioTareaExistente(data.existingRecord);
+                        showToast("⚠️ El cliente ya existía, créale una Tarea.");
+                    } else {
+                        resultContainer.innerHTML = `<div style="color:var(--danger);">⚠️ Error en Salesforce:<br>${data ? data.message : "Error desconocido"}</div>`;
+                    }
                 }
             } catch(e) {
                 resultContainer.innerHTML = `<div style="color:var(--danger);">❌ Fallo de red con el servidor. Verifica tu sesión.</div>`;
+            }
+        }
+
+        // 🔥 FIX: Funciones faltantes para sincronización individual y masiva desde la tabla de Leads 🔥
+        async function syncSalesforceSingleLead(phone) {
+            if (!phone) return;
+            showToast("🔄 Sincronizando con Salesforce...");
+            try {
+                const res = await fetch('/api/salesforce/sync-lead', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ phone })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    showToast("✅ Lead sincronizado con éxito");
+                    refreshLeads();
+                } else {
+                    showToast("⚠️ " + (data.message || "Error al sincronizar"));
+                }
+            } catch(e) {
+                showToast("❌ Error de conexión con Salesforce");
+            }
+        }
+
+        async function syncSalesforceBulk() {
+            if (!confirm("¿Deseas sincronizar todos los leads pendientes con Salesforce?")) return;
+            showToast("⏳ Sincronizando leads en lote...");
+            try {
+                const res = await fetch('/api/salesforce/sync-bulk', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    showToast(`✅ ${data.count} leads sincronizados con Salesforce`);
+                    refreshLeads();
+                } else {
+                    showToast("❌ Error en sincronización masiva");
+                }
+            } catch(e) {
+                showToast("❌ Error de red");
             }
         }
 
@@ -1216,7 +1284,26 @@
             }
             
             if(tab === 'leads') refreshLeads();
-            if(tab === 'config') loadInventoryPreview();
+            if(tab === 'config') {
+                loadAllConfig();
+                loadInventoryPreview();
+            }
+        }
+
+        // 🔥 FIX CRÍTICO: Función faltante que impedía cambiar de pestaña en Configuración 🔥
+        function switchConfigTab(subPanelId, btnElement) {
+            document.querySelectorAll('.config-sub-panel').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.config-tabs-nav .btn-tab').forEach(el => el.classList.remove('active'));
+            
+            const target = document.getElementById(subPanelId);
+            if (target) target.classList.add('active');
+            if (btnElement) btnElement.classList.add('active');
+
+            if (subPanelId === 'sub-memoria') {
+                loadInventoryPreview();
+            } else if (subPanelId === 'sub-herramientas') {
+                loadAllConfig();
+            }
         }
 
         function toggleTheme() {
@@ -1251,18 +1338,20 @@
             document.getElementById(id).classList.remove('show'); 
         }
         
+        // 🔥 FIX CRÍTICO: Actualización visual inmediata de etiquetas en la lista de chats sin F5 🔥
         function updateTagsOptimistic(phone, tagObj, remove = false) {
             const chat = chatsData.find(c => c.id === phone);
             if (chat) {
-                if (!chat.labels) chat.labels = [];
+                const currentLabels = Array.isArray(chat.labels) ? [...chat.labels] : [];
                 if (remove) {
-                    chat.labels = chat.labels.filter(l => l.text !== tagObj.text);
+                    chat.labels = currentLabels.filter(l => (l.text || l) !== tagObj.text);
                 } else {
-                    if (!chat.labels.find(l => l.text === tagObj.text)) {
-                        chat.labels.push(tagObj);
+                    if (!currentLabels.some(l => (l.text || l) === tagObj.text)) {
+                        chat.labels = [...currentLabels, tagObj];
                     }
                 }
-                updateBulkVisuals();
+                renderChatList();
+                if (bulkMode) updateBulkVisuals();
             }
         }
 
@@ -1398,7 +1487,7 @@
                     document.getElementById('lead-details-content').innerHTML = html;
                     document.getElementById('lead-details-modal').classList.add('show');
                 }
-            }).catch(e => showToast("Error cargando información del lead. Verifica tu sesión."));
+            }).catch(e => showToast("Error cargando información del lead."));
         }
         
         function toggleCRM() { 
@@ -1421,30 +1510,34 @@
         }
 
         function startNewChat() { 
-            const phone = prompt("Ingresa el número (con indicativo):"); 
+            const phone = prompt("Ingresa el número (con indicativo, ej: 57310...):"); 
             if (!phone) return; 
             const name = prompt("Nombre:") || phone; 
             openChat(phone.replace(/\D/g, ''), name, ''); 
         }
 
         function startSyncLoop() { syncChats(); }
+
+        function populateTagDropdowns(tags) {
+            const html = '<option value="">Todas las etiquetas</option>' + tags.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+            document.getElementById('tag-filter').innerHTML = html;
+            document.getElementById('bulk-tag-select').innerHTML = '<option value="">Etiquetar como...</option>' + tags.map(t => `<option value='${JSON.stringify({text:t.name, color:t.color})}'>${t.name}</option>`).join('');
+        }
         
         async function loadTagFilterOptions() { 
             try { 
                 const tagsResponse = await fetch('/api/data/tags');
                 if (tagsResponse.status === 401 || tagsResponse.redirected || !tagsResponse.ok) { window.location.href = '/login'; return; }
                 const tags = await tagsResponse.json(); 
-                window._cachedTags = tags; 
-                const html = '<option value="">Todas las etiquetas</option>' + tags.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
-                document.getElementById('tag-filter').innerHTML = html;
-                document.getElementById('bulk-tag-select').innerHTML = '<option value="">Etiquetar como...</option>' + tags.map(t => `<option value='${JSON.stringify({text:t.name, color:t.color})}'>${t.name}</option>`).join('');
+                window._cachedTags = Array.isArray(tags) ? tags : []; 
+                populateTagDropdowns(window._cachedTags);
             } catch(e) {} 
         }
         
         async function syncChats() { 
             try { 
                 const search = document.getElementById('main-search').value; 
-                const res = await fetch(`/api/chats-full?view=${currentFilter}&search=${search}`); 
+                const res = await fetch(`/api/chats-full?view=${currentFilter}&search=${encodeURIComponent(search)}`); 
                 
                 if (res.status === 401 || res.redirected || !res.ok) {
                     window.location.href = '/login';
@@ -1462,6 +1555,14 @@
 
                 if (!Array.isArray(allChats)) return;
 
+                // Contador de no leídos para Bandeja Omnicanal
+                let omniUnread = 0;
+                allChats.filter(c => c.channel === 'instagram' || c.channel === 'messenger').forEach(c => {
+                    if (c.unreadCount > 0) omniUnread += 1;
+                });
+                const badgeOmni = document.getElementById('badge-omni');
+                if(badgeOmni) { badgeOmni.innerText = omniUnread; badgeOmni.style.display = omniUnread > 0 ? 'block' : 'none'; }
+
                 chatsData = allChats.filter(c => !c.channel || c.channel === 'whatsapp');
                 
                 let waUnread = 0;
@@ -1475,6 +1576,9 @@
                 chatsData.sort((a, b) => new Date(b.lastMessage.time) - new Date(a.lastMessage.time)); 
                 chatsData.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)); 
                 renderChatList(); 
+                if (currentChat) {
+                    renderCRMTags(window._cachedTags);
+                }
             } catch(e) {
                 console.error("Error sincronizando chats:", e);
                 document.getElementById('chat-list-container').innerHTML = `<div style="padding:20px; color:var(--danger); text-align:center;"><b>Error de Conexión:</b> No se pudieron cargar los chats. Verifica que el backend esté en línea.</div>`;
@@ -1488,7 +1592,11 @@
             syncChats(); 
         }
 
-        function normalizeTag(tag) { return typeof tag === 'string' ? { text: tag, color: '#555' } : tag; }
+        function normalizeTag(tag) { 
+            const tObj = typeof tag === 'string' ? { text: tag, color: '#555' } : tag;
+            const globalMatch = (window._cachedTags || []).find(gt => gt.name === tObj.text);
+            return { text: tObj.text, color: globalMatch ? globalMatch.color : (tObj.color || '#555') };
+        }
         
         function toggleBulkMode() {
             bulkMode = !bulkMode;
@@ -1601,14 +1709,14 @@
                     let seenTexts = new Set();
                     c.labels.forEach(l => {
                         let txt = l.text || l;
-                        if(!seenTexts.has(txt)) { seenTexts.add(txt); uniqueLabels.push(l); }
+                        if(txt && !seenTexts.has(txt)) { seenTexts.add(txt); uniqueLabels.push(l); }
                     });
                     labelsHtml = uniqueLabels.map(l => { 
                         const tag = normalizeTag(l); 
                         return `<span class="mini-tag" style="background:${tag.color}20; color:${tag.color}; border:1px solid ${tag.color}50">${tag.text}</span>`;
                     }).join('');
                 }
-                let cleanMsgText = c.lastMessage.text || 'Multimedia';
+                let cleanMsgText = (c.lastMessage && c.lastMessage.text) ? c.lastMessage.text : 'Multimedia';
                 let platformIcon = '<i class="fab fa-whatsapp" style="color:#25D366;"></i>';
                 if (cleanMsgText.includes('[Instagram]')) { platformIcon = '<i class="fab fa-instagram" style="color:#E1306C;"></i>'; cleanMsgText = cleanMsgText.replace(/\[Instagram\]\s*/g, ''); } 
                 else if (cleanMsgText.includes('[Messenger]')) { platformIcon = '<i class="fab fa-facebook-messenger" style="color:#0084FF;"></i>'; cleanMsgText = cleanMsgText.replace(/\[Messenger\]\s*/g, ''); }
@@ -1621,11 +1729,11 @@
                 const isSelected = selectedChats.has(c.id);
 
                 return `
-                <div id="chat-${c.id}" class="chat-item ${currentChat === c.id ? 'active' : ''} ${c.archived ? 'archived' : ''}" onclick="openChat('${c.id}', decodeURIComponent('${encodeURIComponent(c.name)}'), '${c.photoUrl || ''}')" oncontextmenu="showContextMenu(event, '${c.id}', ${c.pinned}, ${c.archived})">
+                <div id="chat-${c.id}" class="chat-item ${currentChat === c.id ? 'active' : ''} ${c.archived ? 'archived' : ''}" onclick="openChat('${c.id}', decodeURIComponent('${encodeURIComponent(c.name)}'), '${c.photoUrl || ''}', event)" oncontextmenu="showContextMenu(event, '${c.id}', ${c.pinned}, ${c.archived})">
                     <input type="checkbox" class="bulk-checkbox" ${isSelected ? 'checked' : ''} onclick="toggleChatSelection('${c.id}', event)">
                     <div class="avatar">${c.photoUrl ? `<img src="${c.photoUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fas fa-user"></i>'}<div class="omni-badge">${platformIcon}</div></div>
                     <div class="chat-info">
-                        <div class="chat-name"><span>${c.name} ${c.pinned ? '<i class="fas fa-thumbtack pin-icon" style="color:var(--primary); font-size:0.8rem;"></i>' : ''}</span><span class="chat-date" style="font-weight:400; font-size:0.75rem;">${new Date(c.lastMessage.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span></div>
+                        <div class="chat-name"><span>${c.name} ${c.pinned ? '<i class="fas fa-thumbtack pin-icon" style="color:var(--primary); font-size:0.8rem;"></i>' : ''}</span><span class="chat-date" style="font-weight:400; font-size:0.75rem;">${c.lastMessage && c.lastMessage.time ? new Date(c.lastMessage.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</span></div>
                         <div class="chat-preview"><span class="chat-last-msg">${cleanMsgText}</span><div style="display:flex; gap:3px;">${c.unreadCount > 0 ? `<span class="badge">${c.unreadCount}</span>` : ''}${sourceBadge}</div></div>
                         <div class="mini-tags">${labelsHtml}</div>
                     </div>
@@ -1653,8 +1761,8 @@
             document.getElementById('crm-panel').classList.add('open'); document.getElementById('context-menu').style.display = 'none'; 
         }
         
-        async function openChat(phone, name, photo) { 
-            if(bulkMode) return toggleChatSelection(phone, event); 
+        async function openChat(phone, name, photo, ev = null) { 
+            if(bulkMode && ev) return toggleChatSelection(phone, ev); 
             
             if(currentlyPlaying) { 
                 try { currentlyPlaying.pause(); } catch(e){} 
@@ -1679,6 +1787,10 @@
             
             const chatInfo = chatsData.find(c => c.id === phone); 
             document.getElementById('bot-switch').checked = chatInfo ? chatInfo.botActive : true; 
+            if (chatInfo && chatInfo.unreadCount > 0) {
+                chatInfo.unreadCount = 0;
+                renderChatList();
+            }
             
             document.getElementById('sf-result-container').style.display = 'none';
             document.getElementById('btn-copy-ficha').style.display = 'none';
@@ -1701,7 +1813,7 @@
         }
 
         function buildMessageHTML(m) {
-            let text = m.text; 
+            let text = m.text || ''; 
             let isMedia = false; 
             let mediaId = null;
             
@@ -1990,7 +2102,7 @@
             }
         }
 
-        async function saveLeadManual() { 
+        async function saveLeadManual(silent = false) { 
             if(!currentChat) return; 
             
             const res = await fetch('/api/data/leads'); 
@@ -2013,8 +2125,11 @@
                 for(let u of updates) { 
                     await fetch('/api/leads/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id, field: u.field, value: u.value }) }); 
                 }
-                showToast("✅ Base de Datos Actualizada"); refreshLeads(); 
-            } else { showToast("⚠️ Espera un primer mensaje del cliente."); } 
+                if(!silent) showToast("✅ Base de Datos Actualizada"); 
+                refreshLeads(); 
+            } else { 
+                if(!silent) showToast("⚠️ Espera un primer mensaje del cliente."); 
+            } 
         }
 
         function toggleAllLeads(source) {
@@ -2030,34 +2145,50 @@
 
         function renderCRMTags(tags) {
             const container = document.getElementById('tag-list');
+            if(!container) return;
             const chat = chatsData.find(c => c.id === currentChat); 
-            const activeTags = chat ? (chat.labels || []) : []; 
+            const activeTags = chat && Array.isArray(chat.labels) ? chat.labels : []; 
 
             const uniqueTags = [];
             const seenTags = new Set();
-            tags.forEach(t => { if(!seenTags.has(t.name)) { seenTags.add(t.name); uniqueTags.push(t); } });
+            (tags || []).forEach(t => { if(t && t.name && !seenTags.has(t.name)) { seenTags.add(t.name); uniqueTags.push(t); } });
+
+            if (uniqueTags.length === 0) {
+                container.innerHTML = `<span style="font-size:0.8rem; color:var(--text-muted);">No hay etiquetas. Créalas en Configuración > Herramientas Comerciales.</span>`;
+                return;
+            }
 
             container.innerHTML = uniqueTags.map(t => { 
-                const isActive = activeTags.find(l => (l.text || l) === t.name); 
+                const isActive = activeTags.some(l => (l.text || l) === t.name); 
                 return `<div class="tag ${isActive ? 'selected' : ''}" style="${isActive ? `background:${t.color}; border-color:${t.color};` : ''}" onclick="toggleTagLocal(decodeURIComponent('${encodeURIComponent(t.name)}'), '${t.color}')">${t.name}</div>`; 
             }).join(''); 
         }
 
+        // 🔥 FIX CRÍTICO: Clonamos activeTags ANTES de mutar el estado local, evitando duplicaciones y refrescos manuales 🔥
         async function toggleTagLocal(name, color) { 
             if(!currentChat) return; 
             
             const chat = chatsData.find(c => c.id === currentChat);
-            const activeTags = chat ? (chat.labels || []) : [];
-            const exists = activeTags.find(l => (l.text || l) === name);
+            const currentLabels = (chat && Array.isArray(chat.labels)) ? [...chat.labels] : [];
+            const exists = currentLabels.some(l => (l.text || l) === name);
             
             const tagObj = { text: name, color: color };
-            updateTagsOptimistic(currentChat, tagObj, !!exists);
+            let newTags;
+            if (exists) {
+                newTags = currentLabels.filter(l => (l.text || l) !== name);
+            } else {
+                newTags = [...currentLabels, tagObj];
+            }
+
+            updateTagsOptimistic(currentChat, tagObj, exists);
             renderCRMTags(window._cachedTags);
             
             try {
-                let newTags = [...activeTags]; 
-                if(exists) { newTags = newTags.filter(l => (l.text || l) !== name); } else { newTags.push(tagObj); } 
-                await fetch('/api/chat/action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone: currentChat, action: 'set_labels', value: newTags }) });
+                await fetch('/api/chat/action', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ phone: currentChat, action: 'set_labels', value: newTags }) 
+                });
             } catch(e) { showToast("Error guardando etiqueta."); }
         }
 
@@ -2068,7 +2199,7 @@
             const tbody = document.getElementById('leads-body'); 
             
             tbody.innerHTML = data.map(l => { 
-                const d = new Date(l.fecha); const f = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`; 
+                const d = new Date(l.fecha); const f = isNaN(d.getTime()) ? '-' : `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`; 
                 
                 let sourceHTML = l.source || '-';
                 if(l.source && l.source.includes('Ads')) sourceHTML = `<span class="lead-source-tag" style="background:rgba(239, 68, 68, 0.1); color:#ef4444; border: 1px solid #ef4444;">META ADS</span>`;
@@ -2080,7 +2211,7 @@
                 let visualTagsHTML = '';
                 if(l.status_tag && l.status_tag !== "Sin Etiqueta") { visualTagsHTML = `<span class="mini-tag" style="background:var(--panel); border:1px solid var(--border); color:var(--text);">${l.status_tag}</span>`; }
                 const execName = executivesMap[l.etiqueta] || l.etiqueta || 'Pendiente';
-                const sfIcon = l.sf_id ? '<i class="fas fa-check-circle" style="color:#10b981;" title="Sincronizado"></i>' : '<i class="fas fa-cloud text-gray-400" title="Pendiente de Sincronizar"></i>';
+                const sfIcon = l.sf_id ? '<i class="fas fa-check-circle" style="color:#10b981;" title="Sincronizado"></i>' : '<i class="fas fa-cloud" title="Sincronizar con Salesforce"></i>';
 
                 return `<tr>
                     <td><input type="checkbox" class="lead-checkbox" value="${l.id}" style="cursor:pointer; width:16px; height:16px;"></td>
@@ -2096,7 +2227,7 @@
                     <td><span class="badge" style="background:${execName === 'Pendiente (Sin Asignar)' ? '#ef4444' : '#10b981'}">${execName}</span></td>
                     <td>${visualTagsHTML}</td>
                     <td>
-                        <button class="btn-small btn-blue" onclick="syncSalesforceCurrent()" title="Subir a Salesforce" style="margin-right:5px; background:transparent; color:var(--sf-blue); border-color:var(--sf-blue);">${sfIcon}</button>
+                        <button class="btn-small btn-blue" onclick="syncSalesforceSingleLead('${l.phone}')" title="Subir a Salesforce" style="margin-right:5px; background:transparent; color:var(--sf-blue); border-color:var(--sf-blue);">${sfIcon}</button>
                         <button class="btn-small btn-red" onclick="deleteLead(${l.id})"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>`; 
@@ -2135,7 +2266,8 @@
                 if(configData.logo_url) document.getElementById('logo-preview').style.backgroundImage = `url(${configData.logo_url})`;
 
                 const tagsRes = await fetch('/api/data/tags'); const tags = await tagsRes.json();
-                document.getElementById('config-tags-list').innerHTML = tags.map(t => `<li class="config-item"><span style="display:flex; align-items:center; gap:10px; color:var(--text);"><div style="width:15px;height:15px;border-radius:50%;background:${t.color};"></div> ${t.name}</span><div style="display:flex; gap:5px;"><button class="btn-small btn-blue" onclick="openTagEdit(${t.id}, decodeURIComponent('${encodeURIComponent(t.name)}'), '${t.color}')"><i class="fas fa-pencil-alt"></i></button><button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button></div></li>`).join('');
+                window._cachedTags = Array.isArray(tags) ? tags : [];
+                document.getElementById('config-tags-list').innerHTML = window._cachedTags.map(t => `<li class="config-item"><span style="display:flex; align-items:center; gap:10px; color:var(--text);"><div style="width:15px;height:15px;border-radius:50%;background:${t.color};"></div> ${t.name}</span><div style="display:flex; gap:5px;"><button class="btn-small btn-blue" onclick="openTagEdit(${t.id}, decodeURIComponent('${encodeURIComponent(t.name)}'), '${t.color}')"><i class="fas fa-pencil-alt"></i></button><button class="btn-small btn-red" onclick="deleteTag(${t.id})"><i class="fas fa-trash"></i></button></div></li>`).join('');
 
                 const shortRes = await fetch('/api/data/shortcuts'); const shortcuts = await shortRes.json();
                 const crmShortcuts = document.getElementById('shortcuts-list');
@@ -2164,32 +2296,48 @@
         }
 
         async function addRule() {
-            const input = document.getElementById('rule-input'); if(!input.value) return;
-            await fetch('/api/config/rules/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({rule: input.value}) });
-            input.value = ''; loadAllConfig();
+            const input = document.getElementById('rule-input'); if(!input.value.trim()) return;
+            await fetch('/api/config/rules/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({rule: input.value.trim()}) });
+            input.value = ''; loadAllConfig(); showToast("✅ Regla añadida");
         }
 
         async function deleteRule(index) { await fetch('/api/config/rules/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({index}) }); loadAllConfig(); }
 
         async function saveBizConfig() {
             const name = document.getElementById('biz-name').value; const hours = document.getElementById('biz-hours').value;
-            await fetch('/api/config/biz/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, hours}) }); showToast("Perfil guardado");
+            await fetch('/api/config/biz/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, hours}) }); showToast("✅ Perfil guardado");
         }
 
         async function uploadLogo(input) {
             if(!input.files[0]) return; const formData = new FormData(); formData.append('file', input.files[0]);
-            await fetch('/api/config/logo', { method: 'POST', body: formData }); showToast("Logo actualizado (Recarga para ver cambios)");
+            await fetch('/api/config/logo', { method: 'POST', body: formData }); showToast("✅ Logo actualizado"); loadAllConfig();
         }
 
         async function addTag() {
-            const name = document.getElementById('tag-name').value; const color = document.getElementById('tag-color').value; if(!name) return;
-            await fetch('/api/tags/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, color}) });
-            document.getElementById('tag-name').value = ''; loadAllConfig(); loadTagFilterOptions(); 
+            const nameInput = document.getElementById('tag-name');
+            const name = nameInput.value.trim(); 
+            const color = document.getElementById('tag-color').value; 
+            if(!name) return showToast("⚠️ Escribe un nombre para la etiqueta");
+            
+            const res = await fetch('/api/tags/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, color}) });
+            if (res.ok) {
+                nameInput.value = ''; 
+                await loadTagFilterOptions();
+                await loadAllConfig();
+                if (currentChat) renderCRMTags(window._cachedTags);
+                showToast("✅ Etiqueta creada");
+            } else {
+                showToast("❌ Error creando etiqueta");
+            }
         }
 
         async function deleteTag(id) {
             if(!confirm("¿Eliminar etiqueta?")) return;
-            await fetch('/api/tags/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id}) }); loadAllConfig(); loadTagFilterOptions(); 
+            await fetch('/api/tags/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id}) }); 
+            await loadTagFilterOptions();
+            await loadAllConfig();
+            if (currentChat) renderCRMTags(window._cachedTags);
+            showToast("🗑️ Etiqueta eliminada");
         }
         
         function openTagEdit(id, name, color) {
@@ -2197,30 +2345,38 @@
         }
 
         async function saveTagEdit() {
-            const id = document.getElementById('edit-tag-id').value; const name = document.getElementById('edit-tag-name').value; const color = document.getElementById('edit-tag-color').value;
+            const id = document.getElementById('edit-tag-id').value; const name = document.getElementById('edit-tag-name').value.trim(); const color = document.getElementById('edit-tag-color').value;
+            if(!name) return;
             await fetch('/api/tags/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, color}) });
-            closeModal('tag-edit-modal'); loadAllConfig(); loadTagFilterOptions();
+            closeModal('tag-edit-modal'); 
+            await loadTagFilterOptions();
+            await loadAllConfig();
+            if (currentChat) renderCRMTags(window._cachedTags);
+            renderChatList();
+            showToast("✅ Etiqueta actualizada");
         }
 
         async function addShortcut() {
-            const keyword = document.getElementById('short-key').value; const text = document.getElementById('short-text').value; if(!keyword || !text) return;
+            const keyword = document.getElementById('short-key').value.trim(); const text = document.getElementById('short-text').value.trim(); if(!keyword || !text) return showToast("⚠️ Completa el comando y el texto");
             await fetch('/api/shortcuts/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({keyword, text}) });
-            document.getElementById('short-key').value = ''; document.getElementById('short-text').value = ''; loadAllConfig();
+            document.getElementById('short-key').value = ''; document.getElementById('short-text').value = ''; loadAllConfig(); showToast("✅ Atajo creado");
         }
 
         async function deleteShortcut(id) { await fetch('/api/shortcuts/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id}) }); loadAllConfig(); }
 
         function insertShortcut(text) { const input = document.getElementById('msg-input'); input.value = text; input.focus(); }
 
-        async function uploadCSV() {
+        async function uploadCSV(ev) {
             const file = document.getElementById('csv-upload').files[0]; if(!file) return alert('Selecciona un archivo');
-            const btn = event.target; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...'; btn.disabled = true;
+            const btn = ev ? ev.currentTarget : document.querySelector('button[onclick*="uploadCSV"]'); 
+            if(btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...'; btn.disabled = true; }
             const fd = new FormData(); fd.append('file', file);
             try {
                 const res = await fetch('/api/knowledge/csv', { method:'POST', body: fd }); const result = await res.json();
                 if(result.success) { showToast(`✅ ${result.count} productos cargados`); loadInventoryPreview(); }
             } catch(e) { alert("Error procesando el archivo."); } finally {
-                btn.innerHTML = '<i class="fas fa-upload"></i> Cargar Archivo'; btn.disabled = false; document.getElementById('csv-upload').value = '';
+                if(btn) { btn.innerHTML = '<i class="fas fa-upload"></i> Cargar Archivo'; btn.disabled = false; }
+                document.getElementById('csv-upload').value = '';
             }
         }
         
@@ -2259,7 +2415,7 @@
             if(item) { try { data = JSON.parse(item.raw_data); } catch(e){} }
             data.nombre = document.getElementById('edit-nombre').value; data.precio = document.getElementById('edit-precio').value; data.stock = document.getElementById('edit-stock').value; data.descripcion_larga = document.getElementById('edit-desc').value;
             await fetch('/api/knowledge/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id, data }) });
-            closeModal('edit-modal'); showToast("Producto actualizado"); loadInventoryPreview();
+            closeModal('edit-modal'); showToast("✅ Producto actualizado"); loadInventoryPreview();
         }
 
         async function deleteInventoryItem(id) {
@@ -2269,12 +2425,13 @@
 
         async function clearInventory() {
             if(!confirm("⚠️ ¡PELIGRO! ¿Estás seguro de querer BORRAR TODO EL INVENTARIO? Esta acción no se puede deshacer.")) return;
-            const res = await fetch('/api/knowledge/clear', { method: 'POST' }); if(res.ok) { showToast("Inventario borrado por completo"); loadInventoryPreview(); }
+            const res = await fetch('/api/knowledge/clear', { method: 'POST' }); if(res.ok) { showToast("🗑️ Inventario borrado por completo"); loadInventoryPreview(); }
         }
 
-        async function scanWeb() {
+        async function scanWeb(ev) {
             const urlInput = document.getElementById('web-url-input'); const url = urlInput.value.trim(); if(!url) return;
-            const btn = event.target; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Escaneando...'; btn.disabled = true;
+            const btn = ev ? ev.currentTarget : document.querySelector('button[onclick*="scanWeb"]'); 
+            if(btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Escaneando...'; btn.disabled = true; }
             try {
                 const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`; const response = await fetch(proxyUrl); const data = await response.json(); const htmlText = data.contents;
                 const parser = new DOMParser(); const doc = parser.parseFromString(htmlText, "text/html");
@@ -2282,7 +2439,13 @@
                 rawText = rawText.replace(/\s+/g, ' ').trim(); const summary = `Contenido de ${url}:\n` + rawText.substring(0, 3000); 
                 await fetch('/api/data/web-knowledge', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url: url, summary: summary }) });
                 showToast("✅ Página escaneada y memorizada"); urlInput.value = ''; loadAllConfig();
-            } catch(error) { alert("No se pudo escanear la página."); } finally { btn.innerHTML = '<i class="fas fa-plus"></i> Añadir'; btn.disabled = false; }
+            } catch(error) { alert("No se pudo escanear la página."); } finally { if(btn) { btn.innerHTML = '<i class="fas fa-plus"></i> Añadir'; btn.disabled = false; } }
+        }
+
+        async function deleteWeb(id) {
+            if(!confirm("¿Eliminar esta fuente web?")) return;
+            await fetch('/api/data/web-knowledge/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) });
+            loadAllConfig();
         }
 
         function openWebEdit(id, url, text) {
