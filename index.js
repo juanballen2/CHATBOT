@@ -1814,3 +1814,72 @@ app.post('/api/extractor/salesforce', proteger, async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 });
+// ============================================================
+// 🔍 ESCÁNER DE RADIOGRAFÍA SALESFORCE (LIGERO - NO DESCARGA LOS 8000 PRODUCTOS)
+// ============================================================
+app.get('/api/salesforce/inspect', async (req, res) => {
+    try {
+        const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
+        await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
+
+        const extraerCampos = async (objName) => {
+            try {
+                const meta = await sfConn.sobject(objName).describe();
+                return {
+                    recordTypes: meta.recordTypeInfos
+                        .filter(rt => rt.available)
+                        .map(rt => ({ name: rt.name, id: rt.recordTypeId, default: rt.defaultRecordTypeMapping })),
+                    fields: meta.fields
+                        .filter(f => f.custom || ['Name','Phone','Type','Industry','CurrencyIsoCode','ParentId','StageName','CloseDate','Amount','Pricebook2Id','AccountId','OpportunityId','ExpirationDate','Status','Tax','ShippingHandling','Discount','Description','ContactId','Email','Quantity','UnitPrice','TotalPrice','Product2Id','PricebookEntryId'].includes(f.name))
+                        .map(f => ({
+                            label: f.label,
+                            apiName: f.name,
+                            type: f.type,
+                            required: !f.nillable && !f.defaultedOnCreate && f.createable,
+                            picklist: f.picklistValues && f.picklistValues.length > 0 ? f.picklistValues.filter(p => p.active).map(p => p.value) : undefined
+                        }))
+                };
+            } catch (e) {
+                return { error: `No se pudo describir ${objName}: ${e.message}` };
+            }
+        };
+
+        // 1. Escanear estructura de objetos clave (solo metadatos, pesa pocos KB)
+        const [account, opportunity, oppLine, quote, quoteLine] = await Promise.all([
+            extraerCampos('Account'),
+            extraerCampos('Opportunity'),
+            extraerCampos('OpportunityLineItem'),
+            extraerCampos('Quote'),
+            extraerCampos('QuoteLineItem')
+        ]);
+
+        // 2. Traer Listas de Precios (Pricebook2) activas
+        let pricebooks = [];
+        try {
+            const pbRes = await sfConn.query("SELECT Id, Name, IsActive, IsStandard FROM Pricebook2 WHERE IsActive = true");
+            pricebooks = pbRes.records.map(r => ({ id: r.Id, name: r.Name, isStandard: r.IsStandard }));
+        } catch (e) { pricebooks = [{ error: e.message }]; }
+
+        // 3. Traer SOLO 3 productos de muestra para ver cómo guardan SKU, Precio y Divisa
+        let sampleProducts = [];
+        try {
+            const prodRes = await sfConn.query("SELECT Id, Pricebook2Id, Pricebook2.Name, Product2Id, Product2.Name, Product2.ProductCode, Product2.Family, UnitPrice, CurrencyIsoCode FROM PricebookEntry WHERE IsActive = true LIMIT 3");
+            sampleProducts = prodRes.records;
+        } catch (e) { sampleProducts = [{ error: e.message }]; }
+
+        res.json({
+            success: true,
+            pricebooks,
+            sampleProducts,
+            schema: {
+                Account: account,
+                Opportunity: opportunity,
+                OpportunityLineItem: oppLine,
+                Quote: quote,
+                QuoteLineItem: quoteLine
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
