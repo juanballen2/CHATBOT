@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v33.31 (FIX DEFINITIVO: LOGIN LOOP Y SQL ROTO)
+ * SERVER BACKEND - v33.32 (INTEGRA UPDATE: REAL-TIME TAGS + EXTRACTOR TASKS)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -26,6 +26,8 @@
  * 23. FIX CRÍTICO: Sanitización Anti-Markdown en todos los JSON.parse de la IA.
  * 24. FIX CRÍTICO: Solución al bucle de Login forzando req.session.save().
  * 25. FIX CRÍTICO: Reparación de consulta SQL rota en /api/chats-full.
+ * 26. ADD: Emisión Socket.io en tiempo real al etiquetar y gestionar tags/config.
+ * 27. ADD: Retorno de metadatos de registro existente en /api/extractor/salesforce para crear Tareas.
  * ============================================================
  */
 
@@ -83,7 +85,7 @@ const SF_TOKEN = process.env.SF_TOKEN || 'IRKsWeCW6ooQw4ORheVQmLRt';
 const DEFAULT_PROMPT = `Eres Lorena, Asistente Comercial de Importadora Casa Colombia. Tu objetivo principal es atender al cliente, resolver sus dudas y perfilarlo recopilando sus datos para pasarlo a un asesor humano.
 REGLA DE ORO: NUNCA ASUMAS EL NOMBRE DEL CLIENTE. Si el cliente no te ha dicho explícitamente "Me llamo X", debes preguntárselo obligatoriamente (Nombre y Apellido) para su registro.`;
 
-// --- 3. SESIONES (CORREGIDAS PARA EVITAR EL BUCLE DE LOGIN) ---
+// --- 3. SESIONES ---
 app.use(session({
     name: 'icc_session_id', 
     secret: SESSION_SECRET, 
@@ -213,8 +215,10 @@ async function refreshKnowledge() {
     } catch(e) { globalKnowledge = []; }
 }
 async function getCfg(k, fb=null) { 
-    const r = await db.get("SELECT value FROM config WHERE key = ?", [k]); 
-    return r ? JSON.parse(r.value) : fb; 
+    try {
+        const r = await db.get("SELECT value FROM config WHERE key = ?", [k]); 
+        return r ? JSON.parse(r.value) : fb; 
+    } catch(e) { return fb; }
 }
 async function setCfg(k, v) { 
     await db.run("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", [k, JSON.stringify(v)]); 
@@ -312,7 +316,6 @@ async function enviarOmnicanal(recipientId, text, channel) {
 // 🔥 RUTAS DE LA INTERFAZ WEB 🔥
 // ============================================================
 
-// FIX CRÍTICO: Forzamos el guardado de la sesión antes de responder para evitar bucles.
 app.post('/auth', (req, res) => { 
     if (req.body.user === ADMIN_USER && req.body.pass === ADMIN_PASS) { 
         req.session.isLogged = true; 
@@ -338,7 +341,6 @@ app.get('/extractor', proteger, (req, res) => {
     res.sendFile(path.join(__dirname, 'extractor.html'));
 });
 
-// 🔥 RUTA OCULTA Y PÚBLICA PARA LA TAREA DEL COTIZADOR 🔥
 app.get('/prototipo-cotizador', (req, res) => {
     res.sendFile(path.join(__dirname, 'cotizador.html'));
 });
@@ -525,8 +527,6 @@ Categorías permitidas: Maquinaria nueva, Maquinaria usada, Volquetas, Martillos
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, requestBody);
         
         const rawText = r.data.candidates[0].content.parts[0].text;
-        
-        // FIX CRÍTICO: Limpieza de Markdown antes del JSON Parse para evitar Crash
         const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
         const infoIA = JSON.parse(cleanText);
         
@@ -554,10 +554,7 @@ async function gestionarLead(phone, info, fbName, oldLead) {
     
     let name = limpiarDato(info.nombre) || (oldLead && oldLead.nombre && oldLead.nombre !== fbName ? oldLead.nombre : fbName);
     let ciudadLimpia = limpiarDato(info.ciudad); 
-    
-    // FIX CRÍTICO: Removida función inexistente obtenerDepartamento. Ahora guarda directo.
     let dpto = ciudadLimpia || (oldLead ? oldLead.departamento : null);
-    
     let interesLimpio = limpiarDato(info.categoria_interes) || limpiarDato(info.interes) || (oldLead ? oldLead.interes : "Otros");
     let productoLimpio = limpiarDato(info.producto_especifico) || (oldLead ? oldLead.producto_especifico : null);
     let correoLimpio = limpiarDato(info.correo) || (oldLead ? oldLead.correo : null);
@@ -649,14 +646,20 @@ function iniciarCronJobs() {
     }, 10 * 60 * 1000); 
 }
 
+// ============================================================
+// 🔥 API DE CONFIGURACIÓN, ETIQUETAS Y CONOCIMIENTO (BLINDADO) 🔥
+// ============================================================
+
 app.get('/api/data/:type', proteger, async (req, res) => {
-    const t = req.params.type;
-    if (t === 'leads') res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
-    else if (t === 'tags') res.json(await db.all("SELECT * FROM global_tags"));
-    else if (t === 'shortcuts') res.json(await db.all("SELECT * FROM shortcuts"));
-    else if (t === 'knowledge') res.json(await db.all("SELECT * FROM inventory"));
-    else if (t === 'config') res.json({ website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []), biz_profile: await getCfg('biz_profile', {}), logo_url: await getCfg('logo_url') });
-    else res.json([]);
+    try {
+        const t = req.params.type;
+        if (t === 'leads') res.json(await db.all("SELECT * FROM leads ORDER BY id DESC"));
+        else if (t === 'tags') res.json(await db.all("SELECT * FROM global_tags ORDER BY id DESC"));
+        else if (t === 'shortcuts') res.json(await db.all("SELECT * FROM shortcuts ORDER BY id DESC"));
+        else if (t === 'knowledge') res.json(await db.all("SELECT * FROM inventory"));
+        else if (t === 'config') res.json({ website_data: await getCfg('website_data', ""), tech_rules: await getCfg('tech_rules', []), biz_profile: await getCfg('biz_profile', {}), logo_url: await getCfg('logo_url') });
+        else res.json([]);
+    } catch(e) { res.status(500).json([]); }
 });
 
 app.post('/api/knowledge/update', proteger, async (req, res) => {
@@ -684,24 +687,120 @@ app.post('/api/knowledge/csv', proteger, upload.single('file'), async (req, res)
     } catch(e) { res.status(500).json({ error: "Error procesando archivo" }); } 
 });
 
-app.post('/api/config/logo', proteger, upload.single('file'), async (req, res) => { await setCfg('logo_url', `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`); res.json({success:true}); });
-app.post('/api/config/biz/save', proteger, async (req, res) => { await setCfg('biz_profile', {name:req.body.name, hours:req.body.hours}); res.json({success:true}); });
-app.post('/api/tags/add', proteger, async (req, res) => { await db.run("INSERT INTO global_tags (name, color) VALUES (?, ?)", [req.body.name, req.body.color]); res.json({success:true}); });
-app.post('/api/tags/delete', proteger, async (req, res) => { await db.run("DELETE FROM global_tags WHERE id = ?", [req.body.id]); res.json({success:true}); });
+app.post('/api/config/logo', proteger, upload.single('file'), async (req, res) => { 
+    try {
+        if(!req.file) return res.status(400).json({error: "Sin archivo"});
+        await setCfg('logo_url', `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`); 
+        res.json({success:true}); 
+    } catch(e) { res.status(500).json({error: "Error guardando logo"}); }
+});
+
+app.post('/api/config/biz/save', proteger, async (req, res) => { 
+    try {
+        await setCfg('biz_profile', {name:req.body.name || "", hours:req.body.hours || ""}); 
+        res.json({success:true}); 
+    } catch(e) { res.status(500).json({error: "Error guardando perfil"}); }
+});
+
+// FIX: Manejo seguro de etiquetas con actualización en tiempo real
+app.post('/api/tags/add', proteger, async (req, res) => { 
+    try {
+        const name = (req.body.name || "").trim();
+        const color = req.body.color || "#E9511D";
+        if (!name) return res.status(400).json({error: "El nombre de la etiqueta es vacío"});
+        await db.run("INSERT OR IGNORE INTO global_tags (name, color) VALUES (?, ?)", [name, color]); 
+        await db.run("UPDATE global_tags SET color = ? WHERE name = ?", [color, name]);
+        const tags = await db.all("SELECT * FROM global_tags ORDER BY id DESC");
+        io.emit('tags_updated', tags);
+        res.json({success:true, tags}); 
+    } catch(e) { res.status(500).json({error: "Error creando etiqueta"}); }
+});
+
+app.post('/api/tags/delete', proteger, async (req, res) => { 
+    try {
+        await db.run("DELETE FROM global_tags WHERE id = ?", [req.body.id]); 
+        const tags = await db.all("SELECT * FROM global_tags ORDER BY id DESC");
+        io.emit('tags_updated', tags);
+        res.json({success:true, tags}); 
+    } catch(e) { res.status(500).json({error: "Error eliminando etiqueta"}); }
+});
+
 app.post('/api/tags/update', proteger, async (req, res) => { 
     try {
-        await db.run("UPDATE global_tags SET name = ?, color = ? WHERE id = ?", [req.body.name, req.body.color, req.body.id]); 
-        res.json({success:true});
+        const name = (req.body.name || "").trim();
+        await db.run("UPDATE global_tags SET name = ?, color = ? WHERE id = ?", [name, req.body.color, req.body.id]); 
+        const tags = await db.all("SELECT * FROM global_tags ORDER BY id DESC");
+        io.emit('tags_updated', tags);
+        res.json({success:true, tags});
     } catch(e) { res.status(500).json({error: "Error editando etiqueta"}); }
 });
-app.post('/api/shortcuts/add', proteger, async (req, res) => { await db.run("INSERT INTO shortcuts (keyword, text) VALUES (?, ?)", [req.body.keyword, req.body.text]); res.json({success:true}); });
-app.post('/api/shortcuts/delete', proteger, async (req, res) => { await db.run("DELETE FROM shortcuts WHERE id = ?", [req.body.id]); res.json({success:true}); });
-app.post('/api/contacts/upload-photo', proteger, upload.single('file'), async (req, res) => { await db.run("INSERT INTO metadata (phone, photoUrl) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET photoUrl=excluded.photoUrl", [req.body.phone, `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`]); res.json({success:true}); });
-app.post('/api/chat/toggle-bot', proteger, async (req, res) => { await db.run("INSERT OR REPLACE INTO bot_status (phone, active) VALUES (?, ?)", [req.body.phone, req.body.active?1:0]); res.json({success:true}); });
-app.post('/api/config/rules/add', proteger, async (req, res) => { let r=await getCfg('tech_rules',[]); r.push(req.body.rule); await setCfg('tech_rules',r); res.json({rules:r}); });
-app.post('/api/config/rules/delete', proteger, async (req, res) => { let r=await getCfg('tech_rules',[]); r.splice(req.body.index,1); await setCfg('tech_rules',r); res.json({rules:r}); });
-app.post('/api/leads/update', proteger, async(req,res)=>{ await db.run(`UPDATE leads SET ${req.body.field}=? WHERE id=?`,[req.body.value, req.body.id]); res.json({success:true}); });
-app.post('/api/leads/delete', proteger, async(req,res)=>{ await db.run("DELETE FROM leads WHERE id=?",[req.body.id]); res.json({success:true}); });
+
+app.post('/api/shortcuts/add', proteger, async (req, res) => { 
+    try {
+        const kw = (req.body.keyword || "").trim();
+        if(!kw) return res.status(400).json({error: "Falta comando"});
+        await db.run("INSERT OR REPLACE INTO shortcuts (keyword, text) VALUES (?, ?)", [kw, req.body.text]); 
+        res.json({success:true}); 
+    } catch(e) { res.status(500).json({error: "Error guardando atajo"}); }
+});
+
+app.post('/api/shortcuts/delete', proteger, async (req, res) => { 
+    try {
+        await db.run("DELETE FROM shortcuts WHERE id = ?", [req.body.id]); 
+        res.json({success:true}); 
+    } catch(e) { res.status(500).json({error: "Error borrando atajo"}); }
+});
+
+app.post('/api/contacts/upload-photo', proteger, upload.single('file'), async (req, res) => { 
+    try {
+        await db.run("INSERT INTO metadata (phone, photoUrl) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET photoUrl=excluded.photoUrl", [req.body.phone, `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`]); 
+        io.emit('update_chats_list');
+        res.json({success:true}); 
+    } catch(e) { res.status(500).json({error: "Error subiendo foto"}); }
+});
+
+app.post('/api/chat/toggle-bot', proteger, async (req, res) => { 
+    try {
+        await db.run("INSERT OR REPLACE INTO bot_status (phone, active) VALUES (?, ?)", [req.body.phone, req.body.active?1:0]); 
+        io.emit('update_chats_list');
+        res.json({success:true}); 
+    } catch(e) { res.status(500).json({error: "Error cambiando estado del bot"}); }
+});
+
+app.post('/api/config/rules/add', proteger, async (req, res) => { 
+    try {
+        let r = await getCfg('tech_rules', []); 
+        if(req.body.rule) r.push(req.body.rule); 
+        await setCfg('tech_rules', r); 
+        res.json({success:true, rules:r}); 
+    } catch(e) { res.status(500).json({error: "Error agregando regla"}); }
+});
+
+app.post('/api/config/rules/delete', proteger, async (req, res) => { 
+    try {
+        let r = await getCfg('tech_rules', []); 
+        r.splice(req.body.index, 1); 
+        await setCfg('tech_rules', r); 
+        res.json({success:true, rules:r}); 
+    } catch(e) { res.status(500).json({error: "Error borrando regla"}); }
+});
+
+app.post('/api/leads/update', proteger, async(req,res)=>{ 
+    try {
+        await db.run(`UPDATE leads SET ${req.body.field}=? WHERE id=?`,[req.body.value, req.body.id]); 
+        io.emit('update_chats_list');
+        res.json({success:true}); 
+    } catch(e) { res.status(500).json({error: "Error actualizando lead"}); }
+});
+
+app.post('/api/leads/delete', proteger, async(req,res)=>{ 
+    try {
+        await db.run("DELETE FROM leads WHERE id=?",[req.body.id]); 
+        io.emit('update_chats_list');
+        res.json({success:true}); 
+    } catch(e) { res.status(500).json({error: "Error borrando lead"}); }
+});
+
 app.post('/api/knowledge/delete', proteger, async (req, res) => { await db.run("DELETE FROM inventory WHERE id=?",[req.body.id]); await refreshKnowledge(); res.json({success:true}); });
 app.post('/api/knowledge/clear', proteger, async (req, res) => { await db.run("DELETE FROM inventory"); await refreshKnowledge(); res.json({success:true}); });
 app.post('/api/config/prompt', proteger, async (req, res) => { await setCfg('bot_prompt', req.body.prompt); res.json({success:true}); });
@@ -728,7 +827,7 @@ app.post('/api/salesforce/check-lead', proteger, async (req, res) => {
         const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
         await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
 
-        let q_lead = await sfConn.query(`SELECT Id, Name, OwnerId, Company FROM Lead WHERE (Phone LIKE '%${telefonoFinal}\%' OR MobilePhone LIKE '\%${telefonoFinal}%') AND IsConverted = FALSE LIMIT 1`);
+        let q_lead = await sfConn.query(`SELECT Id, Name, OwnerId, Company FROM Lead WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') AND IsConverted = FALSE LIMIT 1`);
         if (q_lead.totalSize > 0) {
             const rec = q_lead.records[0];
             return res.json({ 
@@ -741,7 +840,7 @@ app.post('/api/salesforce/check-lead', proteger, async (req, res) => {
             });
         }
 
-        let q_contact = await sfConn.query(`SELECT Id, Name, OwnerId, AccountId FROM Contact WHERE (Phone LIKE '%${telefonoFinal}\%' OR MobilePhone LIKE '\%${telefonoFinal}%') LIMIT 1`);
+        let q_contact = await sfConn.query(`SELECT Id, Name, OwnerId, AccountId FROM Contact WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') LIMIT 1`);
         if (q_contact.totalSize > 0) {
             const rec = q_contact.records[0];
             return res.json({ 
@@ -865,15 +964,25 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
         const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
         await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
 
-        const search = await sfConn.query(`SELECT Id FROM Lead WHERE Phone LIKE '%${telefonoFinal}\%' OR MobilePhone LIKE '\%${telefonoFinal}%'`);
+        const search = await sfConn.query(`SELECT Id, Name, OwnerId FROM Lead WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') AND IsConverted = FALSE LIMIT 1`);
         if (search.totalSize > 0) {
-            return res.status(400).json({ success: false, message: "Este cliente ya existe en Salesforce. Por favor, créale una Tarea ('Contactar') en lugar de un Lead nuevo." });
+            const rec = search.records[0];
+            return res.status(400).json({ 
+                success: false, 
+                isDuplicate: true,
+                existingRecord: {
+                    tipo: 'Candidato', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: rec.Id, what_id: null,
+                    link: `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${rec.Id}/view`
+                },
+                message: "Este cliente ya existe en Salesforce. Puedes crearle una Tarea ('Contactar') directamente." 
+            });
         }
 
         const result = await sfConn.sobject("Lead").create(sfData);
 
         if (result.success) {
             await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [result.id, lead.id]);
+            io.emit('update_chats_list');
             res.json({ success: true, sfId: result.id });
         } else {
             res.status(500).json({ success: false, message: "Salesforce rechazó los datos." });
@@ -881,7 +990,7 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
 
     } catch (error) {
         if (error.message && error.message.toLowerCase().includes("duplicate")) {
-            return res.status(400).json({ success: false, message: "Salesforce detectó un DUPLICADO. Este cliente ya existe. Por favor, créale una Tarea en lugar de un Lead nuevo." });
+            return res.status(400).json({ success: false, isDuplicate: true, message: "Salesforce detectó un DUPLICADO. Este cliente ya existe. Por favor, créale una Tarea en lugar de un Lead nuevo." });
         }
         res.status(500).json({ success: false, message: error.message });
     }
@@ -929,7 +1038,7 @@ app.post('/api/salesforce/sync-bulk', proteger, async (req, res) => {
 
                 if (lead.etiqueta && lead.etiqueta.startsWith("005")) sfData.OwnerId = lead.etiqueta;
 
-                const search = await sfConn.query(`SELECT Id FROM Lead WHERE Phone LIKE '%${telefonoFinal}\%' OR MobilePhone LIKE '\%${telefonoFinal}%'`);
+                const search = await sfConn.query(`SELECT Id FROM Lead WHERE Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%'`);
                 if (search.totalSize === 0) {
                     const result = await sfConn.sobject("Lead").create(sfData);
                     if (result.success) {
@@ -939,6 +1048,7 @@ app.post('/api/salesforce/sync-bulk', proteger, async (req, res) => {
                 }
             } catch(e) {}
         }
+        io.emit('update_chats_list');
         res.json({ success: true, count: count });
     } catch (error) {
         res.status(500).json({ success: false, message: "Error crítico sincronizando con Salesforce." });
@@ -980,8 +1090,6 @@ app.post('/api/chat/analyze-lead', proteger, async (req, res) => {
 
         const r = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, requestBody);
         const rawText = r.data.candidates[0].content.parts[0].text;
-        
-        // FIX CRÍTICO: Limpieza de Markdown antes del JSON Parse
         const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
         const extractedData = JSON.parse(cleanText);
 
@@ -991,7 +1099,6 @@ app.post('/api/chat/analyze-lead', proteger, async (req, res) => {
     }
 });
 
-// FIX CRÍTICO: Consulta de SQL reconstruida (se había cortado el 'JOIN leads l ON...')
 app.get('/api/chats-full', proteger, async (req, res) => {
     try {
         const view = req.query.view || 'active';
@@ -1018,9 +1125,9 @@ app.get('/api/chats-full', proteger, async (req, res) => {
             let parsedLabels = [];
             try { 
                 parsedLabels = JSON.parse(r.labels || "[]"); 
-                if (!Array.isArray(parsedLabels)) parsedLabels = [{ text: r.labels, color: "#555555" }];
+                if (!Array.isArray(parsedLabels)) parsedLabels = r.labels ? [{ text: r.labels, color: "#555555" }] : [];
             } catch(e) { 
-                parsedLabels = [{ text: r.labels, color: "#555555" }]; 
+                parsedLabels = r.labels ? [{ text: r.labels, color: "#555555" }] : []; 
             }
 
             return { 
@@ -1057,6 +1164,7 @@ app.get('/api/chat-history/:phone(*)', proteger, async (req, res) => {
     }
 });
 
+// FIX: Emisión por Socket.io al etiquetar en masa
 app.post('/api/contacts/bulk-update', proteger, async (req, res) => {
     const { phones, action, value } = req.body; 
     try {
@@ -1069,40 +1177,51 @@ app.post('/api/contacts/bulk-update', proteger, async (req, res) => {
                 await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [value.text, cleanPhone]);
             } else if (action === 'add_label') {
                 const current = await db.get("SELECT labels FROM metadata WHERE phone = ?", [cleanPhone]);
-                let labels = current ? JSON.parse(current.labels || "[]") : [];
-                if (!labels.find(l => l.text === value.text)) {
+                let labels = [];
+                try { labels = current ? JSON.parse(current.labels || "[]") : []; } catch(e){ labels = []; }
+                if (!Array.isArray(labels)) labels = [];
+                if (!labels.find(l => (l.text || l) === value.text)) {
                     labels.push(value);
-                    await db.run("UPDATE metadata SET labels = ? WHERE phone = ?", [JSON.stringify(labels), cleanPhone]);
-                    await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [labels.map(l => l.text).join(', '), cleanPhone]);
+                    await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, JSON.stringify(labels)]);
+                    await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [labels.map(l => l.text || l).join(', '), cleanPhone]);
                 }
             }
         }
+        io.emit('update_chats_list');
         res.json({success: true});
     } catch (e) {
         res.status(500).json({error: "Error en actualización masiva"});
     }
 });
 
+// FIX: Emisión en tiempo real inmediata al etiquetar, fijar o archivar un chat
 app.post('/api/chat/action', proteger, async (req, res) => {
-    const { phone, action, value } = req.body;
-    const cleanPhone = phone.replace(/[^0-9a-zA-Z_]/g, ''); 
-    
-    if(action === 'delete') { 
-        for(const t of ['history','metadata','bot_status','leads']) {
-            await db.run(`DELETE FROM ${t} WHERE phone=?`,[cleanPhone]); 
+    try {
+        const { phone, action, value } = req.body;
+        const cleanPhone = phone.replace(/[^0-9a-zA-Z_]/g, ''); 
+        
+        if(action === 'delete') { 
+            for(const t of ['history','metadata','bot_status','leads']) {
+                await db.run(`DELETE FROM ${t} WHERE phone=?`,[cleanPhone]); 
+            }
         }
+        else if(action === 'set_labels') { 
+            const safeArray = Array.isArray(value) ? value : [];
+            await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, JSON.stringify(safeArray)]); 
+            await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [safeArray.length > 0 ? safeArray.map(v => v.text || v).join(', ') : "Sin Etiqueta", cleanPhone]); 
+        }
+        else if(action === 'toggle_pin') { 
+            await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET pinned = CASE WHEN pinned = 1 THEN 0 ELSE 1 END", [cleanPhone]); 
+        }
+        else if(action === 'toggle_archive') { 
+            await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET archived = CASE WHEN archived = 1 THEN 0 ELSE 1 END", [cleanPhone]); 
+        }
+        
+        io.emit('update_chats_list');
+        res.json({success:true});
+    } catch(e) {
+        res.status(500).json({error: "Error aplicando acción al chat"});
     }
-    else if(action === 'set_labels') { 
-        await db.run("INSERT INTO metadata (phone, labels) VALUES (?, ?) ON CONFLICT(phone) DO UPDATE SET labels=excluded.labels", [cleanPhone, JSON.stringify(value)]); 
-        await db.run("UPDATE leads SET status_tag = ? WHERE phone = ?", [value.length > 0 ? value.map(v => v.text).join(', ') : "Sin Etiqueta", cleanPhone]); 
-    }
-    else if(action === 'toggle_pin') { 
-        await db.run("INSERT INTO metadata (phone, pinned) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET pinned = CASE WHEN pinned = 1 THEN 0 ELSE 1 END", [cleanPhone]); 
-    }
-    else if(action === 'toggle_archive') { 
-        await db.run("INSERT INTO metadata (phone, archived) VALUES (?, 1) ON CONFLICT(phone) DO UPDATE SET archived = CASE WHEN archived = 1 THEN 0 ELSE 1 END", [cleanPhone]); 
-    }
-    res.json({success:true});
 });
 
 app.post('/api/chat/upload-send', proteger, upload.single('file'), async (req, res) => { 
@@ -1532,7 +1651,6 @@ app.post('/webhook', async (req, res) => {
 // 🔥 MÓDULO: EXTRACTOR INTELIGENTE INDEPENDIENTE 🔥
 // ============================================================
 
-// PÚBLICO: NO LLEVA 'proteger' para que funcione el cotizador enlazado sin contraseña
 app.post('/api/extractor/process', upload.single('image'), async (req, res) => {
     try {
         if (!API_KEY || API_KEY.trim() === '' || API_KEY === 'undefined') {
@@ -1571,7 +1689,6 @@ app.post('/api/extractor/process', upload.single('image'), async (req, res) => {
             contents = [{ role: 'user', parts: [{ text: `${promptReglas}\n\nTexto:\n${data}` }] }];
         } else if (type === 'image' && req.file) {
             const base64Data = req.file.buffer.toString('base64');
-            // La IA soporta base64 nativo tanto para imágenes como para PDF si enviamos el mimetype correcto
             contents = [{ role: 'user', parts: [
                 { text: promptReglas },
                 { inlineData: { mimeType: req.file.mimetype, data: base64Data } }
@@ -1585,8 +1702,6 @@ app.post('/api/extractor/process', upload.single('image'), async (req, res) => {
 
         const gRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, requestBody);
         const rawText = gRes.data.candidates[0].content.parts[0].text;
-        
-        // FIX CRÍTICO: Limpieza de Markdown antes del JSON Parse
         const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
         const extractedData = JSON.parse(cleanText);
 
@@ -1595,30 +1710,80 @@ app.post('/api/extractor/process', upload.single('image'), async (req, res) => {
     } catch (error) {
         const detail = error.response?.data?.error?.message || error.message;
         console.error("Error en Extractor IA:", detail);
-        // Ahora siempre aseguramos un JSON de vuelta, para evitar el error de parsing en el frontend
         res.status(500).json({ success: false, message: `Fallo en la IA: ${detail}` });
     }
 });
 
-// INTERNO: SÍ LLEVA 'proteger' para que no cualquiera pueda subir leads a Salesforce
+// FIX: Detección inteligente de duplicados en Lead, Contact y Account devolviendo datos listos para Crear Tarea
 app.post('/api/extractor/salesforce', proteger, async (req, res) => {
     try {
         const payload = req.body;
         
-        let telefonoFinal = payload.telefono.replace(/\s+/g, '');
-        if (telefonoFinal.startsWith("+57")) telefonoFinal = telefonoFinal.substring(3);
+        let telefonoFinal = (payload.telefono || "").replace(/\D/g, '');
         if (telefonoFinal.startsWith("57") && telefonoFinal.length > 10) telefonoFinal = telefonoFinal.substring(2);
+
+        if (!telefonoFinal) {
+            return res.status(400).json({ success: false, message: "El número de teléfono es obligatorio para validar en Salesforce." });
+        }
 
         let categoriaLimpia = limpiarCategoriaSF(payload.categoria_producto);
         let dptoSF = limpiarUbicacionSF(payload.ubicacion);
 
+        const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
+        await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
+
+        // 1. Verificar si ya existe como Candidato (Lead)
+        const q_lead = await sfConn.query(`SELECT Id, Name, OwnerId FROM Lead WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') AND IsConverted = FALSE LIMIT 1`);
+        if (q_lead.totalSize > 0) {
+            const rec = q_lead.records[0];
+            return res.status(400).json({ 
+                success: false, 
+                isDuplicate: true,
+                existingRecord: {
+                    tipo: 'Candidato', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: rec.Id, what_id: null,
+                    link: `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${rec.Id}/view`
+                },
+                message: `Este cliente ya existe como Candidato (${rec.Name}). ¿Deseas asignarle una Tarea de seguimiento?` 
+            });
+        }
+
+        // 2. Verificar si ya existe como Contacto
+        const q_contact = await sfConn.query(`SELECT Id, Name, OwnerId, AccountId FROM Contact WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') LIMIT 1`);
+        if (q_contact.totalSize > 0) {
+            const rec = q_contact.records[0];
+            return res.status(400).json({ 
+                success: false, 
+                isDuplicate: true,
+                existingRecord: {
+                    tipo: 'Contacto', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: rec.Id, what_id: rec.AccountId,
+                    link: `https://importadoracolombia.lightning.force.com/lightning/r/Contact/${rec.Id}/view`
+                },
+                message: `Este cliente ya existe como Contacto (${rec.Name}). ¿Deseas asignarle una Tarea de seguimiento?` 
+            });
+        }
+
+        // 3. Verificar si ya existe como Cuenta
+        const q_account = await sfConn.query(`SELECT Id, Name, OwnerId FROM Account WHERE Phone LIKE '%${telefonoFinal}%' LIMIT 1`);
+        if (q_account.totalSize > 0) {
+            const rec = q_account.records[0];
+            return res.status(400).json({ 
+                success: false, 
+                isDuplicate: true,
+                existingRecord: {
+                    tipo: 'Cuenta', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: null, what_id: rec.Id,
+                    link: `https://importadoracolombia.lightning.force.com/lightning/r/Account/${rec.Id}/view`
+                },
+                message: `Este cliente ya existe como Cuenta (${rec.Name}). ¿Deseas asignarle una Tarea de seguimiento?` 
+            });
+        }
+
         const sfData = {
-            FirstName: payload.nombre !== "No proporcionado" ? payload.nombre : "Cliente",
-            LastName: payload.apellido !== "No proporcionado" ? payload.apellido : "Extraído",
+            FirstName: payload.nombre && payload.nombre !== "No proporcionado" ? payload.nombre : "Cliente",
+            LastName: payload.apellido && payload.apellido !== "No proporcionado" ? payload.apellido : "Extraído",
             Phone: telefonoFinal,
-            Email: payload.correo !== "No proporcionado" ? payload.correo : "",
-            Company: `${payload.nombre} ${payload.apellido}`,
-            DescripciondeProducto__c: payload.producto_detalle !== "No proporcionado" ? payload.producto_detalle : "",
+            Email: payload.correo && payload.correo !== "No proporcionado" ? payload.correo : "",
+            Company: `${payload.nombre || 'Cliente'} ${payload.apellido || 'ICC'}`.trim(),
+            DescripciondeProducto__c: payload.producto_detalle && payload.producto_detalle !== "No proporcionado" ? payload.producto_detalle : "",
             Producto_de_su_inter_s__c: categoriaLimpia,
             Ubicaci_n__c: dptoSF,
             LeadSource: payload.origen || "WhatsApp" 
@@ -1626,14 +1791,6 @@ app.post('/api/extractor/salesforce', proteger, async (req, res) => {
 
         if (payload.ejecutivo && payload.ejecutivo.startsWith("005")) {
             sfData.OwnerId = payload.ejecutivo;
-        }
-
-        const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
-        await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
-
-        const search = await sfConn.query(`SELECT Id FROM Lead WHERE Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%'`);
-        if (search.totalSize > 0) {
-            return res.status(400).json({ success: false, message: "Este cliente ya existe en la base de datos de Salesforce. Por favor, usa el Panel de Chats para agregarle una Tarea ('Contactar') en lugar de un Candidato nuevo." });
         }
 
         const result = await sfConn.sobject("Lead").create(sfData);
@@ -1649,7 +1806,8 @@ app.post('/api/extractor/salesforce', proteger, async (req, res) => {
         if (error.message && error.message.toLowerCase().includes("duplicate")) {
             return res.status(400).json({ 
                 success: false, 
-                message: "Salesforce detectó un DUPLICADO. Este cliente ya existe en la base de datos. Por favor, búscalo en el Panel de Chats y créale una Tarea ('Contactar') en lugar de un Candidato nuevo." 
+                isDuplicate: true,
+                message: "Salesforce detectó un DUPLICADO por reglas internas (ej. Correo repetido). Usa el botón de Crear Tarea." 
             });
         }
 
