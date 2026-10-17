@@ -1,33 +1,24 @@
 /*
- * SERVER BACKEND - v33.32 (INTEGRA UPDATE: REAL-TIME TAGS + EXTRACTOR TASKS)
+ * SERVER BACKEND - v34.0 (CORE INTEGRA: COTIZADOR EJECUTIVO + REAL-TIME CRM)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
  * 3. ADD: Soporte completo para Videos MP4 y Fotos en Campañas.
- * 4. FIX: Integración real con JSFORCE para crear Leads.
+ * 4. FIX: Integración real con JSFORCE y Pool Singleton para +10 usuarios simultáneos.
  * 5. FIX: Traductor de LeadSource y limpieza del '57' en teléfonos.
  * 6. ADD: Los comentarios ahora crean un chat separado (ID_comentarios).
  * 7. FIX: Sanitización Regex en rutas Bulk/Action para DMs originales.
- * 8. ADD: Rutas Nativas para Extractor Inteligente (/extractor) RESTAURADA.
+ * 8. ADD: Rutas Nativas para Extractor Inteligente (/extractor).
  * 9. FIX: Re-ingeniería del Webhook Omnicanal para capturar Ecos.
- * 10. FIX: Solución de link de SF y silencio en chat (Solo guarda ID local).
- * 11. ADD: Rutas de verificación de Lead y creación de Tareas (Tasks).
- * 12. FIX: Estado de Tareas cambiado de 'Not Started' a 'Open'.
- * 13. FIX: Manejo robusto de errores de Gemini en el Extractor Inteligente.
- * 14. FIX: El enviador de plantillas ya detecta videos correctamente.
- * 15. FIX: Corrección del modelo a gemini-2.5-flash en el extractor.
- * 16. FIX: Filtro "Consultando" -> "Otro" para evitar error de Picklist en SF.
- * 17. FIX: Intercepción de error "Duplicate Record" de SF con alerta clara.
- * 18. ADD: Ruta pública oculta /prototipo-cotizador para tarea escolar.
- * 19. FIX: Ruta /api/extractor/process TOTALMENTE PÚBLICA sin 'proteger'.
- * 20. FIX: Soporte nativo de base64 para PDFs pesados en Gemini 2.5.
- * 21. FIX: Agregado Logger de Errores Reales de Gemini en el ChatBot.
- * 22. FIX CRÍTICO: Eliminada función fantasma 'obtenerDepartamento'.
- * 23. FIX CRÍTICO: Sanitización Anti-Markdown en todos los JSON.parse de la IA.
- * 24. FIX CRÍTICO: Solución al bucle de Login forzando req.session.save().
- * 25. FIX CRÍTICO: Reparación de consulta SQL rota en /api/chats-full.
- * 26. ADD: Emisión Socket.io en tiempo real al etiquetar y gestionar tags/config.
- * 27. ADD: Retorno de metadatos de registro existente en /api/extractor/salesforce para crear Tareas.
+ * 10. ADD: Rutas de verificación de Lead y creación de Tareas (Tasks).
+ * 11. FIX: Estado de Tareas configurado en 'Open'.
+ * 12. FIX: Manejo robusto de errores y sanitización Anti-Markdown en Gemini 2.5 Flash.
+ * 13. FIX: Solución al bucle de Login forzando req.session.save().
+ * 14. FIX: Emisión Socket.io en tiempo real al etiquetar y gestionar tags/config.
+ * 15. ADD: Retorno de metadatos de registro existente en /api/extractor/salesforce para crear Tareas.
+ * 16. ADD CORE INTEGRA: Buscador en tiempo real de Cuentas, Contactos y +8.000 Productos por Pricebook.
+ * 17. ADD CORE INTEGRA: Extractor IA de RUT y carga automática a "Archivos" (ContentVersion) de la Cuenta.
+ * 18. ADD CORE INTEGRA: Transacción Todo-En-Uno (Cuenta + Oportunidad + Productos + Presupuesto con IVA).
  * ============================================================
  */
 
@@ -84,6 +75,48 @@ const SF_TOKEN = process.env.SF_TOKEN || 'IRKsWeCW6ooQw4ORheVQmLRt';
 
 const DEFAULT_PROMPT = `Eres Lorena, Asistente Comercial de Importadora Casa Colombia. Tu objetivo principal es atender al cliente, resolver sus dudas y perfilarlo recopilando sus datos para pasarlo a un asesor humano.
 REGLA DE ORO: NUNCA ASUMAS EL NOMBRE DEL CLIENTE. Si el cliente no te ha dicho explícitamente "Me llamo X", debes preguntárselo obligatoriamente (Nombre y Apellido) para su registro.`;
+
+// --- 2.1 POOL DE CONEXIÓN PERSISTENTE A SALESFORCE (SOPORTE MULTI-USUARIO) ---
+let cachedSfConn = null;
+let sfLastLoginTime = 0;
+let sfLoginPromise = null;
+
+async function getSfConnection() {
+    const now = Date.now();
+    if (cachedSfConn && (now - sfLastLoginTime < 45 * 60 * 1000)) {
+        return cachedSfConn;
+    }
+    if (sfLoginPromise) return sfLoginPromise;
+
+    sfLoginPromise = (async () => {
+        try {
+            const conn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
+            await conn.login(SF_USER, SF_PASS + SF_TOKEN);
+            cachedSfConn = conn;
+            sfLastLoginTime = Date.now();
+            console.log("⚡ Sesión de Salesforce iniciada / renovada en el Pool.");
+            return conn;
+        } finally {
+            sfLoginPromise = null;
+        }
+    })();
+
+    return sfLoginPromise;
+}
+
+async function runSfOperation(fn) {
+    try {
+        const conn = await getSfConnection();
+        return await fn(conn);
+    } catch (err) {
+        if (err.errorCode === 'INVALID_SESSION_ID' || (err.message && err.message.includes('Session expired'))) {
+            cachedSfConn = null;
+            const conn = await getSfConnection();
+            return await fn(conn);
+        }
+        throw err;
+    }
+}
 
 // --- 3. SESIONES ---
 app.use(session({
@@ -250,8 +283,8 @@ function limpiarUbicacionSF(ubi) {
     
     const validas = ["Amazonas","Antioquia","Arauca","Atlántico","Bolívar","Bogotá","Boyacá","Caldas","Caquetá","Casanare","Cauca","Cesar","Chocó","Córdoba","Cundinamarca","Distrito Capital","Guainía","Guaviare","Huila","La Guajira","Magdalena","Meta","Nariño","Norte De Santander","Putumayo","Quindío","Risaralda","San Andrés Y Providencia","Santander","Sucre","Tolima","Valle","Vaupés","Vichada"];
     
-    if (validas.includes(u)) return u;
-    return ""; 
+    const match = validas.find(v => v.toLowerCase() === u.toLowerCase());
+    return match || ""; 
 }
 
 async function uploadToMeta(buffer, mime, name) {
@@ -341,7 +374,11 @@ app.get('/extractor', proteger, (req, res) => {
     res.sendFile(path.join(__dirname, 'extractor.html'));
 });
 
+// RUTAS PÚBLICAS DE ACCESO LIBRE PARA EL COTIZADOR EJECUTIVO (10+ PERSONAS)
 app.get('/prototipo-cotizador', (req, res) => {
+    res.sendFile(path.join(__dirname, 'cotizador.html'));
+});
+app.get('/cotizador', (req, res) => {
     res.sendFile(path.join(__dirname, 'cotizador.html'));
 });
 
@@ -702,7 +739,6 @@ app.post('/api/config/biz/save', proteger, async (req, res) => {
     } catch(e) { res.status(500).json({error: "Error guardando perfil"}); }
 });
 
-// FIX: Manejo seguro de etiquetas con actualización en tiempo real
 app.post('/api/tags/add', proteger, async (req, res) => { 
     try {
         const name = (req.body.name || "").trim();
@@ -810,10 +846,9 @@ app.get('/api/data/web-knowledge', proteger, async (req, res) => { res.json(awai
 app.post('/api/data/web-knowledge/delete', proteger, async (req, res) => { await db.run("DELETE FROM knowledge_sources WHERE id = ?", [req.body.id]); res.json({success:true}); });
 
 // ============================================================
-// 🔥 INTEGRACIÓN REAL CON SALESFORCE (API / SYNC)
+// 🔥 INTEGRACIÓN REAL CON SALESFORCE (USANDO EL POOL SINGLETON)
 // ============================================================
 
-// 1. Buscar si el cliente existe (Lead, Contact, Account)
 app.post('/api/salesforce/check-lead', proteger, async (req, res) => {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ success: false, message: "Falta teléfono" });
@@ -824,76 +859,70 @@ app.post('/api/salesforce/check-lead', proteger, async (req, res) => {
     }
 
     try {
-        const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
-        await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
+        const checkResult = await runSfOperation(async (sfConn) => {
+            let q_lead = await sfConn.query(`SELECT Id, Name, OwnerId, Company FROM Lead WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') AND IsConverted = FALSE LIMIT 1`);
+            if (q_lead.totalSize > 0) {
+                const rec = q_lead.records[0];
+                return { 
+                    exists: true, 
+                    data: { 
+                        tipo: 'Candidato', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: rec.Id, what_id: null, 
+                        link: `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${rec.Id}/view` 
+                    } 
+                };
+            }
 
-        let q_lead = await sfConn.query(`SELECT Id, Name, OwnerId, Company FROM Lead WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') AND IsConverted = FALSE LIMIT 1`);
-        if (q_lead.totalSize > 0) {
-            const rec = q_lead.records[0];
-            return res.json({ 
-                success: true, 
-                exists: true, 
-                data: { 
-                    tipo: 'Candidato', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: rec.Id, what_id: null, 
-                    link: `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${rec.Id}/view` 
-                } 
-            });
-        }
+            let q_contact = await sfConn.query(`SELECT Id, Name, OwnerId, AccountId FROM Contact WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') LIMIT 1`);
+            if (q_contact.totalSize > 0) {
+                const rec = q_contact.records[0];
+                return { 
+                    exists: true, 
+                    data: { 
+                        tipo: 'Contacto', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: rec.Id, what_id: rec.AccountId, 
+                        link: `https://importadoracolombia.lightning.force.com/lightning/r/Contact/${rec.Id}/view` 
+                    } 
+                };
+            }
 
-        let q_contact = await sfConn.query(`SELECT Id, Name, OwnerId, AccountId FROM Contact WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') LIMIT 1`);
-        if (q_contact.totalSize > 0) {
-            const rec = q_contact.records[0];
-            return res.json({ 
-                success: true, 
-                exists: true, 
-                data: { 
-                    tipo: 'Contacto', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: rec.Id, what_id: rec.AccountId, 
-                    link: `https://importadoracolombia.lightning.force.com/lightning/r/Contact/${rec.Id}/view` 
-                } 
-            });
-        }
+            let q_account = await sfConn.query(`SELECT Id, Name, OwnerId FROM Account WHERE Phone LIKE '%${telefonoFinal}%' LIMIT 1`);
+            if (q_account.totalSize > 0) {
+                const rec = q_account.records[0];
+                return { 
+                    exists: true, 
+                    data: { 
+                        tipo: 'Cuenta', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: null, what_id: rec.Id, 
+                        link: `https://importadoracolombia.lightning.force.com/lightning/r/Account/${rec.Id}/view` 
+                    } 
+                };
+            }
 
-        let q_account = await sfConn.query(`SELECT Id, Name, OwnerId FROM Account WHERE Phone LIKE '%${telefonoFinal}%' LIMIT 1`);
-        if (q_account.totalSize > 0) {
-            const rec = q_account.records[0];
-            return res.json({ 
-                success: true, 
-                exists: true, 
-                data: { 
-                    tipo: 'Cuenta', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: null, what_id: rec.Id, 
-                    link: `https://importadoracolombia.lightning.force.com/lightning/r/Account/${rec.Id}/view` 
-                } 
-            });
-        }
+            return { exists: false };
+        });
 
-        return res.json({ success: true, exists: false });
-
+        return res.json({ success: true, ...checkResult });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 });
 
-// 2. Crear Tarea (Contactar) a un cliente existente
 app.post('/api/salesforce/create-task', proteger, async (req, res) => {
     const { who_id, what_id, owner_id, descripcion } = req.body;
     try {
-        const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
-        await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
+        const result = await runSfOperation(async (sfConn) => {
+            const hoy = new Date().toISOString().split('T')[0];
+            const nueva_tarea = {
+                Subject: 'Contactar',
+                ActivityDate: hoy,
+                Status: 'Open', 
+                Description: descripcion || "Sin detalle especificado",
+                OwnerId: owner_id
+            };
 
-        const hoy = new Date().toISOString().split('T')[0];
-        
-        const nueva_tarea = {
-            Subject: 'Contactar',
-            ActivityDate: hoy,
-            Status: 'Open', 
-            Description: descripcion || "Sin detalle especificado",
-            OwnerId: owner_id
-        };
+            if (who_id) nueva_tarea.WhoId = who_id;
+            if (what_id) nueva_tarea.WhatId = what_id;
 
-        if (who_id) nueva_tarea.WhoId = who_id;
-        if (what_id) nueva_tarea.WhatId = what_id;
-
-        const result = await sfConn.sobject("Task").create(nueva_tarea);
+            return await sfConn.sobject("Task").create(nueva_tarea);
+        });
         
         if (result.success) {
             res.json({ 
@@ -909,7 +938,6 @@ app.post('/api/salesforce/create-task', proteger, async (req, res) => {
     }
 });
 
-
 app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ success: false, message: "Falta teléfono" });
@@ -921,13 +949,9 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
         let leadSource = "Redes sociales"; 
         const src = (lead.source || "").toLowerCase();
 
-        if (src.includes("tienda")) {
-            leadSource = "Tienda Virtual";
-        } else if (src.includes("web")) {
-            leadSource = "Sitio web";
-        } else if (src.includes("excel") || src.includes("masivo") || src.includes("campaña") || src.includes("whatsapp")) {
-            leadSource = "WhatsApp";
-        }
+        if (src.includes("tienda")) leadSource = "Tienda Virtual";
+        else if (src.includes("web")) leadSource = "Sitio web";
+        else if (src.includes("excel") || src.includes("masivo") || src.includes("campaña") || src.includes("whatsapp")) leadSource = "WhatsApp";
 
         let firstName = "Cliente";
         let lastName = "ICC";
@@ -961,29 +985,35 @@ app.post('/api/salesforce/sync-lead', proteger, async (req, res) => {
             sfData.OwnerId = lead.etiqueta;
         }
 
-        const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
-        await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
+        const syncOutcome = await runSfOperation(async (sfConn) => {
+            const search = await sfConn.query(`SELECT Id, Name, OwnerId FROM Lead WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') AND IsConverted = FALSE LIMIT 1`);
+            if (search.totalSize > 0) {
+                const rec = search.records[0];
+                return {
+                    duplicate: true,
+                    existingRecord: {
+                        tipo: 'Candidato', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: rec.Id, what_id: null,
+                        link: `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${rec.Id}/view`
+                    }
+                };
+            }
+            const created = await sfConn.sobject("Lead").create(sfData);
+            return { duplicate: false, created };
+        });
 
-        const search = await sfConn.query(`SELECT Id, Name, OwnerId FROM Lead WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') AND IsConverted = FALSE LIMIT 1`);
-        if (search.totalSize > 0) {
-            const rec = search.records[0];
+        if (syncOutcome.duplicate) {
             return res.status(400).json({ 
                 success: false, 
                 isDuplicate: true,
-                existingRecord: {
-                    tipo: 'Candidato', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: rec.Id, what_id: null,
-                    link: `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${rec.Id}/view`
-                },
+                existingRecord: syncOutcome.existingRecord,
                 message: "Este cliente ya existe en Salesforce. Puedes crearle una Tarea ('Contactar') directamente." 
             });
         }
 
-        const result = await sfConn.sobject("Lead").create(sfData);
-
-        if (result.success) {
-            await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [result.id, lead.id]);
+        if (syncOutcome.created && syncOutcome.created.success) {
+            await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [syncOutcome.created.id, lead.id]);
             io.emit('update_chats_list');
-            res.json({ success: true, sfId: result.id });
+            res.json({ success: true, sfId: syncOutcome.created.id });
         } else {
             res.status(500).json({ success: false, message: "Salesforce rechazó los datos." });
         }
@@ -1001,60 +1031,59 @@ app.post('/api/salesforce/sync-bulk', proteger, async (req, res) => {
         const leads = await db.all("SELECT * FROM leads WHERE sf_id IS NULL OR sf_id = ''");
         if (leads.length === 0) return res.json({ success: true, count: 0 });
 
-        const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
-        await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
-
         let count = 0;
-        for (const lead of leads) {
-            try {
-                let leadSource = "Redes sociales";
-                const src = (lead.source || "").toLowerCase();
-                if (src.includes("tienda")) leadSource = "Tienda Virtual";
-                else if (src.includes("web")) leadSource = "Sitio web";
-                else if (src.includes("excel") || src.includes("masivo") || src.includes("campaña") || src.includes("whatsapp")) leadSource = "WhatsApp";
+        await runSfOperation(async (sfConn) => {
+            for (const lead of leads) {
+                try {
+                    let leadSource = "Redes sociales";
+                    const src = (lead.source || "").toLowerCase();
+                    if (src.includes("tienda")) leadSource = "Tienda Virtual";
+                    else if (src.includes("web")) leadSource = "Sitio web";
+                    else if (src.includes("excel") || src.includes("masivo") || src.includes("campaña") || src.includes("whatsapp")) leadSource = "WhatsApp";
 
-                let firstName = "Cliente"; let lastName = "ICC";
-                if (lead.nombre) {
-                    const parts = lead.nombre.trim().split(" ");
-                    firstName = parts[0]; lastName = parts.length > 1 ? parts.slice(1).join(" ") : "ICC";
-                }
-
-                let telefonoFinal = lead.phone;
-                if (telefonoFinal.startsWith("57") && telefonoFinal.length > 10) {
-                    telefonoFinal = telefonoFinal.substring(2); 
-                }
-
-                let interesLimpio = limpiarCategoriaSF(lead.interes);
-                let dptoSF = limpiarUbicacionSF(lead.departamento || lead.ciudad);
-
-                const sfData = {
-                    FirstName: firstName, LastName: lastName, Phone: telefonoFinal,
-                    Email: lead.correo || "", Company: lead.nombre || "Cliente ICC",
-                    DescripciondeProducto__c: lead.producto_especifico || "",
-                    Producto_de_su_inter_s__c: interesLimpio,
-                    Ubicaci_n__c: dptoSF,
-                    LeadSource: leadSource
-                };
-
-                if (lead.etiqueta && lead.etiqueta.startsWith("005")) sfData.OwnerId = lead.etiqueta;
-
-                const search = await sfConn.query(`SELECT Id FROM Lead WHERE Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%'`);
-                if (search.totalSize === 0) {
-                    const result = await sfConn.sobject("Lead").create(sfData);
-                    if (result.success) {
-                        await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [result.id, lead.id]);
-                        count++;
+                    let firstName = "Cliente"; let lastName = "ICC";
+                    if (lead.nombre) {
+                        const parts = lead.nombre.trim().split(" ");
+                        firstName = parts[0]; lastName = parts.length > 1 ? parts.slice(1).join(" ") : "ICC";
                     }
-                }
-            } catch(e) {}
-        }
+
+                    let telefonoFinal = lead.phone;
+                    if (telefonoFinal.startsWith("57") && telefonoFinal.length > 10) {
+                        telefonoFinal = telefonoFinal.substring(2); 
+                    }
+
+                    let interesLimpio = limpiarCategoriaSF(lead.interes);
+                    let dptoSF = limpiarUbicacionSF(lead.departamento || lead.ciudad);
+
+                    const sfData = {
+                        FirstName: firstName, LastName: lastName, Phone: telefonoFinal,
+                        Email: lead.correo || "", Company: lead.nombre || "Cliente ICC",
+                        DescripciondeProducto__c: lead.producto_especifico || "",
+                        Producto_de_su_inter_s__c: interesLimpio,
+                        Ubicaci_n__c: dptoSF,
+                        LeadSource: leadSource
+                    };
+
+                    if (lead.etiqueta && lead.etiqueta.startsWith("005")) sfData.OwnerId = lead.etiqueta;
+
+                    const search = await sfConn.query(`SELECT Id FROM Lead WHERE Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%'`);
+                    if (search.totalSize === 0) {
+                        const result = await sfConn.sobject("Lead").create(sfData);
+                        if (result.success) {
+                            await db.run("UPDATE leads SET sf_id = ? WHERE id = ?", [result.id, lead.id]);
+                            count++;
+                        }
+                    }
+                } catch(e) {}
+            }
+        });
+
         io.emit('update_chats_list');
         res.json({ success: true, count: count });
     } catch (error) {
         res.status(500).json({ success: false, message: "Error crítico sincronizando con Salesforce." });
     }
 });
-
 
 app.post('/api/chat/analyze-lead', proteger, async (req, res) => {
     const { phone } = req.body;
@@ -1164,7 +1193,6 @@ app.get('/api/chat-history/:phone(*)', proteger, async (req, res) => {
     }
 });
 
-// FIX: Emisión por Socket.io al etiquetar en masa
 app.post('/api/contacts/bulk-update', proteger, async (req, res) => {
     const { phones, action, value } = req.body; 
     try {
@@ -1194,7 +1222,6 @@ app.post('/api/contacts/bulk-update', proteger, async (req, res) => {
     }
 });
 
-// FIX: Emisión en tiempo real inmediata al etiquetar, fijar o archivar un chat
 app.post('/api/chat/action', proteger, async (req, res) => {
     try {
         const { phone, action, value } = req.body;
@@ -1714,7 +1741,6 @@ app.post('/api/extractor/process', upload.single('image'), async (req, res) => {
     }
 });
 
-// FIX: Detección inteligente de duplicados en Lead, Contact y Account devolviendo datos listos para Crear Tarea
 app.post('/api/extractor/salesforce', proteger, async (req, res) => {
     try {
         const payload = req.body;
@@ -1729,80 +1755,82 @@ app.post('/api/extractor/salesforce', proteger, async (req, res) => {
         let categoriaLimpia = limpiarCategoriaSF(payload.categoria_producto);
         let dptoSF = limpiarUbicacionSF(payload.ubicacion);
 
-        const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
-        await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
+        const extOutcome = await runSfOperation(async (sfConn) => {
+            const q_lead = await sfConn.query(`SELECT Id, Name, OwnerId FROM Lead WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') AND IsConverted = FALSE LIMIT 1`);
+            if (q_lead.totalSize > 0) {
+                const rec = q_lead.records[0];
+                return { 
+                    duplicate: true,
+                    existingRecord: {
+                        tipo: 'Candidato', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: rec.Id, what_id: null,
+                        link: `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${rec.Id}/view`
+                    },
+                    message: `Este cliente ya existe como Candidato (${rec.Name}). ¿Deseas asignarle una Tarea de seguimiento?` 
+                };
+            }
 
-        // 1. Verificar si ya existe como Candidato (Lead)
-        const q_lead = await sfConn.query(`SELECT Id, Name, OwnerId FROM Lead WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') AND IsConverted = FALSE LIMIT 1`);
-        if (q_lead.totalSize > 0) {
-            const rec = q_lead.records[0];
-            return res.status(400).json({ 
-                success: false, 
+            const q_contact = await sfConn.query(`SELECT Id, Name, OwnerId, AccountId FROM Contact WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') LIMIT 1`);
+            if (q_contact.totalSize > 0) {
+                const rec = q_contact.records[0];
+                return { 
+                    duplicate: true,
+                    existingRecord: {
+                        tipo: 'Contacto', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: rec.Id, what_id: rec.AccountId,
+                        link: `https://importadoracolombia.lightning.force.com/lightning/r/Contact/${rec.Id}/view`
+                    },
+                    message: `Este cliente ya existe como Contacto (${rec.Name}). ¿Deseas asignarle una Tarea de seguimiento?` 
+                };
+            }
+
+            const q_account = await sfConn.query(`SELECT Id, Name, OwnerId FROM Account WHERE Phone LIKE '%${telefonoFinal}%' LIMIT 1`);
+            if (q_account.totalSize > 0) {
+                const rec = q_account.records[0];
+                return { 
+                    duplicate: true,
+                    existingRecord: {
+                        tipo: 'Cuenta', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: null, what_id: rec.Id,
+                        link: `https://importadoracolombia.lightning.force.com/lightning/r/Account/${rec.Id}/view`
+                    },
+                    message: `Este cliente ya existe como Cuenta (${rec.Name}). ¿Deseas asignarle una Tarea de seguimiento?` 
+                };
+            }
+
+            const sfData = {
+                FirstName: payload.nombre && payload.nombre !== "No proporcionado" ? payload.nombre : "Cliente",
+                LastName: payload.apellido && payload.apellido !== "No proporcionado" ? payload.apellido : "Extraído",
+                Phone: telefonoFinal,
+                Email: payload.correo && payload.correo !== "No proporcionado" ? payload.correo : "",
+                Company: `${payload.nombre || 'Cliente'} ${payload.apellido || 'ICC'}`.trim(),
+                DescripciondeProducto__c: payload.producto_detalle && payload.producto_detalle !== "No proporcionado" ? payload.producto_detalle : "",
+                Producto_de_su_inter_s__c: categoriaLimpia,
+                Ubicaci_n__c: dptoSF,
+                LeadSource: payload.origen || "WhatsApp" 
+            };
+
+            if (payload.ejecutivo && payload.ejecutivo.startsWith("005")) {
+                sfData.OwnerId = payload.ejecutivo;
+            }
+
+            const created = await sfConn.sobject("Lead").create(sfData);
+            return { duplicate: false, created };
+        });
+
+        if (extOutcome.duplicate) {
+            return res.status(400).json({
+                success: false,
                 isDuplicate: true,
-                existingRecord: {
-                    tipo: 'Candidato', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: rec.Id, what_id: null,
-                    link: `https://importadoracolombia.lightning.force.com/lightning/r/Lead/${rec.Id}/view`
-                },
-                message: `Este cliente ya existe como Candidato (${rec.Name}). ¿Deseas asignarle una Tarea de seguimiento?` 
+                existingRecord: extOutcome.existingRecord,
+                message: extOutcome.message
             });
         }
 
-        // 2. Verificar si ya existe como Contacto
-        const q_contact = await sfConn.query(`SELECT Id, Name, OwnerId, AccountId FROM Contact WHERE (Phone LIKE '%${telefonoFinal}%' OR MobilePhone LIKE '%${telefonoFinal}%') LIMIT 1`);
-        if (q_contact.totalSize > 0) {
-            const rec = q_contact.records[0];
-            return res.status(400).json({ 
-                success: false, 
-                isDuplicate: true,
-                existingRecord: {
-                    tipo: 'Contacto', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: rec.Id, what_id: rec.AccountId,
-                    link: `https://importadoracolombia.lightning.force.com/lightning/r/Contact/${rec.Id}/view`
-                },
-                message: `Este cliente ya existe como Contacto (${rec.Name}). ¿Deseas asignarle una Tarea de seguimiento?` 
-            });
-        }
-
-        // 3. Verificar si ya existe como Cuenta
-        const q_account = await sfConn.query(`SELECT Id, Name, OwnerId FROM Account WHERE Phone LIKE '%${telefonoFinal}%' LIMIT 1`);
-        if (q_account.totalSize > 0) {
-            const rec = q_account.records[0];
-            return res.status(400).json({ 
-                success: false, 
-                isDuplicate: true,
-                existingRecord: {
-                    tipo: 'Cuenta', id: rec.Id, nombre: rec.Name, owner_id: rec.OwnerId, who_id: null, what_id: rec.Id,
-                    link: `https://importadoracolombia.lightning.force.com/lightning/r/Account/${rec.Id}/view`
-                },
-                message: `Este cliente ya existe como Cuenta (${rec.Name}). ¿Deseas asignarle una Tarea de seguimiento?` 
-            });
-        }
-
-        const sfData = {
-            FirstName: payload.nombre && payload.nombre !== "No proporcionado" ? payload.nombre : "Cliente",
-            LastName: payload.apellido && payload.apellido !== "No proporcionado" ? payload.apellido : "Extraído",
-            Phone: telefonoFinal,
-            Email: payload.correo && payload.correo !== "No proporcionado" ? payload.correo : "",
-            Company: `${payload.nombre || 'Cliente'} ${payload.apellido || 'ICC'}`.trim(),
-            DescripciondeProducto__c: payload.producto_detalle && payload.producto_detalle !== "No proporcionado" ? payload.producto_detalle : "",
-            Producto_de_su_inter_s__c: categoriaLimpia,
-            Ubicaci_n__c: dptoSF,
-            LeadSource: payload.origen || "WhatsApp" 
-        };
-
-        if (payload.ejecutivo && payload.ejecutivo.startsWith("005")) {
-            sfData.OwnerId = payload.ejecutivo;
-        }
-
-        const result = await sfConn.sobject("Lead").create(sfData);
-        
-        if (result.success) {
-            res.json({ success: true, sfId: result.id });
+        if (extOutcome.created && extOutcome.created.success) {
+            res.json({ success: true, sfId: extOutcome.created.id });
         } else {
             res.status(500).json({ success: false, message: "Salesforce rechazó la creación." });
         }
     } catch (error) {
         console.error("Error Salesforce Extractor:", error);
-        
         if (error.message && error.message.toLowerCase().includes("duplicate")) {
             return res.status(400).json({ 
                 success: false, 
@@ -1810,76 +1838,355 @@ app.post('/api/extractor/salesforce', proteger, async (req, res) => {
                 message: "Salesforce detectó un DUPLICADO por reglas internas (ej. Correo repetido). Usa el botón de Crear Tarea." 
             });
         }
-
         res.status(500).json({ success: false, message: error.message });
     }
 });
+
 // ============================================================
-// 🔍 ESCÁNER DE RADIOGRAFÍA SALESFORCE (LIGERO - NO DESCARGA LOS 8000 PRODUCTOS)
+// 🚀 MÓDULO CORE INTEGRA: COTIZADOR EJECUTIVO MULTI-USUARIO
 // ============================================================
-app.get('/api/salesforce/inspect', async (req, res) => {
+
+// 1. Buscador en tiempo real de Cuentas (por NIT, Cédula o Nombre) y alerta de duplicados
+app.get('/api/cotizador/search-accounts', async (req, res) => {
     try {
-        const sfConn = new jsforce.Connection({ loginUrl: 'https://login.salesforce.com' });
-        await sfConn.login(SF_USER, SF_PASS + SF_TOKEN);
+        const q = (req.query.q || '').trim();
+        if (!q || q.length < 2) return res.json({ success: true, records: [] });
 
-        const extraerCampos = async (objName) => {
-            try {
-                const meta = await sfConn.sobject(objName).describe();
-                return {
-                    recordTypes: meta.recordTypeInfos
-                        .filter(rt => rt.available)
-                        .map(rt => ({ name: rt.name, id: rt.recordTypeId, default: rt.defaultRecordTypeMapping })),
-                    fields: meta.fields
-                        .filter(f => f.custom || ['Name','Phone','Type','Industry','CurrencyIsoCode','ParentId','StageName','CloseDate','Amount','Pricebook2Id','AccountId','OpportunityId','ExpirationDate','Status','Tax','ShippingHandling','Discount','Description','ContactId','Email','Quantity','UnitPrice','TotalPrice','Product2Id','PricebookEntryId'].includes(f.name))
-                        .map(f => ({
-                            label: f.label,
-                            apiName: f.name,
-                            type: f.type,
-                            required: !f.nillable && !f.defaultedOnCreate && f.createable,
-                            picklist: f.picklistValues && f.picklistValues.length > 0 ? f.picklistValues.filter(p => p.active).map(p => p.value) : undefined
-                        }))
-                };
-            } catch (e) {
-                return { error: `No se pudo describir ${objName}: ${e.message}` };
-            }
-        };
+        const cleanNum = q.replace(/\D/g, '');
+        const safeText = q.replace(/'/g, "\\'");
 
-        // 1. Escanear estructura de objetos clave (solo metadatos, pesa pocos KB)
-        const [account, opportunity, oppLine, quote, quoteLine] = await Promise.all([
-            extraerCampos('Account'),
-            extraerCampos('Opportunity'),
-            extraerCampos('OpportunityLineItem'),
-            extraerCampos('Quote'),
-            extraerCampos('QuoteLineItem')
-        ]);
+        let whereClause = `Name LIKE '%${safeText}%' OR Nombre_de_la_Empresa__c LIKE '%${safeText}%' OR Nombre_de_la_Persona__c LIKE '%${safeText}%'`;
+        if (cleanNum.length >= 5 && cleanNum.length <= 15) {
+            const nitSinDV = cleanNum.length === 10 ? cleanNum.substring(0, 9) : cleanNum;
+            whereClause += ` OR N_mero_de_NIT__c = ${cleanNum} OR N_mero_de_C_dula__c = ${cleanNum} OR N_mero_de_NIT__c = ${nitSinDV}`;
+        }
 
-        // 2. Traer Listas de Precios (Pricebook2) activas
-        let pricebooks = [];
-        try {
-            const pbRes = await sfConn.query("SELECT Id, Name, IsActive, IsStandard FROM Pricebook2 WHERE IsActive = true");
-            pricebooks = pbRes.records.map(r => ({ id: r.Id, name: r.Name, isStandard: r.IsStandard }));
-        } catch (e) { pricebooks = [{ error: e.message }]; }
-
-        // 3. Traer SOLO 3 productos de muestra para ver cómo guardan SKU, Precio y Divisa
-        let sampleProducts = [];
-        try {
-            const prodRes = await sfConn.query("SELECT Id, Pricebook2Id, Pricebook2.Name, Product2Id, Product2.Name, Product2.ProductCode, Product2.Family, UnitPrice, CurrencyIsoCode FROM PricebookEntry WHERE IsActive = true LIMIT 3");
-            sampleProducts = prodRes.records;
-        } catch (e) { sampleProducts = [{ error: e.message }]; }
-
-        res.json({
-            success: true,
-            pricebooks,
-            sampleProducts,
-            schema: {
-                Account: account,
-                Opportunity: opportunity,
-                OpportunityLineItem: oppLine,
-                Quote: quote,
-                QuoteLineItem: quoteLine
-            }
+        const records = await runSfOperation(async (conn) => {
+            const result = await conn.query(`
+                SELECT Id, Name, RecordTypeId, Phone, Correo_de_facturaci_n__c, 
+                       N_mero_de_NIT__c, N_mero_de_C_dula__c, Industry, 
+                       Ubicaci_n__c, Ciudad__c, Direccion_detalle__c, CurrencyIsoCode, OwnerId
+                FROM Account 
+                WHERE ${whereClause}
+                ORDER BY LastModifiedDate DESC 
+                LIMIT 12
+            `);
+            return result.records;
         });
+
+        res.json({ success: true, records });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 2. Buscador en tiempo real de Contactos (filtrable por Cuenta o texto)
+app.get('/api/cotizador/search-contacts', async (req, res) => {
+    try {
+        const q = (req.query.q || '').trim().replace(/'/g, "\\'");
+        const accountId = (req.query.accountId || '').trim();
+
+        let conditions = [];
+        if (accountId) conditions.push(`AccountId = '${accountId}'`);
+        if (q) conditions.push(`(Name LIKE '%${q}%' OR Phone LIKE '%${q}%' OR Email LIKE '%${q}%')`);
+
+        const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+        const records = await runSfOperation(async (conn) => {
+            const result = await conn.query(`
+                SELECT Id, Name, Phone, MobilePhone, Email, AccountId, Account.Name 
+                FROM Contact 
+                ${whereSql}
+                ORDER BY LastModifiedDate DESC 
+                LIMIT 15
+            `);
+            return result.records;
+        });
+
+        res.json({ success: true, records });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 3. Buscador ultrarrápido entre los +8.000 Productos por Lista de Precios y Divisa
+app.get('/api/cotizador/search-products', async (req, res) => {
+    try {
+        const pricebookId = (req.query.pricebookId || '01sDn000001UtQvIAK').trim();
+        const currency = (req.query.currency || 'COP').trim();
+        const q = (req.query.q || '').trim().replace(/'/g, "\\'");
+
+        let searchFilter = '';
+        if (q) {
+            const terms = q.split(/\s+/).filter(Boolean);
+            const termClauses = terms.map(t => `(Product2.Name LIKE '%${t}%' OR Product2.ProductCode LIKE '%${t}%' OR Product2.Family LIKE '%${t}%')`);
+            searchFilter = `AND ${termClauses.join(' AND ')}`;
+        }
+
+        const records = await runSfOperation(async (conn) => {
+            let resQuery = await conn.query(`
+                SELECT Id, Pricebook2Id, Product2Id, Product2.Name, Product2.ProductCode, Product2.Family, Product2.Description, UnitPrice, CurrencyIsoCode
+                FROM PricebookEntry
+                WHERE Pricebook2Id = '${pricebookId}' 
+                  AND CurrencyIsoCode = '${currency}'
+                  AND IsActive = true
+                  ${searchFilter}
+                ORDER BY Product2.Name ASC
+                LIMIT 25
+            `);
+
+            // Fallback: Si la lista elegida no tiene entradas en esa divisa o está vacía, busca en Standard Price Book
+            if (resQuery.records.length === 0 && pricebookId !== '01sDn000001UtQvIAK') {
+                resQuery = await conn.query(`
+                    SELECT Id, Pricebook2Id, Product2Id, Product2.Name, Product2.ProductCode, Product2.Family, Product2.Description, UnitPrice, CurrencyIsoCode
+                    FROM PricebookEntry
+                    WHERE Pricebook2Id = '01sDn000001UtQvIAK'
+                      AND CurrencyIsoCode = '${currency}'
+                      AND IsActive = true
+                      ${searchFilter}
+                    ORDER BY Product2.Name ASC
+                    LIMIT 25
+                `);
+            }
+            return resQuery.records;
+        });
+
+        res.json({ success: true, records });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 4. Lector Inteligente de RUT (PDF o Imagen) o Texto para Auto-llenar Cuenta
+app.post('/api/cotizador/extract-rut', upload.single('file'), async (req, res) => {
+    try {
+        if (!API_KEY) return res.status(500).json({ success: false, message: "Falta GEMINI_API_KEY" });
+
+        const promptRut = `
+        Eres un analista tributario y comercial experto en Colombia (DIAN / RUT).
+        Extrae con precisión quirúrgica los datos del documento o texto adjunto para crear una Cuenta en Salesforce.
+
+        REGLAS ESTRICTAS:
+        1. 'tipo_registro': Si es Persona Jurídica (Empresa) devuelve "Empresas". Si es Persona Natural devuelve "Particulares".
+        2. 'nit_o_cedula': Devuelve ÚNICAMENTE los dígitos numéricos del NIT o Cédula, SIN puntos, SIN guiones y SIN el dígito de verificación (casilla 6 del RUT).
+        3. 'nombre_cuenta': Si es empresa, la Razón Social (casilla 35). Si es persona natural, Nombres y Apellidos completos.
+        4. 'ubicacion': Homologa el departamento a uno de estos valores exactos: Amazonas, Antioquia, Arauca, Atlántico, Bolívar, Bogotá, Boyacá, Caldas, Caquetá, Casanare, Cauca, Cesar, Chocó, Córdoba, Cundinamarca, Distrito Capital, Guainía, Guaviare, Huila, La Guajira, Magdalena, Meta, Nariño, Norte De Santander, Putumayo, Quindío, Risaralda, San Andrés Y Providencia, Santander, Sucre, Tolima, Valle, Vaupés, Vichada. (Si es Bogotá D.C., usa "Bogotá").
+        5. 'industria': Clasifica según la actividad económica en una de: Demolición, Movimiento de tierra, Minería, Agricultura, Infraestructura, Alquiler, Fluvial, Urbanismo, Otros.
+
+        Devuelve ESTRICTAMENTE este JSON:
+        {
+            "tipo_registro": "Empresas o Particulares",
+            "nombre_cuenta": "",
+            "nit_o_cedula": "",
+            "telefono": "",
+            "correo": "",
+            "industria": "Otros",
+            "ubicacion": "Bogotá",
+            "ciudad": "",
+            "direccion": ""
+        }`;
+
+        let parts = [{ text: promptRut }];
+        if (req.file) {
+            parts.push({
+                inlineData: {
+                    mimeType: req.file.mimetype,
+                    data: req.file.buffer.toString('base64')
+                }
+            });
+        } else if (req.body.text) {
+            parts.push({ text: `Texto del cliente:\n${req.body.text}` });
+        } else {
+            return res.status(400).json({ success: false, message: "No se envió archivo ni texto." });
+        }
+
+        const gRes = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
+            { contents: [{ role: 'user', parts }], generationConfig: { responseMimeType: "application/json" } }
+        );
+
+        const rawText = gRes.data.candidates[0].content.parts[0].text;
+        const cleanJson = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
+        cleanJson.nit_o_cedula = (cleanJson.nit_o_cedula || '').toString().replace(/\D/g, '');
+
+        res.json({ success: true, data: cleanJson });
+    } catch (error) {
+        const detail = error.response?.data?.error?.message || error.message;
+        res.status(500).json({ success: false, message: `Error leyendo documento: ${detail}` });
+    }
+});
+
+// 5. Transacción Todo-En-Uno: Cuenta + Archivo RUT + Oportunidad + Productos + Presupuesto (Quote)
+app.post('/api/cotizador/procesar-todo', upload.single('rutFile'), async (req, res) => {
+    try {
+        const payload = JSON.parse(req.body.payload);
+        const rutFile = req.file;
+
+        const result = await runSfOperation(async (conn) => {
+            let accountId = payload.account.existingAccountId || null;
+            let accountName = payload.account.name;
+            let rutUploadedId = null;
+
+            // PASO A: CREAR CUENTA SI ES NUEVA
+            if (!accountId) {
+                const isEmpresa = payload.account.recordType === 'Empresas';
+                const numDoc = Number((payload.account.nit || '').toString().replace(/\D/g, '')) || null;
+                const interesesStr = Array.isArray(payload.account.intereses) && payload.account.intereses.length > 0
+                    ? payload.account.intereses.join(';')
+                    : 'Otros';
+
+                const newAccData = {
+                    RecordTypeId: isEmpresa ? '012Dn000000mInkIAE' : '012Dn000000mInlIAE',
+                    Name: payload.account.name,
+                    Phone: payload.account.phone || '',
+                    Correo_de_facturaci_n__c: payload.account.email || '',
+                    Industry: payload.account.industry || null,
+                    Monto_de_cr_dito__c: Number(payload.account.creditAmount || 0),
+                    Estado__c: payload.account.status || 'Activo',
+                    CurrencyIsoCode: payload.account.currency || 'COP',
+                    Ubicaci_n__c: limpiarUbicacionSF(payload.account.ubicacion) || 'Bogotá',
+                    Ciudad__c: payload.account.ciudad || 'Bogotá',
+                    Direccion_detalle__c: payload.account.direccion || 'Pendiente',
+                    Producto_de_su_interes__c: interesesStr,
+                    Description: payload.account.description || '',
+                    Hist_rico_de_ventas__c: payload.account.historico || '',
+                    Futuros_intereses__c: payload.account.futuros || ''
+                };
+
+                if (payload.account.parentId) newAccData.ParentId = payload.account.parentId;
+                if (payload.ownerId && payload.ownerId.startsWith('005')) newAccData.OwnerId = payload.ownerId;
+
+                if (isEmpresa) {
+                    newAccData.Nombre_de_la_Empresa__c = payload.account.empresaName || payload.account.name;
+                    if (numDoc) newAccData.N_mero_de_NIT__c = numDoc;
+                } else {
+                    newAccData.Nombre_de_la_Persona__c = payload.account.personaName || payload.account.name;
+                    if (numDoc) newAccData.N_mero_de_C_dula__c = numDoc;
+                }
+
+                const accRes = await conn.sobject('Account').create(newAccData);
+                if (!accRes.success) throw new Error("No se pudo crear la Cuenta en Salesforce.");
+                accountId = accRes.id;
+            }
+
+            // PASO A.2: SI SUBIÓ ARCHIVO RUT, CARGARLO AUTOMÁTICAMENTE A "ARCHIVOS" DE LA CUENTA
+            if (rutFile && accountId) {
+                try {
+                    const cvRes = await conn.sobject('ContentVersion').create({
+                        Title: `RUT_${accountName.replace(/[^a-zA-Z0-9 ]/g, '').trim()}`,
+                        PathOnClient: rutFile.originalname || 'RUT_Cliente.pdf',
+                        VersionData: rutFile.buffer.toString('base64'),
+                        FirstPublishLocationId: accountId
+                    });
+                    if (cvRes.success) rutUploadedId = cvRes.id;
+                } catch (cvErr) {
+                    console.error("⚠️ Error subiendo adjunto RUT a la cuenta:", cvErr.message);
+                }
+            }
+
+            // PASO B: Determinar Pricebook2Id real de los productos seleccionados
+            let finalPricebookId = payload.opportunity.pricebookId || '01sDn000001UtQvIAK';
+            if (payload.items && payload.items.length > 0 && payload.items[0].pricebook2Id) {
+                finalPricebookId = payload.items[0].pricebook2Id;
+            }
+
+            // PASO C: CREAR OPORTUNIDAD
+            const oppIntereses = Array.isArray(payload.opportunity.intereses) && payload.opportunity.intereses.length > 0
+                ? payload.opportunity.intereses.join(';')
+                : 'Otros';
+
+            const newOppData = {
+                Name: payload.opportunity.name,
+                AccountId: accountId,
+                StageName: payload.opportunity.stage || 'Cotización',
+                CloseDate: payload.opportunity.closeDate,
+                CurrencyIsoCode: payload.opportunity.currency || 'COP',
+                Pricebook2Id: finalPricebookId,
+                Producto_de_interes__c: oppIntereses,
+                Loss_Reason_del__c: payload.opportunity.lossReason || 'No aplica',
+                Description: payload.opportunity.description || ''
+            };
+
+            if (payload.opportunity.origin) newOppData.Type = payload.opportunity.origin;
+            if (payload.ownerId && payload.ownerId.startsWith('005')) {
+                newOppData.OwnerId = payload.ownerId;
+            }
+
+            const oppRes = await conn.sobject('Opportunity').create(newOppData);
+            if (!oppRes.success) throw new Error("No se pudo crear la Oportunidad en Salesforce.");
+            const opportunityId = oppRes.id;
+
+            // PASO D: INSERTAR PRODUCTOS EN LA OPORTUNIDAD (OpportunityLineItem)
+            if (payload.items && payload.items.length > 0) {
+                for (const item of payload.items) {
+                    const discFactor = 1 - (Number(item.discountPct || 0) / 100);
+                    const netUnitPrice = Math.round(Number(item.unitPrice) * discFactor * 100) / 100;
+                    await conn.sobject('OpportunityLineItem').create({
+                        OpportunityId: opportunityId,
+                        PricebookEntryId: item.pricebookEntryId,
+                        Quantity: Number(item.quantity || 1),
+                        UnitPrice: netUnitPrice,
+                        Description: item.description || ''
+                    });
+                }
+            }
+
+            // PASO E: CREAR PRESUPUESTO (Quote)
+            const newQuoteData = {
+                Name: payload.quote.name || payload.opportunity.name,
+                OpportunityId: opportunityId,
+                Pricebook2Id: finalPricebookId,
+                Status: payload.quote.status || 'En Revisión',
+                Tiempo_de_entrega_d_as__c: payload.quote.deliveryTime || 'Inmediata',
+                Forma_de_pago__c: payload.quote.paymentMethod || 'Contado',
+                Descripcion_de_forma_de_pago__c: payload.quote.paymentDescription || 'Pago de contado.',
+                Validez_de_ofertas_d_as__c: Number(payload.quote.validityDays || 15),
+                ExpirationDate: payload.quote.expirationDate,
+                Description: payload.quote.description || 'Cotización comercial.',
+                Garant_a__c: payload.quote.warranty || '6 meses',
+                Tax: Number(payload.quote.totalTax || 0),
+                ShippingHandling: Number(payload.quote.shipping || 0),
+                Email: payload.quote.email || payload.account.email || '',
+                Phone: payload.quote.phone || payload.account.phone || ''
+            };
+
+            if (payload.quote.contactId) newQuoteData.ContactId = payload.quote.contactId;
+
+            const quoteRes = await conn.sobject('Quote').create(newQuoteData);
+            if (!quoteRes.success) throw new Error("No se pudo crear el Presupuesto (Quote) en Salesforce.");
+            const quoteId = quoteRes.id;
+
+            // PASO F: INSERTAR PRODUCTOS EN EL PRESUPUESTO (QuoteLineItem con % Descuento nativo)
+            if (payload.items && payload.items.length > 0) {
+                for (const item of payload.items) {
+                    await conn.sobject('QuoteLineItem').create({
+                        QuoteId: quoteId,
+                        PricebookEntryId: item.pricebookEntryId,
+                        Product2Id: item.product2Id,
+                        Quantity: Number(item.quantity || 1),
+                        UnitPrice: Number(item.unitPrice),
+                        Discount: Number(item.discountPct || 0),
+                        Description: item.description || ''
+                    });
+                }
+            }
+
+            return {
+                accountId,
+                opportunityId,
+                quoteId,
+                rutUploadedId,
+                links: {
+                    account: `https://importadoracolombia.lightning.force.com/lightning/r/Account/${accountId}/view`,
+                    opportunity: `https://importadoracolombia.lightning.force.com/lightning/r/Opportunity/${opportunityId}/view`,
+                    quote: `https://importadoracolombia.lightning.force.com/lightning/r/Quote/${quoteId}/view`
+                }
+            };
+        });
+
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error("❌ Error en Cotizador Todo-En-Uno:", error);
+        res.status(500).json({ success: false, message: error.message });
     }
 });
