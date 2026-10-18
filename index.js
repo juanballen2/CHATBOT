@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v34.0 (CORE INTEGRA: COTIZADOR EJECUTIVO + REAL-TIME CRM)
+ * SERVER BACKEND - v34.1 (CORE INTEGRA: BÚSQUEDA GLOBAL 8K + PDF NATIVO SALESFORCE)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -16,9 +16,8 @@
  * 13. FIX: Solución al bucle de Login forzando req.session.save().
  * 14. FIX: Emisión Socket.io en tiempo real al etiquetar y gestionar tags/config.
  * 15. ADD: Retorno de metadatos de registro existente en /api/extractor/salesforce para crear Tareas.
- * 16. ADD CORE INTEGRA: Buscador en tiempo real de Cuentas, Contactos y +8.000 Productos por Pricebook.
- * 17. ADD CORE INTEGRA: Extractor IA de RUT y carga automática a "Archivos" (ContentVersion) de la Cuenta.
- * 18. ADD CORE INTEGRA: Transacción Todo-En-Uno (Cuenta + Oportunidad + Productos + Presupuesto con IVA).
+ * 16. FIX PRODUCTOS: Filtro Product2.IsActive = true (oculta vendidas), LIMIT 150, búsqueda global y sinónimos (EXC/EXCAVADORA).
+ * 17. ADD PDF NATIVO SF: Descarga directa desde QuoteTemplate (quoteTemplateDataViewer.apexp) e inserción en QuoteDocument.
  * ============================================================
  */
 
@@ -80,6 +79,7 @@ REGLA DE ORO: NUNCA ASUMAS EL NOMBRE DEL CLIENTE. Si el cliente no te ha dicho e
 let cachedSfConn = null;
 let sfLastLoginTime = 0;
 let sfLoginPromise = null;
+let cachedQuoteTemplates = null;
 
 async function getSfConnection() {
     const now = Date.now();
@@ -116,6 +116,72 @@ async function runSfOperation(fn) {
         }
         throw err;
     }
+}
+
+// Descubre automáticamente los IDs (0EH...) de las Plantillas de Presupuesto en Salesforce
+async function getSfQuoteTemplates(conn) {
+    if (cachedQuoteTemplates && cachedQuoteTemplates.length > 0) return cachedQuoteTemplates;
+    try {
+        const metaList = await conn.metadata.list([{ type: 'QuoteTemplate' }]);
+        const arr = Array.isArray(metaList) ? metaList : (metaList ? [metaList] : []);
+        cachedQuoteTemplates = arr.map(t => ({
+            id: t.id,
+            fullName: t.fullName,
+            cleanName: (t.fullName || '').replace(/_/g, ' ')
+        }));
+        return cachedQuoteTemplates;
+    } catch (e) {
+        console.error("⚠️ No se pudieron listar QuoteTemplates por Metadata API:", e.message);
+        return [];
+    }
+}
+
+function normalizeStrMatch(s) {
+    return (s || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+}
+
+// Descarga el binario PDF renderizado por el motor nativo de plantillas de Salesforce
+async function fetchOfficialSalesforcePdf(conn, quoteId, templateId) {
+    if (!templateId) return null;
+    const targetPath = `/quote/quoteTemplateDataViewer.apexp?id=${quoteId}&summlid=${templateId}`;
+    let currentUrl = `${conn.instanceUrl}${targetPath}`;
+    let cookieHeader = `sid=${conn.accessToken}`;
+
+    for (let hop = 0; hop < 5; hop++) {
+        const res = await axios.get(currentUrl, {
+            headers: {
+                'Cookie': cookieHeader,
+                'Authorization': `Bearer ${conn.accessToken}`,
+                'User-Agent': 'Mozilla/5.0'
+            },
+            responseType: 'arraybuffer',
+            maxRedirects: 0,
+            validateStatus: (status) => status >= 200 && status < 400
+        });
+
+        if (res.headers['set-cookie']) {
+            const newCookies = res.headers['set-cookie'].map(c => c.split(';')[0]).join('; ');
+            cookieHeader = `${cookieHeader}; ${newCookies}`;
+        }
+
+        if (res.status === 301 || res.status === 302 || res.status === 303 || res.status === 307) {
+            let loc = res.headers.location;
+            if (!loc) break;
+            if (loc.startsWith('/')) {
+                const u = new URL(currentUrl);
+                loc = `${u.protocol}//${u.host}${loc}`;
+            }
+            currentUrl = loc;
+            continue;
+        }
+
+        const buf = Buffer.from(res.data);
+        if (buf.length > 4 && buf.slice(0, 4).toString() === '%PDF') {
+            return buf;
+        }
+        break;
+    }
+    return null;
 }
 
 // --- 3. SESIONES ---
@@ -374,7 +440,6 @@ app.get('/extractor', proteger, (req, res) => {
     res.sendFile(path.join(__dirname, 'extractor.html'));
 });
 
-// RUTAS PÚBLICAS DE ACCESO LIBRE PARA EL COTIZADOR EJECUTIVO (10+ PERSONAS)
 app.get('/prototipo-cotizador', (req, res) => {
     res.sendFile(path.join(__dirname, 'cotizador.html'));
 });
@@ -1536,7 +1601,7 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                         io.emit('new_message', { phone: targetId, role: role, text: text, time: timestamp });
                         io.emit('update_chats_list');
 
-                        console.log(`📢 TIEMPO REAL (${source.toUpperCase()}) - ChatID:${targetId} | Rol: ${role} \vert{} Msj:${text}`);
+                        console.log(`📢 TIEMPO REAL (${source.toUpperCase()}) - ChatID:${targetId} | Rol: ${role} | Msj:${text}`);
                     }
                 }
 
@@ -1566,7 +1631,7 @@ app.post('/api/omnicanal/webhook', async (req, res) => {
                         io.emit('new_message', { phone: targetId, role: 'user', text: text, time: timestamp, msg_type: 'comment', media_id: mediaId });
                         io.emit('update_chats_list');
 
-                        console.log(`📣 ${source.toUpperCase()} COMENTARIO - De:${senderName} | Msj: ${rawText} \vert{} PostID:${mediaId}`);
+                        console.log(`📣 ${source.toUpperCase()} COMENTARIO - De:${senderName} | Msj: ${rawText} | PostID:${mediaId}`);
                     }
                 }
             }
@@ -1846,6 +1911,18 @@ app.post('/api/extractor/salesforce', proteger, async (req, res) => {
 // 🚀 MÓDULO CORE INTEGRA: COTIZADOR EJECUTIVO MULTI-USUARIO
 // ============================================================
 
+// 0. Obtener Plantillas Oficiales de Presupuesto de Salesforce (IDs 0EH...)
+app.get('/api/cotizador/templates', async (req, res) => {
+    try {
+        const templates = await runSfOperation(async (conn) => {
+            return await getSfQuoteTemplates(conn);
+        });
+        res.json({ success: true, templates });
+    } catch (e) {
+        res.json({ success: false, templates: [] });
+    }
+});
+
 // 1. Buscador en tiempo real de Cuentas (por NIT, Cédula o Nombre) y alerta de duplicados
 app.get('/api/cotizador/search-accounts', async (req, res) => {
     try {
@@ -1869,7 +1946,7 @@ app.get('/api/cotizador/search-accounts', async (req, res) => {
                 FROM Account 
                 WHERE ${whereClause}
                 ORDER BY LastModifiedDate DESC 
-                LIMIT 12
+                LIMIT 15
             `);
             return result.records;
         });
@@ -1909,46 +1986,76 @@ app.get('/api/cotizador/search-contacts', async (req, res) => {
     }
 });
 
-// 3. Buscador ultrarrápido entre los +8.000 Productos por Lista de Precios y Divisa
+// 3. Buscador Global/Específico entre los +8.000 Productos (Filtra vendidas/inactivas + soporta abreviaturas EXC.)
 app.get('/api/cotizador/search-products', async (req, res) => {
     try {
-        const pricebookId = (req.query.pricebookId || '01sDn000001UtQvIAK').trim();
+        const pricebookId = (req.query.pricebookId || 'ALL').trim();
         const currency = (req.query.currency || 'COP').trim();
+        const includeInactive = req.query.includeInactive === 'true';
         const q = (req.query.q || '').trim().replace(/'/g, "\\'");
 
         let searchFilter = '';
         if (q) {
             const terms = q.split(/\s+/).filter(Boolean);
-            const termClauses = terms.map(t => `(Product2.Name LIKE '%${t}%' OR Product2.ProductCode LIKE '%${t}%' OR Product2.Family LIKE '%${t}%')`);
+            const termClauses = terms.map(t => {
+                const low = t.toLowerCase();
+                if (low.startsWith('excav')) {
+                    // En Salesforce muchos productos usan "EXC." en vez de "EXCAVADORA"
+                    return `(Product2.Name LIKE '%${t}%' OR Product2.Name LIKE '%EXC%' OR Product2.Family LIKE '%${t}%' OR Product2.Description LIKE '%${t}%')`;
+                }
+                return `(Product2.Name LIKE '%${t}%' OR Product2.ProductCode LIKE '%${t}%' OR Product2.Family LIKE '%${t}%' OR Product2.Description LIKE '%${t}%')`;
+            });
             searchFilter = `AND ${termClauses.join(' AND ')}`;
         }
 
+        const activeFilter = includeInactive
+            ? `AND IsActive = true`
+            : `AND IsActive = true AND Product2.IsActive = true`;
+
         const records = await runSfOperation(async (conn) => {
+            let pbClause = '';
+            if (pricebookId && pricebookId !== 'ALL') {
+                pbClause = `AND Pricebook2Id = '${pricebookId}'`;
+            }
+
             let resQuery = await conn.query(`
-                SELECT Id, Pricebook2Id, Product2Id, Product2.Name, Product2.ProductCode, Product2.Family, Product2.Description, UnitPrice, CurrencyIsoCode
+                SELECT Id, Pricebook2Id, Pricebook2.Name, Pricebook2.IsStandard,
+                       Product2Id, Product2.Name, Product2.ProductCode, Product2.Family, Product2.Description, Product2.IsActive,
+                       UnitPrice, CurrencyIsoCode
                 FROM PricebookEntry
-                WHERE Pricebook2Id = '${pricebookId}' 
-                  AND CurrencyIsoCode = '${currency}'
-                  AND IsActive = true
+                WHERE CurrencyIsoCode = '${currency}'
+                  ${activeFilter}
+                  ${pbClause}
                   ${searchFilter}
-                ORDER BY Product2.Name ASC
-                LIMIT 25
+                ORDER BY Pricebook2.IsStandard ASC, Product2.Name ASC
+                LIMIT 150
             `);
 
-            // Fallback: Si la lista elegida no tiene entradas en esa divisa o está vacía, busca en Standard Price Book
-            if (resQuery.records.length === 0 && pricebookId !== '01sDn000001UtQvIAK') {
+            // Si buscó en una lista específica y no encontró, busca globalmente en todas las listas activas
+            if (resQuery.records.length === 0 && pricebookId !== 'ALL') {
                 resQuery = await conn.query(`
-                    SELECT Id, Pricebook2Id, Product2Id, Product2.Name, Product2.ProductCode, Product2.Family, Product2.Description, UnitPrice, CurrencyIsoCode
+                    SELECT Id, Pricebook2Id, Pricebook2.Name, Pricebook2.IsStandard,
+                           Product2Id, Product2.Name, Product2.ProductCode, Product2.Family, Product2.Description, Product2.IsActive,
+                           UnitPrice, CurrencyIsoCode
                     FROM PricebookEntry
-                    WHERE Pricebook2Id = '01sDn000001UtQvIAK'
-                      AND CurrencyIsoCode = '${currency}'
-                      AND IsActive = true
+                    WHERE CurrencyIsoCode = '${currency}'
+                      ${activeFilter}
                       ${searchFilter}
-                    ORDER BY Product2.Name ASC
-                    LIMIT 25
+                    ORDER BY Pricebook2.IsStandard ASC, Product2.Name ASC
+                    LIMIT 150
                 `);
             }
-            return resQuery.records;
+
+            // Filtrar máquinas que tengan explícitamente "VENDIDA" o "VENDIDO" en el nombre/descripción a menos que pidan ver inactivos
+            let finalRecords = resQuery.records;
+            if (!includeInactive) {
+                finalRecords = finalRecords.filter(r => {
+                    const fullTxt = `${r.Product2?.Name || ''} ${r.Product2?.Description || ''}`.toUpperCase();
+                    return !fullTxt.includes('VENDIDA') && !fullTxt.includes('VENDIDO');
+                });
+            }
+
+            return finalRecords;
         });
 
         res.json({ success: true, records });
@@ -2016,7 +2123,7 @@ app.post('/api/cotizador/extract-rut', upload.single('file'), async (req, res) =
     }
 });
 
-// 5. Transacción Todo-En-Uno: Cuenta + Archivo RUT + Oportunidad + Productos + Presupuesto (Quote)
+// 5. Transacción Todo-En-Uno: Cuenta + Archivo RUT + Oportunidad + Productos + Presupuesto + PDF Oficial SF
 app.post('/api/cotizador/procesar-todo', upload.single('rutFile'), async (req, res) => {
     try {
         const payload = JSON.parse(req.body.payload);
@@ -2085,7 +2192,9 @@ app.post('/api/cotizador/procesar-todo', upload.single('rutFile'), async (req, r
             }
 
             // PASO B: Determinar Pricebook2Id real de los productos seleccionados
-            let finalPricebookId = payload.opportunity.pricebookId || '01sDn000001UtQvIAK';
+            let finalPricebookId = (payload.opportunity.pricebookId && payload.opportunity.pricebookId !== 'ALL')
+                ? payload.opportunity.pricebookId
+                : '01sDn000001UtQvIAK';
             if (payload.items && payload.items.length > 0 && payload.items[0].pricebook2Id) {
                 finalPricebookId = payload.items[0].pricebook2Id;
             }
@@ -2171,15 +2280,48 @@ app.post('/api/cotizador/procesar-todo', upload.single('rutFile'), async (req, r
                 }
             }
 
+            // PASO G: RESOLVER PLANTILLA DE PDF EN SALESFORCE Y GENERAR QUOTEDOCUMENT OFICIAL
+            const templates = await getSfQuoteTemplates(conn);
+            const desiredTpl = payload.quote.templateName || '';
+            let matchedTpl = templates.find(t => t.id === desiredTpl)
+                || templates.find(t => normalizeStrMatch(t.fullName).includes(normalizeStrMatch(desiredTpl)) || normalizeStrMatch(desiredTpl).includes(normalizeStrMatch(t.fullName)))
+                || templates[0];
+
+            let quoteDocumentId = null;
+            let resolvedTemplateId = matchedTpl ? matchedTpl.id : null;
+
+            if (resolvedTemplateId) {
+                try {
+                    const pdfBuf = await fetchOfficialSalesforcePdf(conn, quoteId, resolvedTemplateId);
+                    if (pdfBuf) {
+                        const qdRes = await conn.sobject('QuoteDocument').create({
+                            QuoteId: quoteId,
+                            Document: pdfBuf.toString('base64')
+                        });
+                        if (qdRes.success) quoteDocumentId = qdRes.id;
+                    }
+                } catch (pdfErr) {
+                    console.error("⚠️ Aviso generando QuoteDocument automático:", pdfErr.message);
+                }
+            }
+
+            const sfPdfViewerUrl = resolvedTemplateId
+                ? `https://importadoracolombia.my.salesforce.com/quote/quoteTemplateDataViewer.apexp?id=${quoteId}&summlid=${resolvedTemplateId}`
+                : `https://importadoracolombia.lightning.force.com/lightning/r/Quote/${quoteId}/view`;
+
             return {
                 accountId,
                 opportunityId,
                 quoteId,
                 rutUploadedId,
+                quoteDocumentId,
+                templateId: resolvedTemplateId,
                 links: {
                     account: `https://importadoracolombia.lightning.force.com/lightning/r/Account/${accountId}/view`,
                     opportunity: `https://importadoracolombia.lightning.force.com/lightning/r/Opportunity/${opportunityId}/view`,
-                    quote: `https://importadoracolombia.lightning.force.com/lightning/r/Quote/${quoteId}/view`
+                    quote: `https://importadoracolombia.lightning.force.com/lightning/r/Quote/${quoteId}/view`,
+                    sfNativePdf: sfPdfViewerUrl,
+                    downloadPdfApi: `/api/cotizador/download-sf-pdf?quoteId=${quoteId}&templateName=${encodeURIComponent(desiredTpl)}&templateId=${resolvedTemplateId || ''}`
                 }
             };
         });
@@ -2188,5 +2330,59 @@ app.post('/api/cotizador/procesar-todo', upload.single('rutFile'), async (req, r
     } catch (error) {
         console.error("❌ Error en Cotizador Todo-En-Uno:", error);
         res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 6. Endpoint para descargar el PDF Oficial generado por las Plantillas de Salesforce
+app.get('/api/cotizador/download-sf-pdf', async (req, res) => {
+    try {
+        const quoteId = (req.query.quoteId || '').trim();
+        let templateId = (req.query.templateId || '').trim();
+        const templateName = (req.query.templateName || '').trim();
+
+        if (!quoteId) return res.status(400).send("Falta quoteId");
+
+        const pdfOutcome = await runSfOperation(async (conn) => {
+            // 1. Si no vino el templateId, lo buscamos por nombre en los metadatos de Salesforce
+            if (!templateId) {
+                const templates = await getSfQuoteTemplates(conn);
+                const matched = templates.find(t => normalizeStrMatch(t.fullName).includes(normalizeStrMatch(templateName)) || normalizeStrMatch(templateName).includes(normalizeStrMatch(t.fullName))) || templates[0];
+                if (matched) templateId = matched.id;
+            }
+
+            // 2. Intentar descargar el binario directo del motor de plantillas de Salesforce
+            if (templateId) {
+                const livePdf = await fetchOfficialSalesforcePdf(conn, quoteId, templateId);
+                if (livePdf) return { buffer: livePdf };
+            }
+
+            // 3. Fallback: si ya existe un QuoteDocument adjunto al Quote en Salesforce, leer su binario
+            const qdQuery = await conn.query(`SELECT Id, Document FROM QuoteDocument WHERE QuoteId = '${quoteId}' ORDER BY CreatedDate DESC LIMIT 1`);
+            if (qdQuery.totalSize > 0) {
+                const docId = qdQuery.records[0].Id;
+                const docRes = await axios.get(`${conn.instanceUrl}/services/data/v50.0/sobjects/QuoteDocument/${docId}/Document`, {
+                    headers: { 'Authorization': `Bearer ${conn.accessToken}` },
+                    responseType: 'arraybuffer'
+                });
+                return { buffer: Buffer.from(docRes.data) };
+            }
+
+            return {
+                redirectUrl: templateId
+                    ? `https://importadoracolombia.my.salesforce.com/quote/quoteTemplateDataViewer.apexp?id=${quoteId}&summlid=${templateId}`
+                    : `https://importadoracolombia.lightning.force.com/lightning/r/Quote/${quoteId}/view`
+            };
+        });
+
+        if (pdfOutcome.buffer) {
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="Cotizacion_ICC_${quoteId}.pdf"`);
+            return res.send(pdfOutcome.buffer);
+        } else {
+            return res.redirect(pdfOutcome.redirectUrl);
+        }
+    } catch (error) {
+        console.error("❌ Error descargando PDF oficial de SF:", error.message);
+        res.status(500).send("Error descargando el PDF desde Salesforce: " + error.message);
     }
 });
