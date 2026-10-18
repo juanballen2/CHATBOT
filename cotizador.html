@@ -3,578 +3,668 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICCBOT - Cotizador Rápido Ejecutivo (Core Integra)</title>
+    <title>ICCBOT - Cotizador Ejecutivo Pro</title>
     <link rel="icon" href="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" type="image/svg+xml">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #E9511D;
-            --primary-dark: #c93f10;
-            --sf-blue: #00a1e0;
-            --bg: #F3F5F8;
+            --primary-hover: #D14110;
+            --primary-soft: #FFF4F0;
+            --sf-blue: #00A1E0;
+            --sf-blue-soft: #EBF8FF;
+            --bg: #F1F5F9;
             --card: #FFFFFF;
-            --border: #DCE2EA;
-            --text: #1E293B;
+            --border: #E2E8F0;
+            --text: #0F172A;
             --muted: #64748B;
             --success: #10B981;
             --danger: #EF4444;
             --warning: #F59E0B;
+            --radius: 14px;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-        body { background: var(--bg); color: var(--text); padding-bottom: 60px; }
+        body { background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 50px; }
 
-        /* TOPBAR EJECUTIVA */
+        /* BARRA SUPERIOR */
         .topbar {
-            background: #111b21;
+            background: #0F172A;
             color: #fff;
-            padding: 14px 28px;
+            padding: 12px 28px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             position: sticky;
             top: 0;
             z-index: 100;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
         }
-        .topbar-brand { display: flex; align-items: center; gap: 12px; }
-        .topbar-brand img { width: 38px; height: 38px; border-radius: 50%; background: #fff; padding: 2px; }
-        .topbar-brand h1 { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.3px; }
-        .topbar-brand span { font-size: 0.75rem; background: var(--primary); padding: 2px 8px; border-radius: 99px; font-weight: 700; margin-left: 6px; }
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand img { width: 38px; height: 38px; border-radius: 50%; background: #fff; padding: 2px; }
+        .brand-title { font-size: 1.1rem; font-weight: 800; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px; }
+        .badge-pro { background: var(--primary); color: #fff; font-size: 0.7rem; padding: 3px 9px; border-radius: 99px; font-weight: 700; }
 
-        .exec-selector-bar { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.08); padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); }
-        .exec-selector-bar label { font-size: 0.8rem; color: #cbd5e1; font-weight: 600; }
-        .exec-selector-bar select { background: transparent; color: #fff; border: none; font-weight: 700; font-size: 0.9rem; outline: none; cursor: pointer; }
-        .exec-selector-bar select option { color: #000; }
+        .topbar-right { display: flex; align-items: center; gap: 14px; }
+        .exec-pill {
+            display: flex; align-items: center; gap: 8px;
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+            padding: 7px 14px; border-radius: 99px;
+        }
+        .exec-pill i { color: var(--primary); }
+        .exec-pill select {
+            background: transparent; color: #fff; border: none; font-weight: 700;
+            font-size: 0.88rem; outline: none; cursor: pointer;
+        }
+        .exec-pill select option { color: #0F172A; }
 
-        .container { max-width: 1280px; margin: 24px auto; padding: 0 20px; display: flex; flex-direction: column; gap: 22px; }
+        /* LAYOUT DE 2 COLUMNAS (IZQUIERDA TRABAJO, DERECHA RESUMEN STICKY) */
+        .workspace {
+            max-width: 1400px;
+            margin: 24px auto;
+            padding: 0 20px;
+            display: grid;
+            grid-template-columns: 1fr 390px;
+            gap: 24px;
+            align-items: start;
+        }
+        @media (max-width: 1100px) {
+            .workspace { grid-template-columns: 1fr; }
+        }
 
-        .step-card {
+        .main-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+        .side-col { position: sticky; top: 80px; display: flex; flex-direction: column; gap: 16px; }
+
+        /* TARJETAS LIMPIAS */
+        .card {
             background: var(--card);
-            border-radius: 12px;
+            border-radius: var(--radius);
             border: 1px solid var(--border);
-            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
-            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
+            overflow: visible;
         }
-        .step-header {
-            background: #F8FAFC;
-            padding: 16px 24px;
+        .card-header {
+            padding: 16px 22px;
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
         }
-        .step-title { display: flex; align-items: center; gap: 10px; font-size: 1.05rem; font-weight: 800; color: var(--text); }
-        .step-badge { width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 800; }
-        .step-body { padding: 24px; }
+        .card-title { display: flex; align-items: center; gap: 10px; font-size: 1rem; font-weight: 800; color: var(--text); }
+        .step-num {
+            width: 26px; height: 26px; border-radius: 8px; background: var(--primary);
+            color: #fff; display: flex; align-items: center; justify-content: center;
+            font-size: 0.82rem; font-weight: 800;
+        }
+        .card-body { padding: 20px 22px; }
 
-        /* BUSCADOR / RUT DROPZONE */
-        .quick-bar { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; margin-bottom: 20px; }
-        @media (max-width: 900px) { .quick-bar { grid-template-columns: 1fr; } }
+        /* PASO 1: BUSCADOR DE CLIENTE + LECTOR RUT */
+        .client-entry-grid {
+            display: grid;
+            grid-template-columns: 1.3fr 1fr;
+            gap: 14px;
+        }
+        @media (max-width: 768px) { .client-entry-grid { grid-template-columns: 1fr; } }
 
-        .search-box-wrap { position: relative; background: #F8FAFC; border: 2px solid var(--sf-blue); border-radius: 10px; padding: 14px; }
-        .search-box-wrap label { display: block; font-size: 0.78rem; font-weight: 800; color: var(--sf-blue); text-transform: uppercase; margin-bottom: 6px; }
-        .search-input-row { display: flex; align-items: center; gap: 8px; }
-        .search-input-row input { width: 100%; border: none; background: transparent; font-size: 1rem; font-weight: 600; outline: none; color: var(--text); }
+        .smart-search {
+            position: relative;
+            background: #F8FAFC;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 16px;
+            transition: 0.2s;
+        }
+        .smart-search:focus-within { border-color: var(--sf-blue); background: #fff; box-shadow: 0 0 0 4px rgba(0, 161, 224, 0.1); }
+        .smart-search-lbl { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: var(--sf-blue); margin-bottom: 4px; display: flex; justify-content: space-between; }
+        .smart-search-row { display: flex; align-items: center; gap: 10px; }
+        .smart-search-row input { width: 100%; border: none; background: transparent; font-size: 0.95rem; font-weight: 600; color: var(--text); outline: none; }
 
+        .rut-smart-box {
+            border: 2px dashed #CBD5E1;
+            background: #F8FAFC;
+            border-radius: 12px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .rut-smart-box:hover { border-color: var(--primary); background: var(--primary-soft); }
+
+        /* DROPDOWN FLOTANTE */
         .dropdown-results {
-            position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid var(--border);
-            border-radius: 8px; box-shadow: 0 12px 28px rgba(0,0,0,0.15); z-index: 90; max-height: 260px; overflow-y: auto; display: none; margin-top: 4px;
+            position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+            background: #fff; border: 1px solid var(--border); border-radius: 12px;
+            box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16); z-index: 95;
+            max-height: 320px; overflow-y: auto; display: none;
         }
-        .dropdown-item { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: 0.15s; }
-        .dropdown-item:hover { background: #FFF5F2; }
-
-        .rut-dropzone {
-            border: 2px dashed var(--primary); background: rgba(233, 81, 29, 0.04); border-radius: 10px; padding: 14px;
-            display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; transition: 0.2s;
+        .dropdown-item {
+            padding: 12px 16px; border-bottom: 1px solid var(--border);
+            cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 12px; transition: 0.15s;
         }
-        .rut-dropzone:hover { background: rgba(233, 81, 29, 0.09); }
+        .dropdown-item:hover { background: var(--primary-soft); }
 
-        /* BANNER DE CUENTA SELECCIONADA */
-        .selected-account-banner {
-            display: none; background: #ECFDF5; border: 2px solid var(--success); border-radius: 10px;
-            padding: 14px 18px; margin-bottom: 15px; align-items: center; justify-content: space-between;
+        /* TARJETA DE CLIENTE SELECCIONADO */
+        .client-selected-card {
+            display: none;
+            background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+            border: 1px solid #34D399;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-top: 14px;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+        }
+        .client-avatar {
+            width: 46px; height: 46px; border-radius: 12px; background: #10B981;
+            color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0;
         }
 
-        /* GRIDS DE FORMULARIO */
-        .form-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-        .form-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-        @media (max-width: 960px) { .form-grid-4, .form-grid-3 { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 600px) { .form-grid-4, .form-grid-3 { grid-template-columns: 1fr; } }
+        /* FORMULARIO DESPLEGABLE DE CLIENTE NUEVO */
+        #new-account-drawer {
+            display: none;
+            margin-top: 18px;
+            padding-top: 18px;
+            border-top: 1px dashed var(--border);
+            animation: fadeIn 0.25s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
-        .fg { display: flex; flex-direction: column; gap: 5px; position: relative; }
-        .fg.span-2 { grid-column: span 2; }
-        .fg.span-4 { grid-column: 1 / -1; }
-        .flabel { font-size: 0.78rem; font-weight: 700; color: var(--muted); text-transform: uppercase; display: flex; align-items: center; gap: 4px; }
-        .req-dot { color: var(--danger); font-weight: 900; }
-        .opt-dot { color: var(--sf-blue); font-size: 0.65rem; }
+        .form-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .form-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        @media (max-width: 768px) { .form-grid-3, .form-grid-2 { grid-template-columns: 1fr; } }
 
+        .fg { display: flex; flex-direction: column; gap: 4px; position: relative; }
+        .flabel { font-size: 0.74rem; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+        .req { color: var(--danger); }
         .finput {
-            padding: 10px 12px; border: 1px solid var(--border); border-radius: 7px; font-size: 0.92rem;
-            color: var(--text); background: #fff; font-weight: 500; outline: none; transition: 0.15s; width: 100%;
+            padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+            font-size: 0.9rem; color: var(--text); background: #fff; font-weight: 500; outline: none; transition: 0.15s; width: 100%;
         }
         .finput:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(233, 81, 29, 0.12); }
 
-        /* CHIPS MULTI-SELECCIÓN */
-        .chips-wrap { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0; }
+        /* ACORDEÓN DE OPCIONES AVANZADAS */
+        .adv-toggle {
+            display: inline-flex; align-items: center; gap: 6px; margin-top: 14px;
+            font-size: 0.8rem; font-weight: 700; color: var(--muted); cursor: pointer;
+            user-select: none; padding: 6px 10px; border-radius: 6px; background: #F8FAFC; border: 1px solid var(--border);
+        }
+        .adv-toggle:hover { color: var(--primary); border-color: var(--primary); }
+        .adv-box { display: none; margin-top: 12px; padding: 14px; background: #F8FAFC; border-radius: 10px; border: 1px solid var(--border); }
+
+        /* PÍLDORAS DE CATEGORÍAS DE PRODUCTOS (TABS RÁPIDOS) */
+        .cat-Bar {
+            display: flex; gap: 6px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 12px;
+        }
+        .cat-pill {
+            padding: 7px 14px; border-radius: 99px; border: 1px solid var(--border);
+            background: #F8FAFC; color: var(--muted); font-size: 0.8rem; font-weight: 700;
+            cursor: pointer; white-space: nowrap; transition: 0.15s; display: flex; align-items: center; gap: 6px;
+        }
+        .cat-pill:hover { border-color: var(--primary); color: var(--primary); }
+        .cat-pill.active { background: var(--primary); color: #fff; border-color: var(--primary); box-shadow: 0 4px 10px rgba(233, 81, 29, 0.25); }
+
+        .pb-badge {
+            display: inline-block; padding: 2px 7px; border-radius: 5px; font-size: 0.68rem; font-weight: 800;
+            background: var(--sf-blue-soft); color: #0284C7; border: 1px solid #BAE6FD; margin-right: 6px;
+        }
+
+        /* TABLA POS DEL CARRITO */
+        .table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--border); border-radius: 10px; }
+        .pos-table { width: 100%; border-collapse: collapse; min-width: 820px; font-size: 0.84rem; }
+        .pos-table th {
+            background: #1E293B; color: #fff; padding: 10px; text-align: right;
+            font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.3px;
+        }
+        .pos-table th:first-child, .pos-table td:first-child { text-align: left; }
+        .pos-table td { padding: 10px; border-bottom: 1px solid var(--border); text-align: right; vertical-align: middle; }
+        .pos-table tr:hover { background: #F8FAFC; }
+
+        .qty-stepper { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; background: #fff; }
+        .qty-btn { width: 26px; height: 28px; border: none; background: #F1F5F9; cursor: pointer; font-weight: 800; color: var(--text); }
+        .qty-btn:hover { background: var(--primary); color: #fff; }
+        .qty-inp { width: 46px; height: 28px; border: none; text-align: center; font-weight: 700; font-size: 0.85rem; outline: none; }
+
+        .tbl-num { width: 105px; padding: 6px 8px; text-align: right; border: 1px solid var(--border); border-radius: 6px; font-weight: 600; font-size: 0.84rem; }
+        .tbl-pct { width: 58px; padding: 6px; text-align: right; border: 1px solid var(--border); border-radius: 6px; font-weight: 700; font-size: 0.84rem; }
+
+        /* COLUMNA DERECHA: RESUMEN FINANCIERO Y CONDICIONES */
+        .receipt-box {
+            background: #0F172A; color: #fff; border-radius: 12px; padding: 18px;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .receipt-row { display: flex; justify-content: space-between; font-size: 0.88rem; color: #CBD5E1; }
+        .receipt-row.iva { color: #F87171; font-weight: 700; font-size: 0.95rem; }
+        .receipt-total {
+            border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 12px; margin-top: 4px;
+            display: flex; justify-content: space-between; align-items: baseline;
+        }
+        .receipt-total span:first-child { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; color: #94A3B8; }
+        .receipt-total span:last-child { font-size: 1.45rem; font-weight: 800; color: #fff; }
+
+        /* PÍLDORAS RÁPIDAS DE GARANTÍA */
+        .mini-pills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+        .mini-pill {
+            font-size: 0.7rem; padding: 3px 8px; border-radius: 6px; background: #F1F5F9;
+            color: var(--muted); cursor: pointer; font-weight: 600; border: 1px solid transparent;
+        }
+        .mini-pill:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+
+        .chips-wrap { display: flex; flex-wrap: wrap; gap: 5px; }
         .chip-btn {
-            padding: 6px 12px; border-radius: 99px; border: 1px solid var(--border); background: #F8FAFC;
-            font-size: 0.8rem; font-weight: 600; color: var(--muted); cursor: pointer; user-select: none; transition: 0.15s;
+            padding: 4px 10px; border-radius: 99px; border: 1px solid var(--border); background: #fff;
+            font-size: 0.74rem; font-weight: 600; color: var(--muted); cursor: pointer; user-select: none;
         }
         .chip-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
-        /* TABLA DE COTIZACIÓN ESTILO EXCEL */
-        .excel-table-wrap { overflow-x: auto; margin-top: 15px; border: 1px solid var(--border); border-radius: 8px; }
-        .excel-table { width: 100%; border-collapse: collapse; min-width: 980px; font-size: 0.86rem; }
-        .excel-table th { background: #334155; color: #fff; padding: 10px 10px; text-align: right; font-weight: 700; font-size: 0.76rem; text-transform: uppercase; }
-        .excel-table th:first-child, .excel-table td:first-child { text-align: left; }
-        .excel-table th.col-total-iva { background: var(--primary); }
-        .excel-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: right; vertical-align: middle; }
-        .excel-table tr:hover { background: #F8FAFC; }
-        .excel-table input.tbl-inp { width: 85px; padding: 6px; text-align: right; border: 1px solid var(--border); border-radius: 5px; font-weight: 600; }
-        .excel-table input.tbl-inp-wide { width: 130px; padding: 6px; text-align: right; border: 1px solid var(--border); border-radius: 5px; font-weight: 600; }
-        .excel-table tfoot td { background: #F1F5F9; font-weight: 800; font-size: 0.95rem; padding: 12px 10px; border-top: 2px solid #94A3B8; }
-
-        .btn { padding: 10px 18px; border-radius: 8px; border: none; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; transition: 0.2s; }
-        .btn-orange { background: var(--primary); color: #fff; }
-        .btn-orange:hover { background: var(--primary-dark); }
-        .btn-blue { background: var(--sf-blue); color: #fff; }
+        /* BOTONES */
+        .btn {
+            padding: 10px 16px; border-radius: 9px; border: none; font-weight: 700;
+            cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+            gap: 8px; font-size: 0.88rem; transition: 0.2s; text-decoration: none;
+        }
+        .btn-primary { background: var(--primary); color: #fff; width: 100%; padding: 15px; font-size: 1rem; box-shadow: 0 6px 18px rgba(233, 81, 29, 0.28); }
+        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn-primary:disabled { background: #94A3B8; box-shadow: none; cursor: not-allowed; transform: none; }
         .btn-outline { background: #fff; border: 1px solid var(--border); color: var(--text); }
         .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+        .btn-blue { background: var(--sf-blue); color: #fff; }
 
-        .submit-bar {
-            background: var(--card); padding: 20px 28px; border-radius: 12px; border: 2px solid var(--primary);
-            display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 25px rgba(233, 81, 29, 0.12);
+        /* TOAST FLOTANTE */
+        #toast-box { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+        .toast-msg {
+            background: #0F172A; color: #fff; padding: 12px 18px; border-radius: 10px;
+            font-size: 0.86rem; font-weight: 600; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            border-left: 4px solid var(--primary); animation: fadeIn 0.2s ease;
         }
 
-        /* ÁREA DE IMPRESIÓN PDF */
-        #printable-quote { display: none; }
-        @media print {
-            body * { visibility: hidden; }
-            #printable-quote, #printable-quote * { visibility: visible; }
-            #printable-quote { display: block !important; position: absolute; left: 0; top: 0; width: 100%; padding: 20px; background: #fff; color: #000; }
+        /* MODAL DE ÉXITO */
+        .modal-bg {
+            display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(4px); z-index: 500; align-items: center; justify-content: center; padding: 20px;
+        }
+        .modal-card {
+            background: #fff; border-radius: 18px; max-width: 540px; width: 100%; padding: 28px;
+            text-align: center; box-shadow: 0 25px 50px rgba(0,0,0,0.25); animation: fadeIn 0.25s ease;
         }
     </style>
 </head>
 <body>
 
+    <!-- TOPBAR -->
     <div class="topbar">
-        <div class="topbar-brand">
+        <div class="brand">
             <img src="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" alt="ICC">
-            <div>
-                <h1>COTIZADOR RÁPIDO ICC <span>CORE INTEGRA</span></h1>
+            <div class="brand-title">
+                COTIZADOR RÁPIDO ICC <span class="badge-pro">CORE INTEGRA</span>
             </div>
         </div>
 
-        <div class="exec-selector-bar">
-            <label><i class="fas fa-user-tie"></i> Ejecutivo Activo:</label>
-            <select id="global-exec" onchange="onExecutiveChange()">
-                <option value="005Dn000007H1EUIA0" data-init="MK">Marketing ICC</option>
-                <option value="005Dn000007mWFhIAM" data-init="LG">Luz Guzmán (LG)</option>
-                <option value="005UO000000PdB3YAK" data-init="NF">Nelson / Felipe (NF)</option>
-                <option value="005Dn000005u1yTIAQ" data-init="MR">Mario (MR)</option>
-                <option value="005Dn000005u27NIAQ" data-init="MC">Marcos (MC)</option>
-                <option value="005Dn000005u22vIAA" data-init="FB">Fabio (FB)</option>
-                <option value="005Dn000005u2BkIAI" data-init="DN">Diana (DN)</option>
-                <option value="005Dn000003Z5vbIAC" data-init="OS">Oscar (OS)</option>
-            </select>
+        <div class="topbar-right">
+            <div class="exec-pill">
+                <i class="fas fa-user-check"></i>
+                <span style="font-size:0.78rem; color:#94A3B8;">Cotizando como:</span>
+                <select id="global-exec" onchange="onExecutiveChange()">
+                    <option value="005Dn000007H1EUIA0" data-init="MK">Marketing ICC</option>
+                    <option value="005Dn000007mWFhIAM" data-init="LG">Luz Guzmán (LG)</option>
+                    <option value="005UO000000PdB3YAK" data-init="NF">Nelson / Felipe (NF)</option>
+                    <option value="005Dn000005u1yTIAQ" data-init="MR">Mario (MR)</option>
+                    <option value="005Dn000005u27NIAQ" data-init="MC">Marcos (MC)</option>
+                    <option value="005Dn000005u22vIAA" data-init="FB">Fabio (FB)</option>
+                    <option value="005Dn000005u2BkIAI" data-init="DN">Diana (DN)</option>
+                    <option value="005Dn000003Z5vbIAC" data-init="OS">Oscar (OS)</option>
+                </select>
+            </div>
         </div>
     </div>
 
-    <div class="container">
+    <!-- WORKSPACE EN 2 COLUMNAS -->
+    <div class="workspace">
 
-        <!-- ==================== PASO 1: CUENTA (CLIENTE) ==================== -->
-        <div class="step-card">
-            <div class="step-header">
-                <div class="step-title">
-                    <div class="step-badge">1</div>
-                    <span>IDENTIFICACIÓN O CREACIÓN DE CUENTA (EMPRESAS / PARTICULARES)</span>
-                </div>
-                <div style="display:flex; gap:8px;">
-                    <button type="button" class="btn btn-outline" id="btn-type-emp" onclick="setAccountRecordType('Empresas')" style="border-color:var(--primary); color:var(--primary);">
-                        <i class="fas fa-building"></i> Empresas
-                    </button>
-                    <button type="button" class="btn btn-outline" id="btn-type-par" onclick="setAccountRecordType('Particulares')">
-                        <i class="fas fa-user"></i> Particulares
-                    </button>
-                </div>
-            </div>
+        <!-- ==================== COLUMNA IZQUIERDA (CLIENTE + PRODUCTOS) ==================== -->
+        <div class="main-col">
 
-            <div class="step-body">
-                <!-- BUSCADOR RÁPIDO Y LECTOR DE RUT -->
-                <div class="quick-bar">
-                    <div class="search-box-wrap">
-                        <label><i class="fas fa-search"></i> Buscador en Vivo en Salesforce (Evita Duplicados por NIT, Cédula o Nombre)</label>
-                        <div class="search-input-row">
-                            <input type="text" id="live-acc-search" placeholder="Escribe el NIT (sin guiones) o nombre del cliente para verificar si ya existe..." oninput="debounceAccountSearch(this.value)">
-                            <i class="fas fa-spinner fa-spin" id="acc-search-spinner" style="display:none; color:var(--sf-blue);"></i>
-                        </div>
-                        <div class="dropdown-results" id="acc-search-results"></div>
+            <!-- PASO 1: CLIENTE -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="step-num">1</div>
+                        <span>¿A QUIÉN LE VAMOS A COTIZAR?</span>
                     </div>
+                    <button type="button" class="btn btn-outline" id="btn-toggle-new-acc" onclick="openManualNewAccount()" style="padding: 6px 12px; font-size: 0.78rem;">
+                        <i class="fas fa-user-plus"></i> + Crear Cliente Nuevo Manual
+                    </button>
+                </div>
 
-                    <div class="rut-dropzone" onclick="document.getElementById('rut-file-input').click()">
-                        <div>
-                            <div style="font-weight:800; color:var(--primary); font-size:0.9rem;">
-                                <i class="fas fa-file-pdf"></i> Auto-Llenar con RUT (PDF / Imagen)
+                <div class="card-body">
+                    <div class="client-entry-grid">
+                        <!-- Buscador en Vivo -->
+                        <div class="smart-search">
+                            <div class="smart-search-lbl">
+                                <span><i class="fas fa-search"></i> Buscar Cuenta Existente en Salesforce</span>
+                                <i class="fas fa-spinner fa-spin" id="acc-search-spinner" style="display:none;"></i>
                             </div>
-                            <div style="font-size:0.78rem; color:var(--muted);" id="rut-status-text">
-                                Extrae los datos con IA y sube el RUT automáticamente a "Archivos" de la Cuenta en SF.
+                            <div class="smart-search-row">
+                                <input type="text" id="live-acc-search" placeholder="Escribe NIT, Cédula o Nombre del cliente..." oninput="debounceAccountSearch(this.value)">
+                            </div>
+                            <div class="dropdown-results" id="acc-search-results"></div>
+                        </div>
+
+                        <!-- Subir RUT o Pegar Captura -->
+                        <div class="rut-smart-box" onclick="document.getElementById('rut-file-input').click()">
+                            <div>
+                                <div style="font-weight:800; color:var(--primary); font-size:0.86rem;">
+                                    <i class="fas fa-magic"></i> ¿Cliente Nuevo? Sube el RUT o pega con Ctrl+V
+                                </div>
+                                <div style="font-size:0.75rem; color:var(--muted); margin-top:2px;" id="rut-status-text">
+                                    La IA llena el formulario sola y adjunta el RUT a la Cuenta en SF.
+                                </div>
+                            </div>
+                            <span class="btn btn-outline" style="padding:6px 10px; font-size:0.76rem; flex-shrink:0; border-color:var(--primary); color:var(--primary);">
+                                <i class="fas fa-file-upload"></i> Subir RUT
+                            </span>
+                            <input type="file" id="rut-file-input" accept="application/pdf,image/*" style="display:none" onchange="handleRutUpload(this)">
+                        </div>
+                    </div>
+
+                    <!-- TARJETA VERDE CUANDO ELIGE UN CLIENTE EXISTENTE -->
+                    <div class="client-selected-card" id="existing-acc-banner">
+                        <div style="display:flex; align-items:center; gap:14px;">
+                            <div class="client-avatar"><i class="fas fa-check"></i></div>
+                            <div>
+                                <div style="font-size:0.72rem; font-weight:800; color:#047857; text-transform:uppercase;">Cliente Encontrado en Salesforce</div>
+                                <div id="banner-acc-name" style="font-size:1.05rem; font-weight:800; color:#064E3B;">Nombre Cliente</div>
+                                <div id="banner-acc-meta" style="font-size:0.8rem; color:#047857; margin-top:2px;"></div>
                             </div>
                         </div>
-                        <span class="btn btn-orange" style="padding:8px 12px; font-size:0.8rem;"><i class="fas fa-upload"></i> Subir RUT</span>
-                        <input type="file" id="rut-file-input" accept="application/pdf,image/*" style="display:none" onchange="handleRutUpload(this)">
+                        <button type="button" class="btn btn-outline" onclick="clearSelectedAccount()" style="padding:6px 12px; font-size:0.78rem;">
+                            <i class="fas fa-exchange-alt"></i> Cambiar Cliente
+                        </button>
                     </div>
-                </div>
 
-                <!-- BANNER SI EL CLIENTE YA EXISTE EN SALESFORCE -->
-                <div class="selected-account-banner" id="existing-acc-banner">
-                    <div>
-                        <span style="font-size:0.75rem; font-weight:800; color:#047857; text-transform:uppercase;">⚡ Cuenta Existente Seleccionada (Ahorraste crear la cuenta)</span>
-                        <h3 id="banner-acc-name" style="font-size:1.1rem; color:#065f46; margin-top:2px;">Nombre Cuenta</h3>
-                        <p id="banner-acc-meta" style="font-size:0.82rem; color:#047857;"></p>
-                    </div>
-                    <button type="button" class="btn btn-outline" onclick="clearSelectedAccount()" style="border-color:#059669; color:#065f46;">
-                        <i class="fas fa-user-plus"></i> Crear Cuenta Nueva en su lugar
-                    </button>
-                </div>
-
-                <!-- FORMULARIO DE NUEVA CUENTA -->
-                <div id="new-account-form">
-                    <div class="form-grid-4">
-                        <div class="fg">
-                            <label class="flabel"><span class="req-dot">*</span> Nombre de la Cuenta</label>
-                            <input type="text" id="acc-name" class="finput" placeholder="Ej: Constructora El Cóndor S.A." oninput="syncAccountNames()">
-                        </div>
-                        <div class="fg">
-                            <label class="flabel" id="lbl-emp-per"><span class="req-dot">*</span> Nombre de la Empresa</label>
-                            <input type="text" id="acc-emp-per" class="finput" placeholder="Nombre legal o persona">
-                        </div>
-                        <div class="fg">
-                            <label class="flabel" id="lbl-nit-cc"><span class="req-dot">*</span> Número de NIT (Solo números)</label>
-                            <input type="text" id="acc-nit" class="finput" placeholder="Ej: 900123456" oninput="validateNitLive(this)">
-                            <small id="nit-warning" style="display:none; color:var(--danger); font-weight:700; font-size:0.73rem;"></small>
-                        </div>
-                        <div class="fg">
-                            <label class="flabel"><span class="req-dot">*</span> Teléfono</label>
-                            <input type="text" id="acc-phone" class="finput" placeholder="Ej: 3101234567">
-                        </div>
-
-                        <div class="fg">
-                            <label class="flabel"><span class="opt-dot">🔵</span> Correo de Facturación</label>
-                            <input type="email" id="acc-email" class="finput" placeholder="facturacion@empresa.com">
-                        </div>
-                        <div class="fg">
-                            <label class="flabel"><span class="opt-dot">🔵</span> Industria</label>
-                            <select id="acc-industry" class="finput">
-                                <option value="">--Ninguno--</option>
-                                <option value="Demolición">Demolición</option>
-                                <option value="Movimiento de tierra">Movimiento de tierra</option>
-                                <option value="Minería">Minería</option>
-                                <option value="Agricultura">Agricultura</option>
-                                <option value="Infraestructura">Infraestructura</option>
-                                <option value="Alquiler">Alquiler</option>
-                                <option value="Fluvial">Fluvial</option>
-                                <option value="Urbanismo">Urbanismo</option>
-                                <option value="Otros">Otros</option>
-                            </select>
-                        </div>
-                        <div class="fg">
-                            <label class="flabel"><span class="opt-dot">🔵</span> Monto de Crédito</label>
-                            <input type="number" id="acc-credit" class="finput" value="0">
-                        </div>
-                        <div class="fg">
-                            <label class="flabel"><span class="req-dot">*</span> Estado / Divisa Cuenta</label>
+                    <!-- FORMULARIO DESPLEGABLE SOLO SI ES CLIENTE NUEVO -->
+                    <div id="new-account-drawer">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <span style="font-size:0.82rem; font-weight:800; color:var(--primary); text-transform:uppercase;">
+                                <i class="fas fa-id-card"></i> Datos para Crear la Cuenta Nueva
+                            </span>
                             <div style="display:flex; gap:6px;">
-                                <select id="acc-status" class="finput" style="flex:1;">
-                                    <option value="Activo" selected>Activo</option>
-                                    <option value="Inactivo">Inactivo</option>
-                                </select>
-                                <select id="acc-currency" class="finput" style="flex:1;" onchange="syncCurrency(this.value)">
-                                    <option value="COP" selected>COP</option>
-                                    <option value="USD">USD</option>
-                                </select>
+                                <button type="button" class="btn btn-outline" id="btn-type-emp" onclick="setAccountRecordType('Empresas')" style="padding:4px 10px; font-size:0.75rem; border-color:var(--primary); color:var(--primary);">
+                                    <i class="fas fa-building"></i> Empresa (NIT)
+                                </button>
+                                <button type="button" class="btn btn-outline" id="btn-type-par" onclick="setAccountRecordType('Particulares')" style="padding:4px 10px; font-size:0.75rem;">
+                                    <i class="fas fa-user"></i> Particular (Cédula)
+                                </button>
                             </div>
                         </div>
 
-                        <div class="fg">
-                            <label class="flabel"><span class="req-dot">*</span> Ubicación (Departamento)</label>
-                            <select id="acc-ubicacion" class="finput">
-                                <option value="Bogotá">Bogotá</option>
-                                <option value="Antioquia">Antioquia</option>
-                                <option value="Cundinamarca">Cundinamarca</option>
-                                <option value="Valle">Valle</option>
-                                <option value="Santander">Santander</option>
-                                <option value="Atlántico">Atlántico</option>
-                                <option value="Bolívar">Bolívar</option>
-                                <option value="Boyacá">Boyacá</option>
-                                <option value="Meta">Meta</option>
-                                <option value="Casanare">Casanare</option>
-                                <option value="Tolima">Tolima</option>
-                                <option value="Huila">Huila</option>
-                                <option value="Norte De Santander">Norte De Santander</option>
-                                <option value="Caldas">Caldas</option>
-                                <option value="Risaralda">Risaralda</option>
-                                <option value="Quindío">Quindío</option>
-                                <option value="Cauca">Cauca</option>
-                                <option value="Nariño">Nariño</option>
-                                <option value="Córdoba">Córdoba</option>
-                                <option value="Cesar">Cesar</option>
-                                <option value="Magdalena">Magdalena</option>
-                                <option value="Sucre">Sucre</option>
-                                <option value="La Guajira">La Guajira</option>
-                                <option value="Arauca">Arauca</option>
-                                <option value="Caquetá">Caquetá</option>
-                                <option value="Chocó">Chocó</option>
-                                <option value="Putumayo">Putumayo</option>
-                                <option value="Amazonas">Amazonas</option>
-                                <option value="Distrito Capital">Distrito Capital</option>
-                                <option value="Guainía">Guainía</option>
-                                <option value="Guaviare">Guaviare</option>
-                                <option value="San Andrés Y Providencia">San Andrés Y Providencia</option>
-                                <option value="Vaupés">Vaupés</option>
-                                <option value="Vichada">Vichada</option>
-                            </select>
+                        <!-- Solo los 7 campos esenciales a la vista -->
+                        <div class="form-grid-3">
+                            <div class="fg">
+                                <label class="flabel"><span class="req">*</span> Nombre Cuenta / Razón Social</label>
+                                <input type="text" id="acc-name" class="finput" placeholder="Ej: Constructora El Cóndor" oninput="syncAccountNames()">
+                            </div>
+                            <div class="fg">
+                                <label class="flabel" id="lbl-nit-cc"><span class="req">*</span> Número de NIT (Sin guión)</label>
+                                <input type="text" id="acc-nit" class="finput" placeholder="Solo números..." oninput="validateNitLive(this)">
+                                <small id="nit-warning" style="display:none; color:var(--danger); font-weight:700; font-size:0.72rem;"></small>
+                            </div>
+                            <div class="fg">
+                                <label class="flabel"><span class="req">*</span> Teléfono / Celular</label>
+                                <input type="text" id="acc-phone" class="finput" placeholder="Ej: 3101234567">
+                            </div>
+
+                            <div class="fg">
+                                <label class="flabel">Correo de Facturación</label>
+                                <input type="email" id="acc-email" class="finput" placeholder="correo@empresa.com">
+                            </div>
+                            <div class="fg">
+                                <label class="flabel"><span class="req">*</span> Departamento (Ubicación)</label>
+                                <select id="acc-ubicacion" class="finput">
+                                    <option value="Bogotá">Bogotá</option>
+                                    <option value="Antioquia">Antioquia</option>
+                                    <option value="Cundinamarca">Cundinamarca</option>
+                                    <option value="Valle">Valle</option>
+                                    <option value="Santander">Santander</option>
+                                    <option value="Atlántico">Atlántico</option>
+                                    <option value="Bolívar">Bolívar</option>
+                                    <option value="Boyacá">Boyacá</option>
+                                    <option value="Meta">Meta</option>
+                                    <option value="Casanare">Casanare</option>
+                                    <option value="Tolima">Tolima</option>
+                                    <option value="Huila">Huila</option>
+                                    <option value="Norte De Santander">Norte De Santander</option>
+                                    <option value="Caldas">Caldas</option>
+                                    <option value="Risaralda">Risaralda</option>
+                                    <option value="Quindío">Quindío</option>
+                                    <option value="Cauca">Cauca</option>
+                                    <option value="Nariño">Nariño</option>
+                                    <option value="Córdoba">Córdoba</option>
+                                    <option value="Cesar">Cesar</option>
+                                    <option value="Magdalena">Magdalena</option>
+                                    <option value="Sucre">Sucre</option>
+                                    <option value="La Guajira">La Guajira</option>
+                                    <option value="Arauca">Arauca</option>
+                                    <option value="Caquetá">Caquetá</option>
+                                    <option value="Chocó">Chocó</option>
+                                    <option value="Putumayo">Putumayo</option>
+                                    <option value="Amazonas">Amazonas</option>
+                                    <option value="Distrito Capital">Distrito Capital</option>
+                                    <option value="Guainía">Guainía</option>
+                                    <option value="Guaviare">Guaviare</option>
+                                    <option value="San Andrés Y Providencia">San Andrés Y Providencia</option>
+                                    <option value="Vaupés">Vaupés</option>
+                                    <option value="Vichada">Vichada</option>
+                                </select>
+                            </div>
+                            <div class="fg">
+                                <label class="flabel"><span class="req">*</span> Ciudad y Dirección</label>
+                                <div style="display:flex; gap:6px;">
+                                    <input type="text" id="acc-ciudad" class="finput" value="Bogotá" style="width:42%;" placeholder="Ciudad">
+                                    <input type="text" id="acc-direccion" class="finput" style="width:58%;" placeholder="Dirección física...">
+                                </div>
+                            </div>
                         </div>
-                        <div class="fg">
-                            <label class="flabel"><span class="req-dot">*</span> Ciudad</label>
-                            <input type="text" id="acc-ciudad" class="finput" value="Bogotá">
+
+                        <!-- Cajón oculto para campos secundarios que casi nunca se tocan -->
+                        <div class="adv-toggle" onclick="toggleAdv('adv-acc-fields')">
+                            <i class="fas fa-cog"></i> Opciones avanzadas de cuenta (Industria, Crédito, Cuenta Padre...)
                         </div>
-                        <div class="fg">
-                            <label class="flabel"><span class="req-dot">*</span> Dirección Detalle</label>
-                            <input type="text" id="acc-direccion" class="finput" placeholder="Calle / Carrera / Bodega...">
-                        </div>
-                        <div class="fg">
-                            <label class="flabel"><span class="opt-dot">🔵</span> Cuenta Principal (Relacionar)</label>
-                            <input type="text" id="parent-acc-search" class="finput" placeholder="Buscar cuenta padre..." oninput="searchParentAccount(this.value)">
-                            <input type="hidden" id="acc-parent-id">
-                            <div class="dropdown-results" id="parent-acc-results"></div>
+                        <div class="adv-box" id="adv-acc-fields">
+                            <div class="form-grid-3">
+                                <div class="fg">
+                                    <label class="flabel" id="lbl-emp-per">Nombre Legal / Persona</label>
+                                    <input type="text" id="acc-emp-per" class="finput">
+                                </div>
+                                <div class="fg">
+                                    <label class="flabel">Industria</label>
+                                    <select id="acc-industry" class="finput">
+                                        <option value="">--Ninguno--</option>
+                                        <option value="Movimiento de tierra">Movimiento de tierra</option>
+                                        <option value="Infraestructura">Infraestructura</option>
+                                        <option value="Minería">Minería</option>
+                                        <option value="Demolición">Demolición</option>
+                                        <option value="Agricultura">Agricultura</option>
+                                        <option value="Alquiler">Alquiler</option>
+                                        <option value="Fluvial">Fluvial</option>
+                                        <option value="Urbanismo">Urbanismo</option>
+                                        <option value="Otros">Otros</option>
+                                    </select>
+                                </div>
+                                <div class="fg">
+                                    <label class="flabel">Cuenta Principal (Padre)</label>
+                                    <input type="text" id="parent-acc-search" class="finput" placeholder="Buscar cuenta..." oninput="searchParentAccount(this.value)">
+                                    <input type="hidden" id="acc-parent-id">
+                                    <div class="dropdown-results" id="parent-acc-results"></div>
+                                </div>
+                                <div class="fg">
+                                    <label class="flabel">Monto de Crédito</label>
+                                    <input type="number" id="acc-credit" class="finput" value="0">
+                                </div>
+                                <div class="fg">
+                                    <label class="flabel">Estado Cuenta</label>
+                                    <select id="acc-status" class="finput">
+                                        <option value="Activo" selected>Activo</option>
+                                        <option value="Inactivo">Inactivo</option>
+                                    </select>
+                                </div>
+                                <div class="fg">
+                                    <label class="flabel">Divisa</label>
+                                    <select id="acc-currency" class="finput" onchange="syncCurrency(this.value)">
+                                        <option value="COP" selected>COP - Peso Colombiano</option>
+                                        <option value="USD">USD - Dólar</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <!-- PASO 2: PRODUCTOS Y TABLA CALCULADORA -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="step-num">2</div>
+                        <span>SELECCIÓN DE PRODUCTOS Y CALCULADORA DE DESCUENTOS / IVA</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <label style="font-size:0.75rem; color:var(--muted); cursor:pointer; display:flex; align-items:center; gap:5px;">
+                            <input type="checkbox" id="chk-include-inactive" onchange="debounceProductSearch(document.getElementById('prod-search-input').value)">
+                            Ver inactivos/vendidos
+                        </label>
+                        <select id="opp-currency" class="finput" style="width:90px; padding:5px 8px; font-weight:700;" onchange="syncCurrency(this.value)">
+                            <option value="COP" selected>COP $</option>
+                            <option value="USD">USD $</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <!-- Píldoras visuales para filtrar por Lista de Precios en 1 clic -->
+                    <div class="cat-Bar" id="visual-pb-pills">
+                        <button type="button" class="cat-pill active" onclick="selectVisualPricebook('ALL', this)"><i class="fas fa-globe"></i> Todas las Listas</button>
+                        <button type="button" class="cat-pill" onclick="selectVisualPricebook('01sDn00000AybM1IAJ', this)"><i class="fas fa-tractor"></i> Maquinaria Usada</button>
+                        <button type="button" class="cat-pill" onclick="selectVisualPricebook('01sDn00000AyQ1WIAV', this)"><i class="fas fa-star"></i> Maquinaria Nueva</button>
+                        <button type="button" class="cat-pill" onclick="selectVisualPricebook('01sDn00000C9WkzIAF', this)"><i class="fas fa-cogs"></i> Repuestos</button>
+                        <button type="button" class="cat-pill" onclick="selectVisualPricebook('01sDn00000Aybp0IAB', this)"><i class="fas fa-hammer"></i> Martillos Hidráulicos</button>
+                        <button type="button" class="cat-pill" onclick="selectVisualPricebook('01sDn00000CAs91IAD', this)"><i class="fas fa-truck-monster"></i> Volquetas / Vehículos</button>
+                        <button type="button" class="cat-pill" onclick="selectVisualPricebook('01sDn00000C8wItIAJ', this)"><i class="fas fa-arrows-alt-h"></i> Equipo Frontal / Brazos</button>
+                    </div>
+
+                    <!-- Selector nativo completo sincronizado -->
+                    <select id="opp-pricebook" style="display:none;" onchange="onPricebookChange()">
+                        <option value="ALL" data-cat="Maquinaria usada" data-days="15" data-tpl="Presupuesto Casa Colombia Maquinaria" selected>TODAS LAS LISTAS</option>
+                        <option value="01sDn00000AybM1IAJ" data-cat="Maquinaria usada" data-days="30" data-tpl="Presupuesto Casa Colombia Maquinaria">MAQUINARIA USADA</option>
+                        <option value="01sDn00000AyQ1WIAV" data-cat="Maquinaria nueva" data-days="30" data-tpl="Presupuesto Casa Colombia Maquinaria">MAQUINARIA NUEVA</option>
+                        <option value="01sDn00000C9WkzIAF" data-cat="Repuestos" data-days="7" data-tpl="Presupuesto Casa Colombia Repuestos">REPUESTOS</option>
+                        <option value="01sDn00000Aybp0IAB" data-cat="Martillos Hidráulicos" data-days="15" data-tpl="Presupuesto Casa Colombia Martillos">MARTILLOS HIDRÁULICOS</option>
+                        <option value="01sDn00000CAs91IAD" data-cat="Volquetas" data-days="30" data-tpl="Presupuesto Casa Colombia Volqueta">VEHICULOS</option>
+                        <option value="01sDn00000C8wItIAJ" data-cat="Brazos largos" data-days="15" data-tpl="Presupuesto Casa Colombia Brazo Largo">EQUIPO FRONTAL</option>
+                        <option value="01sUO000000EAAnYAO" data-cat="Repuestos" data-days="7" data-tpl="Presupuesto Casa Colombia Repuestos">CONSUMIBLES</option>
+                        <option value="01sUO000000FpGjYAK" data-cat="Repuestos" data-days="15" data-tpl="Presupuesto Casa Colombia Repuestos">MOTORES</option>
+                        <option value="01sUO0000014N8jYAE" data-cat="Repuestos" data-days="7" data-tpl="Presupuesto Casa Colombia Repuestos">ORIGINAL</option>
+                        <option value="01sUO0000014NALYA2" data-cat="Repuestos" data-days="7" data-tpl="Presupuesto Casa Colombia Repuestos">GENERICO</option>
+                        <option value="01sUO0000029MubYAE" data-cat="Repuestos" data-days="7" data-tpl="Presupuesto Casa Colombia Repuestos">AEREO</option>
+                        <option value="01sUO000001DFALYA4" data-cat="Servicio" data-days="15" data-tpl="Copia de Presupuesto Casa Colombia Servicios">LISTA CORTES CAÑON</option>
+                        <option value="01sDn00000C8xi1IAB" data-cat="Accesorios" data-days="15" data-tpl="Presupuesto Casa Colombia Pontones">OTROS</option>
+                        <option value="01sDn000001UtQvIAK" data-cat="Otros" data-days="15" data-tpl="Presupuesto Casa Colombia Maquinaria">Standard Price Book</option>
+                    </select>
+
+                    <!-- Buscador de Productos -->
+                    <div class="smart-search" style="border-color: var(--primary); background: #FFFDFB;">
+                        <div class="smart-search-lbl" style="color: var(--primary);">
+                            <span><i class="fas fa-barcode"></i> Buscar Producto por Nombre, Modelo o Referencia SKU</span>
+                            <i class="fas fa-spinner fa-spin" id="prod-search-spinner" style="display:none;"></i>
+                        </div>
+                        <div class="smart-search-row">
+                            <input type="text" id="prod-search-input" placeholder="Escribe ej: HITACHI, ZX75, ZX200, SHANTUI, 4464985, filtro..." oninput="debounceProductSearch(this.value)" onfocus="debounceProductSearch(this.value)">
+                        </div>
+                        <div class="dropdown-results" id="prod-search-results"></div>
+                    </div>
+
+                    <!-- Tabla del Carrito -->
+                    <div class="table-wrap">
+                        <table class="pos-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:28%;">Producto / SKU</th>
+                                    <th>Precio Und</th>
+                                    <th style="text-align:center;">Cant.</th>
+                                    <th>Subtotal Bruto</th>
+                                    <th>% Desc.</th>
+                                    <th>$ Descuento</th>
+                                    <th>Neto sin IVA</th>
+                                    <th>% IVA</th>
+                                    <th>Valor IVA</th>
+                                    <th style="background:var(--primary);">Total con IVA</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="quote-items-body">
+                                <tr>
+                                    <td colspan="11" style="text-align:center; padding: 32px; color: var(--muted);">
+                                        <i class="fas fa-cart-plus" style="font-size:1.6rem; opacity:0.4; display:block; margin-bottom:6px;"></i>
+                                        Busca y selecciona arriba los equipos o repuestos para armar la cotización.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
-        <!-- ==================== PASO 2: OPORTUNIDAD + CARRITO DE PRODUCTOS ==================== -->
-        <div class="step-card">
-            <div class="step-header">
-                <div class="step-title">
-                    <div class="step-badge">2</div>
-                    <span>OPORTUNIDAD Y SELECCIÓN DE PRODUCTOS (+8.000 ÍTEMS EN TIEMPO REAL)</span>
+        <!-- ==================== COLUMNA DERECHA STICKY (RESUMEN + CONDICIONES + ENVÍO) ==================== -->
+        <div class="side-col">
+
+            <div class="card">
+                <div class="card-header" style="background:#F8FAFC;">
+                    <div class="card-title">
+                        <div class="step-num">3</div>
+                        <span>RESUMEN Y CONDICIONES</span>
+                    </div>
                 </div>
-                <span style="font-size:0.8rem; color:var(--muted); font-weight:600;">
-                    <i class="fas fa-bolt" style="color:var(--warning);"></i> Seleccionar la Lista de Precios autoconfigura validez, fechas y plantilla
-                </span>
-            </div>
 
-            <div class="step-body">
-                <div class="form-grid-4" style="margin-bottom: 18px;">
-                    <div class="fg">
-                        <label class="flabel"><span class="req-dot">*</span> 1. Lista de Precios a Cotizar</label>
-                        <select id="opp-pricebook" class="finput" style="border-color:var(--primary); font-weight:700;" onchange="onPricebookChange()">
-                            <option value="01sDn00000C9WkzIAF" data-cat="Repuestos" data-days="7" data-tpl="Presupuesto Casa Colombia Repuestos">REPUESTOS</option>
-                            <option value="01sDn00000AyQ1WIAV" data-cat="Maquinaria nueva" data-days="30" data-tpl="Presupuesto Casa Colombia Maquinaria">MAQUINARIA NUEVA</option>
-                            <option value="01sDn00000AybM1IAJ" data-cat="Maquinaria usada" data-days="30" data-tpl="Presupuesto Casa Colombia Maquinaria">MAQUINARIA USADA</option>
-                            <option value="01sDn00000Aybp0IAB" data-cat="Martillos Hidráulicos" data-days="15" data-tpl="Presupuesto Casa Colombia Martillos">MARTILLOS HIDRÁULICOS</option>
-                            <option value="01sDn00000CAs91IAD" data-cat="Volquetas" data-days="30" data-tpl="Presupuesto Casa Colombia Volqueta">VEHICULOS / VOLQUETAS</option>
-                            <option value="01sDn00000C8wItIAJ" data-cat="Accesorios" data-days="15" data-tpl="Presupuesto Casa Colombia Brazo Largo">EQUIPO FRONTAL / BRAZOS</option>
-                            <option value="01sUO000000EAAnYAO" data-cat="Repuestos" data-days="7" data-tpl="Presupuesto Casa Colombia Repuestos">CONSUMIBLES</option>
-                            <option value="01sUO000000FpGjYAK" data-cat="Repuestos" data-days="15" data-tpl="Presupuesto Casa Colombia Repuestos">MOTORES</option>
-                            <option value="01sUO0000014N8jYAE" data-cat="Repuestos" data-days="7" data-tpl="Presupuesto Casa Colombia Repuestos">ORIGINAL</option>
-                            <option value="01sUO0000014NALYA2" data-cat="Repuestos" data-days="7" data-tpl="Presupuesto Casa Colombia Repuestos">GENERICO</option>
-                            <option value="01sUO0000029MubYAE" data-cat="Repuestos" data-days="7" data-tpl="Presupuesto Casa Colombia Repuestos">AEREO</option>
-                            <option value="01sUO000001DFALYA4" data-cat="Servicio" data-days="15" data-tpl="Copia de Presupuesto Casa Colombia Servicios">LISTA CORTES CAÑON</option>
-                            <option value="01sDn00000C8xi1IAB" data-cat="Otros" data-days="15" data-tpl="Presupuesto Casa Colombia Pontones">OTROS / PONTONES</option>
-                            <option value="01sDn000001UtQvIAK" data-cat="Otros" data-days="15" data-tpl="Presupuesto Casa Colombia Maquinaria">Standard Price Book (General)</option>
-                        </select>
-                    </div>
+                <div class="card-body" style="display:flex; flex-direction:column; gap:14px;">
 
-                    <div class="fg">
-                        <label class="flabel"><span class="req-dot">*</span> Nombre de la Oportunidad (Auto)</label>
-                        <input type="text" id="opp-name" class="finput" placeholder="Ej: LG - HITACHI 75 - JOSE GUZMAN">
-                    </div>
-
-                    <div class="fg">
-                        <label class="flabel"><span class="req-dot">*</span> Etapa / Origen</label>
-                        <div style="display:flex; gap:6px;">
-                            <select id="opp-stage" class="finput" style="flex:1.2;">
-                                <option value="Cotización" selected>Cotización</option>
-                                <option value="Contacto">Contacto</option>
-                                <option value="Revisión">Revisión</option>
-                                <option value="Documentación">Documentación</option>
-                                <option value="Negociación">Negociación</option>
-                                <option value="Orden de compra">Orden de compra</option>
-                                <option value="Cerrado/Ganada">Cerrado/Ganada</option>
-                                <option value="Cerrado/Perdida">Cerrado/Perdida</option>
-                            </select>
-                            <select id="opp-origin" class="finput" style="flex:1;">
-                                <option value="">--Origen--</option>
-                                <option value="Cuenta">Cuenta</option>
-                                <option value="Candidato" selected>Candidato</option>
-                            </select>
+                    <!-- Recibo Financiero Oscuro -->
+                    <div class="receipt-box">
+                        <div class="receipt-row">
+                            <span>Subtotal Bruto:</span>
+                            <span id="rc-bruto">$ 0</span>
+                        </div>
+                        <div class="receipt-row">
+                            <span>Descuento Total:</span>
+                            <span id="rc-descuento">- $ 0</span>
+                        </div>
+                        <div class="receipt-row" style="font-weight:700; color:#fff;">
+                            <span>Total Antes de IVA:</span>
+                            <span id="ft-subtotal">$ 0</span>
+                        </div>
+                        <div class="receipt-row iva">
+                            <span><i class="fas fa-percentage"></i> Suma Total IVA (CRM):</span>
+                            <span id="ft-iva">$ 0</span>
+                        </div>
+                        <div class="receipt-total">
+                            <span>Total con IVA</span>
+                            <span id="ft-grandtotal">$ 0</span>
                         </div>
                     </div>
 
+                    <!-- Plantilla Oficial PDF -->
                     <div class="fg">
-                        <label class="flabel"><span class="req-dot">*</span> Fecha de Cierre / Divisa</label>
-                        <div style="display:flex; gap:6px;">
-                            <input type="date" id="opp-closedate" class="finput" style="flex:1.4;">
-                            <select id="opp-currency" class="finput" style="flex:1;" onchange="syncCurrency(this.value)">
-                                <option value="COP" selected>COP</option>
-                                <option value="USD">USD</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="fg span-4">
-                        <label class="flabel"><span class="req-dot">*</span> Producto de Interés (Selección Múltiple para Cuenta y Oportunidad)</label>
-                        <div class="chips-wrap" id="interest-chips">
-                            <span class="chip-btn active" onclick="toggleChip(this)">Repuestos</span>
-                            <span class="chip-btn" onclick="toggleChip(this)">Maquinaria nueva</span>
-                            <span class="chip-btn" onclick="toggleChip(this)">Maquinaria usada</span>
-                            <span class="chip-btn" onclick="toggleChip(this)">Volquetas</span>
-                            <span class="chip-btn" onclick="toggleChip(this)">Martillos Hidráulicos</span>
-                            <span class="chip-btn" onclick="toggleChip(this)">Brazos largos</span>
-                            <span class="chip-btn" onclick="toggleChip(this)">Accesorios</span>
-                            <span class="chip-btn" onclick="toggleChip(this)">Servicio</span>
-                            <span class="chip-btn" onclick="toggleChip(this)">Otros</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- BUSCADOR DE PRODUCTOS EN VIVO -->
-                <div class="search-box-wrap" style="border-color: var(--primary); background: #FFFBF9;">
-                    <label style="color: var(--primary);"><i class="fas fa-boxes"></i> 2. Buscar y Añadir Productos por Nombre o Referencia / SKU</label>
-                    <div class="search-input-row">
-                        <input type="text" id="prod-search-input" placeholder="Escribe referencia (ej: 4464985, SE17SR, ZX75, filtro, bomba...) para buscar en Salesforce..." oninput="debounceProductSearch(this.value)" onfocus="debounceProductSearch(this.value)">
-                        <i class="fas fa-spinner fa-spin" id="prod-search-spinner" style="display:none; color:var(--primary);"></i>
-                    </div>
-                    <div class="dropdown-results" id="prod-search-results"></div>
-                </div>
-
-                <!-- TABLA CALCULADORA IDÉNTICA AL EXCEL -->
-                <div class="excel-table-wrap">
-                    <table class="excel-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 26%;">Producto / SKU</th>
-                                <th>Precio Und</th>
-                                <th>Unds</th>
-                                <th>Precio Total</th>
-                                <th>% Descuento</th>
-                                <th>$ Descuento</th>
-                                <th>Total (Sin IVA)</th>
-                                <th>% IVA</th>
-                                <th>Valor IVA</th>
-                                <th class="col-total-iva">Total con IVA</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody id="quote-items-body">
-                            <tr>
-                                <td colspan="11" style="text-align:center; padding: 24px; color: var(--muted);">
-                                    Usa el buscador de arriba para agregar productos o repuestos a la cotización.
-                                </td>
-                            </tr>
-                        </tbody>
-                        <tfoot>
-                            <tr>
-                                <td colspan="6" style="text-align:right;">TOTALES DE LA COTIZACIÓN:</td>
-                                <td id="ft-subtotal">$ 0</td>
-                                <td></td>
-                                <td id="ft-iva" style="color: var(--danger); font-size: 1.02rem;">$ 0</td>
-                                <td id="ft-grandtotal" style="background: #FFEBE5; color: var(--primary); font-size: 1.05rem;">$ 0</td>
-                                <td></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- ==================== PASO 3: PRESUPUESTO Y PDF ==================== -->
-        <div class="step-card">
-            <div class="step-header">
-                <div class="step-title">
-                    <div class="step-badge">3</div>
-                    <span>CONDICIONES DEL PRESUPUESTO Y PLANTILLA PDF</span>
-                </div>
-            </div>
-
-            <div class="step-body">
-                <div class="form-grid-4">
-                    <div class="fg">
-                        <label class="flabel"><span class="req-dot">*</span> Nombre de Presupuesto</label>
-                        <input type="text" id="qt-name" class="finput">
-                    </div>
-
-                    <div class="fg">
-                        <label class="flabel"><span class="req-dot">*</span> Tiempo de Entrega (Días)</label>
-                        <select id="qt-delivery" class="finput">
-                            <option value="Inmediata" selected>Inmediata</option>
-                            <option value="0 a 30 días">0 a 30 días</option>
-                            <option value="30 a 45 dias">30 a 45 dias</option>
-                            <option value="45 a 60 días">45 a 60 días</option>
-                            <option value="60 a 90 días">60 a 90 días</option>
-                            <option value="90 a 120 días">90 a 120 días</option>
-                            <option value="Más de 120 días">Más de 120 días</option>
-                        </select>
-                    </div>
-
-                    <div class="fg">
-                        <label class="flabel"><span class="req-dot">*</span> Forma de Pago</label>
-                        <select id="qt-pay-method" class="finput" onchange="onPaymentMethodChange()">
-                            <option value="Contado" selected>Contado</option>
-                            <option value="Crédito">Crédito</option>
-                            <option value="Leasing">Leasing</option>
-                            <option value="Otros">Otros</option>
-                        </select>
-                    </div>
-
-                    <div class="fg">
-                        <label class="flabel"><span class="req-dot">*</span> Validez (Días) y Caducidad</label>
-                        <div style="display:flex; gap:6px;">
-                            <input type="number" id="qt-validity" class="finput" value="7" style="width:75px;" oninput="recalcExpirationDate()">
-                            <input type="date" id="qt-expiration" class="finput" style="flex:1;">
-                        </div>
-                    </div>
-
-                    <div class="fg span-2">
-                        <label class="flabel"><span class="req-dot">*</span> Descripción de Forma de Pago (Auto-completado editable)</label>
-                        <input type="text" id="qt-pay-desc" class="finput" value="100% Contado contra entrega / anticipo previo despacho.">
-                    </div>
-
-                    <div class="fg">
-                        <label class="flabel"><span class="req-dot">*</span> Garantía</label>
-                        <input type="text" id="qt-warranty" class="finput" value="6 meses por defectos de fábrica">
-                    </div>
-
-                    <div class="fg">
-                        <label class="flabel"><span class="req-dot">*</span> Estado del Presupuesto</label>
-                        <select id="qt-status" class="finput">
-                            <option value="En Revisión" selected>En Revisión</option>
-                            <option value="Aprobado">Aprobado</option>
-                            <option value="Presentado">Presentado</option>
-                        </select>
-                    </div>
-
-                    <div class="fg span-2">
-                        <label class="flabel"><span class="req-dot">*</span> Descripción / Observaciones del Presupuesto</label>
-                        <input type="text" id="qt-description" class="finput" value="Precios sujetos a disponibilidad de inventario salvo venta previa.">
-                    </div>
-
-                    <div class="fg">
-                        <label class="flabel"><span class="opt-dot">🔵</span> Buscar Contacto en CRM ("Preparado para")</label>
-                        <input type="text" id="qt-contact-search" class="finput" placeholder="Buscar nombre de contacto..." oninput="searchContactsLive(this.value)">
-                        <input type="hidden" id="qt-contact-id">
-                        <div class="dropdown-results" id="qt-contact-results"></div>
-                    </div>
-
-                    <div class="fg">
-                        <label class="flabel"><span class="req-dot">*</span> Plantilla de PDF Oficial</label>
+                        <label class="flabel" style="color:var(--sf-blue);"><i class="fas fa-file-pdf"></i> Plantilla PDF en Salesforce</label>
                         <select id="qt-template" class="finput" style="border-color:var(--sf-blue); font-weight:700;">
-                            <option value="Presupuesto Casa Colombia Repuestos">Presupuesto Casa Colombia Repuestos</option>
                             <option value="Presupuesto Casa Colombia Maquinaria">Presupuesto Casa Colombia Maquinaria</option>
+                            <option value="Presupuesto Casa Colombia Repuestos">Presupuesto Casa Colombia Repuestos</option>
                             <option value="Presupuesto Casa Colombia Martillos">Presupuesto Casa Colombia Martillos</option>
                             <option value="Presupuesto Casa Colombia Volqueta">Presupuesto Casa Colombia Volqueta</option>
                             <option value="Presupuesto Casa Colombia Brazo Largo">Presupuesto Casa Colombia Brazo Largo</option>
@@ -582,48 +672,178 @@
                             <option value="Copia de Presupuesto Casa Colombia Servicios">Copia de Presupuesto Casa Colombia Servicios</option>
                         </select>
                     </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- BARRA DE ACCIÓN FINAL -->
-        <div class="submit-bar">
-            <div>
-                <div style="font-weight:800; font-size:1.05rem;">¿Todo listo para disparar a Salesforce?</div>
-                <div style="font-size:0.82rem; color:var(--muted);">
-                    Creará Cuenta (si es nueva) + Subirá el RUT + Creará Oportunidad + Cargará Productos + Creará Presupuesto con IVA calculado.
-                </div>
-            </div>
-            <div style="display:flex; gap:12px;">
-                <button type="button" class="btn btn-outline" onclick="printQuotePDF()">
-                    <i class="fas fa-file-pdf" style="color:var(--danger);"></i> Vista Previa / Descargar PDF
-                </button>
-                <button type="button" class="btn btn-orange" id="btn-submit-all" onclick="submitFullQuoteToSF()" style="padding: 14px 26px; font-size: 1rem;">
-                    <i class="fas fa-cloud-upload-alt"></i> GUARDAR Y GENERAR COTIZACIÓN EN SALESFORCE
-                </button>
-            </div>
-        </div>
+                    <!-- Entrega y Forma de Pago -->
+                    <div class="form-grid-2">
+                        <div class="fg">
+                            <label class="flabel"><span class="req">*</span> Tiempo Entrega</label>
+                            <select id="qt-delivery" class="finput">
+                                <option value="Inmediata" selected>Inmediata</option>
+                                <option value="0 a 30 días">0 a 30 días</option>
+                                <option value="30 a 45 dias">30 a 45 dias</option>
+                                <option value="45 a 60 días">45 a 60 días</option>
+                                <option value="60 a 90 días">60 a 90 días</option>
+                                <option value="90 a 120 días">90 a 120 días</option>
+                                <option value="Más de 120 días">Más de 120 días</option>
+                            </select>
+                        </div>
+                        <div class="fg">
+                            <label class="flabel"><span class="req">*</span> Forma de Pago</label>
+                            <select id="qt-pay-method" class="finput" onchange="onPaymentMethodChange()">
+                                <option value="Contado" selected>Contado</option>
+                                <option value="Crédito">Crédito</option>
+                                <option value="Leasing">Leasing</option>
+                                <option value="Otros">Otros</option>
+                            </select>
+                        </div>
+                    </div>
 
-        <!-- TARJETA DE ÉXITO CON LINKS DIRECTOS A SALESFORCE -->
-        <div class="step-card" id="final-success-box" style="display:none; border: 2px solid var(--success); background: #ECFDF5;">
-            <div class="step-body" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px;">
-                <div>
-                    <h2 style="color:#065f46; font-size:1.3rem;"><i class="fas fa-check-circle"></i> ¡Cotización Creada Exitosamente en Salesforce!</h2>
-                    <p style="color:#047857; font-size:0.9rem; margin-top:4px;" id="final-success-msg"></p>
-                </div>
-                <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                    <a id="lnk-acc" href="#" target="_blank" class="btn btn-outline"><i class="fas fa-building"></i> Abrir Cuenta</a>
-                    <a id="lnk-opp" href="#" target="_blank" class="btn btn-outline"><i class="fas fa-briefcase"></i> Abrir Oportunidad</a>
-                    <a id="lnk-qt" href="#" target="_blank" class="btn btn-blue"><i class="fas fa-file-invoice-dollar"></i> Abrir Presupuesto / PDF en SF</a>
-                    <button type="button" class="btn btn-orange" onclick="printQuotePDF()"><i class="fas fa-print"></i> Descargar PDF Rápido</button>
+                    <div class="fg">
+                        <label class="flabel"><span class="req">*</span> Detalle Forma de Pago</label>
+                        <input type="text" id="qt-pay-desc" class="finput" value="100% Pago de contado previo al despacho.">
+                    </div>
+
+                    <!-- Garantía con Píldoras de 1 Clic -->
+                    <div class="fg">
+                        <label class="flabel"><span class="req">*</span> Garantía</label>
+                        <input type="text" id="qt-warranty" class="finput" value="6 meses por defectos de fábrica">
+                        <div class="mini-pills">
+                            <span class="mini-pill" onclick="setWarranty('6 meses por defectos de fábrica')">6 meses</span>
+                            <span class="mini-pill" onclick="setWarranty('1 año o 2.000 horas (lo primero que ocurra)')">1 año / 2000h</span>
+                            <span class="mini-pill" onclick="setWarranty('3 meses sobre componentes principales')">3 meses</span>
+                            <span class="mini-pill" onclick="setWarranty('Sin garantía (Equipo usado en el estado en que se encuentra)')">Sin garantía</span>
+                        </div>
+                    </div>
+
+                    <!-- Validez y Contacto -->
+                    <div class="form-grid-2">
+                        <div class="fg">
+                            <label class="flabel">Validez (Días)</label>
+                            <input type="number" id="qt-validity" class="finput" value="15" oninput="recalcExpirationDate()">
+                        </div>
+                        <div class="fg">
+                            <label class="flabel">Caducidad</label>
+                            <input type="date" id="qt-expiration" class="finput">
+                        </div>
+                    </div>
+
+                    <div class="fg">
+                        <label class="flabel">Contacto CRM ("Preparado para")</label>
+                        <input type="text" id="qt-contact-search" class="finput" placeholder="Opcional: Buscar contacto..." oninput="searchContactsLive(this.value)">
+                        <input type="hidden" id="qt-contact-id">
+                        <div class="dropdown-results" id="qt-contact-results"></div>
+                    </div>
+
+                    <div class="fg">
+                        <label class="flabel">Observaciones / Obsequios en Cotización</label>
+                        <textarea id="qt-description" class="finput" rows="2">Precios sujetos a disponibilidad de inventario salvo venta previa.</textarea>
+                    </div>
+
+                    <!-- Cajón oculto de ajustes de Oportunidad (Ya se llenan solos) -->
+                    <div class="adv-toggle" onclick="toggleAdv('adv-opp-fields')" style="margin-top:2px;">
+                        <i class="fas fa-sliders-h"></i> Ajustes de Oportunidad (Nombres auto, Etapa, Intereses)
+                    </div>
+                    <div class="adv-box" id="adv-opp-fields">
+                        <div style="display:flex; flex-direction:column; gap:10px;">
+                            <div class="fg">
+                                <label class="flabel">Nombre Oportunidad</label>
+                                <input type="text" id="opp-name" class="finput">
+                            </div>
+                            <div class="fg">
+                                <label class="flabel">Nombre Presupuesto</label>
+                                <input type="text" id="qt-name" class="finput">
+                            </div>
+                            <div class="form-grid-2">
+                                <div class="fg">
+                                    <label class="flabel">Etapa Oportunidad</label>
+                                    <select id="opp-stage" class="finput">
+                                        <option value="Cotización" selected>Cotización</option>
+                                        <option value="Contacto">Contacto</option>
+                                        <option value="Revisión">Revisión</option>
+                                        <option value="Negociación">Negociación</option>
+                                        <option value="Orden de compra">Orden de compra</option>
+                                    </select>
+                                </div>
+                                <div class="fg">
+                                    <label class="flabel">Estado Presupuesto</label>
+                                    <select id="qt-status" class="finput">
+                                        <option value="En Revisión" selected>En Revisión</option>
+                                        <option value="Aprobado">Aprobado</option>
+                                        <option value="Presentado">Presentado</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-grid-2">
+                                <div class="fg">
+                                    <label class="flabel">Origen</label>
+                                    <select id="opp-origin" class="finput">
+                                        <option value="Candidato" selected>Candidato</option>
+                                        <option value="Cuenta">Cuenta</option>
+                                    </select>
+                                </div>
+                                <div class="fg">
+                                    <label class="flabel">Fecha Cierre</label>
+                                    <input type="date" id="opp-closedate" class="finput">
+                                </div>
+                            </div>
+                            <div class="fg">
+                                <label class="flabel">Líneas de Interés (Multipicklist)</label>
+                                <div class="chips-wrap" id="interest-chips">
+                                    <span class="chip-btn active" onclick="toggleChip(this)">Maquinaria usada</span>
+                                    <span class="chip-btn" onclick="toggleChip(this)">Maquinaria nueva</span>
+                                    <span class="chip-btn" onclick="toggleChip(this)">Repuestos</span>
+                                    <span class="chip-btn" onclick="toggleChip(this)">Volquetas</span>
+                                    <span class="chip-btn" onclick="toggleChip(this)">Martillos Hidráulicos</span>
+                                    <span class="chip-btn" onclick="toggleChip(this)">Brazos largos</span>
+                                    <span class="chip-btn" onclick="toggleChip(this)">Accesorios</span>
+                                    <span class="chip-btn" onclick="toggleChip(this)">Servicio</span>
+                                    <span class="chip-btn" onclick="toggleChip(this)">Otros</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BOTÓN PRINCIPAL DE ACCIÓN -->
+                    <button type="button" class="btn btn-primary" id="btn-submit-all" onclick="submitFullQuoteToSF()">
+                        <i class="fas fa-bolt"></i> GENERAR COTIZACIÓN Y DESCARGAR PDF
+                    </button>
+
                 </div>
             </div>
+
         </div>
 
     </div>
 
-    <!-- PLANTILLA IMPRIMIBLE PDF -->
-    <div id="printable-quote"></div>
+    <!-- MODAL DE ÉXITO -->
+    <div class="modal-bg" id="final-success-modal">
+        <div class="modal-card">
+            <div style="width:64px; height:64px; border-radius:50%; background:#D1FAE5; color:#059669; display:flex; align-items:center; justify-content:center; font-size:2rem; margin:0 auto 14px;">
+                <i class="fas fa-check"></i>
+            </div>
+            <h2 style="color:var(--text); font-size:1.35rem; font-weight:800;">¡Cotización Lista en Salesforce!</h2>
+            <p id="final-success-msg" style="color:var(--muted); font-size:0.9rem; margin:8px 0 20px; line-height:1.4;"></p>
+
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <a id="lnk-download-pdf" href="#" target="_blank" class="btn btn-primary" style="text-decoration:none;">
+                    <i class="fas fa-file-pdf"></i> DESCARGAR PDF OFICIAL DE SALESFORCE
+                </a>
+                <a id="lnk-sf-pdf-viewer" href="#" target="_blank" class="btn btn-blue" style="width:100%;">
+                    <i class="fas fa-external-link-alt"></i> Ver Previsualización en Salesforce
+                </a>
+                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:4px;">
+                    <a id="lnk-acc" href="#" target="_blank" class="btn btn-outline" style="font-size:0.78rem;"><i class="fas fa-building"></i> Cuenta</a>
+                    <a id="lnk-opp" href="#" target="_blank" class="btn btn-outline" style="font-size:0.78rem;"><i class="fas fa-briefcase"></i> Oportunidad</a>
+                    <a id="lnk-qt" href="#" target="_blank" class="btn btn-outline" style="font-size:0.78rem;"><i class="fas fa-file-invoice"></i> Presupuesto</a>
+                </div>
+                <button type="button" class="btn btn-outline" onclick="resetCotizador()" style="margin-top:8px; width:100%;">
+                    <i class="fas fa-plus"></i> Hacer Nueva Cotización
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-box"></div>
 
     <script>
         let currentRecordType = 'Empresas';
@@ -639,37 +859,81 @@
 
             onPricebookChange();
             onPaymentMethodChange();
+            loadSalesforceNativeTemplates();
+
+            // Soporte para pegar imagen de RUT o texto con Ctrl+V si no están dentro de un input
+            document.addEventListener('paste', (e) => {
+                if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+                const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                for (let idx in items) {
+                    if (items[idx].kind === 'file') {
+                        const file = items[idx].getAsFile();
+                        processRutFileObject(file);
+                        break;
+                    }
+                }
+            });
 
             document.addEventListener('click', (e) => {
-                if (!e.target.closest('.search-box-wrap') && !e.target.closest('.fg')) {
+                if (!e.target.closest('.smart-search') && !e.target.closest('.fg')) {
                     document.querySelectorAll('.dropdown-results').forEach(d => d.style.display = 'none');
                 }
             });
         });
 
+        function showToast(msg) {
+            const box = document.getElementById('toast-box');
+            const el = document.createElement('div');
+            el.className = 'toast-msg';
+            el.innerText = msg;
+            box.appendChild(el);
+            setTimeout(() => el.remove(), 3500);
+        }
+
+        function toggleAdv(id) {
+            const el = document.getElementById(id);
+            el.style.display = el.style.display === 'block' ? 'none' : 'block';
+        }
+
+        async function loadSalesforceNativeTemplates() {
+            try {
+                const res = await fetch('/api/cotizador/templates');
+                const data = await res.json();
+                if (data.success && data.templates && data.templates.length > 0) {
+                    const sel = document.getElementById('qt-template');
+                    sel.innerHTML = data.templates.map(t => `<option value="${t.id}" data-name="${t.cleanName}">${t.cleanName}</option>`).join('');
+                }
+            } catch (e) {}
+        }
+
         function onExecutiveChange() {
             const sel = document.getElementById('global-exec');
             localStorage.setItem('icc_active_exec', sel.value);
             autoBuildOpportunityName();
+            showToast("👤 Ejecutivo activo actualizado");
+        }
+
+        function openManualNewAccount() {
+            clearSelectedAccount();
+            const drawer = document.getElementById('new-account-drawer');
+            drawer.style.display = 'block';
+            document.getElementById('acc-name').focus();
         }
 
         function setAccountRecordType(type) {
             currentRecordType = type;
             const btnEmp = document.getElementById('btn-type-emp');
             const btnPar = document.getElementById('btn-type-par');
-            const lblEmpPer = document.getElementById('lbl-emp-per');
             const lblNitCc = document.getElementById('lbl-nit-cc');
 
             if (type === 'Empresas') {
                 btnEmp.style.borderColor = 'var(--primary)'; btnEmp.style.color = 'var(--primary)';
                 btnPar.style.borderColor = 'var(--border)'; btnPar.style.color = 'var(--text)';
-                lblEmpPer.innerHTML = '<span class="req-dot">*</span> Nombre de la Empresa';
-                lblNitCc.innerHTML = '<span class="req-dot">*</span> Número de NIT (Solo números)';
+                lblNitCc.innerHTML = '<span class="req">*</span> Número de NIT (Sin guión)';
             } else {
                 btnPar.style.borderColor = 'var(--primary)'; btnPar.style.color = 'var(--primary)';
                 btnEmp.style.borderColor = 'var(--border)'; btnEmp.style.color = 'var(--text)';
-                lblEmpPer.innerHTML = '<span class="opt-dot">🔵</span> Nombre de la Persona';
-                lblNitCc.innerHTML = '<span class="req-dot">*</span> Número de Cédula (Solo números)';
+                lblNitCc.innerHTML = '<span class="req">*</span> Número de Cédula';
             }
         }
 
@@ -685,7 +949,12 @@
             renderQuoteTable();
         }
 
-        // --- BUSCADOR DE CUENTAS Y DETECTOR DE NIT DUPLICADO EN VIVO ---
+        function setWarranty(text) {
+            document.getElementById('qt-warranty').value = text;
+            showToast("✅ Garantía aplicada");
+        }
+
+        // --- BUSCADOR DE CUENTAS ---
         function debounceAccountSearch(val) {
             clearTimeout(accSearchTimer);
             const box = document.getElementById('acc-search-results');
@@ -705,21 +974,39 @@
                                 <div class="dropdown-item" onclick='selectExistingAccount(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
                                     <div>
                                         <div style="font-weight:700; color:var(--text);">${r.Name}</div>
-                                        <div style="font-size:0.78rem; color:var(--muted);">NIT/CC: <b>${doc}</b> | Tel: ${r.Phone || 'N/A'} | ${r.Ubicaci_n__c || ''}</div>
+                                        <div style="font-size:0.76rem; color:var(--muted);">NIT/CC: <b>${doc}</b> • Tel: ${r.Phone || 'N/A'} • ${r.Ubicaci_n__c || ''}</div>
                                     </div>
-                                    <span class="btn btn-blue" style="padding:4px 10px; font-size:0.75rem;">Usar Cuenta</span>
+                                    <span class="btn btn-blue" style="padding:5px 10px; font-size:0.74rem;">Elegir</span>
                                 </div>
                             `;
                         }).join('');
                         box.style.display = 'block';
                     } else {
-                        box.innerHTML = `<div style="padding:12px; font-size:0.85rem; color:var(--muted);">No existe en Salesforce. Puedes crearla abajo.</div>`;
+                        box.innerHTML = `
+                            <div style="padding:14px; display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-size:0.84rem; color:var(--muted);">No existe "${val}" en Salesforce.</span>
+                                <button type="button" class="btn btn-outline" style="padding:5px 10px; font-size:0.75rem; border-color:var(--primary); color:var(--primary);" onclick="openManualNewAccountWith('${val.replace(/'/g, "")}')">
+                                    + Crearlo Ahora
+                                </button>
+                            </div>
+                        `;
                         box.style.display = 'block';
                     }
                 } catch (e) {
                     document.getElementById('acc-search-spinner').style.display = 'none';
                 }
-            }, 300);
+            }, 280);
+        }
+
+        function openManualNewAccountWith(val) {
+            document.getElementById('acc-search-results').style.display = 'none';
+            openManualNewAccount();
+            if (/^\d+$/.test(val.trim())) {
+                document.getElementById('acc-nit').value = val.trim();
+            } else {
+                document.getElementById('acc-name').value = val.trim();
+                syncAccountNames();
+            }
         }
 
         function validateNitLive(input) {
@@ -733,7 +1020,7 @@
                         const match = (d.records || []).find(acc => String(acc.N_mero_de_NIT__c) === val || String(acc.N_mero_de_C_dula__c) === val);
                         if (match) {
                             warn.style.display = 'block';
-                            warn.innerHTML = `⚠️ Ya existe: <b>${match.Name}</b>. <a href="#" onclick='selectExistingAccount(${JSON.stringify(match).replace(/'/g, "&#39;")}); return false;' style="color:var(--sf-blue); text-decoration:underline;">Clic aquí para usarla</a>`;
+                            warn.innerHTML = `⚠️ Ya existe: <b>${match.Name}</b>. <a href="#" onclick='selectExistingAccount(${JSON.stringify(match).replace(/'/g, "&#39;")}); return false;' style="color:var(--sf-blue); text-decoration:underline;">Usar esta cuenta</a>`;
                         } else {
                             warn.style.display = 'none';
                         }
@@ -746,30 +1033,36 @@
         function selectExistingAccount(acc) {
             selectedExistingAccount = acc;
             document.getElementById('acc-search-results').style.display = 'none';
-            document.getElementById('new-account-form').style.display = 'none';
+            document.getElementById('new-account-drawer').style.display = 'none';
+            document.getElementById('live-acc-search').value = '';
             
             const banner = document.getElementById('existing-acc-banner');
             banner.style.display = 'flex';
             document.getElementById('banner-acc-name').innerText = acc.Name;
-            document.getElementById('banner-acc-meta').innerText = `NIT/CC: ${acc.N_mero_de_NIT__c || acc.N_mero_de_C_dula__c || 'N/A'} | Tel: ${acc.Phone || 'N/A'} | Correo: ${acc.Correo_de_facturaci_n__c || 'N/A'} | Ubicación: ${acc.Ubicaci_n__c || ''}`;
+            document.getElementById('banner-acc-meta').innerText = `NIT/CC: ${acc.N_mero_de_NIT__c || acc.N_mero_de_C_dula__c || 'N/A'} • Tel: ${acc.Phone || 'N/A'} • ${acc.Ubicaci_n__c || ''}`;
             
             autoBuildOpportunityName();
             searchContactsLive('');
+            showToast(`✅ Cliente "${acc.Name}" seleccionado`);
         }
 
         function clearSelectedAccount() {
             selectedExistingAccount = null;
             document.getElementById('existing-acc-banner').style.display = 'none';
-            document.getElementById('new-account-form').style.display = 'block';
             autoBuildOpportunityName();
         }
 
         // --- LECTOR DE RUT CON IA ---
-        async function handleRutUpload(input) {
+        function handleRutUpload(input) {
             if (!input.files || !input.files[0]) return;
-            uploadedRutFile = input.files[0];
+            processRutFileObject(input.files[0]);
+        }
+
+        async function processRutFileObject(file) {
+            uploadedRutFile = file;
             const statusTxt = document.getElementById('rut-status-text');
-            statusTxt.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Analizando RUT "${uploadedRutFile.name}" con Gemini IA...`;
+            statusTxt.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Extrayendo datos del RUT con IA...`;
+            showToast("🤖 Leyendo documento con Gemini IA...");
 
             const fd = new FormData();
             fd.append('file', uploadedRutFile);
@@ -780,6 +1073,7 @@
                 if (json.success && json.data) {
                     const d = json.data;
                     clearSelectedAccount();
+                    document.getElementById('new-account-drawer').style.display = 'block';
                     setAccountRecordType(d.tipo_registro === 'Particulares' ? 'Particulares' : 'Empresas');
                     document.getElementById('acc-name').value = d.nombre_cuenta || '';
                     document.getElementById('acc-emp-per').value = d.nombre_cuenta || '';
@@ -793,16 +1087,16 @@
 
                     validateNitLive(document.getElementById('acc-nit'));
                     autoBuildOpportunityName();
-                    statusTxt.innerHTML = `<span style="color:var(--success); font-weight:700;">✅ RUT extraído y listo para adjuntarse automáticamente a "Archivos" de la Cuenta.</span>`;
+                    statusTxt.innerHTML = `<span style="color:var(--success); font-weight:700;">✅ RUT leído. Se adjuntará a "Archivos" de la Cuenta.</span>`;
+                    showToast("✨ Datos del RUT cargados automáticamente");
                 } else {
-                    statusTxt.innerHTML = `<span style="color:var(--danger);">❌ No se pudo extraer: ${json.message}</span>`;
+                    statusTxt.innerHTML = `<span style="color:var(--danger);">❌ ${json.message}</span>`;
                 }
             } catch (e) {
-                statusTxt.innerHTML = `<span style="color:var(--danger);">❌ Error de conexión leyendo el RUT.</span>`;
+                statusTxt.innerHTML = `<span style="color:var(--danger);">❌ Error leyendo el RUT.</span>`;
             }
         }
 
-        // --- BUSCADOR CUENTA PRINCIPAL ---
         function searchParentAccount(val) {
             const box = document.getElementById('parent-acc-results');
             if (!val || val.length < 2) { box.style.display = 'none'; return; }
@@ -821,22 +1115,36 @@
                 });
         }
 
-        // --- AUTOMATIZACIÓN DE OPORTUNIDAD Y PRESUPUESTO SEGÚN LISTA DE PRECIOS ---
+        // --- SELECCIÓN VISUAL DE CATEGORÍA / LISTA DE PRECIOS ---
+        function selectVisualPricebook(pbId, btnEl) {
+            document.querySelectorAll('#visual-pb-pills .cat-pill').forEach(b => b.classList.remove('active'));
+            if (btnEl) btnEl.classList.add('active');
+
+            const sel = document.getElementById('opp-pricebook');
+            sel.value = pbId;
+            onPricebookChange();
+            debounceProductSearch(document.getElementById('prod-search-input').value);
+        }
+
         function onPricebookChange() {
             const sel = document.getElementById('opp-pricebook');
             const opt = sel.options[sel.selectedIndex];
             const days = Number(opt.dataset.days || 15);
             const cat = opt.dataset.cat || 'Otros';
-            const tpl = opt.dataset.tpl || 'Presupuesto Casa Colombia Repuestos';
+            const tplWanted = (opt.dataset.tpl || '').toLowerCase();
 
-            // 1. Ajustar validez y fechas automáticamente
             document.getElementById('qt-validity').value = days;
             recalcExpirationDate();
 
-            // 2. Ajustar plantilla de PDF recomendada
-            document.getElementById('qt-template').value = tpl;
+            const tplSel = document.getElementById('qt-template');
+            for (let i = 0; i < tplSel.options.length; i++) {
+                const txt = (tplSel.options[i].text || '').toLowerCase();
+                if (txt.includes(tplWanted) || tplWanted.includes(txt)) {
+                    tplSel.selectedIndex = i;
+                    break;
+                }
+            }
 
-            // 3. Marcar chip de interés correspondiente
             document.querySelectorAll('#interest-chips .chip-btn').forEach(c => {
                 c.classList.toggle('active', c.innerText.trim() === cat);
             });
@@ -865,9 +1173,7 @@
             descInput.value = templates[method] || '';
         }
 
-        function toggleChip(el) {
-            el.classList.toggle('active');
-        }
+        function toggleChip(el) { el.classList.toggle('active'); }
 
         function getSelectedInterests() {
             return Array.from(document.querySelectorAll('#interest-chips .chip-btn.active')).map(el => el.innerText.trim());
@@ -877,24 +1183,25 @@
             const execSel = document.getElementById('global-exec');
             const initials = execSel.options[execSel.selectedIndex].dataset.init || 'ICC';
             const clientName = selectedExistingAccount ? selectedExistingAccount.Name : (document.getElementById('acc-name').value || 'CLIENTE');
-            const firstProd = quoteItems.length > 0 ? quoteItems[0].name.substring(0, 22) : document.getElementById('opp-pricebook').options[document.getElementById('opp-pricebook').selectedIndex].text;
+            const firstProd = quoteItems.length > 0 ? quoteItems[0].name.substring(0, 25) : 'COTIZACION';
 
             const autoTitle = `${initials} - ${firstProd.toUpperCase()} - ${clientName.toUpperCase()}`.substring(0, 110);
             document.getElementById('opp-name').value = autoTitle;
             document.getElementById('qt-name').value = autoTitle;
         }
 
-        // --- BUSCADOR EN TIEMPO REAL DE LOS +8.000 PRODUCTOS ---
+        // --- BUSCADOR DE PRODUCTOS ---
         function debounceProductSearch(val) {
             clearTimeout(prodSearchTimer);
             const box = document.getElementById('prod-search-results');
             const pbId = document.getElementById('opp-pricebook').value;
             const curr = document.getElementById('opp-currency').value;
+            const includeInactive = document.getElementById('chk-include-inactive').checked;
 
             document.getElementById('prod-search-spinner').style.display = 'inline-block';
             prodSearchTimer = setTimeout(async () => {
                 try {
-                    const res = await fetch(`/api/cotizador/search-products?pricebookId=${pbId}&currency=${curr}&q=${encodeURIComponent(val || '')}`);
+                    const res = await fetch(`/api/cotizador/search-products?pricebookId=${pbId}&currency=${curr}&includeInactive=${includeInactive}&q=${encodeURIComponent(val || '')}`);
                     const data = await res.json();
                     document.getElementById('prod-search-spinner').style.display = 'none';
 
@@ -902,41 +1209,66 @@
                         box.innerHTML = data.records.map(p => {
                             const pName = p.Product2 ? p.Product2.Name : 'Producto';
                             const pCode = p.Product2 && p.Product2.ProductCode ? p.Product2.ProductCode : 'Sin SKU';
+                            const pDesc = p.Product2 && p.Product2.Description ? p.Product2.Description : '';
+                            const pbName = p.Pricebook2 ? p.Pricebook2.Name : 'Lista General';
+
                             const itemObj = {
                                 pricebookEntryId: p.Id,
                                 pricebook2Id: p.Pricebook2Id,
+                                pricebookName: pbName,
                                 product2Id: p.Product2Id,
                                 name: pName,
                                 code: pCode,
-                                unitPrice: Number(p.UnitPrice || 0)
+                                unitPrice: Number(p.UnitPrice || 0),
+                                description: pDesc
                             };
                             return `
                                 <div class="dropdown-item" onclick='addProductToQuote(${JSON.stringify(itemObj).replace(/'/g, "&#39;")})'>
-                                    <div>
-                                        <div style="font-weight:700; color:var(--text);">${pName}</div>
-                                        <div style="font-size:0.76rem; color:var(--muted);">SKU/Código: <b>${pCode}</b> | Familia: ${p.Product2?.Family || 'General'}</div>
+                                    <div style="flex:1;">
+                                        <div style="font-weight:700; color:var(--text);">
+                                            <span class="pb-badge">${pbName}</span>${pName}
+                                        </div>
+                                        <div style="font-size:0.75rem; color:var(--muted); margin-top:2px;">
+                                            SKU: <b>${pCode}</b> • ${p.Product2?.Family || 'General'} ${pDesc ? `• <i>${pDesc.substring(0, 60)}</i>` : ''}
+                                        </div>
                                     </div>
-                                    <div style="text-align:right;">
-                                        <div style="font-weight:800; color:var(--primary);">${formatMoney(p.UnitPrice)} ${p.CurrencyIsoCode}</div>
-                                        <span style="font-size:0.72rem; color:var(--sf-blue); font-weight:700;">+ Añadir al carrito</span>
+                                    <div style="text-align:right; flex-shrink:0;">
+                                        <div style="font-weight:800; color:var(--primary);">${formatMoney(p.UnitPrice)}</div>
+                                        <span style="font-size:0.7rem; color:var(--sf-blue); font-weight:700;">+ Agregar</span>
                                     </div>
                                 </div>
                             `;
                         }).join('');
                         box.style.display = 'block';
                     } else {
-                        box.innerHTML = `<div style="padding:12px; font-size:0.85rem; color:var(--muted);">No se encontraron productos con ese término.</div>`;
+                        box.innerHTML = `<div style="padding:14px; font-size:0.84rem; color:var(--muted);">No se encontraron productos activos con ese término.</div>`;
                         box.style.display = 'block';
                     }
                 } catch (e) {
                     document.getElementById('prod-search-spinner').style.display = 'none';
                 }
-            }, 280);
+            }, 250);
         }
 
         function addProductToQuote(prod) {
             document.getElementById('prod-search-results').style.display = 'none';
             document.getElementById('prod-search-input').value = '';
+
+            if (quoteItems.length > 0 && quoteItems[0].pricebook2Id !== prod.pricebook2Id) {
+                if (!confirm(`⚠️ El carrito actual usa la lista "${quoteItems[0].pricebookName}" y este ítem pertenece a "${prod.pricebookName}".\n\n¿Deseas cambiar la cotización a "${prod.pricebookName}"?`)) {
+                    return;
+                }
+                quoteItems = [];
+            }
+
+            const pbSel = document.getElementById('opp-pricebook');
+            for (let i = 0; i < pbSel.options.length; i++) {
+                if (pbSel.options[i].value === prod.pricebook2Id) {
+                    pbSel.selectedIndex = i;
+                    onPricebookChange();
+                    break;
+                }
+            }
 
             const existing = quoteItems.find(i => i.pricebookEntryId === prod.pricebookEntryId);
             if (existing) {
@@ -946,11 +1278,18 @@
                     ...prod,
                     quantity: 1,
                     discountPct: 0,
-                    ivaPct: 19,
-                    description: ''
+                    ivaPct: 19
                 });
             }
             autoBuildOpportunityName();
+            renderQuoteTable();
+            showToast(`🛒 Añadido: ${prod.name}`);
+        }
+
+        function stepQty(idx, delta) {
+            if (!quoteItems[idx]) return;
+            const next = (quoteItems[idx].quantity || 1) + delta;
+            quoteItems[idx].quantity = next > 0 ? next : 1;
             renderQuoteTable();
         }
 
@@ -972,13 +1311,24 @@
         function renderQuoteTable() {
             const tbody = document.getElementById('quote-items-body');
             if (quoteItems.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding: 24px; color: var(--muted);">Usa el buscador de arriba para agregar productos o repuestos a la cotización.</td></tr>`;
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="11" style="text-align:center; padding: 32px; color: var(--muted);">
+                            <i class="fas fa-cart-plus" style="font-size:1.6rem; opacity:0.4; display:block; margin-bottom:6px;"></i>
+                            Busca y selecciona arriba los equipos o repuestos para armar la cotización.
+                        </td>
+                    </tr>`;
+                document.getElementById('rc-bruto').innerText = '$ 0';
+                document.getElementById('rc-descuento').innerText = '- $ 0';
                 document.getElementById('ft-subtotal').innerText = '$ 0';
                 document.getElementById('ft-iva').innerText = '$ 0';
                 document.getElementById('ft-grandtotal').innerText = '$ 0';
+                window._calculatedTotalTax = 0;
                 return;
             }
 
+            let sumBruto = 0;
+            let sumDesc = 0;
             let sumSubtotalNeto = 0;
             let sumTotalIva = 0;
             let sumGrandTotal = 0;
@@ -990,6 +1340,8 @@
                 const valIva = netoAntesIva * (item.ivaPct / 100);
                 const totalConIva = netoAntesIva + valIva;
 
+                sumBruto += bruto;
+                sumDesc += valDescuento;
                 sumSubtotalNeto += netoAntesIva;
                 sumTotalIva += valIva;
                 sumGrandTotal += totalConIva;
@@ -998,36 +1350,41 @@
                     <tr>
                         <td>
                             <div style="font-weight:700; color:var(--text);">${item.name}</div>
-                            <div style="font-size:0.75rem; color:var(--muted);">SKU: ${item.code}</div>
+                            <div style="font-size:0.72rem; color:var(--muted);">SKU: <b>${item.code}</b> • ${item.pricebookName || ''}</div>
                         </td>
-                        <td><input type="number" class="tbl-inp-wide" value="${item.unitPrice}" onchange="updateQuoteItem(${idx}, 'unitPrice', this.value)"></td>
-                        <td><input type="number" class="tbl-inp" style="width:65px;" min="1" value="${item.quantity}" onchange="updateQuoteItem(${idx}, 'quantity', this.value)"></td>
+                        <td><input type="number" class="tbl-num" value="${item.unitPrice}" onchange="updateQuoteItem(${idx}, 'unitPrice', this.value)"></td>
+                        <td style="text-align:center;">
+                            <div class="qty-stepper">
+                                <button type="button" class="qty-btn" onclick="stepQty(${idx}, -1)">-</button>
+                                <input type="number" class="qty-inp" min="1" value="${item.quantity}" onchange="updateQuoteItem(${idx}, 'quantity', this.value)">
+                                <button type="button" class="qty-btn" onclick="stepQty(${idx}, 1)">+</button>
+                            </div>
+                        </td>
                         <td style="font-weight:600;">${formatMoney(bruto)}</td>
-                        <td><input type="number" class="tbl-inp" style="width:65px;" min="0" max="100" step="0.5" value="${item.discountPct}" onchange="updateQuoteItem(${idx}, 'discountPct', this.value)"> %</td>
+                        <td><input type="number" class="tbl-pct" min="0" max="100" step="0.5" value="${item.discountPct}" onchange="updateQuoteItem(${idx}, 'discountPct', this.value)">%</td>
                         <td style="color:var(--muted);">${formatMoney(valDescuento)}</td>
                         <td style="font-weight:700;">${formatMoney(netoAntesIva)}</td>
-                        <td><input type="number" class="tbl-inp" style="width:60px;" min="0" max="100" value="${item.ivaPct}" onchange="updateQuoteItem(${idx}, 'ivaPct', this.value)"> %</td>
+                        <td><input type="number" class="tbl-pct" min="0" max="100" value="${item.ivaPct}" onchange="updateQuoteItem(${idx}, 'ivaPct', this.value)">%</td>
                         <td style="color:var(--danger); font-weight:700;">${formatMoney(valIva)}</td>
-                        <td style="background:#FFF5F2; font-weight:800; color:var(--text);">${formatMoney(totalConIva)}</td>
+                        <td style="background:var(--primary-soft); font-weight:800; color:var(--primary);">${formatMoney(totalConIva)}</td>
                         <td>
-                            <button type="button" onclick="removeQuoteItem(${idx})" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:1rem;">
-                                <i class="fas fa-trash"></i>
+                            <button type="button" onclick="removeQuoteItem(${idx})" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.95rem;">
+                                <i class="fas fa-trash-alt"></i>
                             </button>
                         </td>
                     </tr>
                 `;
             }).join('');
 
+            document.getElementById('rc-bruto').innerText = formatMoney(sumBruto);
+            document.getElementById('rc-descuento').innerText = '- ' + formatMoney(sumDesc);
             document.getElementById('ft-subtotal').innerText = formatMoney(sumSubtotalNeto);
             document.getElementById('ft-iva').innerText = formatMoney(sumTotalIva);
             document.getElementById('ft-grandtotal').innerText = formatMoney(sumGrandTotal);
 
             window._calculatedTotalTax = Math.round(sumTotalIva);
-            window._calculatedSubtotal = Math.round(sumSubtotalNeto);
-            window._calculatedGrandTotal = Math.round(sumGrandTotal);
         }
 
-        // --- BUSCADOR DE CONTACTOS EN CRM ---
         function searchContactsLive(val) {
             const box = document.getElementById('qt-contact-results');
             const accId = selectedExistingAccount ? selectedExistingAccount.Id : '';
@@ -1041,7 +1398,7 @@
                             <div class="dropdown-item" onclick="document.getElementById('qt-contact-search').value='${c.Name.replace(/'/g, "")}'; document.getElementById('qt-contact-id').value='${c.Id}'; document.getElementById('qt-contact-results').style.display='none';">
                                 <div>
                                     <div style="font-weight:700;">${c.Name}</div>
-                                    <small style="color:var(--muted);">${c.Phone || ''} | ${c.Email || ''}</small>
+                                    <small style="color:var(--muted);">${c.Phone || ''} • ${c.Email || ''}</small>
                                 </div>
                             </div>
                         `).join('');
@@ -1052,18 +1409,31 @@
                 });
         }
 
-        // --- ENVIAR TODO A SALESFORCE EN UNA SOLA TRANSACCIÓN ---
+        function resetCotizador() {
+            document.getElementById('final-success-modal').style.display = 'none';
+            quoteItems = [];
+            clearSelectedAccount();
+            renderQuoteTable();
+        }
+
         async function submitFullQuoteToSF() {
             const accName = selectedExistingAccount ? selectedExistingAccount.Name : document.getElementById('acc-name').value.trim();
-            if (!accName) return alert("⚠️ Por favor selecciona una Cuenta existente o escribe el Nombre de la Cuenta nueva.");
-            if (quoteItems.length === 0) return alert("⚠️ Agrega al menos 1 producto o repuesto a la tabla de cotización.");
+            if (!accName) {
+                openManualNewAccount();
+                return showToast("⚠️ Selecciona un Cliente existente o escribe el nombre del Cliente nuevo.");
+            }
+            if (quoteItems.length === 0) {
+                document.getElementById('prod-search-input').focus();
+                return showToast("⚠️ Añade al menos 1 producto al carrito para cotizar.");
+            }
 
             const btn = document.getElementById('btn-submit-all');
             const originalHTML = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando Cuenta, Oportunidad y Presupuesto en Salesforce...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creando en Salesforce y generando PDF...';
 
             const interesesElegidos = getSelectedInterests();
+            const selectedTplValue = document.getElementById('qt-template').value;
 
             const payload = {
                 ownerId: document.getElementById('global-exec').value,
@@ -1108,7 +1478,8 @@
                     warranty: document.getElementById('qt-warranty').value,
                     description: document.getElementById('qt-description').value,
                     contactId: document.getElementById('qt-contact-id').value || null,
-                    totalTax: window._calculatedTotalTax || 0
+                    totalTax: window._calculatedTotalTax || 0,
+                    templateName: selectedTplValue
                 },
                 items: quoteItems
             };
@@ -1124,16 +1495,19 @@
                 const json = await res.json();
 
                 if (res.ok && json.success) {
-                    const box = document.getElementById('final-success-box');
-                    box.style.display = 'block';
                     document.getElementById('final-success-msg').innerText =
-                        `Cuenta, Oportunidad (${quoteItems.length} productos) y Presupuesto sincronizados.${json.data.rutUploadedId ? ' ¡El archivo RUT también quedó cargado en Archivos de la Cuenta!' : ''}`;
+                        `Cliente "${accName}" sincronizado con ${quoteItems.length} producto(s).${json.data.quoteDocumentId ? ' El PDF oficial también quedó adjunto en el Presupuesto de Salesforce.' : ''}`;
+                    
                     document.getElementById('lnk-acc').href = json.data.links.account;
                     document.getElementById('lnk-opp').href = json.data.links.opportunity;
                     document.getElementById('lnk-qt').href = json.data.links.quote;
-                    box.scrollIntoView({ behavior: 'smooth' });
+                    document.getElementById('lnk-sf-pdf-viewer').href = json.data.links.sfNativePdf;
+                    document.getElementById('lnk-download-pdf').href = json.data.links.downloadPdfApi;
+
+                    document.getElementById('final-success-modal').style.display = 'flex';
+                    window.open(json.data.links.downloadPdfApi, '_blank');
                 } else {
-                    alert("❌ Error en Salesforce:\n" + (json.message || "Revisa los campos obligatorios."));
+                    alert("❌ Salesforce rechazó un dato:\n" + (json.message || "Verifica los campos obligatorios."));
                 }
             } catch (e) {
                 alert("❌ Error de red conectando con el servidor.");
@@ -1141,84 +1515,6 @@
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;
             }
-        }
-
-        // --- GENERADOR DE PDF OFICIAL SEGÚN PLANTILLA ---
-        function printQuotePDF() {
-            const tplName = document.getElementById('qt-template').value;
-            const clientName = selectedExistingAccount ? selectedExistingAccount.Name : (document.getElementById('acc-name').value || 'Cliente');
-            const clientNit = selectedExistingAccount ? (selectedExistingAccount.N_mero_de_NIT__c || selectedExistingAccount.N_mero_de_C_dula__c || '') : document.getElementById('acc-nit').value;
-            const execName = document.getElementById('global-exec').options[document.getElementById('global-exec').selectedIndex].text;
-
-            const rowsHtml = quoteItems.map(item => {
-                const bruto = item.unitPrice * item.quantity;
-                const desc = bruto * (item.discountPct / 100);
-                const neto = bruto - desc;
-                const iva = neto * (item.ivaPct / 100);
-                const total = neto + iva;
-                return `
-                    <tr>
-                        <td style="padding:8px; border:1px solid #ccc;"><b>${item.name}</b><br><small>SKU: ${item.code}</small></td>
-                        <td style="padding:8px; border:1px solid #ccc; text-align:center;">${item.quantity}</td>
-                        <td style="padding:8px; border:1px solid #ccc; text-align:right;">${formatMoney(item.unitPrice)}</td>
-                        <td style="padding:8px; border:1px solid #ccc; text-align:right;">${item.discountPct}%</td>
-                        <td style="padding:8px; border:1px solid #ccc; text-align:right;">${formatMoney(neto)}</td>
-                        <td style="padding:8px; border:1px solid #ccc; text-align:right;">${formatMoney(iva)}</td>
-                        <td style="padding:8px; border:1px solid #ccc; text-align:right; font-weight:bold;">${formatMoney(total)}</td>
-                    </tr>
-                `;
-            }).join('');
-
-            const printArea = document.getElementById('printable-quote');
-            printArea.innerHTML = `
-                <div style="border-bottom: 3px solid #E9511D; padding-bottom: 12px; margin-bottom: 20px; display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                        <h1 style="color:#E9511D; font-size:22px;">IMPORTADORA CASA COLOMBIA S.A.S.</h1>
-                        <p style="font-size:12px; color:#555;"> Modalidad: <b>${tplName}</b></p>
-                    </div>
-                    <div style="text-align:right; font-size:12px;">
-                        <div><b>Fecha:</b> ${new Date().toLocaleDateString('es-CO')}</div>
-                        <div><b>Validez:</b> ${document.getElementById('qt-validity').value} días (Hasta ${document.getElementById('qt-expiration').value})</div>
-                        <div><b>Ejecutivo:</b> ${execName}</div>
-                    </div>
-                </div>
-
-                <div style="margin-bottom: 18px; font-size: 13px; line-height: 1.5;">
-                    <div><b>Cliente / Cuenta:</b> ${clientName}</div>
-                    <div><b>NIT / Cédula:</b> ${clientNit}</div>
-                    <div><b>Tiempo de Entrega:</b> ${document.getElementById('qt-delivery').value} | <b>Forma de Pago:</b> ${document.getElementById('qt-pay-method').value}</div>
-                    <div><b>Garantía:</b> ${document.getElementById('qt-warranty').value}</div>
-                </div>
-
-                <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:20px;">
-                    <thead>
-                        <tr style="background:#E9511D; color:#fff;">
-                            <th style="padding:8px; border:1px solid #ccc; text-align:left;">Descripción / Referencia</th>
-                            <th style="padding:8px; border:1px solid #ccc;">Cant.</th>
-                            <th style="padding:8px; border:1px solid #ccc;">Precio Und</th>
-                            <th style="padding:8px; border:1px solid #ccc;">% Desc</th>
-                            <th style="padding:8px; border:1px solid #ccc;">Total sin IVA</th>
-                            <th style="padding:8px; border:1px solid #ccc;">IVA</th>
-                            <th style="padding:8px; border:1px solid #ccc;">Total con IVA</th>
-                        </tr>
-                    </thead>
-                    <tbody>${rowsHtml}</tbody>
-                    <tfoot>
-                        <tr>
-                            <td colspan="4" style="padding:8px; text-align:right; font-weight:bold;">TOTALES:</td>
-                            <td style="padding:8px; border:1px solid #ccc; text-align:right; font-weight:bold;">${document.getElementById('ft-subtotal').innerText}</td>
-                            <td style="padding:8px; border:1px solid #ccc; text-align:right; font-weight:bold; color:#d00;">${document.getElementById('ft-iva').innerText}</td>
-                            <td style="padding:8px; border:1px solid #ccc; text-align:right; font-weight:bold;">${document.getElementById('ft-grandtotal').innerText}</td>
-                        </tr>
-                    </tfoot>
-                </table>
-
-                <div style="font-size:12px; border-top:1px solid #ccc; padding-top:10px;">
-                    <p><b>Condiciones de Pago:</b> ${document.getElementById('qt-pay-desc').value}</p>
-                    <p style="margin-top:6px;"><b>Observaciones:</b> ${document.getElementById('qt-description').value}</p>
-                </div>
-            `;
-            window.print();
         }
     </script>
 </body>
