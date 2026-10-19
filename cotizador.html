@@ -275,6 +275,7 @@
         .btn-outline { background: #fff; border: 1px solid var(--border); color: var(--text); }
         .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
         .btn-blue { background: var(--sf-blue); color: #fff; }
+        .btn-blue:hover { filter: brightness(1.08); }
 
         /* TOAST FLOTANTE */
         #toast-box { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
@@ -347,11 +348,11 @@
                         <!-- Buscador en Vivo -->
                         <div class="smart-search">
                             <div class="smart-search-lbl">
-                                <span><i class="fas fa-search"></i> Buscar Cuenta Existente en Salesforce</span>
+                                <span><i class="fas fa-search"></i> Buscar Cuenta en Salesforce (NIT, Teléfono o Nombre)</span>
                                 <i class="fas fa-spinner fa-spin" id="acc-search-spinner" style="display:none;"></i>
                             </div>
                             <div class="smart-search-row">
-                                <input type="text" id="live-acc-search" placeholder="Escribe NIT, Cédula o Nombre del cliente..." oninput="debounceAccountSearch(this.value)">
+                                <input type="text" id="live-acc-search" placeholder="Escribe NIT, Cédula, Celular o Nombre del cliente..." oninput="debounceAccountSearch(this.value)">
                             </div>
                             <div class="dropdown-results" id="acc-search-results"></div>
                         </div>
@@ -404,7 +405,6 @@
                             </div>
                         </div>
 
-                        <!-- Solo los 7 campos esenciales a la vista -->
                         <div class="form-grid-3">
                             <div class="fg">
                                 <label class="flabel"><span class="req">*</span> Nombre Cuenta / Razón Social</label>
@@ -472,7 +472,6 @@
                             </div>
                         </div>
 
-                        <!-- Cajón oculto para campos secundarios que casi nunca se tocan -->
                         <div class="adv-toggle" onclick="toggleAdv('adv-acc-fields')">
                             <i class="fas fa-cog"></i> Opciones avanzadas de cuenta (Industria, Crédito, Cuenta Padre...)
                         </div>
@@ -558,7 +557,6 @@
                         <button type="button" class="cat-pill" onclick="selectVisualPricebook('01sDn00000C8wItIAJ', this)"><i class="fas fa-arrows-alt-h"></i> Equipo Frontal / Brazos</button>
                     </div>
 
-                    <!-- Selector nativo completo sincronizado -->
                     <select id="opp-pricebook" style="display:none;" onchange="onPricebookChange()">
                         <option value="ALL" data-cat="Maquinaria usada" data-days="15" data-tpl="Presupuesto Casa Colombia Maquinaria" selected>TODAS LAS LISTAS</option>
                         <option value="01sDn00000AybM1IAJ" data-cat="Maquinaria usada" data-days="30" data-tpl="Presupuesto Casa Colombia Maquinaria">MAQUINARIA USADA</option>
@@ -584,7 +582,7 @@
                             <i class="fas fa-spinner fa-spin" id="prod-search-spinner" style="display:none;"></i>
                         </div>
                         <div class="smart-search-row">
-                            <input type="text" id="prod-search-input" placeholder="Escribe ej: HITACHI, ZX75, ZX200, SHANTUI, 4464985, filtro..." oninput="debounceProductSearch(this.value)" onfocus="debounceProductSearch(this.value)">
+                            <input type="text" id="prod-search-input" placeholder="Escribe ej: HITACHI, ZX75, ZX120, ZX200, SHANTUI, 4464985, filtro..." oninput="debounceProductSearch(this.value)" onfocus="debounceProductSearch(this.value)">
                         </div>
                         <div class="dropdown-results" id="prod-search-results"></div>
                     </div>
@@ -661,7 +659,7 @@
 
                     <!-- Plantilla Oficial PDF -->
                     <div class="fg">
-                        <label class="flabel" style="color:var(--sf-blue);"><i class="fas fa-file-pdf"></i> Plantilla PDF en Salesforce</label>
+                        <label class="flabel" style="color:var(--sf-blue);"><i class="fas fa-file-pdf"></i> Plantilla Sugerida en Salesforce</label>
                         <select id="qt-template" class="finput" style="border-color:var(--sf-blue); font-weight:700;">
                             <option value="Presupuesto Casa Colombia Maquinaria">Presupuesto Casa Colombia Maquinaria</option>
                             <option value="Presupuesto Casa Colombia Repuestos">Presupuesto Casa Colombia Repuestos</option>
@@ -805,7 +803,7 @@
 
                     <!-- BOTÓN PRINCIPAL DE ACCIÓN -->
                     <button type="button" class="btn btn-primary" id="btn-submit-all" onclick="submitFullQuoteToSF()">
-                        <i class="fas fa-bolt"></i> GENERAR COTIZACIÓN Y DESCARGAR PDF
+                        <i class="fas fa-cloud-upload-alt"></i> GUARDAR Y ABRIR EN SALESFORCE
                     </button>
 
                 </div>
@@ -815,28 +813,36 @@
 
     </div>
 
-    <!-- MODAL DE ÉXITO -->
+    <!-- MODAL DE ÉXITO (FLUJO PRINCIPAL A SALESFORCE + BOTÓN DE BACKUP OPCIONAL) -->
     <div class="modal-bg" id="final-success-modal">
         <div class="modal-card">
             <div style="width:64px; height:64px; border-radius:50%; background:#D1FAE5; color:#059669; display:flex; align-items:center; justify-content:center; font-size:2rem; margin:0 auto 14px;">
                 <i class="fas fa-check"></i>
             </div>
-            <h2 style="color:var(--text); font-size:1.35rem; font-weight:800;">¡Cotización Lista en Salesforce!</h2>
+            <h2 style="color:var(--text); font-size:1.35rem; font-weight:800;">¡Sincronizado en Salesforce!</h2>
             <p id="final-success-msg" style="color:var(--muted); font-size:0.9rem; margin:8px 0 20px; line-height:1.4;"></p>
 
             <div style="display:flex; flex-direction:column; gap:10px;">
-                <a id="lnk-download-pdf" href="#" target="_blank" class="btn btn-primary" style="text-decoration:none;">
-                    <i class="fas fa-file-pdf"></i> DESCARGAR PDF OFICIAL DE SALESFORCE
+                <!-- ACCIÓN PRINCIPAL: IR A LA OPORTUNIDAD / PRESUPUESTO EN SALESFORCE -->
+                <a id="lnk-opp-main" href="#" target="_blank" class="btn btn-primary" style="text-decoration:none; background:var(--sf-blue); box-shadow: 0 6px 18px rgba(0, 161, 224, 0.3);">
+                    <i class="fas fa-external-link-alt"></i> IR A LA OPORTUNIDAD EN SALESFORCE
                 </a>
-                <a id="lnk-sf-pdf-viewer" href="#" target="_blank" class="btn btn-blue" style="width:100%;">
-                    <i class="fas fa-external-link-alt"></i> Ver Previsualización en Salesforce
-                </a>
-                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:4px;">
-                    <a id="lnk-acc" href="#" target="_blank" class="btn btn-outline" style="font-size:0.78rem;"><i class="fas fa-building"></i> Cuenta</a>
-                    <a id="lnk-opp" href="#" target="_blank" class="btn btn-outline" style="font-size:0.78rem;"><i class="fas fa-briefcase"></i> Oportunidad</a>
-                    <a id="lnk-qt" href="#" target="_blank" class="btn btn-outline" style="font-size:0.78rem;"><i class="fas fa-file-invoice"></i> Presupuesto</a>
+
+                <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:8px;">
+                    <a id="lnk-qt" href="#" target="_blank" class="btn btn-outline" style="font-size:0.82rem; border-color:var(--sf-blue); color:var(--sf-blue);">
+                        <i class="fas fa-file-invoice-dollar"></i> Ir al Presupuesto (Quote)
+                    </a>
+                    <a id="lnk-acc" href="#" target="_blank" class="btn btn-outline" style="font-size:0.82rem;">
+                        <i class="fas fa-building"></i> Ver Cuenta
+                    </a>
                 </div>
-                <button type="button" class="btn btn-outline" onclick="resetCotizador()" style="margin-top:8px; width:100%;">
+
+                <!-- BOTÓN SECUNDARIO DE BACKUP -->
+                <a id="lnk-download-backup" href="#" target="_blank" class="btn btn-outline" style="margin-top:4px; width:100%; border-style:dashed; color:var(--muted); font-size:0.82rem;">
+                    <i class="fas fa-file-pdf" style="color:var(--primary);"></i> Descargar Backup de Cotización (Opcional)
+                </a>
+
+                <button type="button" class="btn btn-outline" onclick="resetCotizador()" style="margin-top:6px; width:100%; background:#F8FAFC;">
                     <i class="fas fa-plus"></i> Hacer Nueva Cotización
                 </button>
             </div>
@@ -860,8 +866,8 @@
             onPricebookChange();
             onPaymentMethodChange();
             loadSalesforceNativeTemplates();
+            checkUrlIncomingLead();
 
-            // Soporte para pegar imagen de RUT o texto con Ctrl+V si no están dentro de un input
             document.addEventListener('paste', (e) => {
                 if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
                 const items = (e.clipboardData || e.originalEvent.clipboardData).items;
@@ -880,6 +886,44 @@
                 }
             });
         });
+
+        // Si el asesor abrió el cotizador desde un chat de WhatsApp o desde la tabla de Leads, pre-carga los datos
+        async function checkUrlIncomingLead() {
+            const params = new URLSearchParams(window.location.search);
+            const phone = params.get('phone');
+            const name = params.get('name');
+            const email = params.get('email');
+            const city = params.get('city');
+            const dept = params.get('dept');
+            const exec = params.get('exec');
+
+            if (exec && exec.startsWith('005')) {
+                document.getElementById('global-exec').value = exec;
+            }
+
+            if (phone) {
+                try {
+                    const res = await fetch(`/api/cotizador/search-accounts?q=${encodeURIComponent(phone)}`);
+                    const data = await res.json();
+                    if (data.success && data.records && data.records.length > 0) {
+                        selectExistingAccount(data.records[0]);
+                        return;
+                    }
+                } catch (e) {}
+            }
+
+            if (name || phone) {
+                openManualNewAccount();
+                if (name) {
+                    document.getElementById('acc-name').value = name;
+                    syncAccountNames();
+                }
+                if (phone) document.getElementById('acc-phone').value = phone;
+                if (email) document.getElementById('acc-email').value = email;
+                if (city) document.getElementById('acc-ciudad').value = city;
+                if (dept) document.getElementById('acc-ubicacion').value = dept;
+            }
+        }
 
         function showToast(msg) {
             const box = document.getElementById('toast-box');
@@ -1219,8 +1263,7 @@
                                 product2Id: p.Product2Id,
                                 name: pName,
                                 code: pCode,
-                                unitPrice: Number(p.UnitPrice || 0),
-                                description: pDesc
+                                unitPrice: Number(p.UnitPrice || 0)
                             };
                             return `
                                 <div class="dropdown-item" onclick='addProductToQuote(${JSON.stringify(itemObj).replace(/'/g, "&#39;")})'>
@@ -1430,7 +1473,7 @@
             const btn = document.getElementById('btn-submit-all');
             const originalHTML = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creando en Salesforce y generando PDF...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creando Oportunidad y Presupuesto en Salesforce...';
 
             const interesesElegidos = getSelectedInterests();
             const selectedTplValue = document.getElementById('qt-template').value;
@@ -1496,16 +1539,16 @@
 
                 if (res.ok && json.success) {
                     document.getElementById('final-success-msg').innerText =
-                        `Cliente "${accName}" sincronizado con ${quoteItems.length} producto(s).${json.data.quoteDocumentId ? ' El PDF oficial también quedó adjunto en el Presupuesto de Salesforce.' : ''}`;
+                        `Cliente "${accName}" sincronizado con ${quoteItems.length} producto(s). Ya puedes abrir la Oportunidad/Presupuesto en Salesforce o descargar el Backup.`;
                     
                     document.getElementById('lnk-acc').href = json.data.links.account;
-                    document.getElementById('lnk-opp').href = json.data.links.opportunity;
+                    document.getElementById('lnk-opp-main').href = json.data.links.opportunity;
                     document.getElementById('lnk-qt').href = json.data.links.quote;
-                    document.getElementById('lnk-sf-pdf-viewer').href = json.data.links.sfNativePdf;
-                    document.getElementById('lnk-download-pdf').href = json.data.links.downloadPdfApi;
+                    document.getElementById('lnk-download-backup').href = json.data.links.downloadPdfApi;
 
                     document.getElementById('final-success-modal').style.display = 'flex';
-                    window.open(json.data.links.downloadPdfApi, '_blank');
+                    // Lleva directamente a la Oportunidad en Salesforce como antes
+                    window.open(json.data.links.opportunity, '_blank');
                 } else {
                     alert("❌ Salesforce rechazó un dato:\n" + (json.message || "Verifica los campos obligatorios."));
                 }
