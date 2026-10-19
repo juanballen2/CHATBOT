@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v34.1 (CORE INTEGRA: BÚSQUEDA GLOBAL 8K + PDF NATIVO SALESFORCE)
+ * SERVER BACKEND - v34.2 (CORE INTEGRA DEFINITIVO: COTIZADOR + PDF AUTO + REAL-TIME CRM)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -17,7 +17,9 @@
  * 14. FIX: Emisión Socket.io en tiempo real al etiquetar y gestionar tags/config.
  * 15. ADD: Retorno de metadatos de registro existente en /api/extractor/salesforce para crear Tareas.
  * 16. FIX PRODUCTOS: Filtro Product2.IsActive = true (oculta vendidas), LIMIT 150, búsqueda global y sinónimos (EXC/EXCAVADORA).
- * 17. ADD PDF NATIVO SF: Descarga directa desde QuoteTemplate (quoteTemplateDataViewer.apexp) e inserción en QuoteDocument.
+ * 17. FIX CUENTAS: Búsqueda por Nombre, NIT exacto/parcial, Cédula y Teléfono (en Account y Contact).
+ * 18. FIX MAQUINARIA: Protección contra error max length=255 en Descripción de partida (OpportunityLineItem / QuoteLineItem).
+ * 19. ADD PDF DIRECTO: Descarga automática de PDF sin requerir login en Salesforce.
  * ============================================================
  */
 
@@ -140,7 +142,7 @@ function normalizeStrMatch(s) {
     return (s || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
 }
 
-// Descarga el binario PDF renderizado por el motor nativo de plantillas de Salesforce
+// Intenta extraer el binario PDF oficial renderizado por el motor de plantillas de Salesforce
 async function fetchOfficialSalesforcePdf(conn, quoteId, templateId) {
     if (!templateId) return null;
     const targetPath = `/quote/quoteTemplateDataViewer.apexp?id=${quoteId}&summlid=${templateId}`;
@@ -1923,23 +1925,77 @@ app.get('/api/cotizador/templates', async (req, res) => {
     }
 });
 
-// 1. Buscador en tiempo real de Cuentas (por NIT, Cédula o Nombre) y alerta de duplicados
+// 1. Buscador en tiempo real de Cuentas (por Nombre, NIT parcial/exacto, Cédula o Teléfono)
 app.get('/api/cotizador/search-accounts', async (req, res) => {
     try {
-        const q = (req.query.q || '').trim();
-        if (!q || q.length < 2) return res.json({ success: true, records: [] });
+        const rawQ = (req.query.q || '').trim();
+        if (!rawQ || rawQ.length < 2) return res.json({ success: true, records: [] });
 
-        const cleanNum = q.replace(/\D/g, '');
-        const safeText = q.replace(/'/g, "\\'");
+        const partsGuion = rawQ.split('-');
+        const baseBeforeHyphen = partsGuion[0].replace(/\D/g, '');
+        const cleanNum = rawQ.replace(/\D/g, '');
+        const safeText = rawQ.replace(/'/g, "\\'");
 
-        let whereClause = `Name LIKE '%${safeText}%' OR Nombre_de_la_Empresa__c LIKE '%${safeText}%' OR Nombre_de_la_Persona__c LIKE '%${safeText}%'`;
-        if (cleanNum.length >= 5 && cleanNum.length <= 15) {
-            const nitSinDV = cleanNum.length === 10 ? cleanNum.substring(0, 9) : cleanNum;
-            whereClause += ` OR N_mero_de_NIT__c = ${cleanNum} OR N_mero_de_C_dula__c = ${cleanNum} OR N_mero_de_NIT__c = ${nitSinDV}`;
+        let orConditions = [
+            `Name LIKE '%${safeText}%'`,
+            `Nombre_de_la_Empresa__c LIKE '%${safeText}%'`,
+            `Nombre_de_la_Persona__c LIKE '%${safeText}%'`,
+            `N_mero_de_cuenta__c LIKE '%${safeText}%'`,
+            `Phone LIKE '%${safeText}%'`
+        ];
+
+        let telLocal = '';
+
+        if (cleanNum.length >= 4 && cleanNum.length <= 15) {
+            telLocal = cleanNum;
+            if (telLocal.startsWith('57') && telLocal.length > 10) {
+                telLocal = telLocal.substring(2);
+            }
+            orConditions.push(`Phone LIKE '%${telLocal}%'`);
+
+            if (telLocal.length >= 7) {
+                const last7 = telLocal.slice(-7);
+                orConditions.push(`Phone LIKE '%${last7}%'`);
+            }
+            if (telLocal.length === 10) {
+                const p1 = telLocal.substring(0, 3);
+                const p2 = telLocal.substring(3, 6);
+                const p3 = telLocal.substring(6);
+                orConditions.push(`Phone LIKE '%${p1}%${p2}%${p3}%'`);
+            }
+
+            orConditions.push(`N_mero_de_NIT__c = ${cleanNum}`);
+            orConditions.push(`N_mero_de_C_dula__c = ${cleanNum}`);
+
+            if (baseBeforeHyphen && baseBeforeHyphen.length >= 5 && baseBeforeHyphen !== cleanNum) {
+                orConditions.push(`N_mero_de_NIT__c = ${baseBeforeHyphen}`);
+                orConditions.push(`N_mero_de_C_dula__c = ${baseBeforeHyphen}`);
+            }
+
+            if (cleanNum.length >= 9) {
+                const sinDigitoVerif = cleanNum.slice(0, -1);
+                orConditions.push(`N_mero_de_NIT__c = ${sinDigitoVerif}`);
+            }
+
+            if (cleanNum.length >= 5 && cleanNum.length <= 8) {
+                const min8 = cleanNum.padEnd(8, '0');
+                const max8 = cleanNum.padEnd(8, '9');
+                const min9 = cleanNum.padEnd(9, '0');
+                const max9 = cleanNum.padEnd(9, '9');
+                const min10 = cleanNum.padEnd(10, '0');
+                const max10 = cleanNum.padEnd(10, '9');
+
+                orConditions.push(`(N_mero_de_NIT__c >= ${min9} AND N_mero_de_NIT__c <= ${max9})`);
+                orConditions.push(`(N_mero_de_NIT__c >= ${min10} AND N_mero_de_NIT__c <= ${max10})`);
+                orConditions.push(`(N_mero_de_C_dula__c >= ${min8} AND N_mero_de_C_dula__c <= ${max8})`);
+                orConditions.push(`(N_mero_de_C_dula__c >= ${min10} AND N_mero_de_C_dula__c <= ${max10})`);
+            }
         }
 
+        const whereClause = orConditions.join(' OR ');
+
         const records = await runSfOperation(async (conn) => {
-            const result = await conn.query(`
+            const accQuery = conn.query(`
                 SELECT Id, Name, RecordTypeId, Phone, Correo_de_facturaci_n__c, 
                        N_mero_de_NIT__c, N_mero_de_C_dula__c, Industry, 
                        Ubicaci_n__c, Ciudad__c, Direccion_detalle__c, CurrencyIsoCode, OwnerId
@@ -1948,7 +2004,38 @@ app.get('/api/cotizador/search-accounts', async (req, res) => {
                 ORDER BY LastModifiedDate DESC 
                 LIMIT 15
             `);
-            return result.records;
+
+            let contactAccQuery = Promise.resolve({ records: [] });
+            if (telLocal.length >= 7) {
+                const last7 = telLocal.slice(-7);
+                contactAccQuery = conn.query(`
+                    SELECT AccountId 
+                    FROM Contact 
+                    WHERE AccountId != null AND (Phone LIKE '%${last7}%' OR MobilePhone LIKE '%${last7}%')
+                    LIMIT 5
+                `).catch(() => ({ records: [] }));
+            }
+
+            const [accRes, contRes] = await Promise.all([accQuery, contactAccQuery]);
+            let finalAccounts = [...accRes.records];
+
+            const extraAccIds = (contRes.records || [])
+                .map(c => c.AccountId)
+                .filter(id => id && !finalAccounts.some(a => a.Id === id));
+
+            if (extraAccIds.length > 0) {
+                const idsIn = extraAccIds.map(id => `'${id}'`).join(',');
+                const extraRes = await conn.query(`
+                    SELECT Id, Name, RecordTypeId, Phone, Correo_de_facturaci_n__c, 
+                           N_mero_de_NIT__c, N_mero_de_C_dula__c, Industry, 
+                           Ubicaci_n__c, Ciudad__c, Direccion_detalle__c, CurrencyIsoCode, OwnerId
+                    FROM Account 
+                    WHERE Id IN (${idsIn})
+                `).catch(() => ({ records: [] }));
+                finalAccounts = [...finalAccounts, ...extraRes.records];
+            }
+
+            return finalAccounts;
         });
 
         res.json({ success: true, records });
@@ -2000,7 +2087,6 @@ app.get('/api/cotizador/search-products', async (req, res) => {
             const termClauses = terms.map(t => {
                 const low = t.toLowerCase();
                 if (low.startsWith('excav')) {
-                    // En Salesforce muchos productos usan "EXC." en vez de "EXCAVADORA"
                     return `(Product2.Name LIKE '%${t}%' OR Product2.Name LIKE '%EXC%' OR Product2.Family LIKE '%${t}%' OR Product2.Description LIKE '%${t}%')`;
                 }
                 return `(Product2.Name LIKE '%${t}%' OR Product2.ProductCode LIKE '%${t}%' OR Product2.Family LIKE '%${t}%' OR Product2.Description LIKE '%${t}%')`;
@@ -2031,7 +2117,6 @@ app.get('/api/cotizador/search-products', async (req, res) => {
                 LIMIT 150
             `);
 
-            // Si buscó en una lista específica y no encontró, busca globalmente en todas las listas activas
             if (resQuery.records.length === 0 && pricebookId !== 'ALL') {
                 resQuery = await conn.query(`
                     SELECT Id, Pricebook2Id, Pricebook2.Name, Pricebook2.IsStandard,
@@ -2046,7 +2131,6 @@ app.get('/api/cotizador/search-products', async (req, res) => {
                 `);
             }
 
-            // Filtrar máquinas que tengan explícitamente "VENDIDA" o "VENDIDO" en el nombre/descripción a menos que pidan ver inactivos
             let finalRecords = resQuery.records;
             if (!includeInactive) {
                 finalRecords = finalRecords.filter(r => {
@@ -2123,7 +2207,7 @@ app.post('/api/cotizador/extract-rut', upload.single('file'), async (req, res) =
     }
 });
 
-// 5. Transacción Todo-En-Uno: Cuenta + Archivo RUT + Oportunidad + Productos + Presupuesto + PDF Oficial SF
+// 5. Transacción Todo-En-Uno: Cuenta + Archivo RUT + Oportunidad + Productos + Presupuesto + PDF Oficial
 app.post('/api/cotizador/procesar-todo', upload.single('rutFile'), async (req, res) => {
     try {
         const payload = JSON.parse(req.body.payload);
@@ -2226,16 +2310,19 @@ app.post('/api/cotizador/procesar-todo', upload.single('rutFile'), async (req, r
             const opportunityId = oppRes.id;
 
             // PASO D: INSERTAR PRODUCTOS EN LA OPORTUNIDAD (OpportunityLineItem)
+            // 🔥 FIX CRÍTICO: NO enviamos la descripción larga de Product2 en Description (límite 255 chars en SF) 🔥
             if (payload.items && payload.items.length > 0) {
                 for (const item of payload.items) {
                     const discFactor = 1 - (Number(item.discountPct || 0) / 100);
                     const netUnitPrice = Math.round(Number(item.unitPrice) * discFactor * 100) / 100;
+                    const safeLineNote = item.customNote ? String(item.customNote).substring(0, 250) : '';
+
                     await conn.sobject('OpportunityLineItem').create({
                         OpportunityId: opportunityId,
                         PricebookEntryId: item.pricebookEntryId,
                         Quantity: Number(item.quantity || 1),
                         UnitPrice: netUnitPrice,
-                        Description: item.description || ''
+                        Description: safeLineNote
                     });
                 }
             }
@@ -2265,9 +2352,10 @@ app.post('/api/cotizador/procesar-todo', upload.single('rutFile'), async (req, r
             if (!quoteRes.success) throw new Error("No se pudo crear el Presupuesto (Quote) en Salesforce.");
             const quoteId = quoteRes.id;
 
-            // PASO F: INSERTAR PRODUCTOS EN EL PRESUPUESTO (QuoteLineItem con % Descuento nativo)
+            // PASO F: INSERTAR PRODUCTOS EN EL PRESUPUESTO (QuoteLineItem con % Descuento nativo y sin desbordar 255 chars)
             if (payload.items && payload.items.length > 0) {
                 for (const item of payload.items) {
+                    const safeLineNote = item.customNote ? String(item.customNote).substring(0, 250) : '';
                     await conn.sobject('QuoteLineItem').create({
                         QuoteId: quoteId,
                         PricebookEntryId: item.pricebookEntryId,
@@ -2275,7 +2363,7 @@ app.post('/api/cotizador/procesar-todo', upload.single('rutFile'), async (req, r
                         Quantity: Number(item.quantity || 1),
                         UnitPrice: Number(item.unitPrice),
                         Discount: Number(item.discountPct || 0),
-                        Description: item.description || ''
+                        Description: safeLineNote
                     });
                 }
             }
@@ -2306,7 +2394,7 @@ app.post('/api/cotizador/procesar-todo', upload.single('rutFile'), async (req, r
             }
 
             const sfPdfViewerUrl = resolvedTemplateId
-                ? `https://importadoracolombia.my.salesforce.com/quote/quoteTemplateDataViewer.apexp?id=${quoteId}&summlid=${resolvedTemplateId}`
+                ? `${conn.instanceUrl}/quote/quoteTemplateDataViewer.apexp?id=${quoteId}&summlid=${resolvedTemplateId}`
                 : `https://importadoracolombia.lightning.force.com/lightning/r/Quote/${quoteId}/view`;
 
             return {
@@ -2333,7 +2421,7 @@ app.post('/api/cotizador/procesar-todo', upload.single('rutFile'), async (req, r
     }
 });
 
-// 6. Endpoint para descargar el PDF Oficial generado por las Plantillas de Salesforce
+// 6. Endpoint de Descarga Directa del PDF (Sin obligar al ejecutivo a entrar a Salesforce)
 app.get('/api/cotizador/download-sf-pdf', async (req, res) => {
     try {
         const quoteId = (req.query.quoteId || '').trim();
@@ -2343,21 +2431,8 @@ app.get('/api/cotizador/download-sf-pdf', async (req, res) => {
         if (!quoteId) return res.status(400).send("Falta quoteId");
 
         const pdfOutcome = await runSfOperation(async (conn) => {
-            // 1. Si no vino el templateId, lo buscamos por nombre en los metadatos de Salesforce
-            if (!templateId) {
-                const templates = await getSfQuoteTemplates(conn);
-                const matched = templates.find(t => normalizeStrMatch(t.fullName).includes(normalizeStrMatch(templateName)) || normalizeStrMatch(templateName).includes(normalizeStrMatch(t.fullName))) || templates[0];
-                if (matched) templateId = matched.id;
-            }
-
-            // 2. Intentar descargar el binario directo del motor de plantillas de Salesforce
-            if (templateId) {
-                const livePdf = await fetchOfficialSalesforcePdf(conn, quoteId, templateId);
-                if (livePdf) return { buffer: livePdf };
-            }
-
-            // 3. Fallback: si ya existe un QuoteDocument adjunto al Quote en Salesforce, leer su binario
-            const qdQuery = await conn.query(`SELECT Id, Document FROM QuoteDocument WHERE QuoteId = '${quoteId}' ORDER BY CreatedDate DESC LIMIT 1`);
+            // 1. Si ya existe un QuoteDocument guardado en Salesforce para esta cotización, descargarlo directo vía REST API
+            const qdQuery = await conn.query(`SELECT Id, Name FROM QuoteDocument WHERE QuoteId = '${quoteId}' ORDER BY CreatedDate DESC LIMIT 1`);
             if (qdQuery.totalSize > 0) {
                 const docId = qdQuery.records[0].Id;
                 const docRes = await axios.get(`${conn.instanceUrl}/services/data/v50.0/sobjects/QuoteDocument/${docId}/Document`, {
@@ -2367,22 +2442,195 @@ app.get('/api/cotizador/download-sf-pdf', async (req, res) => {
                 return { buffer: Buffer.from(docRes.data) };
             }
 
+            // 2. Si aún no existe QuoteDocument, buscar el TemplateId y extraer el binario de quoteTemplateDataViewer
+            if (!templateId) {
+                const templates = await getSfQuoteTemplates(conn);
+                const matched = templates.find(t => normalizeStrMatch(t.fullName).includes(normalizeStrMatch(templateName)) || normalizeStrMatch(templateName).includes(normalizeStrMatch(t.fullName))) || templates[0];
+                if (matched) templateId = matched.id;
+            }
+
+            if (templateId) {
+                const livePdf = await fetchOfficialSalesforcePdf(conn, quoteId, templateId);
+                if (livePdf) {
+                    try {
+                        await conn.sobject('QuoteDocument').create({
+                            QuoteId: quoteId,
+                            Document: livePdf.toString('base64')
+                        });
+                    } catch (e) {}
+                    return { buffer: livePdf };
+                }
+            }
+
+            // 3. Si Salesforce bloquea la descarga externa por cookies de Visualforce, consultamos los datos completos del Quote y sus productos desde SF para auto-generar el archivo PDF directo sin pedir Login
+            const qData = await conn.query(`
+                SELECT Id, Name, QuoteNumber, CreatedDate, ExpirationDate, Status, Description, Tax, 
+                       Tiempo_de_entrega_d_as__c, Forma_de_pago__c, Descripcion_de_forma_de_pago__c, 
+                       Validez_de_ofertas_d_as__c, Garant_a__c, Email, Phone,
+                       Account.Name, Account.N_mero_de_NIT__c, Account.N_mero_de_C_dula__c, Account.Ciudad__c, Account.Ubicaci_n__c, Account.Direccion_detalle__c,
+                       Opportunity.Owner.Name, Opportunity.CurrencyIsoCode
+                FROM Quote WHERE Id = '${quoteId}' LIMIT 1
+            `);
+
+            const qLines = await conn.query(`
+                SELECT Id, Quantity, UnitPrice, Discount, TotalPrice, Description,
+                       Product2.Name, Product2.ProductCode, Product2.Description
+                FROM QuoteLineItem WHERE QuoteId = '${quoteId}'
+            `);
+
             return {
-                redirectUrl: templateId
-                    ? `https://importadoracolombia.my.salesforce.com/quote/quoteTemplateDataViewer.apexp?id=${quoteId}&summlid=${templateId}`
-                    : `https://importadoracolombia.lightning.force.com/lightning/r/Quote/${quoteId}/view`
+                quoteRecord: qData.records[0] || null,
+                quoteLines: qLines.records || [],
+                templateName
             };
         });
 
+        // Si obtuvimos el binario PDF nativo de Salesforce, lo descargamos directo como archivo .pdf
         if (pdfOutcome.buffer) {
             res.setHeader('Content-Type', 'application/pdf');
             res.setHeader('Content-Disposition', `attachment; filename="Cotizacion_ICC_${quoteId}.pdf"`);
             return res.send(pdfOutcome.buffer);
-        } else {
-            return res.redirect(pdfOutcome.redirectUrl);
         }
+
+        // Renderizador automático de PDF con toda la ficha técnica de Salesforce (Sin pedir login de Salesforce)
+        const q = pdfOutcome.quoteRecord || {};
+        const lines = pdfOutcome.quoteLines || [];
+        const curr = q.Opportunity?.CurrencyIsoCode || 'COP';
+        const fmt = (n) => '$ ' + Math.round(Number(n || 0)).toLocaleString('es-CO');
+
+        let subtotalNeto = 0;
+        const rowsHtml = lines.map((l, i) => {
+            const bruto = Number(l.UnitPrice || 0) * Number(l.Quantity || 1);
+            const disc = bruto * (Number(l.Discount || 0) / 100);
+            const neto = bruto - disc;
+            subtotalNeto += neto;
+            const fichaTecnica = l.Product2?.Description || l.Description || '';
+            return `
+                <tr>
+                    <td style="padding:10px; border:1px solid #cbd5e1; text-align:center;">${i + 1}</td>
+                    <td style="padding:10px; border:1px solid #cbd5e1;">
+                        <div style="font-weight:800; color:#0f172a; font-size:13px;">${l.Product2?.Name || 'Producto'}</div>
+                        <div style="font-size:11px; color:#E9511D; font-weight:700; margin:2px 0;">Ref / Código: ${l.Product2?.ProductCode || 'N/A'}</div>
+                        ${fichaTecnica ? `<div style="font-size:11px; color:#334155; margin-top:4px; white-space:pre-line; line-height:1.35;">${fichaTecnica}</div>` : ''}
+                    </td>
+                    <td style="padding:10px; border:1px solid #cbd5e1; text-align:center; font-weight:700;">${l.Quantity}</td>
+                    <td style="padding:10px; border:1px solid #cbd5e1; text-align:right;">${fmt(l.UnitPrice)}</td>
+                    <td style="padding:10px; border:1px solid #cbd5e1; text-align:center;">${l.Discount || 0}%</td>
+                    <td style="padding:10px; border:1px solid #cbd5e1; text-align:right; font-weight:700;">${fmt(neto)}</td>
+                </tr>
+            `;
+        }).join('');
+
+        const ivaTotal = Number(q.Tax || 0);
+        const granTotal = subtotalNeto + ivaTotal;
+        const nitCliente = q.Account?.N_mero_de_NIT__c || q.Account?.N_mero_de_C_dula__c || 'N/A';
+
+        res.send(`
+            <!DOCTYPE html>
+            <html lang="es">
+            <head>
+                <meta charset="UTF-8">
+                <title>Cotizacion_${q.QuoteNumber || quoteId}</title>
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+                <style>
+                    body { font-family: Arial, sans-serif; background: #525659; margin: 0; padding: 20px; color: #1e293b; }
+                    .toolbar { max-width: 820px; margin: 0 auto 15px; background: #0f172a; color: #fff; padding: 12px 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+                    .btn-dl { background: #E9511D; color: #fff; border: none; padding: 10px 18px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; }
+                    .page { max-width: 820px; margin: 0 auto; background: #fff; padding: 35px 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+                    @media print { body { background: #fff; padding: 0; } .toolbar { display: none; } .page { box-shadow: none; padding: 10px; } }
+                </style>
+            </head>
+            <body>
+                <div class="toolbar">
+                    <span>📄 <b>Cotización Oficial Sincronizada con Salesforce</b> (${q.Name || ''})</span>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn-dl" onclick="descargarPDF()">⬇️ Descargar Archivo .PDF</button>
+                        <button class="btn-dl" style="background:#334155;" onclick="window.print()">🖨️ Imprimir</button>
+                    </div>
+                </div>
+                <div class="page" id="pdf-area">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:3px solid #E9511D; padding-bottom:15px; margin-bottom:20px;">
+                        <div>
+                            <h1 style="margin:0; color:#E9511D; font-size:22px;">IMPORTADORA CASA COLOMBIA S.A.S.</h1>
+                            <div style="font-size:12px; color:#64748b; margin-top:4px;">NIT: 900.193.479-0 • Bogotá D.C., Colombia • Modalidad: <b>${pdfOutcome.templateName || 'Comercial'}</b></div>
+                        </div>
+                        <div style="text-align:right; font-size:12px;">
+                            <div style="font-size:15px; font-weight:bold; color:#0f172a;">COTIZACIÓN N° ${q.QuoteNumber || quoteId.slice(-6)}</div>
+                            <div><b>Fecha:</b> ${new Date().toLocaleDateString('es-CO')}</div>
+                            <div><b>Vence:</b> ${q.ExpirationDate || 'N/A'} (${q.Validez_de_ofertas_d_as__c || 15} días)</div>
+                        </div>
+                    </div>
+
+                    <table style="width:100%; font-size:12px; margin-bottom:20px; border-collapse:collapse;">
+                        <tr>
+                            <td style="padding:6px 0; width:55%;"><b>Cliente / Cuenta:</b> ${q.Account?.Name || ''}</td>
+                            <td style="padding:6px 0;"><b>NIT / Cédula:</b> ${nitCliente}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:6px 0;"><b>Ubicación:</b> ${q.Account?.Ciudad__c || ''} (${q.Account?.Ubicaci_n__c || ''}) - ${q.Account?.Direccion_detalle__c || ''}</td>
+                            <td style="padding:6px 0;"><b>Teléfono:</b> ${q.Phone || ''}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:6px 0;"><b>Asesor Comercial:</b> ${q.Opportunity?.Owner?.Name || 'Importadora Casa Colombia'}</td>
+                            <td style="padding:6px 0;"><b>Divisa:</b> ${curr}</td>
+                        </tr>
+                    </table>
+
+                    <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:20px;">
+                        <thead>
+                            <tr style="background:#0f172a; color:#fff;">
+                                <th style="padding:10px; border:1px solid #0f172a; width:35px;">Ítem</th>
+                                <th style="padding:10px; border:1px solid #0f172a; text-align:left;">Descripción y Especificaciones Técnicas</th>
+                                <th style="padding:10px; border:1px solid #0f172a; width:50px;">Cant.</th>
+                                <th style="padding:10px; border:1px solid #0f172a; width:105px; text-align:right;">Vr. Unitario</th>
+                                <th style="padding:10px; border:1px solid #0f172a; width:55px;">% Desc</th>
+                                <th style="padding:10px; border:1px solid #0f172a; width:115px; text-align:right;">Vr. Total Neto</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px; margin-top:15px;">
+                        <div style="flex:1.3; font-size:11.5px; line-height:1.5; background:#f8fafc; padding:12px; border-radius:6px; border:1px solid #e2e8f0;">
+                            <div><b>Tiempo de entrega:</b> ${q.Tiempo_de_entrega_d_as__c || 'Inmediata'}</div>
+                            <div><b>Forma de pago:</b> ${q.Forma_de_pago__c || 'Contado'} — ${q.Descripcion_de_forma_de_pago__c || ''}</div>
+                            <div><b>Garantía:</b> ${q.Garant_a__c || '6 meses'}</div>
+                            <div style="margin-top:6px;"><b>Observaciones:</b> ${q.Description || ''}</div>
+                        </div>
+                        <table style="width:270px; border-collapse:collapse; font-size:12.5px;">
+                            <tr>
+                                <td style="padding:7px 10px; border:1px solid #cbd5e1; font-weight:bold;">SUBTOTAL NETO:</td>
+                                <td style="padding:7px 10px; border:1px solid #cbd5e1; text-align:right; font-weight:bold;">${fmt(subtotalNeto)}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:7px 10px; border:1px solid #cbd5e1; font-weight:bold; color:#dc2626;">IVA:</td>
+                                <td style="padding:7px 10px; border:1px solid #cbd5e1; text-align:right; font-weight:bold; color:#dc2626;">${fmt(ivaTotal)}</td>
+                            </tr>
+                            <tr style="background:#E9511D; color:#fff;">
+                                <td style="padding:9px 10px; border:1px solid #E9511D; font-weight:bold;">TOTAL (${curr}):</td>
+                                <td style="padding:9px 10px; border:1px solid #E9511D; text-align:right; font-weight:bold; font-size:14px;">${fmt(granTotal)}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                <script>
+                    function descargarPDF() {
+                        const el = document.getElementById('pdf-area');
+                        html2pdf().set({
+                            margin: 8,
+                            filename: 'Cotizacion_ICC_${q.QuoteNumber || quoteId.slice(-6)}.pdf',
+                            image: { type: 'jpeg', quality: 0.98 },
+                            html2canvas: { scale: 2, useCORS: true },
+                            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                        }).from(el).save();
+                    }
+                    window.onload = () => { setTimeout(descargarPDF, 400); };
+                </script>
+            </body>
+            </html>
+        `);
     } catch (error) {
-        console.error("❌ Error descargando PDF oficial de SF:", error.message);
-        res.status(500).send("Error descargando el PDF desde Salesforce: " + error.message);
+        console.error("❌ Error descargando PDF de SF:", error.message);
+        res.status(500).send("Error generando el PDF de la cotización: " + error.message);
     }
 });
