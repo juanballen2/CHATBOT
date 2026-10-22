@@ -1,5 +1,5 @@
 /*
- * SERVER BACKEND - v34.2 (CORE INTEGRA DEFINITIVO: COTIZADOR + PDF AUTO + REAL-TIME CRM)
+ * SERVER BACKEND - v34.3 (CORE INTEGRA + MINI-BOT IA MASIVO + REGLAS CORTES CAÑÓN)
  * ============================================================
  * 1. FIX: Inyección de busyTimeout (10s) para SQLite.
  * 2. ADD: Soporte Omnicanal Inteligente en /api/chat/send.
@@ -19,7 +19,8 @@
  * 16. FIX PRODUCTOS: Filtro Product2.IsActive = true (oculta vendidas), LIMIT 150, búsqueda global y sinónimos (EXC/EXCAVADORA).
  * 17. FIX CUENTAS: Búsqueda por Nombre, NIT exacto/parcial, Cédula y Teléfono (en Account y Contact).
  * 18. FIX MAQUINARIA: Protección contra error max length=255 en Descripción de partida (OpportunityLineItem / QuoteLineItem).
- * 19. ADD PDF DIRECTO: Descarga automática de PDF sin requerir login en Salesforce.
+ * 19. ADD PDF BACKUP: Descarga de respaldo de cotización en PDF sin requerir login en Salesforce.
+ * 20. ADD MINI-BOT IA: Lector masivo de referencias caóticas (Texto + Instrucciones + Imagen -> Carrito Salesforce).
  * ============================================================
  */
 
@@ -77,7 +78,7 @@ const SF_TOKEN = process.env.SF_TOKEN || 'IRKsWeCW6ooQw4ORheVQmLRt';
 const DEFAULT_PROMPT = `Eres Lorena, Asistente Comercial de Importadora Casa Colombia. Tu objetivo principal es atender al cliente, resolver sus dudas y perfilarlo recopilando sus datos para pasarlo a un asesor humano.
 REGLA DE ORO: NUNCA ASUMAS EL NOMBRE DEL CLIENTE. Si el cliente no te ha dicho explícitamente "Me llamo X", debes preguntárselo obligatoriamente (Nombre y Apellido) para su registro.`;
 
-// --- 2.1 POOL DE CONEXIÓN PERSISTENTE A SALESFORCE (SOPORTE MULTI-USUARIO) ---
+// --- 2.1 POOL DE CONNEPCCIÓN PERSISTENTE A SALESFORCE (SOPORTE MULTI-USUARIO) ---
 let cachedSfConn = null;
 let sfLastLoginTime = 0;
 let sfLoginPromise = null;
@@ -2421,7 +2422,7 @@ app.post('/api/cotizador/procesar-todo', upload.single('rutFile'), async (req, r
     }
 });
 
-// 6. Endpoint de Descarga Directa del PDF (Sin obligar al ejecutivo a entrar a Salesforce)
+// 6. Endpoint de Descarga de Backup de Cotización en PDF
 app.get('/api/cotizador/download-sf-pdf', async (req, res) => {
     try {
         const quoteId = (req.query.quoteId || '').trim();
@@ -2431,7 +2432,6 @@ app.get('/api/cotizador/download-sf-pdf', async (req, res) => {
         if (!quoteId) return res.status(400).send("Falta quoteId");
 
         const pdfOutcome = await runSfOperation(async (conn) => {
-            // 1. Si ya existe un QuoteDocument guardado en Salesforce para esta cotización, descargarlo directo vía REST API
             const qdQuery = await conn.query(`SELECT Id, Name FROM QuoteDocument WHERE QuoteId = '${quoteId}' ORDER BY CreatedDate DESC LIMIT 1`);
             if (qdQuery.totalSize > 0) {
                 const docId = qdQuery.records[0].Id;
@@ -2442,7 +2442,6 @@ app.get('/api/cotizador/download-sf-pdf', async (req, res) => {
                 return { buffer: Buffer.from(docRes.data) };
             }
 
-            // 2. Si aún no existe QuoteDocument, buscar el TemplateId y extraer el binario de quoteTemplateDataViewer
             if (!templateId) {
                 const templates = await getSfQuoteTemplates(conn);
                 const matched = templates.find(t => normalizeStrMatch(t.fullName).includes(normalizeStrMatch(templateName)) || normalizeStrMatch(templateName).includes(normalizeStrMatch(t.fullName))) || templates[0];
@@ -2462,7 +2461,6 @@ app.get('/api/cotizador/download-sf-pdf', async (req, res) => {
                 }
             }
 
-            // 3. Si Salesforce bloquea la descarga externa por cookies de Visualforce, consultamos los datos completos del Quote y sus productos desde SF para auto-generar el archivo PDF directo sin pedir Login
             const qData = await conn.query(`
                 SELECT Id, Name, QuoteNumber, CreatedDate, ExpirationDate, Status, Description, Tax, 
                        Tiempo_de_entrega_d_as__c, Forma_de_pago__c, Descripcion_de_forma_de_pago__c, 
@@ -2485,14 +2483,12 @@ app.get('/api/cotizador/download-sf-pdf', async (req, res) => {
             };
         });
 
-        // Si obtuvimos el binario PDF nativo de Salesforce, lo descargamos directo como archivo .pdf
         if (pdfOutcome.buffer) {
             res.setHeader('Content-Type', 'application/pdf');
             res.setHeader('Content-Disposition', `attachment; filename="Cotizacion_ICC_${quoteId}.pdf"`);
             return res.send(pdfOutcome.buffer);
         }
 
-        // Renderizador automático de PDF con toda la ficha técnica de Salesforce (Sin pedir login de Salesforce)
         const q = pdfOutcome.quoteRecord || {};
         const lines = pdfOutcome.quoteLines || [];
         const curr = q.Opportunity?.CurrencyIsoCode || 'COP';
@@ -2530,7 +2526,7 @@ app.get('/api/cotizador/download-sf-pdf', async (req, res) => {
             <html lang="es">
             <head>
                 <meta charset="UTF-8">
-                <title>Cotizacion_${q.QuoteNumber || quoteId}</title>
+                <title>Backup_Cotizacion_${q.QuoteNumber || quoteId}</title>
                 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
                 <style>
                     body { font-family: Arial, sans-serif; background: #525659; margin: 0; padding: 20px; color: #1e293b; }
@@ -2542,9 +2538,9 @@ app.get('/api/cotizador/download-sf-pdf', async (req, res) => {
             </head>
             <body>
                 <div class="toolbar">
-                    <span>📄 <b>Cotización Oficial Sincronizada con Salesforce</b> (${q.Name || ''})</span>
+                    <span>📄 <b>Backup de Cotización Sincronizada</b> (${q.Name || ''})</span>
                     <div style="display:flex; gap:10px;">
-                        <button class="btn-dl" onclick="descargarPDF()">⬇️ Descargar Archivo .PDF</button>
+                        <button class="btn-dl" onclick="descargarPDF()">⬇️ Descargar Backup .PDF</button>
                         <button class="btn-dl" style="background:#334155;" onclick="window.print()">🖨️ Imprimir</button>
                     </div>
                 </div>
@@ -2595,7 +2591,7 @@ app.get('/api/cotizador/download-sf-pdf', async (req, res) => {
                             <div><b>Tiempo de entrega:</b> ${q.Tiempo_de_entrega_d_as__c || 'Inmediata'}</div>
                             <div><b>Forma de pago:</b> ${q.Forma_de_pago__c || 'Contado'} — ${q.Descripcion_de_forma_de_pago__c || ''}</div>
                             <div><b>Garantía:</b> ${q.Garant_a__c || '6 meses'}</div>
-                            <div style="margin-top:6px;"><b>Observaciones:</b> ${q.Description || ''}</div>
+                            <div style="margin-top:6px; white-space:pre-line;"><b>Observaciones:</b> ${q.Description || ''}</div>
                         </div>
                         <table style="width:270px; border-collapse:collapse; font-size:12.5px;">
                             <tr>
@@ -2618,7 +2614,7 @@ app.get('/api/cotizador/download-sf-pdf', async (req, res) => {
                         const el = document.getElementById('pdf-area');
                         html2pdf().set({
                             margin: 8,
-                            filename: 'Cotizacion_ICC_${q.QuoteNumber || quoteId.slice(-6)}.pdf',
+                            filename: 'Backup_Cotizacion_ICC_${q.QuoteNumber || quoteId.slice(-6)}.pdf',
                             image: { type: 'jpeg', quality: 0.98 },
                             html2canvas: { scale: 2, useCORS: true },
                             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
@@ -2632,5 +2628,145 @@ app.get('/api/cotizador/download-sf-pdf', async (req, res) => {
     } catch (error) {
         console.error("❌ Error descargando PDF de SF:", error.message);
         res.status(500).send("Error generando el PDF de la cotización: " + error.message);
+    }
+});
+
+// 7. MINI-BOT IA: Lector Masivo de Pedidos Caóticos (Texto + Instrucciones + Imagen -> Carrito Salesforce)
+app.post('/api/cotizador/ai-bulk-products', upload.single('image'), async (req, res) => {
+    try {
+        if (!API_KEY) return res.status(500).json({ success: false, message: "Falta GEMINI_API_KEY en el servidor." });
+
+        const rawText = (req.body.text || '').trim();
+        const pricebookId = (req.body.pricebookId || 'ALL').trim();
+        const currency = (req.body.currency || 'COP').trim();
+
+        if (!rawText && !req.file) {
+            return res.status(400).json({ success: false, message: "Escribe los productos/instrucciones o pega una imagen primero." });
+        }
+
+        const promptBulk = `
+        Eres un asistente experto en repuestos y maquinaria pesada de Importadora Casa Colombia.
+        El ejecutivo comercial te enviará un texto desordenado, una lista pegada a la carrera, una imagen de referencias, o instrucciones informales (ej: "ponme 3 de todos menos del segundo", "4464985 x 4 y 2 filtros").
+
+        TU TAREA:
+        1. Analiza TANTO la imagen (si existe) COMO el texto y las instrucciones del ejecutivo. Obedece cualquier instrucción sobre cantidades, exclusiones o cambios.
+        2. Extrae cada producto, código, SKU o referencia que se deba cotizar.
+        3. Si para un ítem se especifica cantidad, úsala como número entero. Si NO se menciona cantidad, asigna obligatoriamente 1.
+        4. En "term", pon el código/referencia limpio (ej: "4464985", "SE17SR", "ZX75") o las palabras clave cortas del repuesto si no tiene código numérico.
+
+        Devuelve ESTRICTAMENTE este JSON:
+        {
+            "items": [
+                { "term": "código o nombre corto para buscar en BD", "quantity": 1, "original_label": "lo que pidió el ejecutivo" }
+            ]
+        }`;
+
+        const parts = [{ text: promptBulk }];
+        if (rawText) {
+            parts.push({ text: `Texto / Instrucciones del ejecutivo:\n${rawText}` });
+        }
+        if (req.file) {
+            parts.push({
+                inlineData: {
+                    mimeType: req.file.mimetype,
+                    data: req.file.buffer.toString('base64')
+                }
+            });
+        }
+
+        const gRes = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
+            { contents: [{ role: 'user', parts }], generationConfig: { responseMimeType: "application/json" } }
+        );
+
+        const aiRaw = gRes.data.candidates[0].content.parts[0].text;
+        const parsed = JSON.parse(aiRaw.replace(/```json/g, '').replace(/```/g, '').trim());
+        const requestedItems = Array.isArray(parsed.items) ? parsed.items : [];
+
+        if (requestedItems.length === 0) {
+            return res.json({ success: true, matched: [], ambiguous: [], notFound: [] });
+        }
+
+        const searchResults = await runSfOperation(async (conn) => {
+            const matched = [];
+            const ambiguous = [];
+            const notFound = [];
+
+            for (const reqItem of requestedItems) {
+                const rawTerm = String(reqItem.term || '').trim();
+                const qty = Math.max(1, Number(reqItem.quantity) || 1);
+                if (!rawTerm) continue;
+
+                const safeTerm = rawTerm.replace(/'/g, "\\'");
+                const words = safeTerm.split(/\s+/).filter(Boolean);
+                const wordClauses = words.map(w => `(Product2.ProductCode LIKE '%${w}%' OR Product2.Name LIKE '%${w}%')`).join(' AND ');
+
+                const queryByPb = async (pbFilter) => {
+                    const pbSql = (pbFilter && pbFilter !== 'ALL') ? `AND Pricebook2Id = '${pbFilter}'` : '';
+                    const qRes = await conn.query(`
+                        SELECT Id, Pricebook2Id, Pricebook2.Name, Pricebook2.IsStandard,
+                               Product2Id, Product2.Name, Product2.ProductCode, Product2.Family, Product2.Description,
+                               UnitPrice, CurrencyIsoCode
+                        FROM PricebookEntry
+                        WHERE CurrencyIsoCode = '${currency}'
+                          AND IsActive = true
+                          AND Product2.IsActive = true
+                          ${pbSql}
+                          AND (${wordClauses})
+                        ORDER BY Pricebook2.IsStandard ASC, Product2.Name ASC
+                        LIMIT 8
+                    `);
+                    return qRes.records.filter(r => {
+                        const txt = `${r.Product2?.Name || ''} ${r.Product2?.Description || ''}`.toUpperCase();
+                        return !txt.includes('VENDIDA') && !txt.includes('VENDIDO');
+                    });
+                };
+
+                // 1. Buscar primero en la Lista de Precios activa (Ej: CORTES CAÑON)
+                let recs = await queryByPb(pricebookId);
+
+                // 2. Si no está en esa lista específica y no es búsqueda global, intentar globalmente como respaldo
+                if (recs.length === 0 && pricebookId !== 'ALL') {
+                    recs = await queryByPb('ALL');
+                }
+
+                if (recs.length === 0) {
+                    notFound.push({ term: rawTerm, quantity: qty, label: reqItem.original_label || rawTerm });
+                } else {
+                    const exactCodeMatch = recs.find(r =>
+                        String(r.Product2?.ProductCode || '').toLowerCase() === rawTerm.toLowerCase() &&
+                        (pricebookId === 'ALL' || r.Pricebook2Id === pricebookId)
+                    ) || recs[0];
+
+                    const formatRec = (p) => ({
+                        pricebookEntryId: p.Id,
+                        pricebook2Id: p.Pricebook2Id,
+                        pricebookName: p.Pricebook2 ? p.Pricebook2.Name : 'Lista General',
+                        product2Id: p.Product2Id,
+                        name: p.Product2 ? p.Product2.Name : 'Producto',
+                        code: p.Product2 && p.Product2.ProductCode ? p.Product2.ProductCode : 'Sin SKU',
+                        unitPrice: Number(p.UnitPrice || 0),
+                        quantity: qty
+                    });
+
+                    if (recs.length === 1 || String(exactCodeMatch.Product2?.ProductCode || '').toLowerCase() === rawTerm.toLowerCase()) {
+                        matched.push(formatRec(exactCodeMatch));
+                    } else {
+                        ambiguous.push({
+                            term: rawTerm,
+                            quantity: qty,
+                            options: recs.slice(0, 5).map(formatRec)
+                        });
+                    }
+                }
+            }
+
+            return { matched, ambiguous, notFound };
+        });
+
+        res.json({ success: true, ...searchResults });
+    } catch (error) {
+        console.error("❌ Error en Mini-Bot Bulk Products:", error.message);
+        res.status(500).json({ success: false, message: "Error procesando lista con IA: " + error.message });
     }
 });
