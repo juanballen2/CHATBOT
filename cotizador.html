@@ -22,13 +22,13 @@
             --success: #10B981;
             --danger: #EF4444;
             --warning: #F59E0B;
+            --purple: #7C3AED;
             --radius: 14px;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
         body { background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 50px; }
 
-        /* BARRA SUPERIOR */
         .topbar {
             background: #0F172A;
             color: #fff;
@@ -59,24 +59,20 @@
         }
         .exec-pill select option { color: #0F172A; }
 
-        /* LAYOUT DE 2 COLUMNAS (IZQUIERDA TRABAJO, DERECHA RESUMEN STICKY) */
         .workspace {
             max-width: 1400px;
             margin: 24px auto;
             padding: 0 20px;
             display: grid;
-            grid-template-columns: 1fr 390px;
+            grid-template-columns: 1fr 400px;
             gap: 24px;
             align-items: start;
         }
-        @media (max-width: 1100px) {
-            .workspace { grid-template-columns: 1fr; }
-        }
+        @media (max-width: 1100px) { .workspace { grid-template-columns: 1fr; } }
 
         .main-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
         .side-col { position: sticky; top: 80px; display: flex; flex-direction: column; gap: 16px; }
 
-        /* TARJETAS LIMPIAS */
         .card {
             background: var(--card);
             border-radius: var(--radius);
@@ -101,21 +97,12 @@
         }
         .card-body { padding: 20px 22px; }
 
-        /* PASO 1: BUSCADOR DE CLIENTE + LECTOR RUT */
-        .client-entry-grid {
-            display: grid;
-            grid-template-columns: 1.3fr 1fr;
-            gap: 14px;
-        }
+        .client-entry-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; }
         @media (max-width: 768px) { .client-entry-grid { grid-template-columns: 1fr; } }
 
         .smart-search {
-            position: relative;
-            background: #F8FAFC;
-            border: 2px solid var(--border);
-            border-radius: 12px;
-            padding: 12px 16px;
-            transition: 0.2s;
+            position: relative; background: #F8FAFC; border: 2px solid var(--border);
+            border-radius: 12px; padding: 12px 16px; transition: 0.2s;
         }
         .smart-search:focus-within { border-color: var(--sf-blue); background: #fff; box-shadow: 0 0 0 4px rgba(0, 161, 224, 0.1); }
         .smart-search-lbl { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: var(--sf-blue); margin-bottom: 4px; display: flex; justify-content: space-between; }
@@ -123,20 +110,12 @@
         .smart-search-row input { width: 100%; border: none; background: transparent; font-size: 0.95rem; font-weight: 600; color: var(--text); outline: none; }
 
         .rut-smart-box {
-            border: 2px dashed #CBD5E1;
-            background: #F8FAFC;
-            border-radius: 12px;
-            padding: 12px 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            cursor: pointer;
-            transition: 0.2s;
+            border: 2px dashed #CBD5E1; background: #F8FAFC; border-radius: 12px;
+            padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; cursor: pointer; transition: 0.2s;
         }
         .rut-smart-box:hover { border-color: var(--primary); background: var(--primary-soft); }
 
-        /* DROPDOWN FLOTANTE */
         .dropdown-results {
             position: absolute; top: calc(100% + 6px); left: 0; right: 0;
             background: #fff; border: 1px solid var(--border); border-radius: 12px;
@@ -149,30 +128,26 @@
         }
         .dropdown-item:hover { background: var(--primary-soft); }
 
-        /* TARJETA DE CLIENTE SELECCIONADO */
         .client-selected-card {
-            display: none;
-            background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
-            border: 1px solid #34D399;
-            border-radius: 12px;
-            padding: 16px 20px;
-            margin-top: 14px;
-            align-items: center;
-            justify-content: space-between;
-            gap: 15px;
+            display: none; background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+            border: 1px solid #34D399; border-radius: 12px; padding: 16px 20px;
+            margin-top: 14px; align-items: center; justify-content: space-between; gap: 15px;
         }
         .client-avatar {
             width: 46px; height: 46px; border-radius: 12px; background: #10B981;
             color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0;
         }
 
-        /* FORMULARIO DESPLEGABLE DE CLIENTE NUEVO */
+        /* BANNER ESPECIAL CORTES CAÑÓN */
+        .cortes-banner {
+            display: none; margin-top: 12px; padding: 12px 16px; border-radius: 10px;
+            background: #FEF3C7; border: 2px solid #F59E0B; color: #92400E;
+            font-size: 0.82rem; font-weight: 600; align-items: center; justify-content: space-between; gap: 10px;
+        }
+
         #new-account-drawer {
-            display: none;
-            margin-top: 18px;
-            padding-top: 18px;
-            border-top: 1px dashed var(--border);
-            animation: fadeIn 0.25s ease;
+            display: none; margin-top: 18px; padding-top: 18px;
+            border-top: 1px dashed var(--border); animation: fadeIn 0.25s ease;
         }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -189,7 +164,6 @@
         }
         .finput:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(233, 81, 29, 0.12); }
 
-        /* ACORDEÓN DE OPCIONES AVANZADAS */
         .adv-toggle {
             display: inline-flex; align-items: center; gap: 6px; margin-top: 14px;
             font-size: 0.8rem; font-weight: 700; color: var(--muted); cursor: pointer;
@@ -198,10 +172,37 @@
         .adv-toggle:hover { color: var(--primary); border-color: var(--primary); }
         .adv-box { display: none; margin-top: 12px; padding: 14px; background: #F8FAFC; border-radius: 10px; border: 1px solid var(--border); }
 
-        /* PÍLDORAS DE CATEGORÍAS DE PRODUCTOS (TABS RÁPIDOS) */
-        .cat-Bar {
-            display: flex; gap: 6px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 12px;
+        /* MINI-BOT IA LECTOR DE LISTAS CAÓTICAS */
+        .ai-bulk-box {
+            background: linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%);
+            border: 2px solid #C4B5FD;
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
         }
+        .ai-bulk-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 8px; flex-wrap: wrap; gap: 8px;
+        }
+        .ai-bulk-title { font-size: 0.82rem; font-weight: 800; color: #5B21B6; display: flex; align-items: center; gap: 6px; text-transform: uppercase; }
+        .ai-bulk-textarea {
+            width: 100%; min-height: 68px; padding: 10px 12px; border-radius: 8px;
+            border: 1px solid #C4B5FD; background: #fff; font-size: 0.88rem; color: var(--text);
+            resize: vertical; outline: none; font-weight: 500;
+        }
+        .ai-bulk-textarea:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15); }
+        .ai-img-preview {
+            display: none; align-items: center; gap: 10px; margin-top: 8px;
+            background: #fff; padding: 6px 10px; border-radius: 8px; border: 1px solid #DDD6FE; font-size: 0.78rem;
+        }
+        .ai-img-preview img { width: 42px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; }
+
+        .ai-disambiguation {
+            display: none; margin-top: 10px; padding: 12px; background: #fff;
+            border-radius: 8px; border: 1px solid #FCD34D; font-size: 0.82rem;
+        }
+
+        .cat-Bar { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 12px; }
         .cat-pill {
             padding: 7px 14px; border-radius: 99px; border: 1px solid var(--border);
             background: #F8FAFC; color: var(--muted); font-size: 0.8rem; font-weight: 700;
@@ -215,7 +216,6 @@
             background: var(--sf-blue-soft); color: #0284C7; border: 1px solid #BAE6FD; margin-right: 6px;
         }
 
-        /* TABLA POS DEL CARRITO */
         .table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--border); border-radius: 10px; }
         .pos-table { width: 100%; border-collapse: collapse; min-width: 820px; font-size: 0.84rem; }
         .pos-table th {
@@ -234,7 +234,6 @@
         .tbl-num { width: 105px; padding: 6px 8px; text-align: right; border: 1px solid var(--border); border-radius: 6px; font-weight: 600; font-size: 0.84rem; }
         .tbl-pct { width: 58px; padding: 6px; text-align: right; border: 1px solid var(--border); border-radius: 6px; font-weight: 700; font-size: 0.84rem; }
 
-        /* COLUMNA DERECHA: RESUMEN FINANCIERO Y CONDICIONES */
         .receipt-box {
             background: #0F172A; color: #fff; border-radius: 12px; padding: 18px;
             display: flex; flex-direction: column; gap: 10px;
@@ -248,13 +247,12 @@
         .receipt-total span:first-child { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; color: #94A3B8; }
         .receipt-total span:last-child { font-size: 1.45rem; font-weight: 800; color: #fff; }
 
-        /* PÍLDORAS RÁPIDAS DE GARANTÍA */
         .mini-pills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
         .mini-pill {
             font-size: 0.7rem; padding: 3px 8px; border-radius: 6px; background: #F1F5F9;
             color: var(--muted); cursor: pointer; font-weight: 600; border: 1px solid transparent;
         }
-        .mini-pill:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+        .mini-pill:hover, .mini-pill.active-sede { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); font-weight: 800; }
 
         .chips-wrap { display: flex; flex-wrap: wrap; gap: 5px; }
         .chip-btn {
@@ -263,7 +261,6 @@
         }
         .chip-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
-        /* BOTONES */
         .btn {
             padding: 10px 16px; border-radius: 9px; border: none; font-weight: 700;
             cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
@@ -275,9 +272,9 @@
         .btn-outline { background: #fff; border: 1px solid var(--border); color: var(--text); }
         .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
         .btn-blue { background: var(--sf-blue); color: #fff; }
-        .btn-blue:hover { filter: brightness(1.08); }
+        .btn-purple { background: var(--purple); color: #fff; }
+        .btn-purple:hover { filter: brightness(1.08); }
 
-        /* TOAST FLOTANTE */
         #toast-box { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
         .toast-msg {
             background: #0F172A; color: #fff; padding: 12px 18px; border-radius: 10px;
@@ -285,7 +282,6 @@
             border-left: 4px solid var(--primary); animation: fadeIn 0.2s ease;
         }
 
-        /* MODAL DE ÉXITO */
         .modal-bg {
             display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65);
             backdrop-filter: blur(4px); z-index: 500; align-items: center; justify-content: center; padding: 20px;
@@ -313,7 +309,7 @@
                 <span style="font-size:0.78rem; color:#94A3B8;">Cotizando como:</span>
                 <select id="global-exec" onchange="onExecutiveChange()">
                     <option value="005Dn000007H1EUIA0" data-init="MK">Marketing ICC</option>
-                    <option value="005Dn000007mWFhIAM" data-init="LG">Luz Guzmán (LG)</option>
+                    <option value="005Dn000007mWFhIAM" data-init="LC">Luz Caicedo / Guzmán (LC)</option>
                     <option value="005UO000000PdB3YAK" data-init="NF">Nelson / Felipe (NF)</option>
                     <option value="005Dn000005u1yTIAQ" data-init="MR">Mario (MR)</option>
                     <option value="005Dn000005u27NIAQ" data-init="MC">Marcos (MC)</option>
@@ -352,16 +348,16 @@
                                 <i class="fas fa-spinner fa-spin" id="acc-search-spinner" style="display:none;"></i>
                             </div>
                             <div class="smart-search-row">
-                                <input type="text" id="live-acc-search" placeholder="Escribe NIT, Cédula, Celular o Nombre del cliente..." oninput="debounceAccountSearch(this.value)">
+                                <input type="text" id="live-acc-search" placeholder="Escribe ej: Cortes Cañon, NIT, Cédula o Celular..." oninput="debounceAccountSearch(this.value)">
                             </div>
                             <div class="dropdown-results" id="acc-search-results"></div>
                         </div>
 
-                        <!-- Subir RUT o Pegar Captura -->
+                        <!-- Subir RUT -->
                         <div class="rut-smart-box" onclick="document.getElementById('rut-file-input').click()">
                             <div>
                                 <div style="font-weight:800; color:var(--primary); font-size:0.86rem;">
-                                    <i class="fas fa-magic"></i> ¿Cliente Nuevo? Sube el RUT o pega con Ctrl+V
+                                    <i class="fas fa-id-card"></i> ¿Cliente Nuevo? Sube aquí su RUT
                                 </div>
                                 <div style="font-size:0.75rem; color:var(--muted); margin-top:2px;" id="rut-status-text">
                                     La IA llena el formulario sola y adjunta el RUT a la Cuenta en SF.
@@ -387,6 +383,13 @@
                         <button type="button" class="btn btn-outline" onclick="clearSelectedAccount()" style="padding:6px 12px; font-size:0.78rem;">
                             <i class="fas fa-exchange-alt"></i> Cambiar Cliente
                         </button>
+                    </div>
+
+                    <!-- AVISO AUTOMÁTICO EXCLUSIVO PARA CORTES CAÑÓN -->
+                    <div class="cortes-banner" id="cortes-canon-banner">
+                        <div>
+                            <i class="fas fa-star"></i> <b>MODO CORTES CAÑÓN ACTIVO:</b> Lista de Precios exclusiva fijada • Pago a CRÉDITO • Validez 3 días • Sin garantía (Material de desgaste) • Ventana de Nombres de Oportunidad abierta a la derecha.
+                        </div>
                     </div>
 
                     <!-- FORMULARIO DESPLEGABLE SOLO SI ES CLIENTE NUEVO -->
@@ -531,7 +534,7 @@
                 <div class="card-header">
                     <div class="card-title">
                         <div class="step-num">2</div>
-                        <span>SELECCIÓN DE PRODUCTOS Y CALCULADORA DE DESCUENTOS / IVA</span>
+                        <span>SELECCIÓN DE PRODUCTOS Y LECTOR DE PEDIDOS CON IA</span>
                     </div>
                     <div style="display:flex; align-items:center; gap:10px;">
                         <label style="font-size:0.75rem; color:var(--muted); cursor:pointer; display:flex; align-items:center; gap:5px;">
@@ -548,17 +551,19 @@
                 <div class="card-body">
                     <!-- Píldoras visuales para filtrar por Lista de Precios en 1 clic -->
                     <div class="cat-Bar" id="visual-pb-pills">
-                        <button type="button" class="cat-pill active" onclick="selectVisualPricebook('ALL', this)"><i class="fas fa-globe"></i> Todas las Listas</button>
-                        <button type="button" class="cat-pill" onclick="selectVisualPricebook('01sDn00000AybM1IAJ', this)"><i class="fas fa-tractor"></i> Maquinaria Usada</button>
-                        <button type="button" class="cat-pill" onclick="selectVisualPricebook('01sDn00000AyQ1WIAV', this)"><i class="fas fa-star"></i> Maquinaria Nueva</button>
-                        <button type="button" class="cat-pill" onclick="selectVisualPricebook('01sDn00000C9WkzIAF', this)"><i class="fas fa-cogs"></i> Repuestos</button>
-                        <button type="button" class="cat-pill" onclick="selectVisualPricebook('01sDn00000Aybp0IAB', this)"><i class="fas fa-hammer"></i> Martillos Hidráulicos</button>
-                        <button type="button" class="cat-pill" onclick="selectVisualPricebook('01sDn00000CAs91IAD', this)"><i class="fas fa-truck-monster"></i> Volquetas / Vehículos</button>
-                        <button type="button" class="cat-pill" onclick="selectVisualPricebook('01sDn00000C8wItIAJ', this)"><i class="fas fa-arrows-alt-h"></i> Equipo Frontal / Brazos</button>
+                        <button type="button" class="cat-pill active" data-pb="ALL" onclick="selectVisualPricebook('ALL', this)"><i class="fas fa-globe"></i> Todas las Listas</button>
+                        <button type="button" class="cat-pill" data-pb="01sUO000001DFALYA4" id="pill-cortes-canon" onclick="selectVisualPricebook('01sUO000001DFALYA4', this)" style="border-color:#F59E0B;"><i class="fas fa-hard-hat"></i> Lista Cortes Cañón</button>
+                        <button type="button" class="cat-pill" data-pb="01sDn00000C9WkzIAF" onclick="selectVisualPricebook('01sDn00000C9WkzIAF', this)"><i class="fas fa-cogs"></i> Repuestos</button>
+                        <button type="button" class="cat-pill" data-pb="01sDn00000AybM1IAJ" onclick="selectVisualPricebook('01sDn00000AybM1IAJ', this)"><i class="fas fa-tractor"></i> Maquinaria Usada</button>
+                        <button type="button" class="cat-pill" data-pb="01sDn00000AyQ1WIAV" onclick="selectVisualPricebook('01sDn00000AyQ1WIAV', this)"><i class="fas fa-star"></i> Maquinaria Nueva</button>
+                        <button type="button" class="cat-pill" data-pb="01sDn00000Aybp0IAB" onclick="selectVisualPricebook('01sDn00000Aybp0IAB', this)"><i class="fas fa-hammer"></i> Martillos Hidráulicos</button>
+                        <button type="button" class="cat-pill" data-pb="01sDn00000CAs91IAD" onclick="selectVisualPricebook('01sDn00000CAs91IAD', this)"><i class="fas fa-truck-monster"></i> Volquetas / Vehículos</button>
+                        <button type="button" class="cat-pill" data-pb="01sDn00000C8wItIAJ" onclick="selectVisualPricebook('01sDn00000C8wItIAJ', this)"><i class="fas fa-arrows-alt-h"></i> Equipo Frontal / Brazos</button>
                     </div>
 
                     <select id="opp-pricebook" style="display:none;" onchange="onPricebookChange()">
                         <option value="ALL" data-cat="Maquinaria usada" data-days="15" data-tpl="Presupuesto Casa Colombia Maquinaria" selected>TODAS LAS LISTAS</option>
+                        <option value="01sUO000001DFALYA4" data-cat="Repuestos" data-days="3" data-tpl="Presupuesto Casa Colombia Repuestos">LISTA DE PRECIOS CORTES CAÑON</option>
                         <option value="01sDn00000AybM1IAJ" data-cat="Maquinaria usada" data-days="30" data-tpl="Presupuesto Casa Colombia Maquinaria">MAQUINARIA USADA</option>
                         <option value="01sDn00000AyQ1WIAV" data-cat="Maquinaria nueva" data-days="30" data-tpl="Presupuesto Casa Colombia Maquinaria">MAQUINARIA NUEVA</option>
                         <option value="01sDn00000C9WkzIAF" data-cat="Repuestos" data-days="7" data-tpl="Presupuesto Casa Colombia Repuestos">REPUESTOS</option>
@@ -570,19 +575,49 @@
                         <option value="01sUO0000014N8jYAE" data-cat="Repuestos" data-days="7" data-tpl="Presupuesto Casa Colombia Repuestos">ORIGINAL</option>
                         <option value="01sUO0000014NALYA2" data-cat="Repuestos" data-days="7" data-tpl="Presupuesto Casa Colombia Repuestos">GENERICO</option>
                         <option value="01sUO0000029MubYAE" data-cat="Repuestos" data-days="7" data-tpl="Presupuesto Casa Colombia Repuestos">AEREO</option>
-                        <option value="01sUO000001DFALYA4" data-cat="Servicio" data-days="15" data-tpl="Copia de Presupuesto Casa Colombia Servicios">LISTA CORTES CAÑON</option>
                         <option value="01sDn00000C8xi1IAB" data-cat="Accesorios" data-days="15" data-tpl="Presupuesto Casa Colombia Pontones">OTROS</option>
                         <option value="01sDn000001UtQvIAK" data-cat="Otros" data-days="15" data-tpl="Presupuesto Casa Colombia Maquinaria">Standard Price Book</option>
                     </select>
 
-                    <!-- Buscador de Productos -->
+                    <!-- 🤖 MINI-BOT IA: CUADRO DE TEXTO LIBRE + IMAGEN CTRL+V PARA CARGAR VARIOS PRODUCTOS DE GOLPE -->
+                    <div class="ai-bulk-box" id="ai-bulk-container">
+                        <div class="ai-bulk-header">
+                            <div class="ai-bulk-title">
+                                <i class="fas fa-robot"></i> Mini-Bot Lector de Referencias (Pega lista desordenada, instrucciones o foto con Ctrl+V)
+                            </div>
+                            <div style="display:flex; gap:8px;">
+                                <button type="button" class="btn btn-outline" style="padding:5px 10px; font-size:0.75rem; border-color:#8B5CF6; color:#6D28D9;" onclick="document.getElementById('ai-bulk-file').click()">
+                                    <i class="fas fa-camera"></i> Subir Foto de Lista
+                                </button>
+                                <input type="file" id="ai-bulk-file" accept="image/*" style="display:none;" onchange="handleAiBulkImageSelect(this)">
+                                <button type="button" class="btn btn-purple" id="btn-run-ai-bulk" style="padding:5px 14px; font-size:0.78rem;" onclick="procesarListaConMiniBot()">
+                                    <i class="fas fa-bolt"></i> Buscar y Cargar Todo al Carrito
+                                </button>
+                            </div>
+                        </div>
+
+                        <textarea id="ai-bulk-text" class="ai-bulk-textarea" placeholder="Pega aquí las referencias como vengan o dale órdenes al bot (Ej: '4464985 x 4, 2 filtros ZX200, o cárgate todos los códigos de la imagen que acabo de pegar con Ctrl+V pero ponles 2 unidades a cada uno')..."></textarea>
+
+                        <div class="ai-img-preview" id="ai-bulk-img-preview">
+                            <img id="ai-bulk-img-tag" src="" alt="preview">
+                            <div style="flex:1;">
+                                <div style="font-weight:700; color:#5B21B6;">Imagen de referencias lista para analizar</div>
+                                <div style="color:var(--muted); font-size:0.72rem;">Puedes escribir instrucciones arriba sobre qué hacer con los ítems de esta imagen.</div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="padding:4px 8px; font-size:0.72rem; color:var(--danger);" onclick="clearAiBulkImage()">Quitar imagen</button>
+                        </div>
+
+                        <div class="ai-disambiguation" id="ai-bulk-disambiguation"></div>
+                    </div>
+
+                    <!-- Buscador Individual de Productos -->
                     <div class="smart-search" style="border-color: var(--primary); background: #FFFDFB;">
                         <div class="smart-search-lbl" style="color: var(--primary);">
-                            <span><i class="fas fa-barcode"></i> Buscar Producto por Nombre, Modelo o Referencia SKU</span>
+                            <span><i class="fas fa-barcode"></i> O Buscar Producto Individualmente por Nombre, Modelo o SKU</span>
                             <i class="fas fa-spinner fa-spin" id="prod-search-spinner" style="display:none;"></i>
                         </div>
                         <div class="smart-search-row">
-                            <input type="text" id="prod-search-input" placeholder="Escribe ej: HITACHI, ZX75, ZX120, ZX200, SHANTUI, 4464985, filtro..." oninput="debounceProductSearch(this.value)" onfocus="debounceProductSearch(this.value)">
+                            <input type="text" id="prod-search-input" placeholder="Escribe ej: HITACHI, ZX75, ZX120, 4464985, filtro..." oninput="debounceProductSearch(this.value)" onfocus="debounceProductSearch(this.value)">
                         </div>
                         <div class="dropdown-results" id="prod-search-results"></div>
                     </div>
@@ -609,7 +644,7 @@
                                 <tr>
                                     <td colspan="11" style="text-align:center; padding: 32px; color: var(--muted);">
                                         <i class="fas fa-cart-plus" style="font-size:1.6rem; opacity:0.4; display:block; margin-bottom:6px;"></i>
-                                        Busca y selecciona arriba los equipos o repuestos para armar la cotización.
+                                        Usa el Mini-Bot de arriba para pegar varias referencias de golpe o el buscador individual.
                                     </td>
                                 </tr>
                             </tbody>
@@ -701,15 +736,15 @@
                         <input type="text" id="qt-pay-desc" class="finput" value="100% Pago de contado previo al despacho.">
                     </div>
 
-                    <!-- Garantía con Píldoras de 1 Clic -->
+                    <!-- Garantía con Píldoras de 1 Clic (Incluyendo Material de Desgaste para Cortes Cañón) -->
                     <div class="fg">
                         <label class="flabel"><span class="req">*</span> Garantía</label>
                         <input type="text" id="qt-warranty" class="finput" value="6 meses por defectos de fábrica">
                         <div class="mini-pills">
+                            <span class="mini-pill" onclick="setWarranty('Material de desgaste no tiene garantía.')">Material desgaste (Sin garantía)</span>
                             <span class="mini-pill" onclick="setWarranty('6 meses por defectos de fábrica')">6 meses</span>
                             <span class="mini-pill" onclick="setWarranty('1 año o 2.000 horas (lo primero que ocurra)')">1 año / 2000h</span>
                             <span class="mini-pill" onclick="setWarranty('3 meses sobre componentes principales')">3 meses</span>
-                            <span class="mini-pill" onclick="setWarranty('Sin garantía (Equipo usado en el estado en que se encuentra)')">Sin garantía</span>
                         </div>
                     </div>
 
@@ -733,23 +768,30 @@
                     </div>
 
                     <div class="fg">
-                        <label class="flabel">Observaciones / Obsequios en Cotización</label>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <label class="flabel"><span class="req">*</span> Descripción / Sede Despacho</label>
+                            <div class="mini-pills" id="sede-pills-bar" style="margin-top:0;">
+                                <span class="mini-pill active-sede" onclick="setSedeCortes('FERIAS', this)">FERIAS</span>
+                                <span class="mini-pill" onclick="setSedeCortes('FONTIBÓN', this)">FONTIBÓN</span>
+                                <span class="mini-pill" onclick="setSedeCortes('OCCIDENTE', this)">OCCIDENTE</span>
+                            </div>
+                        </div>
                         <textarea id="qt-description" class="finput" rows="2">Precios sujetos a disponibilidad de inventario salvo venta previa.</textarea>
                     </div>
 
-                    <!-- Cajón oculto de ajustes de Oportunidad (Ya se llenan solos) -->
+                    <!-- Cajón de Nombres de Oportunidad y Presupuesto (Se abre solo cuando eligen Cortes Cañón) -->
                     <div class="adv-toggle" onclick="toggleAdv('adv-opp-fields')" style="margin-top:2px;">
-                        <i class="fas fa-sliders-h"></i> Ajustes de Oportunidad (Nombres auto, Etapa, Intereses)
+                        <i class="fas fa-sliders-h"></i> Nombre de Oportunidad / Presupuesto y Ajustes
                     </div>
                     <div class="adv-box" id="adv-opp-fields">
                         <div style="display:flex; flex-direction:column; gap:10px;">
                             <div class="fg">
-                                <label class="flabel">Nombre Oportunidad</label>
-                                <input type="text" id="opp-name" class="finput">
+                                <label class="flabel" style="color:var(--primary);"><span class="req">*</span> Nombre de la Oportunidad</label>
+                                <input type="text" id="opp-name" class="finput" placeholder="Ej: LC 32187 KMZ669 ALMA CORTES" oninput="onManualOppNameInput(this.value)">
                             </div>
                             <div class="fg">
-                                <label class="flabel">Nombre Presupuesto</label>
-                                <input type="text" id="qt-name" class="finput">
+                                <label class="flabel" style="color:var(--primary);"><span class="req">*</span> Nombre del Presupuesto</label>
+                                <input type="text" id="qt-name" class="finput" placeholder="Ej: LC 32187 KMZ669 ALMA CORTES">
                             </div>
                             <div class="form-grid-2">
                                 <div class="fg">
@@ -787,9 +829,9 @@
                             <div class="fg">
                                 <label class="flabel">Líneas de Interés (Multipicklist)</label>
                                 <div class="chips-wrap" id="interest-chips">
-                                    <span class="chip-btn active" onclick="toggleChip(this)">Maquinaria usada</span>
+                                    <span class="chip-btn active" onclick="toggleChip(this)">Repuestos</span>
+                                    <span class="chip-btn" onclick="toggleChip(this)">Maquinaria usada</span>
                                     <span class="chip-btn" onclick="toggleChip(this)">Maquinaria nueva</span>
-                                    <span class="chip-btn" onclick="toggleChip(this)">Repuestos</span>
                                     <span class="chip-btn" onclick="toggleChip(this)">Volquetas</span>
                                     <span class="chip-btn" onclick="toggleChip(this)">Martillos Hidráulicos</span>
                                     <span class="chip-btn" onclick="toggleChip(this)">Brazos largos</span>
@@ -823,7 +865,6 @@
             <p id="final-success-msg" style="color:var(--muted); font-size:0.9rem; margin:8px 0 20px; line-height:1.4;"></p>
 
             <div style="display:flex; flex-direction:column; gap:10px;">
-                <!-- ACCIÓN PRINCIPAL: IR A LA OPORTUNIDAD / PRESUPUESTO EN SALESFORCE -->
                 <a id="lnk-opp-main" href="#" target="_blank" class="btn btn-primary" style="text-decoration:none; background:var(--sf-blue); box-shadow: 0 6px 18px rgba(0, 161, 224, 0.3);">
                     <i class="fas fa-external-link-alt"></i> IR A LA OPORTUNIDAD EN SALESFORCE
                 </a>
@@ -837,7 +878,6 @@
                     </a>
                 </div>
 
-                <!-- BOTÓN SECUNDARIO DE BACKUP -->
                 <a id="lnk-download-backup" href="#" target="_blank" class="btn btn-outline" style="margin-top:4px; width:100%; border-style:dashed; color:var(--muted); font-size:0.82rem;">
                     <i class="fas fa-file-pdf" style="color:var(--primary);"></i> Descargar Backup de Cotización (Opcional)
                 </a>
@@ -852,9 +892,15 @@
     <div id="toast-box"></div>
 
     <script>
+        const CORTES_CANON_PB_ID = '01sUO000001DFALYA4';
+
         let currentRecordType = 'Empresas';
         let selectedExistingAccount = null;
         let uploadedRutFile = null;
+        let aiBulkImageFile = null;
+        let isCortesCanonMode = false;
+        let currentSedeDespacho = 'FERIAS';
+        let userEditedOppNameManually = false;
         let quoteItems = [];
         let accSearchTimer = null;
         let prodSearchTimer = null;
@@ -868,14 +914,18 @@
             loadSalesforceNativeTemplates();
             checkUrlIncomingLead();
 
+            // Soporte inteligente para pegar imágenes con Ctrl+V:
+            // Si el foco está en el cuadro del Mini-Bot de Productos (o en general), carga la imagen en el lector de productos
             document.addEventListener('paste', (e) => {
-                if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
                 const items = (e.clipboardData || e.originalEvent.clipboardData).items;
                 for (let idx in items) {
                     if (items[idx].kind === 'file') {
                         const file = items[idx].getAsFile();
-                        processRutFileObject(file);
-                        break;
+                        if (file && file.type.startsWith('image/')) {
+                            setAiBulkImage(file);
+                            showToast("📸 Imagen cargada en el Mini-Bot de Productos");
+                            break;
+                        }
                     }
                 }
             });
@@ -887,7 +937,94 @@
             });
         });
 
-        // Si el asesor abrió el cotizador desde un chat de WhatsApp o desde la tabla de Leads, pre-carga los datos
+        // Detecta si la cuenta seleccionada o escrita es CORTES CAÑON INGENIEROS CIVILES SAS
+        function isAccountCortesCanon(nameStr) {
+            if (!nameStr) return false;
+            const norm = nameStr.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            return norm.includes('CORTES CANON') || norm.includes('CORTES CAÑON');
+        }
+
+        function applyCortesCanonProfile(enable) {
+            isCortesCanonMode = enable;
+            const banner = document.getElementById('cortes-canon-banner');
+
+            if (enable) {
+                banner.style.display = 'flex';
+
+                // 1. Forzar Lista de Precios: LISTA DE PRECIOS CORTES CAÑON (01sUO000001DFALYA4)
+                const pillCortes = document.getElementById('pill-cortes-canon');
+                selectVisualPricebook(CORTES_CANON_PB_ID, pillCortes);
+
+                // 2. Condiciones exclusivas de Cortes Cañón
+                document.getElementById('qt-delivery').value = 'Inmediata';
+                document.getElementById('qt-pay-method').value = 'Crédito';
+                document.getElementById('qt-pay-desc').value = 'CREDITO';
+                document.getElementById('qt-validity').value = '3';
+                recalcExpirationDate();
+                document.getElementById('qt-warranty').value = 'Material de desgaste no tiene garantía.';
+
+                // 3. Seleccionar plantilla de Repuestos por defecto
+                const tplSel = document.getElementById('qt-template');
+                for (let i = 0; i < tplSel.options.length; i++) {
+                    if ((tplSel.options[i].text || '').toLowerCase().includes('repuestos')) {
+                        tplSel.selectedIndex = i;
+                        break;
+                    }
+                }
+
+                // 4. Abrir automáticamente la ventana donde el ejecutivo pone el Nombre de Oportunidad y Presupuesto
+                const oppBox = document.getElementById('adv-opp-fields');
+                oppBox.style.display = 'block';
+
+                const execSel = document.getElementById('global-exec');
+                const initials = execSel.options[execSel.selectedIndex].dataset.init || 'LC';
+                const baseSuggested = `${initials} 32187 KMZ669 ALMA CORTES`;
+                document.getElementById('opp-name').value = baseSuggested;
+                document.getElementById('qt-name').value = baseSuggested;
+                syncCortesDescription();
+
+                // Enfocar y seleccionar el campo para que el ejecutivo lo edite de inmediato
+                setTimeout(() => {
+                    const oppInp = document.getElementById('opp-name');
+                    oppInp.focus();
+                    oppInp.select();
+                }, 150);
+
+                showToast("⚡ Reglas exclusivas de CORTES CAÑÓN activadas");
+            } else {
+                banner.style.display = 'none';
+            }
+        }
+
+        function onManualOppNameInput(val) {
+            userEditedOppNameManually = true;
+            document.getElementById('qt-name').value = val;
+            if (isCortesCanonMode) {
+                syncCortesDescription();
+            }
+        }
+
+        function setSedeCortes(sede, pillEl) {
+            currentSedeDespacho = sede;
+            document.querySelectorAll('#sede-pills-bar .mini-pill').forEach(p => p.classList.remove('active-sede'));
+            if (pillEl) pillEl.classList.add('active-sede');
+
+            if (isCortesCanonMode) {
+                syncCortesDescription();
+            } else {
+                const descEl = document.getElementById('qt-description');
+                const lines = descEl.value.split('\n').filter(l => !['FERIAS', 'FONTIBÓN', 'FONTIBON', 'OCCIDENTE'].includes(l.trim().toUpperCase()));
+                lines.push(sede);
+                descEl.value = lines.join('\n');
+            }
+            showToast(`📍 Sede ajustada: ${sede}`);
+        }
+
+        function syncCortesDescription() {
+            const oppTitle = document.getElementById('opp-name').value.trim();
+            document.getElementById('qt-description').value = `${oppTitle}\n${currentSedeDespacho}`;
+        }
+
         async function checkUrlIncomingLead() {
             const params = new URLSearchParams(window.location.search);
             const phone = params.get('phone');
@@ -984,6 +1121,9 @@
         function syncAccountNames() {
             const mainName = document.getElementById('acc-name').value;
             document.getElementById('acc-emp-per').value = mainName;
+            if (isAccountCortesCanon(mainName) && !isCortesCanonMode) {
+                applyCortesCanonProfile(true);
+            }
             autoBuildOpportunityName();
         }
 
@@ -1076,6 +1216,7 @@
 
         function selectExistingAccount(acc) {
             selectedExistingAccount = acc;
+            userEditedOppNameManually = false;
             document.getElementById('acc-search-results').style.display = 'none';
             document.getElementById('new-account-drawer').style.display = 'none';
             document.getElementById('live-acc-search').value = '';
@@ -1085,13 +1226,22 @@
             document.getElementById('banner-acc-name').innerText = acc.Name;
             document.getElementById('banner-acc-meta').innerText = `NIT/CC: ${acc.N_mero_de_NIT__c || acc.N_mero_de_C_dula__c || 'N/A'} • Tel: ${acc.Phone || 'N/A'} • ${acc.Ubicaci_n__c || ''}`;
             
-            autoBuildOpportunityName();
+            // Verificar si el cliente elegido es CORTES CAÑON INGENIEROS CIVILES SAS
+            if (isAccountCortesCanon(acc.Name)) {
+                applyCortesCanonProfile(true);
+            } else {
+                applyCortesCanonProfile(false);
+                autoBuildOpportunityName();
+            }
+
             searchContactsLive('');
             showToast(`✅ Cliente "${acc.Name}" seleccionado`);
         }
 
         function clearSelectedAccount() {
             selectedExistingAccount = null;
+            userEditedOppNameManually = false;
+            applyCortesCanonProfile(false);
             document.getElementById('existing-acc-banner').style.display = 'none';
             autoBuildOpportunityName();
         }
@@ -1106,7 +1256,7 @@
             uploadedRutFile = file;
             const statusTxt = document.getElementById('rut-status-text');
             statusTxt.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Extrayendo datos del RUT con IA...`;
-            showToast("🤖 Leyendo documento con Gemini IA...");
+            showToast("🤖 Leyendo documento RUT con Gemini IA...");
 
             const fd = new FormData();
             fd.append('file', uploadedRutFile);
@@ -1141,6 +1291,107 @@
             }
         }
 
+        // --- 🤖 MINI-BOT LECTOR DE REFERENCIAS E INSTRUCCIONES CAÓTICAS ---
+        function handleAiBulkImageSelect(input) {
+            if (input.files && input.files[0]) {
+                setAiBulkImage(input.files[0]);
+            }
+        }
+
+        function setAiBulkImage(file) {
+            aiBulkImageFile = file;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                document.getElementById('ai-bulk-img-tag').src = ev.target.result;
+                document.getElementById('ai-bulk-img-preview').style.display = 'flex';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearAiBulkImage() {
+            aiBulkImageFile = null;
+            document.getElementById('ai-bulk-file').value = '';
+            document.getElementById('ai-bulk-img-preview').style.display = 'none';
+        }
+
+        async function procesarListaConMiniBot() {
+            const text = document.getElementById('ai-bulk-text').value.trim();
+            if (!text && !aiBulkImageFile) {
+                return showToast("⚠️ Escribe las referencias/instrucciones o pega una imagen (Ctrl+V) primero.");
+            }
+
+            const btn = document.getElementById('btn-run-ai-bulk');
+            const origHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analizando y cruzando con Salesforce...';
+
+            const pbId = isCortesCanonMode ? CORTES_CANON_PB_ID : document.getElementById('opp-pricebook').value;
+            const curr = document.getElementById('opp-currency').value;
+
+            const fd = new FormData();
+            fd.append('text', text);
+            fd.append('pricebookId', pbId);
+            fd.append('currency', curr);
+            if (aiBulkImageFile) {
+                fd.append('image', aiBulkImageFile);
+            }
+
+            try {
+                const res = await fetch('/api/cotizador/ai-bulk-products', { method: 'POST', body: fd });
+                const data = await res.json();
+
+                if (res.ok && data.success) {
+                    let addedCount = 0;
+                    (data.matched || []).forEach(prod => {
+                        addProductToQuote(prod, prod.quantity, true);
+                        addedCount++;
+                    });
+
+                    // Mostrar si hubo referencias con varias opciones o no encontradas
+                    const disBox = document.getElementById('ai-bulk-disambiguation');
+                    let disHtml = '';
+
+                    if (data.ambiguous && data.ambiguous.length > 0) {
+                        disHtml += `<div style="font-weight:800; color:#B45309; margin-bottom:6px;"><i class="fas fa-question-circle"></i> Elige la opción exacta para estas referencias:</div>`;
+                        data.ambiguous.forEach((amb, aIdx) => {
+                            disHtml += `<div id="amb-row-${aIdx}" style="margin-bottom:8px; padding-bottom:6px; border-bottom:1px dashed #FDE68A;">
+                                <div style="font-weight:700; margin-bottom:4px;">Buscado: "${amb.term}" (Cant: ${amb.quantity})</div>
+                                <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                                    ${amb.options.map(opt => `
+                                        <button type="button" class="btn btn-outline" style="padding:4px 8px; font-size:0.74rem;" onclick='addProductToQuote(${JSON.stringify(opt).replace(/'/g, "&#39;")}, ${amb.quantity}, false); document.getElementById("amb-row-${aIdx}").remove();'>
+                                            + [${opt.pricebookName}] ${opt.name} (${opt.code}) - ${formatMoney(opt.unitPrice)}
+                                        </button>
+                                    `).join('')}
+                                </div>
+                            </div>`;
+                        });
+                    }
+
+                    if (data.notFound && data.notFound.length > 0) {
+                        disHtml += `<div style="color:var(--danger); font-weight:700; margin-top:4px;">
+                            ⚠️ No encontrados como activos en SF: ${data.notFound.map(n => `${n.term} (x${n.quantity})`).join(', ')}
+                        </div>`;
+                    }
+
+                    if (disHtml) {
+                        disBox.innerHTML = disHtml;
+                        disBox.style.display = 'block';
+                    } else {
+                        disBox.style.display = 'none';
+                    }
+
+                    showToast(`🤖 Mini-Bot agregó ${addedCount} referencia(s) al carrito`);
+                } else {
+                    alert("❌ Error en el Mini-Bot:\n" + (data.message || "No se pudo procesar."));
+                }
+            } catch (e) {
+                alert("❌ Error de red procesando lista con IA.");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            }
+        }
+
         function searchParentAccount(val) {
             const box = document.getElementById('parent-acc-results');
             if (!val || val.length < 2) { box.style.display = 'none'; return; }
@@ -1161,8 +1412,20 @@
 
         // --- SELECCIÓN VISUAL DE CATEGORÍA / LISTA DE PRECIOS ---
         function selectVisualPricebook(pbId, btnEl) {
+            // Si el cliente activo es Cortes Cañón y quieren cambiar de lista, avisar que Cortes Cañón exige su lista propia
+            if (isCortesCanonMode && pbId !== CORTES_CANON_PB_ID) {
+                if (!confirm("⚠️ El cliente actual es CORTES CAÑÓN y tiene asignada su lista de precios exclusiva. ¿Seguro que deseas cambiar a otra lista de precios?")) {
+                    return;
+                }
+            }
+
             document.querySelectorAll('#visual-pb-pills .cat-pill').forEach(b => b.classList.remove('active'));
-            if (btnEl) btnEl.classList.add('active');
+            if (btnEl) {
+                btnEl.classList.add('active');
+            } else {
+                const foundBtn = document.querySelector(`#visual-pb-pills .cat-pill[data-pb="${pbId}"]`);
+                if (foundBtn) foundBtn.classList.add('active');
+            }
 
             const sel = document.getElementById('opp-pricebook');
             sel.value = pbId;
@@ -1173,7 +1436,7 @@
         function onPricebookChange() {
             const sel = document.getElementById('opp-pricebook');
             const opt = sel.options[sel.selectedIndex];
-            const days = Number(opt.dataset.days || 15);
+            const days = isCortesCanonMode ? 3 : Number(opt.dataset.days || 15);
             const cat = opt.dataset.cat || 'Otros';
             const tplWanted = (opt.dataset.tpl || '').toLowerCase();
 
@@ -1208,6 +1471,10 @@
         function onPaymentMethodChange() {
             const method = document.getElementById('qt-pay-method').value;
             const descInput = document.getElementById('qt-pay-desc');
+            if (isCortesCanonMode && method === 'Crédito') {
+                descInput.value = 'CREDITO';
+                return;
+            }
             const templates = {
                 'Contado': '100% Pago de contado previo al despacho / entrega de mercancía.',
                 'Crédito': 'Crédito sujeto a estudio y aprobación de cupo por Importadora Casa Colombia.',
@@ -1224,6 +1491,8 @@
         }
 
         function autoBuildOpportunityName() {
+            if (isCortesCanonMode || userEditedOppNameManually) return;
+
             const execSel = document.getElementById('global-exec');
             const initials = execSel.options[execSel.selectedIndex].dataset.init || 'ICC';
             const clientName = selectedExistingAccount ? selectedExistingAccount.Name : (document.getElementById('acc-name').value || 'CLIENTE');
@@ -1234,11 +1503,11 @@
             document.getElementById('qt-name').value = autoTitle;
         }
 
-        // --- BUSCADOR DE PRODUCTOS ---
+        // --- BUSCADOR INDIVIDUAL DE PRODUCTOS ---
         function debounceProductSearch(val) {
             clearTimeout(prodSearchTimer);
             const box = document.getElementById('prod-search-results');
-            const pbId = document.getElementById('opp-pricebook').value;
+            const pbId = isCortesCanonMode ? CORTES_CANON_PB_ID : document.getElementById('opp-pricebook').value;
             const curr = document.getElementById('opp-currency').value;
             const includeInactive = document.getElementById('chk-include-inactive').checked;
 
@@ -1266,7 +1535,7 @@
                                 unitPrice: Number(p.UnitPrice || 0)
                             };
                             return `
-                                <div class="dropdown-item" onclick='addProductToQuote(${JSON.stringify(itemObj).replace(/'/g, "&#39;")})'>
+                                <div class="dropdown-item" onclick='addProductToQuote(${JSON.stringify(itemObj).replace(/'/g, "&#39;")}, 1, false)'>
                                     <div style="flex:1;">
                                         <div style="font-weight:700; color:var(--text);">
                                             <span class="pb-badge">${pbName}</span>${pName}
@@ -1293,15 +1562,21 @@
             }, 250);
         }
 
-        function addProductToQuote(prod) {
+        function addProductToQuote(prod, customQty = 1, silent = false) {
             document.getElementById('prod-search-results').style.display = 'none';
             document.getElementById('prod-search-input').value = '';
 
+            const qtyToAdd = Math.max(1, Number(customQty) || 1);
+
             if (quoteItems.length > 0 && quoteItems[0].pricebook2Id !== prod.pricebook2Id) {
-                if (!confirm(`⚠️ El carrito actual usa la lista "${quoteItems[0].pricebookName}" y este ítem pertenece a "${prod.pricebookName}".\n\n¿Deseas cambiar la cotización a "${prod.pricebookName}"?`)) {
+                if (!silent) {
+                    if (!confirm(`⚠️ El carrito actual usa la lista "${quoteItems[0].pricebookName}" y este ítem pertenece a "${prod.pricebookName}".\n\n¿Deseas cambiar la cotización a "${prod.pricebookName}"?`)) {
+                        return;
+                    }
+                    quoteItems = [];
+                } else {
                     return;
                 }
-                quoteItems = [];
             }
 
             const pbSel = document.getElementById('opp-pricebook');
@@ -1315,18 +1590,18 @@
 
             const existing = quoteItems.find(i => i.pricebookEntryId === prod.pricebookEntryId);
             if (existing) {
-                existing.quantity += 1;
+                existing.quantity += qtyToAdd;
             } else {
                 quoteItems.push({
                     ...prod,
-                    quantity: 1,
+                    quantity: qtyToAdd,
                     discountPct: 0,
                     ivaPct: 19
                 });
             }
             autoBuildOpportunityName();
             renderQuoteTable();
-            showToast(`🛒 Añadido: ${prod.name}`);
+            if (!silent) showToast(`🛒 Añadido: ${prod.name}`);
         }
 
         function stepQty(idx, delta) {
@@ -1358,7 +1633,7 @@
                     <tr>
                         <td colspan="11" style="text-align:center; padding: 32px; color: var(--muted);">
                             <i class="fas fa-cart-plus" style="font-size:1.6rem; opacity:0.4; display:block; margin-bottom:6px;"></i>
-                            Busca y selecciona arriba los equipos o repuestos para armar la cotización.
+                            Usa el Mini-Bot de arriba para pegar varias referencias de golpe o el buscador individual.
                         </td>
                     </tr>`;
                 document.getElementById('rc-bruto').innerText = '$ 0';
@@ -1477,6 +1752,7 @@
 
             const interesesElegidos = getSelectedInterests();
             const selectedTplValue = document.getElementById('qt-template').value;
+            const forcedPricebook = isCortesCanonMode ? CORTES_CANON_PB_ID : document.getElementById('opp-pricebook').value;
 
             const payload = {
                 ownerId: document.getElementById('global-exec').value,
@@ -1501,7 +1777,7 @@
                 },
                 opportunity: {
                     name: document.getElementById('opp-name').value.trim() || `COT - ${accName}`,
-                    pricebookId: document.getElementById('opp-pricebook').value,
+                    pricebookId: forcedPricebook,
                     stage: document.getElementById('opp-stage').value,
                     origin: document.getElementById('opp-origin').value,
                     closeDate: document.getElementById('opp-closedate').value,
@@ -1547,7 +1823,6 @@
                     document.getElementById('lnk-download-backup').href = json.data.links.downloadPdfApi;
 
                     document.getElementById('final-success-modal').style.display = 'flex';
-                    // Lleva directamente a la Oportunidad en Salesforce como antes
                     window.open(json.data.links.opportunity, '_blank');
                 } else {
                     alert("❌ Salesforce rechazó un dato:\n" + (json.message || "Verifica los campos obligatorios."));
