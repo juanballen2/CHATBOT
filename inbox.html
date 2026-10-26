@@ -299,15 +299,19 @@
                 </select>
                 <input type="text" id="crm-specific-interest" class="crm-input" placeholder="Producto Específico">
                 <select id="crm-executive" class="crm-input">
-                    <option value="Pendiente">Ejecutivo: Pendiente</option>
-                    <option value="005Dn000007mWFhIAM">Luz</option>
-                    <option value="005UO000000PdB3YAK">Felipe</option>
-                    <option value="005Dn000005u1yTIAQ">Mario</option>
-                    <option value="005Dn000005u27NIAQ">Marcos</option>
-                    <option value="005Dn000005u22vIAA">Fabio</option>
-                    <option value="005Dn000005u2BkIAI">Diana</option>
-                    <option value="005Dn000007H1EUIA0">Marketing</option>
-                    <option value="005Dn000003Z5vbIAC">Oscar</option>
+                    <option value="Pendiente">Pendiente (Sin Asignar)</option>
+<option value="005Dn000007mWFhIAM">Luz</option>
+<option value="005UO000000PdB3YAK">Felipe</option>
+<option value="005Dn000005u1yTIAQ">Mario</option>
+<option value="005Dn000005u27NIAQ">Marcos</option>
+<option value="005Dn000005u22vIAA">Fabio</option>
+<option value="005Dn000005u2BkIAI">Diana</option>
+<option value="005Dn000007H1EUIA0">Marketing</option>
+<option value="005Dn000003Z5vbIAC">Juan Manuel</option>
+<option value="005Dn000007H1FDIA0">Andres</option>
+<option value="005Dn00000145LfIAI">Sebastian</option>
+<option value="005UO000001biHdYAI">Nelson</option>
+<option value="005Dn000007IKydIAG">Lorena</option>
                 </select>
                 <div style="display:flex; gap:10px; margin-top:10px;">
                     <button class="btn-small btn-green" style="flex:1;" onclick="saveLeadManual()"><i class="fas fa-save"></i> Guardar</button>
@@ -355,15 +359,19 @@
         const searchInput = document.getElementById('chat-search');
 
         const executivesMap = {
-            "005Dn000007mWFhIAM": "Luz",
-            "005UO000000PdB3YAK": "Felipe",
-            "005Dn000005u1yTIAQ": "Mario",
-            "005Dn000005u27NIAQ": "Marcos",
-            "005Dn000005u22vIAA": "Fabio",
-            "005Dn000005u2BkIAI": "Diana",
-            "005Dn000007H1EUIA0": "Marketing",
-            "005Dn000003Z5vbIAC": "Oscar",
-            "Pendiente": "Pendiente (Sin Asignar)"
+    "005Dn000007mWFhIAM": "Luz",
+    "005UO000000PdB3YAK": "Felipe",
+    "005Dn000005u1yTIAQ": "Mario",
+    "005Dn000005u27NIAQ": "Marcos",
+    "005Dn000005u22vIAA": "Fabio",
+    "005Dn000005u2BkIAI": "Diana",
+    "005Dn000007H1EUIA0": "Marketing",
+    "005Dn000003Z5vbIAC": "Juan Manuel",
+    "005Dn000007H1FDIA0": "Andres",
+    "005Dn00000145LfIAI": "Sebastian",
+    "005UO000001biHdYAI": "Nelson",
+    "005Dn000007IKydIAG": "Lorena",
+    "Pendiente": "Pendiente (Sin Asignar)"
         };
 
         document.addEventListener('DOMContentLoaded', () => {
