@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ICCBOT - Cotizador Ejecutivo Pro</title>
     <link rel="icon" href="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" type="image/svg+xml">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #E9511D;
@@ -14,74 +14,205 @@
             --primary-soft: #FFF4F0;
             --sf-blue: #00A1E0;
             --sf-blue-soft: #EBF8FF;
-            --bg: #F1F5F9;
+            --bg: #F4F6F9;
             --card: #FFFFFF;
             --border: #E2E8F0;
+            --border-focus: #CBD5E1;
             --text: #0F172A;
             --muted: #64748B;
             --success: #10B981;
+            --success-soft: #ECFDF5;
             --danger: #EF4444;
+            --danger-soft: #FEF2F2;
             --warning: #F59E0B;
             --purple: #7C3AED;
-            --radius: 14px;
+            --purple-soft: #F5F3FF;
+            --radius: 16px;
+            --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.04);
+            --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.06);
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-        body { background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 50px; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 60px; -webkit-font-smoothing: antialiased; }
 
+        /* ==================== TOPBAR ==================== */
         .topbar {
             background: #0F172A;
             color: #fff;
-            padding: 12px 28px;
+            padding: 12px 32px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             position: sticky;
             top: 0;
             z-index: 100;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            border-bottom: 3px solid var(--primary);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
         }
-        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand { display: flex; align-items: center; gap: 14px; }
         .brand img { width: 38px; height: 38px; border-radius: 50%; background: #fff; padding: 2px; }
-        .brand-title { font-size: 1.1rem; font-weight: 800; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px; }
-        .badge-pro { background: var(--primary); color: #fff; font-size: 0.7rem; padding: 3px 9px; border-radius: 99px; font-weight: 700; }
+        .brand-title { font-size: 1.05rem; font-weight: 800; letter-spacing: -0.3px; display: flex; align-items: center; gap: 10px; }
+        .badge-pro { background: rgba(233, 81, 29, 0.2); color: #FF7A4D; border: 1px solid rgba(233, 81, 29, 0.4); font-size: 0.68rem; padding: 3px 10px; border-radius: 99px; font-weight: 800; letter-spacing: 0.4px; }
 
         .topbar-right { display: flex; align-items: center; gap: 14px; }
         .exec-pill {
-            display: flex; align-items: center; gap: 8px;
-            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
-            padding: 7px 14px; border-radius: 99px;
+            display: flex; align-items: center; gap: 10px;
+            background: rgba(255,255,255,0.08); border: 1.5px solid rgba(255,255,255,0.18);
+            padding: 6px 16px; border-radius: 99px; transition: 0.2s;
         }
-        .exec-pill i { color: var(--primary); }
+        .exec-pill.confirmed {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: #10B981;
+        }
+        .exec-pill i { color: var(--primary); font-size: 0.95rem; }
+        .exec-pill.confirmed i { color: #34D399; }
         .exec-pill select {
-            background: transparent; color: #fff; border: none; font-weight: 700;
+            background: transparent; color: #fff; border: none; font-weight: 800;
             font-size: 0.88rem; outline: none; cursor: pointer;
         }
-        .exec-pill select option { color: #0F172A; }
+        .exec-pill select option { color: #0F172A; font-weight: 600; }
 
-        .workspace {
-            max-width: 1400px;
-            margin: 24px auto;
-            padding: 0 20px;
+        /* ==================== SELECTOR HERO DE EJECUTIVO (ANTI-ERRORES) ==================== */
+        .exec-hero-wrap {
+            max-width: 1440px;
+            margin: 20px auto 0;
+            padding: 0 24px;
+        }
+        .exec-hero-card {
+            background: #FFFFFF;
+            border: 2px solid #FCA5A5;
+            border-radius: var(--radius);
+            padding: 16px 22px;
+            box-shadow: 0 8px 25px rgba(239, 68, 68, 0.08);
+            transition: all 0.25s ease;
+        }
+        .exec-hero-card.confirmed {
+            border-color: #CBD5E1;
+            box-shadow: var(--shadow-sm);
+            padding: 12px 22px;
+            background: #F8FAFC;
+        }
+        .exec-hero-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+        .exec-hero-card.confirmed .exec-hero-top {
+            margin-bottom: 10px;
+        }
+        .exec-hero-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: var(--text);
+        }
+        .exec-alert-badge {
+            background: var(--danger-soft);
+            color: var(--danger);
+            border: 1px solid #FECACA;
+            font-size: 0.75rem;
+            font-weight: 800;
+            padding: 4px 12px;
+            border-radius: 99px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            animation: pulseAlert 2s infinite;
+        }
+        @keyframes pulseAlert {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+        }
+        .exec-hero-card.confirmed .exec-alert-badge {
+            background: var(--success-soft);
+            color: #047857;
+            border-color: #A7F3D0;
+            animation: none;
+        }
+
+        .exec-grid {
             display: grid;
-            grid-template-columns: 1fr 400px;
-            gap: 24px;
+            grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+            gap: 8px;
+        }
+        .exec-btn-card {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1.5px solid var(--border);
+            background: #FFFFFF;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            user-select: none;
+        }
+        .exec-btn-card:hover {
+            border-color: var(--primary);
+            background: var(--primary-soft);
+            transform: translateY(-1px);
+        }
+        .exec-btn-card.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #FFFFFF;
+            box-shadow: 0 4px 12px rgba(233, 81, 29, 0.3);
+        }
+        .exec-initials {
+            width: 28px;
+            height: 28px;
+            border-radius: 7px;
+            background: #F1F5F9;
+            color: var(--text);
+            font-size: 0.74rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .exec-btn-card.active .exec-initials {
+            background: rgba(255,255,255,0.22);
+            color: #FFFFFF;
+        }
+        .exec-label-name {
+            font-size: 0.8rem;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* ==================== WORKSPACE EN 2 COLUMNAS ==================== */
+        .workspace {
+            max-width: 1440px;
+            margin: 18px auto 0;
+            padding: 0 24px;
+            display: grid;
+            grid-template-columns: 1fr 410px;
+            gap: 22px;
             align-items: start;
         }
-        @media (max-width: 1100px) { .workspace { grid-template-columns: 1fr; } }
+        @media (max-width: 1120px) { .workspace { grid-template-columns: 1fr; } }
 
         .main-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-        .side-col { position: sticky; top: 80px; display: flex; flex-direction: column; gap: 16px; }
+        .side-col { position: sticky; top: 76px; display: flex; flex-direction: column; gap: 16px; }
 
+        /* ==================== TARJETAS GENERALES ==================== */
         .card {
             background: var(--card);
             border-radius: var(--radius);
             border: 1px solid var(--border);
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
+            box-shadow: var(--shadow-sm);
             overflow: visible;
         }
         .card-header {
-            padding: 16px 22px;
+            padding: 16px 24px;
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
@@ -89,29 +220,30 @@
             flex-wrap: wrap;
             gap: 10px;
         }
-        .card-title { display: flex; align-items: center; gap: 10px; font-size: 1rem; font-weight: 800; color: var(--text); }
+        .card-title { display: flex; align-items: center; gap: 10px; font-size: 0.96rem; font-weight: 800; color: var(--text); letter-spacing: -0.2px; }
         .step-num {
             width: 26px; height: 26px; border-radius: 8px; background: var(--primary);
             color: #fff; display: flex; align-items: center; justify-content: center;
-            font-size: 0.82rem; font-weight: 800;
+            font-size: 0.8rem; font-weight: 800;
         }
-        .card-body { padding: 20px 22px; }
+        .card-body { padding: 20px 24px; }
 
-        .client-entry-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; }
+        /* ==================== PASO 1: CLIENTE ==================== */
+        .client-entry-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
         @media (max-width: 768px) { .client-entry-grid { grid-template-columns: 1fr; } }
 
         .smart-search {
-            position: relative; background: #F8FAFC; border: 2px solid var(--border);
-            border-radius: 12px; padding: 12px 16px; transition: 0.2s;
+            position: relative; background: #F8FAFC; border: 1.5px solid var(--border);
+            border-radius: 12px; padding: 11px 16px; transition: 0.2s;
         }
         .smart-search:focus-within { border-color: var(--sf-blue); background: #fff; box-shadow: 0 0 0 4px rgba(0, 161, 224, 0.1); }
-        .smart-search-lbl { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: var(--sf-blue); margin-bottom: 4px; display: flex; justify-content: space-between; }
+        .smart-search-lbl { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: var(--sf-blue); margin-bottom: 4px; display: flex; justify-content: space-between; letter-spacing: 0.3px; }
         .smart-search-row { display: flex; align-items: center; gap: 10px; }
-        .smart-search-row input { width: 100%; border: none; background: transparent; font-size: 0.95rem; font-weight: 600; color: var(--text); outline: none; }
+        .smart-search-row input { width: 100%; border: none; background: transparent; font-size: 0.92rem; font-weight: 600; color: var(--text); outline: none; }
 
         .rut-smart-box {
-            border: 2px dashed #CBD5E1; background: #F8FAFC; border-radius: 12px;
-            padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
+            border: 1.5px dashed #CBD5E1; background: #F8FAFC; border-radius: 12px;
+            padding: 11px 16px; display: flex; align-items: center; justify-content: space-between;
             gap: 12px; cursor: pointer; transition: 0.2s;
         }
         .rut-smart-box:hover { border-color: var(--primary); background: var(--primary-soft); }
@@ -119,30 +251,30 @@
         .dropdown-results {
             position: absolute; top: calc(100% + 6px); left: 0; right: 0;
             background: #fff; border: 1px solid var(--border); border-radius: 12px;
-            box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16); z-index: 95;
+            box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14); z-index: 95;
             max-height: 320px; overflow-y: auto; display: none;
         }
         .dropdown-item {
-            padding: 12px 16px; border-bottom: 1px solid var(--border);
+            padding: 11px 16px; border-bottom: 1px solid var(--border);
             cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 12px; transition: 0.15s;
         }
         .dropdown-item:hover { background: var(--primary-soft); }
 
         .client-selected-card {
-            display: none; background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
-            border: 1px solid #34D399; border-radius: 12px; padding: 16px 20px;
+            display: none; background: var(--success-soft);
+            border: 1.5px solid #34D399; border-radius: 12px; padding: 14px 18px;
             margin-top: 14px; align-items: center; justify-content: space-between; gap: 15px;
         }
         .client-avatar {
-            width: 46px; height: 46px; border-radius: 12px; background: #10B981;
-            color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0;
+            width: 42px; height: 42px; border-radius: 10px; background: var(--success);
+            color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.15rem; flex-shrink: 0;
         }
 
         /* BANNER ESPECIAL CORTES CAÑÓN */
         .cortes-banner {
             display: none; margin-top: 12px; padding: 12px 16px; border-radius: 10px;
-            background: #FEF3C7; border: 2px solid #F59E0B; color: #92400E;
-            font-size: 0.82rem; font-weight: 600; align-items: center; justify-content: space-between; gap: 10px;
+            background: #FEF3C7; border: 1.5px solid #F59E0B; color: #92400E;
+            font-size: 0.8rem; font-weight: 600; align-items: center; justify-content: space-between; gap: 10px;
         }
 
         #new-account-drawer {
@@ -155,121 +287,155 @@
         .form-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
         @media (max-width: 768px) { .form-grid-3, .form-grid-2 { grid-template-columns: 1fr; } }
 
-        .fg { display: flex; flex-direction: column; gap: 4px; position: relative; }
-        .flabel { font-size: 0.74rem; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+        .fg { display: flex; flex-direction: column; gap: 5px; position: relative; }
+        .flabel { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
         .req { color: var(--danger); }
         .finput {
-            padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
-            font-size: 0.9rem; color: var(--text); background: #fff; font-weight: 500; outline: none; transition: 0.15s; width: 100%;
+            padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 9px;
+            font-size: 0.88rem; color: var(--text); background: #fff; font-weight: 600; outline: none; transition: 0.15s; width: 100%;
         }
-        .finput:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(233, 81, 29, 0.12); }
+        .finput:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(233, 81, 29, 0.1); }
 
         .adv-toggle {
-            display: inline-flex; align-items: center; gap: 6px; margin-top: 14px;
-            font-size: 0.8rem; font-weight: 700; color: var(--muted); cursor: pointer;
-            user-select: none; padding: 6px 10px; border-radius: 6px; background: #F8FAFC; border: 1px solid var(--border);
+            display: inline-flex; align-items: center; gap: 6px; margin-top: 12px;
+            font-size: 0.78rem; font-weight: 700; color: var(--muted); cursor: pointer;
+            user-select: none; padding: 6px 12px; border-radius: 8px; background: #F8FAFC; border: 1px solid var(--border); transition: 0.15s;
         }
-        .adv-toggle:hover { color: var(--primary); border-color: var(--primary); }
-        .adv-box { display: none; margin-top: 12px; padding: 14px; background: #F8FAFC; border-radius: 10px; border: 1px solid var(--border); }
+        .adv-toggle:hover { color: var(--primary); border-color: var(--primary); background: var(--primary-soft); }
+        .adv-box { display: none; margin-top: 10px; padding: 14px; background: #F8FAFC; border-radius: 10px; border: 1px solid var(--border); }
+
+        /* ==================== PASO 2: PRODUCTOS Y MINI-BOT ==================== */
+        .cat-Bar { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 14px; scrollbar-width: thin; }
+        .cat-pill {
+            padding: 7px 13px; border-radius: 99px; border: 1.5px solid var(--border);
+            background: #F8FAFC; color: var(--muted); font-size: 0.78rem; font-weight: 700;
+            cursor: pointer; white-space: nowrap; transition: 0.15s; display: flex; align-items: center; gap: 6px;
+        }
+        .cat-pill:hover { border-color: var(--primary); color: var(--primary); background: #fff; }
+        .cat-pill.active { background: var(--text); color: #fff; border-color: var(--text); box-shadow: 0 3px 10px rgba(15, 23, 42, 0.15); }
+
+        .search-tools-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
 
         /* MINI-BOT IA LECTOR DE LISTAS CAÓTICAS */
         .ai-bulk-box {
-            background: linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%);
-            border: 2px solid #C4B5FD;
+            background: var(--purple-soft);
+            border: 1.5px solid #DDD6FE;
             border-radius: 12px;
-            padding: 14px 16px;
-            margin-bottom: 16px;
+            padding: 12px 16px;
         }
         .ai-bulk-header {
             display: flex; justify-content: space-between; align-items: center;
             margin-bottom: 8px; flex-wrap: wrap; gap: 8px;
         }
-        .ai-bulk-title { font-size: 0.82rem; font-weight: 800; color: #5B21B6; display: flex; align-items: center; gap: 6px; text-transform: uppercase; }
+        .ai-bulk-title { font-size: 0.78rem; font-weight: 800; color: #5B21B6; display: flex; align-items: center; gap: 6px; text-transform: uppercase; letter-spacing: 0.3px; }
         .ai-bulk-textarea {
-            width: 100%; min-height: 68px; padding: 10px 12px; border-radius: 8px;
-            border: 1px solid #C4B5FD; background: #fff; font-size: 0.88rem; color: var(--text);
+            width: 100%; min-height: 56px; padding: 9px 12px; border-radius: 8px;
+            border: 1.5px solid #DDD6FE; background: #fff; font-size: 0.85rem; color: var(--text);
             resize: vertical; outline: none; font-weight: 500;
         }
-        .ai-bulk-textarea:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15); }
+        .ai-bulk-textarea:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12); }
         .ai-img-preview {
             display: none; align-items: center; gap: 10px; margin-top: 8px;
             background: #fff; padding: 6px 10px; border-radius: 8px; border: 1px solid #DDD6FE; font-size: 0.78rem;
         }
-        .ai-img-preview img { width: 42px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; }
+        .ai-img-preview img { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; }
 
         .ai-disambiguation {
             display: none; margin-top: 10px; padding: 12px; background: #fff;
             border-radius: 8px; border: 1px solid #FCD34D; font-size: 0.82rem;
         }
 
-        .cat-Bar { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 12px; }
-        .cat-pill {
-            padding: 7px 14px; border-radius: 99px; border: 1px solid var(--border);
-            background: #F8FAFC; color: var(--muted); font-size: 0.8rem; font-weight: 700;
-            cursor: pointer; white-space: nowrap; transition: 0.15s; display: flex; align-items: center; gap: 6px;
-        }
-        .cat-pill:hover { border-color: var(--primary); color: var(--primary); }
-        .cat-pill.active { background: var(--primary); color: #fff; border-color: var(--primary); box-shadow: 0 4px 10px rgba(233, 81, 29, 0.25); }
-
         .pb-badge {
-            display: inline-block; padding: 2px 7px; border-radius: 5px; font-size: 0.68rem; font-weight: 800;
+            display: inline-block; padding: 2px 7px; border-radius: 5px; font-size: 0.66rem; font-weight: 800;
             background: var(--sf-blue-soft); color: #0284C7; border: 1px solid #BAE6FD; margin-right: 6px;
         }
 
-        .table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--border); border-radius: 10px; }
-        .pos-table { width: 100%; border-collapse: collapse; min-width: 820px; font-size: 0.84rem; }
+        /* TABLA CALCULADORA POS */
+        .table-wrap { overflow-x: auto; margin-top: 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
+        .pos-table { width: 100%; border-collapse: collapse; min-width: 820px; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
         .pos-table th {
-            background: #1E293B; color: #fff; padding: 10px; text-align: right;
-            font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.3px;
+            background: #F8FAFC; color: var(--muted); padding: 11px 10px; text-align: right;
+            font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px;
+            border-bottom: 2px solid var(--border);
         }
-        .pos-table th:first-child, .pos-table td:first-child { text-align: left; }
-        .pos-table td { padding: 10px; border-bottom: 1px solid var(--border); text-align: right; vertical-align: middle; }
+        .pos-table th:first-child, .pos-table td:first-child { text-align: left; padding-left: 14px; }
+        .pos-table td { padding: 10px; border-bottom: 1px solid #F1F5F9; text-align: right; vertical-align: middle; }
+        .pos-table tr:last-child td { border-bottom: none; }
         .pos-table tr:hover { background: #F8FAFC; }
 
-        .qty-stepper { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; background: #fff; }
-        .qty-btn { width: 26px; height: 28px; border: none; background: #F1F5F9; cursor: pointer; font-weight: 800; color: var(--text); }
+        .qty-stepper { display: inline-flex; align-items: center; border: 1.5px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff; }
+        .qty-btn { width: 26px; height: 28px; border: none; background: #F8FAFC; cursor: pointer; font-weight: 800; color: var(--text); transition: 0.15s; }
         .qty-btn:hover { background: var(--primary); color: #fff; }
-        .qty-inp { width: 46px; height: 28px; border: none; text-align: center; font-weight: 700; font-size: 0.85rem; outline: none; }
+        .qty-inp { width: 42px; height: 28px; border: none; text-align: center; font-weight: 700; font-size: 0.84rem; outline: none; }
 
-        .tbl-num { width: 105px; padding: 6px 8px; text-align: right; border: 1px solid var(--border); border-radius: 6px; font-weight: 600; font-size: 0.84rem; }
-        .tbl-pct { width: 58px; padding: 6px; text-align: right; border: 1px solid var(--border); border-radius: 6px; font-weight: 700; font-size: 0.84rem; }
+        .tbl-num { width: 102px; padding: 6px 8px; text-align: right; border: 1.5px solid var(--border); border-radius: 7px; font-weight: 700; font-size: 0.82rem; outline: none; }
+        .tbl-num:focus, .tbl-pct:focus { border-color: var(--primary); }
+        .tbl-pct { width: 54px; padding: 6px; text-align: right; border: 1.5px solid var(--border); border-radius: 7px; font-weight: 700; font-size: 0.82rem; outline: none; }
 
+        /* ==================== PASO 3: RESUMEN FINANCIERO Y ENVÍO ==================== */
         .receipt-box {
-            background: #0F172A; color: #fff; border-radius: 12px; padding: 18px;
-            display: flex; flex-direction: column; gap: 10px;
+            background: linear-gradient(145deg, #0F172A 0%, #1E293B 100%);
+            color: #fff; border-radius: 14px; padding: 18px 20px;
+            display: flex; flex-direction: column; gap: 9px;
+            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
+            font-variant-numeric: tabular-nums;
         }
-        .receipt-row { display: flex; justify-content: space-between; font-size: 0.88rem; color: #CBD5E1; }
-        .receipt-row.iva { color: #F87171; font-weight: 700; font-size: 0.95rem; }
+        .receipt-row { display: flex; justify-content: space-between; font-size: 0.84rem; color: #94A3B8; font-weight: 500; }
+        .receipt-row.iva { color: #FCA5A5; font-weight: 700; font-size: 0.88rem; }
         .receipt-total {
-            border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 12px; margin-top: 4px;
+            border-top: 1px dashed rgba(255,255,255,0.18); padding-top: 12px; margin-top: 4px;
             display: flex; justify-content: space-between; align-items: baseline;
         }
-        .receipt-total span:first-child { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; color: #94A3B8; }
-        .receipt-total span:last-child { font-size: 1.45rem; font-weight: 800; color: #fff; }
+        .receipt-total span:first-child { font-size: 0.78rem; font-weight: 800; text-transform: uppercase; color: #CBD5E1; letter-spacing: 0.5px; }
+        .receipt-total span:last-child { font-size: 1.5rem; font-weight: 800; color: #34D399; }
 
         .mini-pills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
         .mini-pill {
-            font-size: 0.7rem; padding: 3px 8px; border-radius: 6px; background: #F1F5F9;
-            color: var(--muted); cursor: pointer; font-weight: 600; border: 1px solid transparent;
+            font-size: 0.68rem; padding: 3px 9px; border-radius: 6px; background: #F1F5F9;
+            color: var(--muted); cursor: pointer; font-weight: 700; border: 1px solid var(--border); transition: 0.15s;
         }
-        .mini-pill:hover, .mini-pill.active-sede { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); font-weight: 800; }
+        .mini-pill:hover, .mini-pill.active-sede { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
 
         .chips-wrap { display: flex; flex-wrap: wrap; gap: 5px; }
         .chip-btn {
             padding: 4px 10px; border-radius: 99px; border: 1px solid var(--border); background: #fff;
-            font-size: 0.74rem; font-weight: 600; color: var(--muted); cursor: pointer; user-select: none;
+            font-size: 0.72rem; font-weight: 700; color: var(--muted); cursor: pointer; user-select: none;
         }
         .chip-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
-        .btn {
-            padding: 10px 16px; border-radius: 9px; border: none; font-weight: 700;
-            cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
-            gap: 8px; font-size: 0.88rem; transition: 0.2s; text-decoration: none;
+        /* SELLO DE PROPIETARIO ANTES DE GUARDAR */
+        .owner-confirm-strip {
+            background: #FFFBEB;
+            border: 1.5px solid #FDE68A;
+            border-radius: 10px;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: #92400E;
+            font-weight: 700;
         }
-        .btn-primary { background: var(--primary); color: #fff; width: 100%; padding: 15px; font-size: 1rem; box-shadow: 0 6px 18px rgba(233, 81, 29, 0.28); }
-        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
-        .btn-primary:disabled { background: #94A3B8; box-shadow: none; cursor: not-allowed; transform: none; }
-        .btn-outline { background: #fff; border: 1px solid var(--border); color: var(--text); }
+        .owner-confirm-strip.ready {
+            background: var(--success-soft);
+            border-color: #A7F3D0;
+            color: #065F46;
+        }
+
+        .btn {
+            padding: 10px 16px; border-radius: 10px; border: none; font-weight: 700;
+            cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+            gap: 8px; font-size: 0.86rem; transition: 0.2s; text-decoration: none;
+        }
+        .btn-primary { background: var(--primary); color: #fff; width: 100%; padding: 15px; font-size: 0.96rem; font-weight: 800; box-shadow: 0 6px 18px rgba(233, 81, 29, 0.28); }
+        .btn-primary:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn-primary:disabled { background: #CBD5E1; color: #64748B; box-shadow: none; cursor: not-allowed; transform: none; }
+        .btn-outline { background: #fff; border: 1.5px solid var(--border); color: var(--text); }
         .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
         .btn-blue { background: var(--sf-blue); color: #fff; }
         .btn-purple { background: var(--purple); color: #fff; }
@@ -304,22 +470,84 @@
         </div>
 
         <div class="topbar-right">
-            <div class="exec-pill">
-                <i class="fas fa-user-check"></i>
-                <span style="font-size:0.78rem; color:#94A3B8;">Cotizando como:</span>
-                <select id="global-exec" onchange="onExecutiveChange()">
-    <option value="005Dn000007H1EUIA0" data-init="MK">Juan Felipe (JF) </option>
-    <option value="005Dn000007mWFhIAM" data-init="LC">Luz (LC)</option>
-    <option value="005UO000000PdB3YAK" data-init="FL">Felipe (FL)</option>
-    <option value="005Dn000005u1yTIAQ" data-init="MR">Mario (MR)</option>
-    <option value="005Dn000005u27NIAQ" data-init="MC">Marcos (MC)</option>
-    <option value="005Dn000005u22vIAA" data-init="FB">Fabio (FB)</option>
-    <option value="005Dn000005u2BkIAI" data-init="DN">Diana (DN)</option>
-    <option value="005Dn000007H1FDIA0" data-init="AN">Andres (AN)</option>
-    <option value="005Dn00000145LfIAI" data-init="SB">Sebastian (SB)</option>
-    <option value="005UO000001biHdYAI" data-init="NL">Nelson (NL)</option>
-    <option value="005Dn000007IKydIAG" data-init="LR">Marketing (MK)</option>
+            <div class="exec-pill" id="topbar-exec-pill">
+                <i class="fas fa-user-shield"></i>
+                <span style="font-size:0.76rem; color:#CBD5E1;">Ejecutivo activo:</span>
+                <select id="global-exec" onchange="onExecutiveChange(true)">
+                    <option value="005Dn000007H1EUIA0" data-init="MK">Juan Felipe (JF)</option>
+                    <option value="005Dn000007mWFhIAM" data-init="LC">Luz (LC)</option>
+                    <option value="005UO000000PdB3YAK" data-init="FL">Felipe (FL)</option>
+                    <option value="005Dn000005u1yTIAQ" data-init="MR">Mario (MR)</option>
+                    <option value="005Dn000005u27NIAQ" data-init="MC">Marcos (MC)</option>
+                    <option value="005Dn000005u22vIAA" data-init="FB">Fabio (FB)</option>
+                    <option value="005Dn000005u2BkIAI" data-init="DN">Diana (DN)</option>
+                    <option value="005Dn000007H1FDIA0" data-init="AN">Andres (AN)</option>
+                    <option value="005Dn00000145LfIAI" data-init="SB">Sebastian (SB)</option>
+                    <option value="005UO000001biHdYAI" data-init="NL">Nelson (NL)</option>
+                    <option value="005Dn000007IKydIAG" data-init="LR">Marketing (MK)</option>
                 </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== BARRA HERO OBLIGATORIA DE IDENTIDAD DEL EJECUTIVO ==================== -->
+    <div class="exec-hero-wrap">
+        <div class="exec-hero-card" id="exec-hero-card">
+            <div class="exec-hero-top">
+                <div class="exec-hero-title">
+                    <div class="step-num" style="background:#0F172A;"><i class="fas fa-user-tie" style="font-size:0.75rem;"></i></div>
+                    <span>¿QUIÉN ESTÁ COTIZANDO HOY? <small style="font-weight:600; color:var(--muted);">(Haz clic en tu nombre para asignar el propietario en Salesforce)</small></span>
+                </div>
+                <span class="exec-alert-badge" id="exec-hero-badge">
+                    <i class="fas fa-exclamation-triangle"></i> Confirma tu usuario antes de cotizar
+                </span>
+            </div>
+
+            <div class="exec-grid" id="exec-visual-grid">
+                <div class="exec-btn-card" data-val="005Dn000007H1EUIA0" onclick="selectVisualExecutive('005Dn000007H1EUIA0')">
+                    <div class="exec-initials">JF</div>
+                    <span class="exec-label-name">Juan Felipe</span>
+                </div>
+                <div class="exec-btn-card" data-val="005Dn000007mWFhIAM" onclick="selectVisualExecutive('005Dn000007mWFhIAM')">
+                    <div class="exec-initials">LC</div>
+                    <span class="exec-label-name">Luz</span>
+                </div>
+                <div class="exec-btn-card" data-val="005UO000000PdB3YAK" onclick="selectVisualExecutive('005UO000000PdB3YAK')">
+                    <div class="exec-initials">FL</div>
+                    <span class="exec-label-name">Felipe</span>
+                </div>
+                <div class="exec-btn-card" data-val="005Dn000005u1yTIAQ" onclick="selectVisualExecutive('005Dn000005u1yTIAQ')">
+                    <div class="exec-initials">MR</div>
+                    <span class="exec-label-name">Mario</span>
+                </div>
+                <div class="exec-btn-card" data-val="005Dn000005u27NIAQ" onclick="selectVisualExecutive('005Dn000005u27NIAQ')">
+                    <div class="exec-initials">MC</div>
+                    <span class="exec-label-name">Marcos</span>
+                </div>
+                <div class="exec-btn-card" data-val="005Dn000005u22vIAA" onclick="selectVisualExecutive('005Dn000005u22vIAA')">
+                    <div class="exec-initials">FB</div>
+                    <span class="exec-label-name">Fabio</span>
+                </div>
+                <div class="exec-btn-card" data-val="005Dn000005u2BkIAI" onclick="selectVisualExecutive('005Dn000005u2BkIAI')">
+                    <div class="exec-initials">DN</div>
+                    <span class="exec-label-name">Diana</span>
+                </div>
+                <div class="exec-btn-card" data-val="005Dn000007H1FDIA0" onclick="selectVisualExecutive('005Dn000007H1FDIA0')">
+                    <div class="exec-initials">AN</div>
+                    <span class="exec-label-name">Andrés</span>
+                </div>
+                <div class="exec-btn-card" data-val="005Dn00000145LfIAI" onclick="selectVisualExecutive('005Dn00000145LfIAI')">
+                    <div class="exec-initials">SB</div>
+                    <span class="exec-label-name">Sebastián</span>
+                </div>
+                <div class="exec-btn-card" data-val="005UO000001biHdYAI" onclick="selectVisualExecutive('005UO000001biHdYAI')">
+                    <div class="exec-initials">NL</div>
+                    <span class="exec-label-name">Nelson</span>
+                </div>
+                <div class="exec-btn-card" data-val="005Dn000007IKydIAG" onclick="selectVisualExecutive('005Dn000007IKydIAG')">
+                    <div class="exec-initials">MK</div>
+                    <span class="exec-label-name">Marketing</span>
+                </div>
             </div>
         </div>
     </div>
@@ -359,14 +587,14 @@
                         <!-- Subir RUT -->
                         <div class="rut-smart-box" onclick="document.getElementById('rut-file-input').click()">
                             <div>
-                                <div style="font-weight:800; color:var(--primary); font-size:0.86rem;">
+                                <div style="font-weight:800; color:var(--primary); font-size:0.84rem;">
                                     <i class="fas fa-id-card"></i> ¿Cliente Nuevo? Sube aquí su RUT
                                 </div>
-                                <div style="font-size:0.75rem; color:var(--muted); margin-top:2px;" id="rut-status-text">
+                                <div style="font-size:0.74rem; color:var(--muted); margin-top:2px;" id="rut-status-text">
                                     La IA llena el formulario sola y adjunta el RUT a la Cuenta en SF.
                                 </div>
                             </div>
-                            <span class="btn btn-outline" style="padding:6px 10px; font-size:0.76rem; flex-shrink:0; border-color:var(--primary); color:var(--primary);">
+                            <span class="btn btn-outline" style="padding:6px 10px; font-size:0.75rem; flex-shrink:0; border-color:var(--primary); color:var(--primary);">
                                 <i class="fas fa-file-upload"></i> Subir RUT
                             </span>
                             <input type="file" id="rut-file-input" accept="application/pdf,image/*" style="display:none" onchange="handleRutUpload(this)">
@@ -378,12 +606,12 @@
                         <div style="display:flex; align-items:center; gap:14px;">
                             <div class="client-avatar"><i class="fas fa-check"></i></div>
                             <div>
-                                <div style="font-size:0.72rem; font-weight:800; color:#047857; text-transform:uppercase;">Cliente Encontrado en Salesforce</div>
-                                <div id="banner-acc-name" style="font-size:1.05rem; font-weight:800; color:#064E3B;">Nombre Cliente</div>
-                                <div id="banner-acc-meta" style="font-size:0.8rem; color:#047857; margin-top:2px;"></div>
+                                <div style="font-size:0.7rem; font-weight:800; color:#047857; text-transform:uppercase;">Cliente Encontrado en Salesforce</div>
+                                <div id="banner-acc-name" style="font-size:1.02rem; font-weight:800; color:#064E3B;">Nombre Cliente</div>
+                                <div id="banner-acc-meta" style="font-size:0.78rem; color:#047857; margin-top:2px;"></div>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-outline" onclick="clearSelectedAccount()" style="padding:6px 12px; font-size:0.78rem;">
+                        <button type="button" class="btn btn-outline" onclick="clearSelectedAccount()" style="padding:6px 12px; font-size:0.76rem;">
                             <i class="fas fa-exchange-alt"></i> Cambiar Cliente
                         </button>
                     </div>
@@ -398,14 +626,14 @@
                     <!-- FORMULARIO DESPLEGABLE SOLO SI ES CLIENTE NUEVO -->
                     <div id="new-account-drawer">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                            <span style="font-size:0.82rem; font-weight:800; color:var(--primary); text-transform:uppercase;">
+                            <span style="font-size:0.8rem; font-weight:800; color:var(--primary); text-transform:uppercase;">
                                 <i class="fas fa-id-card"></i> Datos para Crear la Cuenta Nueva
                             </span>
                             <div style="display:flex; gap:6px;">
-                                <button type="button" class="btn btn-outline" id="btn-type-emp" onclick="setAccountRecordType('Empresas')" style="padding:4px 10px; font-size:0.75rem; border-color:var(--primary); color:var(--primary);">
+                                <button type="button" class="btn btn-outline" id="btn-type-emp" onclick="setAccountRecordType('Empresas')" style="padding:4px 10px; font-size:0.74rem; border-color:var(--primary); color:var(--primary);">
                                     <i class="fas fa-building"></i> Empresa (NIT)
                                 </button>
-                                <button type="button" class="btn btn-outline" id="btn-type-par" onclick="setAccountRecordType('Particulares')" style="padding:4px 10px; font-size:0.75rem;">
+                                <button type="button" class="btn btn-outline" id="btn-type-par" onclick="setAccountRecordType('Particulares')" style="padding:4px 10px; font-size:0.74rem;">
                                     <i class="fas fa-user"></i> Particular (Cédula)
                                 </button>
                             </div>
@@ -537,14 +765,14 @@
                 <div class="card-header">
                     <div class="card-title">
                         <div class="step-num">2</div>
-                        <span>SELECCIÓN DE PRODUCTOS Y LECTOR DE PEDIDOS CON IA</span>
+                        <span>CATÁLOGO DE PRODUCTOS Y CARRITO</span>
                     </div>
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <label style="font-size:0.75rem; color:var(--muted); cursor:pointer; display:flex; align-items:center; gap:5px;">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <label style="font-size:0.75rem; color:var(--muted); cursor:pointer; display:flex; align-items:center; gap:5px; font-weight:600;">
                             <input type="checkbox" id="chk-include-inactive" onchange="debounceProductSearch(document.getElementById('prod-search-input').value)">
                             Ver inactivos/vendidos
                         </label>
-                        <select id="opp-currency" class="finput" style="width:90px; padding:5px 8px; font-weight:700;" onchange="syncCurrency(this.value)">
+                        <select id="opp-currency" class="finput" style="width:92px; padding:5px 8px; font-weight:800;" onchange="syncCurrency(this.value)">
                             <option value="COP" selected>COP $</option>
                             <option value="USD">USD $</option>
                         </select>
@@ -582,47 +810,49 @@
                         <option value="01sDn000001UtQvIAK" data-cat="Otros" data-days="15" data-tpl="Presupuesto Casa Colombia Maquinaria">Standard Price Book</option>
                     </select>
 
-                    <!-- 🤖 MINI-BOT IA: CUADRO DE TEXTO LIBRE + IMAGEN CTRL+V PARA CARGAR VARIOS PRODUCTOS DE GOLPE -->
-                    <div class="ai-bulk-box" id="ai-bulk-container">
-                        <div class="ai-bulk-header">
-                            <div class="ai-bulk-title">
-                                <i class="fas fa-robot"></i> Mini-Bot Lector de Referencias (Pega lista desordenada, instrucciones o foto con Ctrl+V)
+                    <div class="search-tools-grid">
+                        <!-- Buscador Individual de Productos (Primero por ser el más directo) -->
+                        <div class="smart-search" style="border-color: var(--primary); background: #FFFDFB;">
+                            <div class="smart-search-lbl" style="color: var(--primary);">
+                                <span><i class="fas fa-barcode"></i> Buscar Producto por Nombre, Modelo o SKU</span>
+                                <i class="fas fa-spinner fa-spin" id="prod-search-spinner" style="display:none;"></i>
                             </div>
-                            <div style="display:flex; gap:8px;">
-                                <button type="button" class="btn btn-outline" style="padding:5px 10px; font-size:0.75rem; border-color:#8B5CF6; color:#6D28D9;" onclick="document.getElementById('ai-bulk-file').click()">
-                                    <i class="fas fa-camera"></i> Subir Foto de Lista
-                                </button>
-                                <input type="file" id="ai-bulk-file" accept="image/*" style="display:none;" onchange="handleAiBulkImageSelect(this)">
-                                <button type="button" class="btn btn-purple" id="btn-run-ai-bulk" style="padding:5px 14px; font-size:0.78rem;" onclick="procesarListaConMiniBot()">
-                                    <i class="fas fa-bolt"></i> Buscar y Cargar Todo al Carrito
-                                </button>
+                            <div class="smart-search-row">
+                                <input type="text" id="prod-search-input" placeholder="Escribe ej: HITACHI, ZX75, ZX120, 4464985, filtro..." oninput="debounceProductSearch(this.value)" onfocus="debounceProductSearch(this.value)">
                             </div>
+                            <div class="dropdown-results" id="prod-search-results"></div>
                         </div>
 
-                        <textarea id="ai-bulk-text" class="ai-bulk-textarea" placeholder="Pega aquí las referencias como vengan o dale órdenes al bot (Ej: '4464985 x 4, 2 filtros ZX200, o cárgate todos los códigos de la imagen que acabo de pegar con Ctrl+V pero ponles 2 unidades a cada uno')..."></textarea>
-
-                        <div class="ai-img-preview" id="ai-bulk-img-preview">
-                            <img id="ai-bulk-img-tag" src="" alt="preview">
-                            <div style="flex:1;">
-                                <div style="font-weight:700; color:#5B21B6;">Imagen de referencias lista para analizar</div>
-                                <div style="color:var(--muted); font-size:0.72rem;">Puedes escribir instrucciones arriba sobre qué hacer con los ítems de esta imagen.</div>
+                        <!-- 🤖 MINI-BOT IA: CUADRO DE TEXTO LIBRE + IMAGEN CTRL+V PARA CARGAR VARIOS PRODUCTOS DE GOLPE -->
+                        <div class="ai-bulk-box" id="ai-bulk-container">
+                            <div class="ai-bulk-header">
+                                <div class="ai-bulk-title">
+                                    <i class="fas fa-robot"></i> Mini-Bot Lector Masivo (Pega lista de códigos o foto con Ctrl+V)
+                                </div>
+                                <div style="display:flex; gap:8px;">
+                                    <button type="button" class="btn btn-outline" style="padding:5px 10px; font-size:0.74rem; border-color:#8B5CF6; color:#6D28D9;" onclick="document.getElementById('ai-bulk-file').click()">
+                                        <i class="fas fa-camera"></i> Subir Foto de Lista
+                                    </button>
+                                    <input type="file" id="ai-bulk-file" accept="image/*" style="display:none;" onchange="handleAiBulkImageSelect(this)">
+                                    <button type="button" class="btn btn-purple" id="btn-run-ai-bulk" style="padding:5px 14px; font-size:0.76rem;" onclick="procesarListaConMiniBot()">
+                                        <i class="fas fa-bolt"></i> Cargar Lista con IA
+                                    </button>
+                                </div>
                             </div>
-                            <button type="button" class="btn btn-outline" style="padding:4px 8px; font-size:0.72rem; color:var(--danger);" onclick="clearAiBulkImage()">Quitar imagen</button>
-                        </div>
 
-                        <div class="ai-disambiguation" id="ai-bulk-disambiguation"></div>
-                    </div>
+                            <textarea id="ai-bulk-text" class="ai-bulk-textarea" placeholder="Ej: '4464985 x 4, 2 filtros ZX200, o cárgate todos los códigos de la imagen que pegué con Ctrl+V'..."></textarea>
 
-                    <!-- Buscador Individual de Productos -->
-                    <div class="smart-search" style="border-color: var(--primary); background: #FFFDFB;">
-                        <div class="smart-search-lbl" style="color: var(--primary);">
-                            <span><i class="fas fa-barcode"></i> O Buscar Producto Individualmente por Nombre, Modelo o SKU</span>
-                            <i class="fas fa-spinner fa-spin" id="prod-search-spinner" style="display:none;"></i>
+                            <div class="ai-img-preview" id="ai-bulk-img-preview">
+                                <img id="ai-bulk-img-tag" src="" alt="preview">
+                                <div style="flex:1;">
+                                    <div style="font-weight:700; color:#5B21B6;">Imagen de referencias lista para analizar</div>
+                                    <div style="color:var(--muted); font-size:0.72rem;">Puedes escribir instrucciones arriba sobre qué hacer con los ítems de esta imagen.</div>
+                                </div>
+                                <button type="button" class="btn btn-outline" style="padding:4px 8px; font-size:0.72rem; color:var(--danger);" onclick="clearAiBulkImage()">Quitar imagen</button>
+                            </div>
+
+                            <div class="ai-disambiguation" id="ai-bulk-disambiguation"></div>
                         </div>
-                        <div class="smart-search-row">
-                            <input type="text" id="prod-search-input" placeholder="Escribe ej: HITACHI, ZX75, ZX120, 4464985, filtro..." oninput="debounceProductSearch(this.value)" onfocus="debounceProductSearch(this.value)">
-                        </div>
-                        <div class="dropdown-results" id="prod-search-results"></div>
                     </div>
 
                     <!-- Tabla del Carrito -->
@@ -639,15 +869,15 @@
                                     <th>Neto sin IVA</th>
                                     <th>% IVA</th>
                                     <th>Valor IVA</th>
-                                    <th style="background:var(--primary);">Total con IVA</th>
+                                    <th style="color:var(--primary);">Total con IVA</th>
                                     <th></th>
                                 </tr>
                             </thead>
                             <tbody id="quote-items-body">
                                 <tr>
                                     <td colspan="11" style="text-align:center; padding: 32px; color: var(--muted);">
-                                        <i class="fas fa-cart-plus" style="font-size:1.6rem; opacity:0.4; display:block; margin-bottom:6px;"></i>
-                                        Usa el Mini-Bot de arriba para pegar varias referencias de golpe o el buscador individual.
+                                        <i class="fas fa-cart-plus" style="font-size:1.5rem; opacity:0.35; display:block; margin-bottom:6px;"></i>
+                                        Tu carrito está vacío. Busca un producto arriba o pega una lista en el Mini-Bot.
                                     </td>
                                 </tr>
                             </tbody>
@@ -669,7 +899,7 @@
                     </div>
                 </div>
 
-                <div class="card-body" style="display:flex; flex-direction:column; gap:14px;">
+                <div class="card-body" style="display:flex; flex-direction:column; gap:13px;">
 
                     <!-- Recibo Financiero Oscuro -->
                     <div class="receipt-box">
@@ -739,12 +969,12 @@
                         <input type="text" id="qt-pay-desc" class="finput" value="100% Pago de contado previo al despacho.">
                     </div>
 
-                    <!-- Garantía con Píldoras de 1 Clic (Incluyendo Material de Desgaste para Cortes Cañón) -->
+                    <!-- Garantía con Píldoras de 1 Clic -->
                     <div class="fg">
                         <label class="flabel"><span class="req">*</span> Garantía</label>
                         <input type="text" id="qt-warranty" class="finput" value="6 meses por defectos de fábrica">
                         <div class="mini-pills">
-                            <span class="mini-pill" onclick="setWarranty('Material de desgaste no tiene garantía.')">Material desgaste (Sin garantía)</span>
+                            <span class="mini-pill" onclick="setWarranty('Material de desgaste no tiene garantía.')">Material desgaste</span>
                             <span class="mini-pill" onclick="setWarranty('6 meses por defectos de fábrica')">6 meses</span>
                             <span class="mini-pill" onclick="setWarranty('1 año o 2.000 horas (lo primero que ocurra)')">1 año / 2000h</span>
                             <span class="mini-pill" onclick="setWarranty('3 meses sobre componentes principales')">3 meses</span>
@@ -772,7 +1002,7 @@
 
                     <div class="fg">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <label class="flabel"><span class="req">*</span> Descripción / Sede Despacho</label>
+                            <label class="flabel"><span class="req">*</span> Descripción / Sede</label>
                             <div class="mini-pills" id="sede-pills-bar" style="margin-top:0;">
                                 <span class="mini-pill active-sede" onclick="setSedeCortes('FERIAS', this)">FERIAS</span>
                                 <span class="mini-pill" onclick="setSedeCortes('FONTIBÓN', this)">FONTIBÓN</span>
@@ -782,7 +1012,7 @@
                         <textarea id="qt-description" class="finput" rows="2">Precios sujetos a disponibilidad de inventario salvo venta previa.</textarea>
                     </div>
 
-                    <!-- Cajón de Nombres de Oportunidad y Presupuesto (Se abre solo cuando eligen Cortes Cañón) -->
+                    <!-- Cajón de Nombres de Oportunidad y Presupuesto -->
                     <div class="adv-toggle" onclick="toggleAdv('adv-opp-fields')" style="margin-top:2px;">
                         <i class="fas fa-sliders-h"></i> Nombre de Oportunidad / Presupuesto y Ajustes
                     </div>
@@ -846,9 +1076,15 @@
                         </div>
                     </div>
 
+                    <!-- SELLO DE VERIFICACIÓN DE PROPIETARIO ANTES DE ENVIAR -->
+                    <div class="owner-confirm-strip" id="owner-confirm-strip">
+                        <span><i class="fas fa-user-lock"></i> Propietario SF: <b id="strip-owner-name">Sin confirmar</b></span>
+                        <a href="#exec-hero-card" style="color:inherit; text-decoration:underline; font-size:0.74rem;">Cambiar arriba</a>
+                    </div>
+
                     <!-- BOTÓN PRINCIPAL DE ACCIÓN -->
-                    <button type="button" class="btn btn-primary" id="btn-submit-all" onclick="submitFullQuoteToSF()">
-                        <i class="fas fa-cloud-upload-alt"></i> GUARDAR Y ABRIR EN SALESFORCE
+                    <button type="button" class="btn btn-primary" id="btn-submit-all" onclick="submitFullQuoteToSF()" disabled>
+                        <i class="fas fa-lock"></i> CONFIRMA TU USUARIO ARRIBA PARA COTIZAR
                     </button>
 
                 </div>
@@ -858,7 +1094,7 @@
 
     </div>
 
-    <!-- MODAL DE ÉXITO (FLUJO PRINCIPAL A SALESFORCE + BOTÓN DE BACKUP OPCIONAL) -->
+    <!-- MODAL DE ÉXITO -->
     <div class="modal-bg" id="final-success-modal">
         <div class="modal-card">
             <div style="width:64px; height:64px; border-radius:50%; background:#D1FAE5; color:#059669; display:flex; align-items:center; justify-content:center; font-size:2rem; margin:0 auto 14px;">
@@ -904,21 +1140,22 @@
         let isCortesCanonMode = false;
         let currentSedeDespacho = 'FERIAS';
         let userEditedOppNameManually = false;
+        let executiveConfirmedInSession = false;
         let quoteItems = [];
         let accSearchTimer = null;
         let prodSearchTimer = null;
 
         document.addEventListener('DOMContentLoaded', () => {
             const savedExec = localStorage.getItem('icc_active_exec');
-            if (savedExec) document.getElementById('global-exec').value = savedExec;
+            if (savedExec) {
+                document.getElementById('global-exec').value = savedExec;
+            }
 
             onPricebookChange();
             onPaymentMethodChange();
             loadSalesforceNativeTemplates();
             checkUrlIncomingLead();
 
-            // Soporte inteligente para pegar imágenes con Ctrl+V:
-            // Si el foco está en el cuadro del Mini-Bot de Productos (o en general), carga la imagen en el lector de productos
             document.addEventListener('paste', (e) => {
                 const items = (e.clipboardData || e.originalEvent.clipboardData).items;
                 for (let idx in items) {
@@ -940,7 +1177,44 @@
             });
         });
 
-        // Detecta si la cuenta seleccionada o escrita es CORTES CAÑON INGENIEROS CIVILES SAS
+        // --- SISTEMA VISUAL DE CONFIRMACIÓN DE EJECUTIVO ---
+        function selectVisualExecutive(execId) {
+            const sel = document.getElementById('global-exec');
+            sel.value = execId;
+            onExecutiveChange(true);
+        }
+
+        function onExecutiveChange(confirmedByClick = false) {
+            const sel = document.getElementById('global-exec');
+            const val = sel.value;
+            const execText = sel.options[sel.selectedIndex].text.trim();
+            localStorage.setItem('icc_active_exec', val);
+
+            // Actualizar tarjetas visuales
+            document.querySelectorAll('#exec-visual-grid .exec-btn-card').forEach(card => {
+                card.classList.toggle('active', card.dataset.val === val);
+            });
+
+            if (confirmedByClick) {
+                executiveConfirmedInSession = true;
+                document.getElementById('exec-hero-card').classList.add('confirmed');
+                document.getElementById('topbar-exec-pill').classList.add('confirmed');
+                document.getElementById('exec-hero-badge').innerHTML = `<i class="fas fa-check-circle"></i> Cotizando como: ${execText.toUpperCase()}`;
+
+                const strip = document.getElementById('owner-confirm-strip');
+                strip.classList.add('ready');
+                document.getElementById('strip-owner-name').innerText = execText;
+
+                const btnSubmit = document.getElementById('btn-submit-all');
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = `<i class="fas fa-cloud-upload-alt"></i> GUARDAR EN SALESFORCE (COMO ${execText.toUpperCase()})`;
+
+                showToast(`👤 Usuario confirmado: ${execText}`);
+            }
+
+            autoBuildOpportunityName();
+        }
+
         function isAccountCortesCanon(nameStr) {
             if (!nameStr) return false;
             const norm = nameStr.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -954,11 +1228,9 @@
             if (enable) {
                 banner.style.display = 'flex';
 
-                // 1. Forzar Lista de Precios: LISTA DE PRECIOS CORTES CAÑON (01sUO000001DFALYA4)
                 const pillCortes = document.getElementById('pill-cortes-canon');
                 selectVisualPricebook(CORTES_CANON_PB_ID, pillCortes);
 
-                // 2. Condiciones exclusivas de Cortes Cañón
                 document.getElementById('qt-delivery').value = 'Inmediata';
                 document.getElementById('qt-pay-method').value = 'Crédito';
                 document.getElementById('qt-pay-desc').value = 'CREDITO';
@@ -966,7 +1238,6 @@
                 recalcExpirationDate();
                 document.getElementById('qt-warranty').value = 'Material de desgaste no tiene garantía.';
 
-                // 3. Seleccionar plantilla de Repuestos por defecto
                 const tplSel = document.getElementById('qt-template');
                 for (let i = 0; i < tplSel.options.length; i++) {
                     if ((tplSel.options[i].text || '').toLowerCase().includes('repuestos')) {
@@ -975,7 +1246,6 @@
                     }
                 }
 
-                // 4. Abrir automáticamente la ventana donde el ejecutivo pone el Nombre de Oportunidad y Presupuesto
                 const oppBox = document.getElementById('adv-opp-fields');
                 oppBox.style.display = 'block';
 
@@ -986,7 +1256,6 @@
                 document.getElementById('qt-name').value = baseSuggested;
                 syncCortesDescription();
 
-                // Enfocar y seleccionar el campo para que el ejecutivo lo edite de inmediato
                 setTimeout(() => {
                     const oppInp = document.getElementById('opp-name');
                     oppInp.focus();
@@ -1039,6 +1308,7 @@
 
             if (exec && exec.startsWith('005')) {
                 document.getElementById('global-exec').value = exec;
+                onExecutiveChange(true);
             }
 
             if (phone) {
@@ -1088,13 +1358,6 @@
                     sel.innerHTML = data.templates.map(t => `<option value="${t.id}" data-name="${t.cleanName}">${t.cleanName}</option>`).join('');
                 }
             } catch (e) {}
-        }
-
-        function onExecutiveChange() {
-            const sel = document.getElementById('global-exec');
-            localStorage.setItem('icc_active_exec', sel.value);
-            autoBuildOpportunityName();
-            showToast("👤 Ejecutivo activo actualizado");
         }
 
         function openManualNewAccount() {
@@ -1229,7 +1492,6 @@
             document.getElementById('banner-acc-name').innerText = acc.Name;
             document.getElementById('banner-acc-meta').innerText = `NIT/CC: ${acc.N_mero_de_NIT__c || acc.N_mero_de_C_dula__c || 'N/A'} • Tel: ${acc.Phone || 'N/A'} • ${acc.Ubicaci_n__c || ''}`;
             
-            // Verificar si el cliente elegido es CORTES CAÑON INGENIEROS CIVILES SAS
             if (isAccountCortesCanon(acc.Name)) {
                 applyCortesCanonProfile(true);
             } else {
@@ -1326,7 +1588,7 @@
             const btn = document.getElementById('btn-run-ai-bulk');
             const origHtml = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analizando y cruzando con Salesforce...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analizando...';
 
             const pbId = isCortesCanonMode ? CORTES_CANON_PB_ID : document.getElementById('opp-pricebook').value;
             const curr = document.getElementById('opp-currency').value;
@@ -1350,7 +1612,6 @@
                         addedCount++;
                     });
 
-                    // Mostrar si hubo referencias con varias opciones o no encontradas
                     const disBox = document.getElementById('ai-bulk-disambiguation');
                     let disHtml = '';
 
@@ -1415,7 +1676,6 @@
 
         // --- SELECCIÓN VISUAL DE CATEGORÍA / LISTA DE PRECIOS ---
         function selectVisualPricebook(pbId, btnEl) {
-            // Si el cliente activo es Cortes Cañón y quieren cambiar de lista, avisar que Cortes Cañón exige su lista propia
             if (isCortesCanonMode && pbId !== CORTES_CANON_PB_ID) {
                 if (!confirm("⚠️ El cliente actual es CORTES CAÑÓN y tiene asignada su lista de precios exclusiva. ¿Seguro que deseas cambiar a otra lista de precios?")) {
                     return;
@@ -1635,8 +1895,8 @@
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="11" style="text-align:center; padding: 32px; color: var(--muted);">
-                            <i class="fas fa-cart-plus" style="font-size:1.6rem; opacity:0.4; display:block; margin-bottom:6px;"></i>
-                            Usa el Mini-Bot de arriba para pegar varias referencias de golpe o el buscador individual.
+                            <i class="fas fa-cart-plus" style="font-size:1.5rem; opacity:0.35; display:block; margin-bottom:6px;"></i>
+                            Tu carrito está vacío. Busca un producto arriba o pega una lista en el Mini-Bot.
                         </td>
                     </tr>`;
                 document.getElementById('rc-bruto').innerText = '$ 0';
@@ -1738,6 +1998,11 @@
         }
 
         async function submitFullQuoteToSF() {
+            if (!executiveConfirmedInSession) {
+                document.getElementById('exec-hero-card').scrollIntoView({ behavior: 'smooth' });
+                return showToast("⚠️ Primero haz clic en tu nombre arriba para confirmar quién está cotizando.");
+            }
+
             const accName = selectedExistingAccount ? selectedExistingAccount.Name : document.getElementById('acc-name').value.trim();
             if (!accName) {
                 openManualNewAccount();
