@@ -72,9 +72,9 @@
         }
         .exec-pill select option { color: #0F172A; font-weight: 600; }
 
-        /* ==================== SELECTOR HERO DE EJECUTIVO (ANTI-ERRORES) ==================== */
+        /* ==================== SELECTOR HERO DE EJECUTIVO (GRANDE Y BALANCEADO) ==================== */
         .exec-hero-wrap {
-            max-width: 1440px;
+            max-width: 1480px;
             margin: 20px auto 0;
             padding: 0 24px;
         }
@@ -82,15 +82,14 @@
             background: #FFFFFF;
             border: 2px solid #FCA5A5;
             border-radius: var(--radius);
-            padding: 16px 22px;
+            padding: 18px 24px;
             box-shadow: 0 8px 25px rgba(239, 68, 68, 0.08);
             transition: all 0.25s ease;
         }
         .exec-hero-card.confirmed {
-            border-color: #CBD5E1;
+            border-color: var(--border);
             box-shadow: var(--shadow-sm);
-            padding: 12px 22px;
-            background: #F8FAFC;
+            background: #FFFFFF;
         }
         .exec-hero-top {
             display: flex;
@@ -98,16 +97,13 @@
             align-items: center;
             gap: 12px;
             flex-wrap: wrap;
-            margin-bottom: 12px;
-        }
-        .exec-hero-card.confirmed .exec-hero-top {
-            margin-bottom: 10px;
+            margin-bottom: 14px;
         }
         .exec-hero-title {
             display: flex;
             align-items: center;
             gap: 10px;
-            font-size: 0.95rem;
+            font-size: 1rem;
             font-weight: 800;
             color: var(--text);
         }
@@ -115,9 +111,9 @@
             background: var(--danger-soft);
             color: var(--danger);
             border: 1px solid #FECACA;
-            font-size: 0.75rem;
+            font-size: 0.78rem;
             font-weight: 800;
-            padding: 4px 12px;
+            padding: 5px 14px;
             border-radius: 99px;
             display: inline-flex;
             align-items: center;
@@ -135,54 +131,64 @@
             animation: none;
         }
 
+        /* Grid balanceado de 6 columnas arriba y 5 abajo expandidas para que ninguno quede huérfano */
         .exec-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
-            gap: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
         }
         .exec-btn-card {
+            flex: 1 1 calc(16.666% - 10px);
+            min-width: 155px;
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 8px 10px;
-            border-radius: 10px;
+            gap: 12px;
+            padding: 11px 14px;
+            border-radius: 12px;
             border: 1.5px solid var(--border);
-            background: #FFFFFF;
+            background: #F8FAFC;
             cursor: pointer;
-            transition: all 0.15s ease;
+            transition: all 0.18s ease;
             user-select: none;
         }
         .exec-btn-card:hover {
             border-color: var(--primary);
             background: var(--primary-soft);
-            transform: translateY(-1px);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(233, 81, 29, 0.1);
         }
         .exec-btn-card.active {
             background: var(--primary);
             border-color: var(--primary);
             color: #FFFFFF;
-            box-shadow: 0 4px 12px rgba(233, 81, 29, 0.3);
+            box-shadow: 0 6px 16px rgba(233, 81, 29, 0.32);
+            transform: translateY(-1px);
         }
         .exec-initials {
-            width: 28px;
-            height: 28px;
-            border-radius: 7px;
-            background: #F1F5F9;
+            width: 36px;
+            height: 36px;
+            border-radius: 9px;
+            background: #E2E8F0;
             color: var(--text);
-            font-size: 0.74rem;
+            font-size: 0.84rem;
             font-weight: 800;
             display: flex;
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
+            transition: 0.18s;
+        }
+        .exec-btn-card:hover .exec-initials {
+            background: #FFD8C9;
+            color: var(--primary);
         }
         .exec-btn-card.active .exec-initials {
             background: rgba(255,255,255,0.22);
             color: #FFFFFF;
         }
         .exec-label-name {
-            font-size: 0.8rem;
-            font-weight: 700;
+            font-size: 0.92rem;
+            font-weight: 800;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -190,15 +196,15 @@
 
         /* ==================== WORKSPACE EN 2 COLUMNAS ==================== */
         .workspace {
-            max-width: 1440px;
-            margin: 18px auto 0;
+            max-width: 1480px;
+            margin: 20px auto 0;
             padding: 0 24px;
             display: grid;
-            grid-template-columns: 1fr 410px;
+            grid-template-columns: minmax(0, 1fr) 390px;
             gap: 22px;
             align-items: start;
         }
-        @media (max-width: 1120px) { .workspace { grid-template-columns: 1fr; } }
+        @media (max-width: 1180px) { .workspace { grid-template-columns: 1fr; } }
 
         .main-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
         .side-col { position: sticky; top: 76px; display: flex; flex-direction: column; gap: 16px; }
@@ -302,88 +308,267 @@
             user-select: none; padding: 6px 12px; border-radius: 8px; background: #F8FAFC; border: 1px solid var(--border); transition: 0.15s;
         }
         .adv-toggle:hover { color: var(--primary); border-color: var(--primary); background: var(--primary-soft); }
-        .adv-box { display: none; margin-top: 10px; padding: 14px; background: #F8FAFC; border-radius: 10px; border: 1px solid var(--border); }
 
-        /* ==================== PASO 2: PRODUCTOS Y MINI-BOT ==================== */
-        .cat-Bar { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 14px; scrollbar-width: thin; }
+        /* BOTÓN DESTACADO PARA OPCIONES EDITABLES DE OPORTUNIDAD / PRESUPUESTO */
+        .opp-settings-btn {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 15px;
+            border-radius: 11px;
+            background: linear-gradient(135deg, #FFF4F0 0%, #FFFFFF 100%);
+            border: 2px solid var(--primary);
+            color: var(--primary);
+            font-size: 0.83rem;
+            font-weight: 800;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(233, 81, 29, 0.1);
+        }
+        .opp-settings-btn:hover {
+            background: var(--primary);
+            color: #FFFFFF;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(233, 81, 29, 0.22);
+        }
+        .opp-settings-btn .badge-edit {
+            background: var(--primary);
+            color: #FFF;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 0.68rem;
+            text-transform: uppercase;
+        }
+        .opp-settings-btn:hover .badge-edit {
+            background: rgba(255,255,255,0.25);
+        }
+
+        .adv-box { display: none; margin-top: 8px; padding: 14px; background: #F8FAFC; border-radius: 12px; border: 1.5px solid #CBD5E1; }
+
+        /* ==================== PASO 2: BUSCADOR SUTIL + MINI-BOT ESTILO CHAT ==================== */
+        .cat-Bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
         .cat-pill {
-            padding: 7px 13px; border-radius: 99px; border: 1.5px solid var(--border);
-            background: #F8FAFC; color: var(--muted); font-size: 0.78rem; font-weight: 700;
+            padding: 6px 12px; border-radius: 99px; border: 1.5px solid var(--border);
+            background: #F8FAFC; color: var(--muted); font-size: 0.76rem; font-weight: 700;
             cursor: pointer; white-space: nowrap; transition: 0.15s; display: flex; align-items: center; gap: 6px;
         }
         .cat-pill:hover { border-color: var(--primary); color: var(--primary); background: #fff; }
         .cat-pill.active { background: var(--text); color: #fff; border-color: var(--text); box-shadow: 0 3px 10px rgba(15, 23, 42, 0.15); }
 
-        .search-tools-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 12px;
-            margin-bottom: 14px;
+        /* Buscador Clásico Sutil */
+        .classic-search-wrap {
+            position: relative;
+            margin-bottom: 18px;
+        }
+        .classic-search-title {
+            font-size: 0.85rem;
+            font-weight: 800;
+            color: var(--text);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .classic-search-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #FFFFFF;
+            border: 1.5px solid #CBD5E1;
+            border-radius: 11px;
+            padding: 11px 16px;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 5px rgba(15, 23, 42, 0.02);
+        }
+        .classic-search-box:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(233, 81, 29, 0.12);
+        }
+        .classic-search-box i {
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+        .classic-search-box input {
+            width: 100%;
+            border: none;
+            background: transparent;
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: var(--text);
+            outline: none;
         }
 
-        /* MINI-BOT IA LECTOR DE LISTAS CAÓTICAS */
-        .ai-bulk-box {
-            background: var(--purple-soft);
-            border: 1.5px solid #DDD6FE;
+        /* MINI-BOT IA ESTILO VENTANA DE CHAT INTUITIVA */
+        .ai-chat-window {
+            background: #FFFFFF;
+            border: 2px solid #DDD6FE;
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 18px;
+            box-shadow: 0 6px 20px rgba(124, 58, 237, 0.06);
+        }
+        .ai-chat-topbar {
+            background: linear-gradient(135deg, #6D28D9 0%, #7C3AED 100%);
+            color: #FFFFFF;
+            padding: 11px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .ai-chat-bot-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .ai-bot-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+        }
+        .ai-chat-body {
+            background: #F5F3FF;
+            padding: 14px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .ai-bot-bubble {
+            background: #FFFFFF;
+            border: 1px solid #E9D5FF;
+            color: #3B0764;
+            padding: 10px 14px;
+            border-radius: 12px 12px 12px 2px;
+            font-size: 0.82rem;
+            line-height: 1.45;
+            max-width: 92%;
+            box-shadow: 0 2px 5px rgba(124, 58, 237, 0.04);
+        }
+        .ai-chat-composer {
+            background: #FFFFFF;
+            border: 1.5px solid #C4B5FD;
             border-radius: 12px;
-            padding: 12px 16px;
+            padding: 10px 12px;
+            transition: 0.2s;
         }
-        .ai-bulk-header {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 8px; flex-wrap: wrap; gap: 8px;
+        .ai-chat-composer:focus-within {
+            border-color: var(--purple);
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.14);
         }
-        .ai-bulk-title { font-size: 0.78rem; font-weight: 800; color: #5B21B6; display: flex; align-items: center; gap: 6px; text-transform: uppercase; letter-spacing: 0.3px; }
         .ai-bulk-textarea {
-            width: 100%; min-height: 56px; padding: 9px 12px; border-radius: 8px;
-            border: 1.5px solid #DDD6FE; background: #fff; font-size: 0.85rem; color: var(--text);
-            resize: vertical; outline: none; font-weight: 500;
+            width: 100%;
+            min-height: 85px;
+            border: none;
+            background: transparent;
+            font-size: 0.9rem;
+            color: var(--text);
+            resize: vertical;
+            outline: none;
+            font-weight: 500;
+            line-height: 1.45;
         }
-        .ai-bulk-textarea:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12); }
+        .ai-chat-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 8px;
+            margin-top: 6px;
+            border-top: 1px dashed #EDE9FE;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
         .ai-img-preview {
-            display: none; align-items: center; gap: 10px; margin-top: 8px;
-            background: #fff; padding: 6px 10px; border-radius: 8px; border: 1px solid #DDD6FE; font-size: 0.78rem;
+            display: none; align-items: center; gap: 10px;
+            background: #fff; padding: 8px 12px; border-radius: 10px; border: 1.5px solid #C4B5FD; font-size: 0.78rem;
         }
-        .ai-img-preview img { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; }
+        .ai-img-preview img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; }
 
         .ai-disambiguation {
-            display: none; margin-top: 10px; padding: 12px; background: #fff;
-            border-radius: 8px; border: 1px solid #FCD34D; font-size: 0.82rem;
+            display: none; padding: 12px; background: #fff;
+            border-radius: 10px; border: 1.5px solid #FCD34D; font-size: 0.82rem;
         }
 
         .pb-badge {
-            display: inline-block; padding: 2px 7px; border-radius: 5px; font-size: 0.66rem; font-weight: 800;
-            background: var(--sf-blue-soft); color: #0284C7; border: 1px solid #BAE6FD; margin-right: 6px;
+            display: inline-block; padding: 2px 6px; border-radius: 5px; font-size: 0.65rem; font-weight: 800;
+            background: var(--sf-blue-soft); color: #0284C7; border: 1px solid #BAE6FD; margin-right: 4px;
         }
 
-        /* TABLA CALCULADORA POS */
-        .table-wrap { overflow-x: auto; margin-top: 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
-        .pos-table { width: 100%; border-collapse: collapse; min-width: 820px; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
-        .pos-table th {
-            background: #F8FAFC; color: var(--muted); padding: 11px 10px; text-align: right;
-            font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px;
-            border-bottom: 2px solid var(--border);
+        /* ==================== TABLA CALCULADORA SIN SCROLL HORIZONTAL ==================== */
+        .table-wrap {
+            width: 100%;
+            overflow-x: visible;
+            margin-top: 8px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: #fff;
         }
-        .pos-table th:first-child, .pos-table td:first-child { text-align: left; padding-left: 14px; }
-        .pos-table td { padding: 10px; border-bottom: 1px solid #F1F5F9; text-align: right; vertical-align: middle; }
+        .pos-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: auto;
+            font-size: 0.78rem;
+            font-variant-numeric: tabular-nums;
+        }
+        .pos-table th {
+            background: #1E293B;
+            color: #fff;
+            padding: 10px 6px;
+            text-align: right;
+            font-size: 0.66rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.2px;
+            white-space: nowrap;
+        }
+        .pos-table th:first-child {
+            text-align: left;
+            padding-left: 12px;
+            border-top-left-radius: 11px;
+        }
+        .pos-table th:last-child {
+            border-top-right-radius: 11px;
+            padding-right: 8px;
+        }
+        .pos-table td {
+            padding: 9px 6px;
+            border-bottom: 1px solid #F1F5F9;
+            text-align: right;
+            vertical-align: middle;
+        }
+        .pos-table td:first-child {
+            text-align: left;
+            padding-left: 12px;
+            white-space: normal;
+            word-break: break-word;
+            min-width: 190px;
+            max-width: 270px;
+        }
         .pos-table tr:last-child td { border-bottom: none; }
         .pos-table tr:hover { background: #F8FAFC; }
 
-        .qty-stepper { display: inline-flex; align-items: center; border: 1.5px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff; }
-        .qty-btn { width: 26px; height: 28px; border: none; background: #F8FAFC; cursor: pointer; font-weight: 800; color: var(--text); transition: 0.15s; }
+        .qty-stepper { display: inline-flex; align-items: center; border: 1.5px solid var(--border); border-radius: 7px; overflow: hidden; background: #fff; }
+        .qty-btn { width: 22px; height: 26px; border: none; background: #F1F5F9; cursor: pointer; font-weight: 800; color: var(--text); transition: 0.15s; }
         .qty-btn:hover { background: var(--primary); color: #fff; }
-        .qty-inp { width: 42px; height: 28px; border: none; text-align: center; font-weight: 700; font-size: 0.84rem; outline: none; }
+        .qty-inp { width: 34px; height: 26px; border: none; text-align: center; font-weight: 700; font-size: 0.78rem; outline: none; }
 
-        .tbl-num { width: 102px; padding: 6px 8px; text-align: right; border: 1.5px solid var(--border); border-radius: 7px; font-weight: 700; font-size: 0.82rem; outline: none; }
+        .tbl-num { width: 86px; padding: 5px 6px; text-align: right; border: 1.5px solid var(--border); border-radius: 6px; font-weight: 700; font-size: 0.78rem; outline: none; }
         .tbl-num:focus, .tbl-pct:focus { border-color: var(--primary); }
-        .tbl-pct { width: 54px; padding: 6px; text-align: right; border: 1.5px solid var(--border); border-radius: 7px; font-weight: 700; font-size: 0.82rem; outline: none; }
+        .tbl-pct { width: 44px; padding: 5px 4px; text-align: right; border: 1.5px solid var(--border); border-radius: 6px; font-weight: 700; font-size: 0.78rem; outline: none; }
 
-        /* ==================== PASO 3: RESUMEN FINANCIERO Y ENVÍO ==================== */
+        /* ==================== PASO 3: CONDICIONES ARRIBA + RECIBO DE TOTALES AL FINAL ==================== */
         .receipt-box {
             background: linear-gradient(145deg, #0F172A 0%, #1E293B 100%);
             color: #fff; border-radius: 14px; padding: 18px 20px;
             display: flex; flex-direction: column; gap: 9px;
             box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
             font-variant-numeric: tabular-nums;
+            margin-top: 4px;
         }
         .receipt-row { display: flex; justify-content: space-between; font-size: 0.84rem; color: #94A3B8; font-weight: 500; }
         .receipt-row.iva { color: #FCA5A5; font-weight: 700; font-size: 0.88rem; }
@@ -401,11 +586,12 @@
         }
         .mini-pill:hover, .mini-pill.active-sede { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
 
-        .chips-wrap { display: flex; flex-wrap: wrap; gap: 5px; }
+        .chips-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
         .chip-btn {
-            padding: 4px 10px; border-radius: 99px; border: 1px solid var(--border); background: #fff;
-            font-size: 0.72rem; font-weight: 700; color: var(--muted); cursor: pointer; user-select: none;
+            padding: 5px 11px; border-radius: 99px; border: 1.5px solid var(--border); background: #fff;
+            font-size: 0.73rem; font-weight: 700; color: var(--muted); cursor: pointer; user-select: none; transition: 0.15s;
         }
+        .chip-btn:hover { border-color: var(--primary); color: var(--primary); }
         .chip-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
         /* SELLO DE PROPIETARIO ANTES DE GUARDAR */
@@ -496,7 +682,7 @@
             <div class="exec-hero-top">
                 <div class="exec-hero-title">
                     <div class="step-num" style="background:#0F172A;"><i class="fas fa-user-tie" style="font-size:0.75rem;"></i></div>
-                    <span>¿QUIÉN ESTÁ COTIZANDO HOY? <small style="font-weight:600; color:var(--muted);">(Haz clic en tu nombre para asignar el propietario en Salesforce)</small></span>
+                    <span>¿QUIÉN ESTÁ COTIZANDO HOY? <small style="font-weight:600; color:var(--muted);">(Selecciona tu usuario para asignar en Salesforce)</small></span>
                 </div>
                 <span class="exec-alert-badge" id="exec-hero-badge">
                     <i class="fas fa-exclamation-triangle"></i> Confirma tu usuario antes de cotizar
@@ -780,7 +966,7 @@
                 </div>
 
                 <div class="card-body">
-                    <!-- Píldoras visuales para filtrar por Lista de Precios en 1 clic -->
+                    <!-- Píldoras visuales para filtrar por Lista de Precios sin barra de scroll -->
                     <div class="cat-Bar" id="visual-pb-pills">
                         <button type="button" class="cat-pill active" data-pb="ALL" onclick="selectVisualPricebook('ALL', this)"><i class="fas fa-globe"></i> Todas las Listas</button>
                         <button type="button" class="cat-pill" data-pb="01sUO000001DFALYA4" id="pill-cortes-canon" onclick="selectVisualPricebook('01sUO000001DFALYA4', this)" style="border-color:#F59E0B;"><i class="fas fa-hard-hat"></i> Lista Cortes Cañón</button>
@@ -810,66 +996,82 @@
                         <option value="01sDn000001UtQvIAK" data-cat="Otros" data-days="15" data-tpl="Presupuesto Casa Colombia Maquinaria">Standard Price Book</option>
                     </select>
 
-                    <div class="search-tools-grid">
-                        <!-- Buscador Individual de Productos (Primero por ser el más directo) -->
-                        <div class="smart-search" style="border-color: var(--primary); background: #FFFDFB;">
-                            <div class="smart-search-lbl" style="color: var(--primary);">
-                                <span><i class="fas fa-barcode"></i> Buscar Producto por Nombre, Modelo o SKU</span>
-                                <i class="fas fa-spinner fa-spin" id="prod-search-spinner" style="display:none;"></i>
+                    <!-- BUSCADOR CLÁSICO SUTIL -->
+                    <div class="classic-search-wrap smart-search" style="padding:0; border:none; background:transparent;">
+                        <div class="classic-search-title">
+                            <span>Busque su producto</span>
+                            <i class="fas fa-spinner fa-spin" id="prod-search-spinner" style="display:none; color:var(--primary);"></i>
+                        </div>
+                        <div class="classic-search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="prod-search-input" placeholder="Buscar por nombre, referencia o SKU..." oninput="debounceProductSearch(this.value)" onfocus="debounceProductSearch(this.value)">
+                        </div>
+                        <div class="dropdown-results" id="prod-search-results"></div>
+                    </div>
+
+                    <!-- 🤖 MINI-BOT IA CON DISEÑO DE VENTANA DE CHAT -->
+                    <div class="ai-chat-window" id="ai-bulk-container">
+                        <div class="ai-chat-topbar">
+                            <div class="ai-chat-bot-info">
+                                <div class="ai-bot-avatar"><i class="fas fa-robot"></i></div>
+                                <div>
+                                    <div style="font-size:0.84rem; font-weight:800;">Mini-Bot Asistente de Pedidos IA</div>
+                                    <div style="font-size:0.7rem; opacity:0.88;">Lector inteligente de listas de códigos e imágenes</div>
+                                </div>
                             </div>
-                            <div class="smart-search-row">
-                                <input type="text" id="prod-search-input" placeholder="Escribe ej: HITACHI, ZX75, ZX120, 4464985, filtro..." oninput="debounceProductSearch(this.value)" onfocus="debounceProductSearch(this.value)">
-                            </div>
-                            <div class="dropdown-results" id="prod-search-results"></div>
+                            <span style="font-size:0.7rem; background:rgba(255,255,255,0.2); padding:3px 9px; border-radius:99px; font-weight:700;">
+                                <i class="fas fa-keyboard"></i> Soporta Ctrl + V
+                            </span>
                         </div>
 
-                        <!-- 🤖 MINI-BOT IA: CUADRO DE TEXTO LIBRE + IMAGEN CTRL+V PARA CARGAR VARIOS PRODUCTOS DE GOLPE -->
-                        <div class="ai-bulk-box" id="ai-bulk-container">
-                            <div class="ai-bulk-header">
-                                <div class="ai-bulk-title">
-                                    <i class="fas fa-robot"></i> Mini-Bot Lector Masivo (Pega lista de códigos o foto con Ctrl+V)
-                                </div>
-                                <div style="display:flex; gap:8px;">
-                                    <button type="button" class="btn btn-outline" style="padding:5px 10px; font-size:0.74rem; border-color:#8B5CF6; color:#6D28D9;" onclick="document.getElementById('ai-bulk-file').click()">
-                                        <i class="fas fa-camera"></i> Subir Foto de Lista
-                                    </button>
-                                    <input type="file" id="ai-bulk-file" accept="image/*" style="display:none;" onchange="handleAiBulkImageSelect(this)">
-                                    <button type="button" class="btn btn-purple" id="btn-run-ai-bulk" style="padding:5px 14px; font-size:0.76rem;" onclick="procesarListaConMiniBot()">
-                                        <i class="fas fa-bolt"></i> Cargar Lista con IA
-                                    </button>
-                                </div>
+                        <div class="ai-chat-body">
+                            <div class="ai-bot-bubble">
+                                💬 <b>¿Cómo usarme?</b> Escríbeme aquí varias referencias a la vez, dime cuántas unidades necesitas de cada una o <b>pega un pantallazo (Ctrl+V)</b> de la lista del cliente y yo busco y cargo todo al carrito automáticamente.
                             </div>
 
-                            <textarea id="ai-bulk-text" class="ai-bulk-textarea" placeholder="Ej: '4464985 x 4, 2 filtros ZX200, o cárgate todos los códigos de la imagen que pegué con Ctrl+V'..."></textarea>
+                            <div class="ai-chat-composer">
+                                <textarea id="ai-bulk-text" class="ai-bulk-textarea" placeholder="Háblale al bot aquí... (Ej: '4464985 x 4, 2 filtros ZX200, o cárgate todos los códigos de la foto que acabo de pegar con Ctrl+V y ponles 2 unidades a cada uno')"></textarea>
 
-                            <div class="ai-img-preview" id="ai-bulk-img-preview">
-                                <img id="ai-bulk-img-tag" src="" alt="preview">
-                                <div style="flex:1;">
-                                    <div style="font-weight:700; color:#5B21B6;">Imagen de referencias lista para analizar</div>
-                                    <div style="color:var(--muted); font-size:0.72rem;">Puedes escribir instrucciones arriba sobre qué hacer con los ítems de esta imagen.</div>
+                                <div class="ai-img-preview" id="ai-bulk-img-preview">
+                                    <img id="ai-bulk-img-tag" src="" alt="preview">
+                                    <div style="flex:1;">
+                                        <div style="font-weight:700; color:#5B21B6;">Imagen adjunta en el chat</div>
+                                        <div style="color:var(--muted); font-size:0.72rem;">Lista para extraer referencias al enviar.</div>
+                                    </div>
+                                    <button type="button" class="btn btn-outline" style="padding:4px 8px; font-size:0.72rem; color:var(--danger);" onclick="clearAiBulkImage()">Quitar</button>
                                 </div>
-                                <button type="button" class="btn btn-outline" style="padding:4px 8px; font-size:0.72rem; color:var(--danger);" onclick="clearAiBulkImage()">Quitar imagen</button>
+
+                                <div class="ai-chat-footer">
+                                    <button type="button" class="btn btn-outline" style="padding:6px 12px; font-size:0.76rem; border-color:#C4B5FD; color:#6D28D9;" onclick="document.getElementById('ai-bulk-file').click()">
+                                        <i class="fas fa-camera"></i> Adjuntar Foto de Lista
+                                    </button>
+                                    <input type="file" id="ai-bulk-file" accept="image/*" style="display:none;" onchange="handleAiBulkImageSelect(this)">
+
+                                    <button type="button" class="btn btn-purple" id="btn-run-ai-bulk" style="padding:8px 18px; font-size:0.82rem;" onclick="procesarListaConMiniBot()">
+                                        <i class="fas fa-paper-plane"></i> Enviar al Bot y Cargar Carrito
+                                    </button>
+                                </div>
                             </div>
 
                             <div class="ai-disambiguation" id="ai-bulk-disambiguation"></div>
                         </div>
                     </div>
 
-                    <!-- Tabla del Carrito -->
+                    <!-- Tabla del Carrito (100% visible sin necesidad de scroll horizontal) -->
                     <div class="table-wrap">
                         <table class="pos-table">
                             <thead>
                                 <tr>
-                                    <th style="width:28%;">Producto / SKU</th>
+                                    <th>Producto / SKU</th>
                                     <th>Precio Und</th>
                                     <th style="text-align:center;">Cant.</th>
-                                    <th>Subtotal Bruto</th>
-                                    <th>% Desc.</th>
-                                    <th>$ Descuento</th>
-                                    <th>Neto sin IVA</th>
+                                    <th>Bruto</th>
+                                    <th>% Desc</th>
+                                    <th>$ Desc</th>
+                                    <th>Neto</th>
                                     <th>% IVA</th>
                                     <th>Valor IVA</th>
-                                    <th style="color:var(--primary);">Total con IVA</th>
+                                    <th style="background:var(--primary);">Total c/IVA</th>
                                     <th></th>
                                 </tr>
                             </thead>
@@ -877,7 +1079,7 @@
                                 <tr>
                                     <td colspan="11" style="text-align:center; padding: 32px; color: var(--muted);">
                                         <i class="fas fa-cart-plus" style="font-size:1.5rem; opacity:0.35; display:block; margin-bottom:6px;"></i>
-                                        Tu carrito está vacío. Busca un producto arriba o pega una lista en el Mini-Bot.
+                                        Tu carrito está vacío. Busca un producto arriba o envíale tu lista al Mini-Bot.
                                     </td>
                                 </tr>
                             </tbody>
@@ -888,56 +1090,29 @@
 
         </div>
 
-        <!-- ==================== COLUMNA DERECHA STICKY (RESUMEN + CONDICIONES + ENVÍO) ==================== -->
+        <!-- ==================== COLUMNA DERECHA STICKY (CONDICIONES ARRIBA + TOTALES AL FINAL) ==================== -->
         <div class="side-col">
 
             <div class="card">
                 <div class="card-header" style="background:#F8FAFC;">
                     <div class="card-title">
                         <div class="step-num">3</div>
-                        <span>RESUMEN Y CONDICIONES</span>
+                        <span>CONDICIONES Y CIERRE</span>
                     </div>
                 </div>
 
                 <div class="card-body" style="display:flex; flex-direction:column; gap:13px;">
 
-                    <!-- Recibo Financiero Oscuro -->
-                    <div class="receipt-box">
-                        <div class="receipt-row">
-                            <span>Subtotal Bruto:</span>
-                            <span id="rc-bruto">$ 0</span>
-                        </div>
-                        <div class="receipt-row">
-                            <span>Descuento Total:</span>
-                            <span id="rc-descuento">- $ 0</span>
-                        </div>
-                        <div class="receipt-row" style="font-weight:700; color:#fff;">
-                            <span>Total Antes de IVA:</span>
-                            <span id="ft-subtotal">$ 0</span>
-                        </div>
-                        <div class="receipt-row iva">
-                            <span><i class="fas fa-percentage"></i> Suma Total IVA (CRM):</span>
-                            <span id="ft-iva">$ 0</span>
-                        </div>
-                        <div class="receipt-total">
-                            <span>Total con IVA</span>
-                            <span id="ft-grandtotal">$ 0</span>
-                        </div>
-                    </div>
-
-                    <!-- Plantilla Oficial PDF -->
-                    <div class="fg">
-                        <label class="flabel" style="color:var(--sf-blue);"><i class="fas fa-file-pdf"></i> Plantilla Sugerida en Salesforce</label>
-                        <select id="qt-template" class="finput" style="border-color:var(--sf-blue); font-weight:700;">
-                            <option value="Presupuesto Casa Colombia Maquinaria">Presupuesto Casa Colombia Maquinaria</option>
-                            <option value="Presupuesto Casa Colombia Repuestos">Presupuesto Casa Colombia Repuestos</option>
-                            <option value="Presupuesto Casa Colombia Martillos">Presupuesto Casa Colombia Martillos</option>
-                            <option value="Presupuesto Casa Colombia Volqueta">Presupuesto Casa Colombia Volqueta</option>
-                            <option value="Presupuesto Casa Colombia Brazo Largo">Presupuesto Casa Colombia Brazo Largo</option>
-                            <option value="Presupuesto Casa Colombia Pontones">Presupuesto Casa Colombia Pontones</option>
-                            <option value="Copia de Presupuesto Casa Colombia Servicios">Copia de Presupuesto Casa Colombia Servicios</option>
-                        </select>
-                    </div>
+                    <!-- Selector de plantilla oculto para conservar la lógica interna sin ocupar espacio -->
+                    <select id="qt-template" style="display:none;">
+                        <option value="Presupuesto Casa Colombia Maquinaria">Presupuesto Casa Colombia Maquinaria</option>
+                        <option value="Presupuesto Casa Colombia Repuestos">Presupuesto Casa Colombia Repuestos</option>
+                        <option value="Presupuesto Casa Colombia Martillos">Presupuesto Casa Colombia Martillos</option>
+                        <option value="Presupuesto Casa Colombia Volqueta">Presupuesto Casa Colombia Volqueta</option>
+                        <option value="Presupuesto Casa Colombia Brazo Largo">Presupuesto Casa Colombia Brazo Largo</option>
+                        <option value="Presupuesto Casa Colombia Pontones">Presupuesto Casa Colombia Pontones</option>
+                        <option value="Copia de Presupuesto Casa Colombia Servicios">Copia de Presupuesto Casa Colombia Servicios</option>
+                    </select>
 
                     <!-- Entrega y Forma de Pago -->
                     <div class="form-grid-2">
@@ -1012,10 +1187,28 @@
                         <textarea id="qt-description" class="finput" rows="2">Precios sujetos a disponibilidad de inventario salvo venta previa.</textarea>
                     </div>
 
-                    <!-- Cajón de Nombres de Oportunidad y Presupuesto -->
-                    <div class="adv-toggle" onclick="toggleAdv('adv-opp-fields')" style="margin-top:2px;">
-                        <i class="fas fa-sliders-h"></i> Nombre de Oportunidad / Presupuesto y Ajustes
+                    <!-- LÍNEAS DE INTERÉS SIEMPRE VISIBLES -->
+                    <div class="fg">
+                        <label class="flabel"><span class="req">*</span> Líneas de Interés (Multipicklist)</label>
+                        <div class="chips-wrap" id="interest-chips">
+                            <span class="chip-btn active" onclick="toggleChip(this)">Repuestos</span>
+                            <span class="chip-btn" onclick="toggleChip(this)">Maquinaria usada</span>
+                            <span class="chip-btn" onclick="toggleChip(this)">Maquinaria nueva</span>
+                            <span class="chip-btn" onclick="toggleChip(this)">Volquetas</span>
+                            <span class="chip-btn" onclick="toggleChip(this)">Martillos Hidráulicos</span>
+                            <span class="chip-btn" onclick="toggleChip(this)">Brazos largos</span>
+                            <span class="chip-btn" onclick="toggleChip(this)">Accesorios</span>
+                            <span class="chip-btn" onclick="toggleChip(this)">Servicio</span>
+                            <span class="chip-btn" onclick="toggleChip(this)">Otros</span>
+                        </div>
                     </div>
+
+                    <!-- BOTÓN RESALTADO PARA ENTRAR A LAS OPCIONES EDITABLES DE OPORTUNIDAD / PRESUPUESTO -->
+                    <button type="button" class="opp-settings-btn" onclick="toggleAdv('adv-opp-fields')">
+                        <span><i class="fas fa-pen-to-square"></i> Editar Nombre de Oportunidad / Presupuesto</span>
+                        <span class="badge-edit">Abrir Opciones <i class="fas fa-chevron-down"></i></span>
+                    </button>
+
                     <div class="adv-box" id="adv-opp-fields">
                         <div style="display:flex; flex-direction:column; gap:10px;">
                             <div class="fg">
@@ -1059,20 +1252,30 @@
                                     <input type="date" id="opp-closedate" class="finput">
                                 </div>
                             </div>
-                            <div class="fg">
-                                <label class="flabel">Líneas de Interés (Multipicklist)</label>
-                                <div class="chips-wrap" id="interest-chips">
-                                    <span class="chip-btn active" onclick="toggleChip(this)">Repuestos</span>
-                                    <span class="chip-btn" onclick="toggleChip(this)">Maquinaria usada</span>
-                                    <span class="chip-btn" onclick="toggleChip(this)">Maquinaria nueva</span>
-                                    <span class="chip-btn" onclick="toggleChip(this)">Volquetas</span>
-                                    <span class="chip-btn" onclick="toggleChip(this)">Martillos Hidráulicos</span>
-                                    <span class="chip-btn" onclick="toggleChip(this)">Brazos largos</span>
-                                    <span class="chip-btn" onclick="toggleChip(this)">Accesorios</span>
-                                    <span class="chip-btn" onclick="toggleChip(this)">Servicio</span>
-                                    <span class="chip-btn" onclick="toggleChip(this)">Otros</span>
-                                </div>
-                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RECIBO DE TOTALES AL FINAL (JUSTO ANTES DE GUARDAR) -->
+                    <div class="receipt-box">
+                        <div class="receipt-row">
+                            <span>Subtotal Bruto:</span>
+                            <span id="rc-bruto">$ 0</span>
+                        </div>
+                        <div class="receipt-row">
+                            <span>Descuento Total:</span>
+                            <span id="rc-descuento">- $ 0</span>
+                        </div>
+                        <div class="receipt-row" style="font-weight:700; color:#fff;">
+                            <span>Total Antes de IVA:</span>
+                            <span id="ft-subtotal">$ 0</span>
+                        </div>
+                        <div class="receipt-row iva">
+                            <span><i class="fas fa-percentage"></i> Suma Total IVA (CRM):</span>
+                            <span id="ft-iva">$ 0</span>
+                        </div>
+                        <div class="receipt-total">
+                            <span>Total con IVA</span>
+                            <span id="ft-grandtotal">$ 0</span>
                         </div>
                     </div>
 
@@ -1190,7 +1393,6 @@
             const execText = sel.options[sel.selectedIndex].text.trim();
             localStorage.setItem('icc_active_exec', val);
 
-            // Actualizar tarjetas visuales
             document.querySelectorAll('#exec-visual-grid .exec-btn-card').forEach(card => {
                 card.classList.toggle('active', card.dataset.val === val);
             });
@@ -1588,7 +1790,7 @@
             const btn = document.getElementById('btn-run-ai-bulk');
             const origHtml = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analizando...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analizando pedido...';
 
             const pbId = isCortesCanonMode ? CORTES_CANON_PB_ID : document.getElementById('opp-pricebook').value;
             const curr = document.getElementById('opp-currency').value;
@@ -1896,7 +2098,7 @@
                     <tr>
                         <td colspan="11" style="text-align:center; padding: 32px; color: var(--muted);">
                             <i class="fas fa-cart-plus" style="font-size:1.5rem; opacity:0.35; display:block; margin-bottom:6px;"></i>
-                            Tu carrito está vacío. Busca un producto arriba o pega una lista en el Mini-Bot.
+                            Tu carrito está vacío. Busca un producto arriba o envíale tu lista al Mini-Bot.
                         </td>
                     </tr>`;
                 document.getElementById('rc-bruto').innerText = '$ 0';
@@ -1930,8 +2132,8 @@
                 return `
                     <tr>
                         <td>
-                            <div style="font-weight:700; color:var(--text);">${item.name}</div>
-                            <div style="font-size:0.72rem; color:var(--muted);">SKU: <b>${item.code}</b> • ${item.pricebookName || ''}</div>
+                            <div style="font-weight:700; color:var(--text); line-height:1.3;">${item.name}</div>
+                            <div style="font-size:0.7rem; color:var(--muted); margin-top:3px;">SKU: <b>${item.code}</b> • <span class="pb-badge">${item.pricebookName || ''}</span></div>
                         </td>
                         <td><input type="number" class="tbl-num" value="${item.unitPrice}" onchange="updateQuoteItem(${idx}, 'unitPrice', this.value)"></td>
                         <td style="text-align:center;">
@@ -1941,15 +2143,15 @@
                                 <button type="button" class="qty-btn" onclick="stepQty(${idx}, 1)">+</button>
                             </div>
                         </td>
-                        <td style="font-weight:600;">${formatMoney(bruto)}</td>
-                        <td><input type="number" class="tbl-pct" min="0" max="100" step="0.5" value="${item.discountPct}" onchange="updateQuoteItem(${idx}, 'discountPct', this.value)">%</td>
-                        <td style="color:var(--muted);">${formatMoney(valDescuento)}</td>
-                        <td style="font-weight:700;">${formatMoney(netoAntesIva)}</td>
-                        <td><input type="number" class="tbl-pct" min="0" max="100" value="${item.ivaPct}" onchange="updateQuoteItem(${idx}, 'ivaPct', this.value)">%</td>
-                        <td style="color:var(--danger); font-weight:700;">${formatMoney(valIva)}</td>
-                        <td style="background:var(--primary-soft); font-weight:800; color:var(--primary);">${formatMoney(totalConIva)}</td>
-                        <td>
-                            <button type="button" onclick="removeQuoteItem(${idx})" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.95rem;">
+                        <td style="font-weight:600; white-space:nowrap;">${formatMoney(bruto)}</td>
+                        <td style="white-space:nowrap;"><input type="number" class="tbl-pct" min="0" max="100" step="0.5" value="${item.discountPct}" onchange="updateQuoteItem(${idx}, 'discountPct', this.value)">%</td>
+                        <td style="color:var(--muted); white-space:nowrap;">${formatMoney(valDescuento)}</td>
+                        <td style="font-weight:700; white-space:nowrap;">${formatMoney(netoAntesIva)}</td>
+                        <td style="white-space:nowrap;"><input type="number" class="tbl-pct" min="0" max="100" value="${item.ivaPct}" onchange="updateQuoteItem(${idx}, 'ivaPct', this.value)">%</td>
+                        <td style="color:var(--danger); font-weight:700; white-space:nowrap;">${formatMoney(valIva)}</td>
+                        <td style="background:var(--primary-soft); font-weight:800; color:var(--primary); white-space:nowrap;">${formatMoney(totalConIva)}</td>
+                        <td style="padding-right:8px;">
+                            <button type="button" onclick="removeQuoteItem(${idx})" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.9rem;">
                                 <i class="fas fa-trash-alt"></i>
                             </button>
                         </td>
