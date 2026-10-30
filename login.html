@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ICBOT - LOGIN</title>
+    <title>ICBOT - LOGIN SEGURO</title>
     <link rel="icon" href="https://raw.githubusercontent.com/juanballen2/CHATBOT/main/images/iconboticc_Mesa%20de%20trabajo%201.svg" type="image/svg+xml">
     
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -84,7 +84,7 @@
             border: 1px solid var(--glass-border);
             box-shadow: 0 30px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
             width: 90%;
-            max-width: 400px;
+            max-width: 410px;
             text-align: center;
             position: relative;
             animation: slideUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -105,7 +105,7 @@
             box-shadow: 0 10px 25px var(--primary-glow);
             animation: floatLogo 3s ease-in-out infinite;
             border: 2px solid rgba(233, 81, 29, 0.3);
-            background-color: #fff; /* Fondo blanco para que el SVG resalte */
+            background-color: #fff;
         }
 
         @keyframes floatLogo {
@@ -125,8 +125,22 @@
         .subtitle {
             color: var(--text-muted);
             font-size: 13px;
-            margin-bottom: 30px;
+            margin-bottom: 18px;
             font-weight: 500;
+        }
+
+        .sf-security-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(0, 161, 224, 0.12);
+            border: 1px solid rgba(0, 161, 224, 0.3);
+            color: #7dd3fc;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 99px;
+            margin-bottom: 24px;
         }
 
         .input-group {
@@ -135,7 +149,7 @@
             text-align: left;
         }
 
-        .input-group i {
+        .input-group i.icon-left {
             position: absolute;
             left: 16px;
             top: 50%;
@@ -143,11 +157,27 @@
             color: var(--text-muted);
             font-size: 16px;
             transition: all 0.3s ease;
+            pointer-events: none;
+        }
+
+        .toggle-pass {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 15px;
+            cursor: pointer;
+            padding: 4px;
+            transition: color 0.2s ease;
+        }
+        .toggle-pass:hover {
+            color: var(--text-main);
         }
 
         input {
             width: 100%;
-            padding: 15px 15px 15px 48px;
+            padding: 15px 42px 15px 48px;
             background: var(--input-bg);
             border: 1px solid var(--glass-border);
             border-radius: 12px;
@@ -168,7 +198,7 @@
             box-shadow: 0 0 15px rgba(233, 81, 29, 0.2);
         }
 
-        input:focus + i {
+        input:focus + i.icon-left {
             color: var(--primary);
             transform: translateY(-50%) scale(1.1);
         }
@@ -222,11 +252,12 @@
             color: #ff6b6b;
             padding: 12px;
             border-radius: 8px;
-            font-size: 13px;
+            font-size: 12.5px;
             margin-top: 20px;
             display: none;
             border: 1px solid rgba(239, 68, 68, 0.3);
             font-weight: 600;
+            line-height: 1.4;
         }
 
         .shake {
@@ -250,68 +281,98 @@
         <div class="logo-container"></div>
 
         <h2>ICC System</h2>
-        <p class="subtitle">Gestión Comercial & IA</p>
+        <p class="subtitle">Core Integra • Gestión Comercial & IA</p>
+
+        <div class="sf-security-badge">
+            <i class="fa-solid fa-shield-halved"></i> Verificación Activa con Salesforce CRM
+        </div>
         
         <form onsubmit="login(event)">
             <div class="input-group">
-                <input type="text" id="u" placeholder="Usuario" required autocomplete="off">
-                <i class="fa-solid fa-user"></i>
+                <input type="text" id="u" placeholder="Usuario o Correo Corporativo" required autocomplete="username">
+                <i class="fa-solid fa-user icon-left"></i>
             </div>
             
             <div class="input-group">
-                <input type="password" id="p" placeholder="Contraseña" required>
-                <i class="fa-solid fa-lock"></i>
+                <input type="password" id="p" placeholder="Contraseña" required autocomplete="current-password">
+                <i class="fa-solid fa-lock icon-left"></i>
+                <i class="fa-solid fa-eye toggle-pass" id="eyeIcon" onclick="togglePassVisibility()" title="Mostrar / Ocultar contraseña"></i>
             </div>
 
-            <button id="btn">Acceder al Sistema</button>
+            <button type="submit" id="btn">Acceder al Sistema</button>
             
             <div id="err">
-                <i class="fa-solid fa-circle-exclamation"></i> Acceso Denegado
+                <i class="fa-solid fa-circle-exclamation"></i> <span id="err-text">Acceso Denegado</span>
             </div>
         </form>
     </div>
 
     <script>
+        function togglePassVisibility() {
+            const pInput = document.getElementById('p');
+            const eye = document.getElementById('eyeIcon');
+            if (pInput.type === 'password') {
+                pInput.type = 'text';
+                eye.classList.remove('fa-eye');
+                eye.classList.add('fa-eye-slash');
+            } else {
+                pInput.type = 'password';
+                eye.classList.remove('fa-eye-slash');
+                eye.classList.add('fa-eye');
+            }
+        }
+
         async function login(e) {
             e.preventDefault();
             
             const btn = document.getElementById('btn');
-            const errorMsg = document.getElementById('err');
+            const errorBox = document.getElementById('err');
+            const errorText = document.getElementById('err-text');
             const box = document.getElementById('loginBox');
             
             // Reset estados
-            errorMsg.style.display = 'none';
+            errorBox.style.display = 'none';
             box.classList.remove('shake');
-            
-            // Reflow para que la animación de shake pueda repetirse si falla varias veces
-            void box.offsetWidth; 
+            void box.offsetWidth;
             
             // Estado Cargando
-            const originalText = btn.innerText;
-            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Verificando...';
+            const originalText = 'Acceder al Sistema';
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Validando en Salesforce...';
             btn.disabled = true;
 
             try {
                 const res = await fetch('/auth', {
-                    method:'POST', 
-                    headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({ user: document.getElementById('u').value, pass: document.getElementById('p').value })
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user: document.getElementById('u').value.trim(),
+                        pass: document.getElementById('p').value
+                    })
                 });
                 
-                const d = await res.json();
+                const d = await res.json().catch(() => ({}));
                 
-                if(d.success) {
-                    btn.innerHTML = '<i class="fas fa-check"></i> ¡Éxito!';
-                    btn.style.background = "linear-gradient(135deg, #10b981 0%, #059669 100%)"; // Verde éxito
+                if (res.ok && d.success) {
+                    // Guardar identidad de sesión para que el Cotizador cargue preseleccionado de inmediato
+                    if (d.user && d.user.sfUserId) {
+                        localStorage.setItem('icc_active_exec', d.user.sfUserId);
+                    }
+
+                    const destinoTexto = d.role === 'admin' ? 'Abriendo Panel Completo...' : 'Abriendo Cotizador Ejecutivo...';
+                    btn.innerHTML = `<i class="fas fa-check"></i> ${destinoTexto}`;
+                    btn.style.background = "linear-gradient(135deg, #10b981 0%, #059669 100%)";
                     btn.style.boxShadow = "0 6px 20px rgba(16, 185, 129, 0.4)";
-                    setTimeout(() => { window.location.href = '/'; }, 600);
-                } else { 
-                    throw new Error('Login failed');
+
+                    // Redirigir según rol ('/' para Admin/Marketing, '/cotizador' para Comerciales)
+                    const targetUrl = d.redirect || (d.role === 'admin' ? '/' : '/cotizador');
+                    setTimeout(() => { window.location.href = targetUrl; }, 550);
+                } else {
+                    throw new Error(d.message || 'Usuario o contraseña incorrectos.');
                 }
             } catch (error) {
-                // Manejo de Error Visual
-                errorMsg.style.display = 'block';
-                box.classList.add('shake'); 
+                errorText.innerText = error.message || 'Acceso Denegado';
+                errorBox.style.display = 'block';
+                box.classList.add('shake');
                 btn.innerText = originalText;
                 btn.disabled = false;
             }
